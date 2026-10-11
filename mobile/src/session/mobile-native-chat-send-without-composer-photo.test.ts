@@ -138,7 +138,7 @@ describe('a photo sent from the chat to a terminal with no Claude input box', ()
     expect(sent).toBe(false)
     expect(typed(client)).toEqual([])
     expect(args.baseSend).not.toHaveBeenCalled()
-    expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_COMPOSER_REFUSAL)
+    expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_COMPOSER_REFUSAL, { retry: true })
   })
 
   it('still pastes a photo into a live Claude box', async () => {

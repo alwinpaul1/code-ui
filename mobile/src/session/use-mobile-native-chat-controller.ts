@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { hudFieldsFromAgentStatus } from './hud-agent-status-fields'
-import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'; import { useChatStopButton } from './use-chat-stop-button'
+import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'; import { useChatStopButton } from './use-chat-stop-button'; import { parkRefusedComposerSend } from './native-chat-send-gate-outbox'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -589,7 +589,7 @@ export function useMobileNativeChatController(
     openNativeChatQueueEditor: queueEditor.recallToComposer, sendNativeChatQueueNow: queueEditor.sendNow,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
-    beginNativeChatImageSend: clearDraftAtSendStart,
+    beginNativeChatImageSend: clearDraftAtSendStart, parkRefusedNativeChatSend: (text: string) => parkRefusedComposerSend({ text, captureSendOrigin, clearDraftForSend, showSendingEcho }),
     handleNativeChatStop: stopButton.onStop, nativeChatStopping: stopButton.stopping,
     nativeChatFilePaths,
     loadNativeChatFiles,

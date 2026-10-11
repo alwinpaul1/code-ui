@@ -192,7 +192,7 @@ describe('a composer send that follows its tab, end to end', () => {
     mount(client)
     expect(await tap('rm -rf build')).toBe(false)
     expect(toNew.filter((method) => method === 'terminal.send')).toEqual([])
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
   })
 
   // Opus review of the follow: closing the active terminal re-points the phone's active
@@ -232,7 +232,7 @@ describe('a composer send that follows its tab, end to end', () => {
     expect(activeHandleRef.current).toBe('term-9')
     expect(writes).toEqual([])
     expect(claude.submitted).toEqual([])
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent (session changed)')
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent (session changed)', { retry: true })
   })
 
   it('does not follow a handle the snapshot names for no tab of this scope', async () => {
@@ -253,6 +253,6 @@ describe('a composer send that follows its tab, end to end', () => {
     expect(hostTerminalOfTab(sessionTabsRef.current, 'h', 'w', SCOPE_A)).toBe('term-1')
     expect(await tap('hello')).toBe(false)
     expect(claude.submitted).toEqual([])
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent (session changed)')
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent (session changed)', { retry: true })
   })
 })

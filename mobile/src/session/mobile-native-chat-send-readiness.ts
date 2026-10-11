@@ -110,7 +110,8 @@ export function useMobileNativeChatSendGate(
         }
         return settle(readiness, undefined, onUnready)
       },
-      now: (action, onUnready) => settle(mobileNativeChatSendReadinessNow(read()), action, onUnready),
+      // A pick's own reporter hears the line alone, as the gate's does.
+      now: (action, onUnready) => settle(mobileNativeChatSendReadinessNow(read()), action, onUnready && ((message) => onUnready(message))),
       isReady: () => readyClient(read()) !== null
     }
   }, [])

@@ -201,7 +201,7 @@ describe('a chat message sent while the relay re-dials', () => {
 
     expect(sent).toBe(false)
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      'Message not sent: the connection to your desktop dropped and did not come back within 11 s'
+      'Message not sent: the connection to your desktop dropped and did not come back within 11 s', { retry: true }
     )
     // Nothing was written anywhere, and the composer was never emptied, so
     // the text is still in the box to send again.
@@ -225,7 +225,7 @@ describe('a chat message sent while the relay re-dials', () => {
 
     expect(sent).toBe(false)
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      "Message not sent: your desktop is offline. Check it's awake and Orca is running"
+      "Message not sent: your desktop is offline. Check it's awake and Orca is running", { retry: true }
     )
     expect(clearDraftForSend).not.toHaveBeenCalled()
   }, 30_000)
@@ -254,7 +254,7 @@ describe('a chat message sent while the relay re-dials', () => {
     })
     expect(outcome).toBe('rejected')
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      'Message not sent: not connected to your desktop'
+      'Message not sent: not connected to your desktop', { retry: true }
     )
   }, 30_000)
 
@@ -322,7 +322,7 @@ describe('a chat message sent while the relay re-dials', () => {
 
     expect(sent).toBe(false)
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      'Message not sent: your desktop came back too late to send it. Send it again'
+      'Message not sent: your desktop came back too late to send it. Send it again', { retry: true }
     )
     expect(clearDraftForSend).not.toHaveBeenCalled()
     expect(terminalWrites(1)).toEqual([])
@@ -344,7 +344,7 @@ describe('a chat message sent while the relay re-dials', () => {
 
     expect(sent).toBe(false)
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      'Message not sent: could not reach your desktop within 11 s'
+      'Message not sent: could not reach your desktop within 11 s', { retry: true }
     )
   }, 30_000)
 })

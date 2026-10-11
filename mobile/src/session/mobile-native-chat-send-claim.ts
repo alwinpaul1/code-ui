@@ -3,7 +3,7 @@ import {
   SEND_TERMINAL_RESTARTED,
   type MobileNativeChatSendFollow
 } from './mobile-native-chat-send-follow'
-import type { MobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
+import type { MobileNativeChatSendGate, MobileNativeChatSendUnready } from './mobile-native-chat-send-readiness'
 import {
   acquireMobileNativeChatTerminalWriteForSend,
   releaseMobileNativeChatTerminalWrite
@@ -63,7 +63,10 @@ export async function sendFollowingTheTab(
     readonly look: (client: RpcClient, terminal: string, followed: boolean) => Promise<string | null>
     readonly verify: (client: RpcClient, terminal: string) => Promise<boolean>
     /** Says why nothing was written, and answers false. */
-    readonly refuse: (message: string) => false
+    readonly refuse: (message: string) => boolean
+    /** The gate gave up before anything was written: says why (or hands the send to the
+     *  outbox, S4) and answers whether the send counts as taken. The gate's own line otherwise. */
+    readonly refuseUnready?: (message: string, unready: MobileNativeChatSendUnready) => boolean
   },
   run: (claim: MobileNativeChatSendClaim) => Promise<boolean | typeof SEND_REMINTED>
 ): Promise<boolean> {
@@ -85,10 +88,12 @@ export async function sendFollowingTheTab(
       if (!structured && held && !moved) {
         // A dialog on screen takes typed keys as answers (2026-09-27): looked at
         // before anything is written, so a refusal leaves the draft where it is.
-        const client = await args.sendGate.wait(args.deadline, tabChanged)
+        let unreadyTaken = false
+        const refuseUnready = args.refuseUnready
+        const client = await args.sendGate.wait(args.deadline, tabChanged, refuseUnready && ((message, unready) => { unreadyTaken = refuseUnready(message, unready) }))
         const refusal = client && (await args.look(client, held, followed))
         if (!client || refusal) {
-          return refusal ? refuse(refusal) : false
+          return refusal ? refuse(refusal) : unreadyTaken
         }
         moved = liveTerminal() !== held
         if (!moved && followed) {

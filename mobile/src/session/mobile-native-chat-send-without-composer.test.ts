@@ -330,7 +330,7 @@ describe('the real send onto a terminal with no Claude input box', () => {
       // Refused before the composer was emptied: the draft never left.
       expect(clearDraftForSend).not.toHaveBeenCalled()
       expect(restoreRejectedDraft).not.toHaveBeenCalled()
-      expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_COMPOSER_REFUSAL)
+      expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_COMPOSER_REFUSAL, { retry: true })
     }
   )
 
@@ -365,7 +365,7 @@ describe('the real send onto a terminal with no Claude input box', () => {
 
     expect(outcome).toBe('rejected')
     expect(host.writes).toEqual([])
-    expect(report).toHaveBeenCalledExactlyOnceWith(SEND_UNDER_DIALOG_REFUSAL)
+    expect(report).toHaveBeenCalledExactlyOnceWith(SEND_UNDER_DIALOG_REFUSAL, { retry: true })
   })
 
   it('still sends to a live Claude box', async () => {
@@ -429,6 +429,6 @@ describe('the real send onto a terminal with no Claude input box', () => {
     await run(() => api!.sendWithOutcome('check the build'))
 
     expect(host.writes).toEqual([])
-    expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
+    expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL, { retry: true })
   })
 })

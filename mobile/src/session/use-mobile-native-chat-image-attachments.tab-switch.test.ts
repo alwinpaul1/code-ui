@@ -118,7 +118,7 @@ describe('a composer send when the tab changes while it waits', () => {
     const sent = await sendSwitchingTabsDuringLook(args, held, 'deploy the staging build')
     expect(sent).toBe(false)
     expect(baseSend).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent (session changed)')
+    expect(onSendError).toHaveBeenCalledWith('Message not sent (session changed)', { retry: true })
   })
 
   it('does not paste a photo into the tab switched to during its look, and keeps the chip', async () => {

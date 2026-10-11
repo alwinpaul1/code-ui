@@ -373,7 +373,7 @@ describe('Send tapped again while a photo message waits', () => {
       await settle()
     })
     expect(outcome.second).toBe(false)
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent')
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith('Message not sent', { retry: true })
 
     let accepted = false
     await act(async () => {

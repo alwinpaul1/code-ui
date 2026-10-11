@@ -2,9 +2,50 @@ import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-ec
 import type { MobileNativeChatSendUnready } from './mobile-native-chat-send-readiness'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 import { passOutboxGate, recordOutboxSend, releaseOutboxSendFromGate, retireOutboxSend } from './native-chat-outbox-sends'
+import {
+  SEND_SCREEN_UNAVAILABLE_REFUSAL,
+  SEND_SCREEN_UNREADABLE_REFUSAL,
+  SEND_WITHOUT_CODEX_COMPOSER_REFUSAL,
+  SEND_WITHOUT_COMPOSER_REFUSAL
+} from './mobile-native-chat-dialog-guard'
 
 /** What a send the gate refused for want of the desktop says when the outbox keeps it. */
 export const SEND_WAITS_FOR_DESKTOP = 'Message waits for your desktop: it is sent when the connection is back'
+
+/** A look that found no input box to type into, and what the send says instead once the outbox
+ *  keeps it: the drainer types only when the box is back (observeTerminalOutboxEntry). */
+export const INPUT_BOX_REFUSALS: ReadonlyMap<string, string> = new Map([
+  [SEND_WITHOUT_COMPOSER_REFUSAL, "Claude's input box isn't on the desktop screen. The message will send when it is back."],
+  [SEND_WITHOUT_CODEX_COMPOSER_REFUSAL, "Codex's input box isn't on the desktop screen. The message will send when it is back."],
+  [SEND_SCREEN_UNAVAILABLE_REFUSAL, 'The desktop has no screen for this terminal yet. The message will send when it has.'],
+  [SEND_SCREEN_UNREADABLE_REFUSAL, "Couldn't read the desktop screen. The message will send when it can be read."]
+])
+
+/**
+ * A composer text send refused before anything was written, handed to the outbox instead of
+ * failing (S4): written down, given to the drainer or the chat's recovery, the box emptied and
+ * the bubble drawn. False, with nothing changed, when the outbox cannot see it through (no route,
+ * no drainer, no chat): the caller then says the refusal with a Retry (S5).
+ */
+export function parkRefusedComposerSend(args: {
+  text: string
+  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
+  showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
+}): boolean {
+  const origin = args.captureSendOrigin(args.text.trimEnd())
+  if (!origin?.outboxId || origin.outboxRecovery || args.text.trim() === '') {
+    return false
+  }
+  recordOutboxSend(origin, args.text, { atGate: true })
+  if (!releaseOutboxSendFromGate(origin.outboxId)) {
+    void retireOutboxSend(origin.outboxId)
+    return false
+  }
+  args.clearDraftForSend(origin, args.text)
+  args.showSendingEcho?.(origin)
+  return true
+}
 
 /**
  * A composer text send's outbox entry around the send gate (S4), and how a send refused before
@@ -34,7 +75,7 @@ export type SendGateOutbox = {
   pass: () => void
   refuse: (message: string, unready?: MobileNativeChatSendUnready) => 'rejected' | 'unknown'
   /** A refusal after the gate and before any write (a dialog, a failed heal): words back, Retry. */
-  giveBack: (message: string) => 'rejected'
+  giveBack: (message: string) => 'rejected' | 'unknown'
   /** The send went back to its caller unsaid (a reminted tab): the entry leaves the outbox. */
   drop: () => void
 }
@@ -53,13 +94,22 @@ export function openSendGateOutbox(args: {
   const { origin, draftText, report } = args
   // Only a text send typed in the composer, on its first try, takes the new path.
   const gated = args.syncComposer && args.chat && !args.images?.length && !origin.outboxRecovery
+  // Handed to the outbox: the box empties and the bubble is drawn, as for a send on its way.
+  const hold = (): boolean => {
+    if (!gated || !releaseOutboxSendFromGate(origin.outboxId)) {
+      return false
+    }
+    args.clearDraftForSend(origin, draftText)
+    args.showSendingEcho?.(origin)
+    return true
+  }
   const giveBack = (message: string, retry = true): 'rejected' => {
     if (!gated) {
       report(message)
       return 'rejected'
     }
     void retireOutboxSend(origin.outboxId)
-    report(message, retry ? { retry: true } : undefined)
+    if (retry) { report(message, { retry: true }) } else { report(message) }
     return 'rejected'
   }
   return {
@@ -78,15 +128,23 @@ export function openSendGateOutbox(args: {
       }
     },
     refuse: (message, unready) => {
-      if (gated && unready?.missing === 'connection' && releaseOutboxSendFromGate(origin.outboxId)) {
-        args.clearDraftForSend(origin, draftText)
-        args.showSendingEcho?.(origin)
+      if (unready?.missing === 'connection' && hold()) {
         report(SEND_WAITS_FOR_DESKTOP)
         return 'unknown'
       }
       return giveBack(message, unready === undefined || unready.missing === 'connection' || unready.missing === 'input')
     },
-    giveBack: (message) => giveBack(message),
+    giveBack: (message) => {
+      // No input box on the screen (a repaint that outlasted the looks, a shell, transcript mode):
+      // the drainer types only once the box is back (observeTerminalOutboxEntry), so the message
+      // waits in the outbox instead of failing, and the line says so.
+      const waits = INPUT_BOX_REFUSALS.get(message)
+      if (waits && hold()) {
+        report(waits)
+        return 'unknown'
+      }
+      return giveBack(message)
+    },
     drop: () => {
       if (gated) {
         void retireOutboxSend(origin.outboxId)

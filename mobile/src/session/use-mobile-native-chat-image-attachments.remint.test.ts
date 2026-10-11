@@ -268,7 +268,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(t.baseSend).not.toHaveBeenCalled()
     expect(t.writes('term-1')).toEqual([])
     expect(t.writes('term-2')).toEqual([])
-    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
     expect(t.onError).toHaveBeenCalledOnce()
     expect(isMobileNativeChatTerminalWriteInFlight('term-1')).toBe(false)
     expect(isMobileNativeChatTerminalWriteInFlight('term-2')).toBe(false)
@@ -300,7 +300,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(await send('hello')).toBe(false)
     expect(t.baseSend).not.toHaveBeenCalled()
     expect(t.writes('term-2')).toEqual([])
-    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
   })
 
   // Codex: a `›` row alone proves nothing (a sent prompt, a popup row, an approval
@@ -322,7 +322,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     } else {
       expect(t.baseSend).not.toHaveBeenCalled()
     }
-    expect(t.onSendError.mock.calls).toEqual(follows ? [] : [[SEND_TERMINAL_RESTARTED]])
+    expect(t.onSendError.mock.calls).toEqual(follows ? [] : [[SEND_TERMINAL_RESTARTED, { retry: true }]])
   })
 
   it('refuses when the tab is given a terminal a second time, however it looks', async () => {
@@ -339,7 +339,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(t.looks).toEqual(['term-1', 'term-2'])
     expect(t.baseSend).not.toHaveBeenCalled()
     expect(t.host.calls.filter((call) => call.method === 'terminal.send')).toEqual([])
-    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
     for (const terminal of ['term-1', 'term-2', 'term-3']) {
       expect(isMobileNativeChatTerminalWriteInFlight(terminal)).toBe(false)
     }
@@ -352,7 +352,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     )
     expect(await send('hello')).toBe(false)
     expect(t.baseSend).not.toHaveBeenCalled()
-    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
     expect(isMobileNativeChatTerminalWriteInFlight('term-1')).toBe(false)
   })
 
@@ -478,7 +478,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(await send('hello')).toBe(false)
     expect(baseSend).toHaveBeenCalledTimes(1)
     expect(holder.t.writes('term-2')).toEqual([])
-    expect(holder.t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(holder.t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
   })
 
   it("refuses a second change of terminal during the message send's wait, the retry's own", async () => {
@@ -493,7 +493,7 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     holder.t = setUp({ 'term-1': EMPTY_COMPOSER, 'term-2': EMPTY_COMPOSER }, { baseSend })
     expect(await send('hello')).toBe(false)
     expect(baseSend).toHaveBeenCalledTimes(2)
-    expect(holder.t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(holder.t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
   })
 
   // The paste has gone to the old terminal by now: refuse, put the chip and the box

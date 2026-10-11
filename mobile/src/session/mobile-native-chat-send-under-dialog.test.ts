@@ -146,7 +146,7 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     expect(sent).toBe(false)
     expect(args.baseSend).not.toHaveBeenCalled()
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
-    expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_UNDER_DIALOG_REFUSAL)
+    expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_UNDER_DIALOG_REFUSAL, { retry: true })
   })
 
   it('refuses a photo too, before its paste, and keeps the chip', async () => {

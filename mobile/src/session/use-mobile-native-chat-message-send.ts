@@ -198,10 +198,10 @@ export function useMobileNativeChatMessageSend(args: {
         (await refusedUnderDialog(
           refuseUnderDialog,
           { client, terminal: handle, deadline, agent, requireComposer: true },
-          gate.giveBack
+          (message) => { refused = gate.giveBack(message) }
         ))
       ) {
-        return 'rejected'
+        return refused
       }
       if (syncComposer && beforeSend) {
         await beforeSend()

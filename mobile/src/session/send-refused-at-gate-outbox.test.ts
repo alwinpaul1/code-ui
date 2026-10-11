@@ -40,6 +40,7 @@ import { isOutboxSendLive, mountOutboxDrainer, publishOutboxChatRoute, resetOutb
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
+import { parkRefusedComposerSend } from './native-chat-send-gate-outbox'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 
 const DRAFT_KEY = 'host\0worktree\0tab'
@@ -211,6 +212,37 @@ describe.each(['claude', 'codex'] as const)('a %s send the gate refuses before a
     expect(notices).toHaveLength(1)
     expect(notices[0]!.message).toMatch(/^Message not sent: /)
     expect(notices[0]!.details).toEqual({ retry: true })
+  })
+
+  it('parks a composer send the screen look refused in the outbox: box empty, bubble drawn, nothing lost', async () => {
+    drainerCanSendIt()
+    await act(async () => {
+      drafts!.setComposerText(TEXT)
+    })
+    let parked = false
+    await act(async () => {
+      parked = parkRefusedComposerSend({ text: TEXT, captureSendOrigin: drafts!.captureSendOrigin, clearDraftForSend: drafts!.clearDraftForSend, showSendingEcho: drafts!.showSendingEcho })
+    })
+    const [entry] = nativeChatOutboxEntries()
+    expect(parked).toBe(true)
+    expect(entry?.text).toBe(TEXT)
+    expect(entry?.atGate).toBeUndefined()
+    expect(isOutboxSendLive(entry!.id)).toBe(false)
+    expect(drafts!.composerText).toBe('')
+    expect(drafts!.pending.map((item) => item.id)).toEqual([outboxEchoId(entry!.id)])
+  })
+
+  it('does not park it when nothing could send it later: no entry, the words stay', async () => {
+    await act(async () => {
+      drafts!.setComposerText(TEXT)
+    })
+    let parked = true
+    await act(async () => {
+      parked = parkRefusedComposerSend({ text: TEXT, captureSendOrigin: drafts!.captureSendOrigin, clearDraftForSend: drafts!.clearDraftForSend, showSendingEcho: drafts!.showSendingEcho })
+    })
+    expect(parked).toBe(false)
+    expect(nativeChatOutboxEntries()).toEqual([])
+    expect(drafts!.composerText).toBe(TEXT)
   })
 
   it('offers a Retry when a dialog on the desktop refused it, with its words still in the composer (S5)', async () => {
