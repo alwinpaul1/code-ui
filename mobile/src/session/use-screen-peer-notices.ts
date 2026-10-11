@@ -172,20 +172,24 @@ export function useScreenPeerNotices(
   // with nothing to place it by, must still say it is no longer drawn. A row
   // still waiting for the transcript says nothing yet: it has no place, and
   // logged then, its line named none and took the key its place needed
-  // (fourth review).
+  // (fourth review). A subagent's sender-only row found this way is never
+  // drawn: it is untimed, so no copy of its words pairs with it, and without
+  // one it may be a hand-back (withScreenPeerNotices, 2026-10-11). Its line
+  // says so rather than "drawn".
   const found = JSON.stringify(
-    notices.flatMap((notice) =>
-      notice.found === true && notice.pending !== true
-        ? [
-            [
-              `${notice.id}\0${notice.held === true ? 'held' : 'drawn'}`,
-              notice.held === true
-                ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and ${notice.why ?? 'nothing places it'}`
-                : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
-            ]
-          ]
-        : []
-    )
+    notices.flatMap((notice) => {
+      if (notice.found !== true || notice.pending === true) {
+        return []
+      }
+      const state = notice.held === true ? 'held' : notice.body === undefined ? 'unpaired' : 'drawn'
+      const line =
+        state === 'held'
+          ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and ${notice.why ?? 'nothing places it'}`
+          : state === 'unpaired'
+            ? `[peer-row] not drawn: the row from @${notice.sender} names only its sender and was on the screen when the chat first read it, so no copy of its words says it is not a hand-back (the Claude app draws none)`
+            : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
+      return [[`${notice.id}\0${state}`, line]]
+    })
   )
   useEffect(() => {
     for (const [row, line] of JSON.parse(found) as [string, string][]) {

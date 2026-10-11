@@ -23,6 +23,7 @@ import {
   SUBAGENT_REQUEST_PROMPT
 } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
+import { HANDBACK_DESCENDANT_TRAILER, HANDBACK_IDLE_FROM, HANDBACK_IDLE_ROW } from './fixtures/claude-subagent-handback-2.1.296'
 import { promptHookBody } from './agent-hud-prompt-hook.test-support'
 
 // Shapes of Claude Code 2.1.283 (fixtures/claude-agent-message-read-image-2.1.283.ts).
@@ -49,12 +50,14 @@ describe("reading a subagent's message out of its delivery", () => {
     // Both fixtures end at a cut, with no closing tag, as a hook cuts a long one.
     expect(parseSubagentMessage(SUBAGENT_HANDBACK_PROMPT, { cut: true })).toEqual({
       from: 'a7a46867b4f497c96',
-      body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…'
+      body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…',
+      handback: true
     })
     // The user-row shape, behind the opener: a Markdown heading survives as one.
     expect(parseSubagentMessage(SUBAGENT_HANDBACK_USER_ROW, { cut: true })).toEqual({
       from: 'aaf323ee8cc2166b5',
-      body: '## 1. Verdict\n\nThe branch has defects: …'
+      body: '## 1. Verdict\n\nThe branch has defects: …',
+      handback: true
     })
   })
 
@@ -84,6 +87,7 @@ describe("reading a subagent's message out of its delivery", () => {
         from: 'a7a46867b4f497c96',
         body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…',
         cut: true,
+        handback: true,
         anchorId: 'row-7'
       }
     ])
@@ -105,7 +109,7 @@ describe('a short subagent message delivered while the lead is idle, framed afte
 
   it('is read as the subagent message, not a person\'s prompt', () => {
     expect(idle.length).toBeLessThan(2000)
-    expect(parseSubagentMessage(idle)).toEqual({ from: 'a7a46867b4f497c96', body: 'hello from probe' })
+    expect(parseSubagentMessage(idle)).toEqual({ from: 'a7a46867b4f497c96', body: 'hello from probe', handback: false })
     expect(isSubagentMessagePrompt({ text: idle })).toBe(true)
     expect(mergeDesktopPrompts([], [{ nonce: '1', text: idle }])).toEqual([])
   })
@@ -113,6 +117,24 @@ describe('a short subagent message delivered while the lead is idle, framed afte
   it('is read the same with the tail a mid-turn delivery adds', () => {
     const midTurn = `Another Claude session sent a message while you were working:\n<agent-message from="a7a46867b4f497c96">\nhello from probe\n</agent-message>\n${DESCENDANT_FRAME}${REPLY_TAIL}`
     expect(parseSubagentMessage(midTurn)?.body).toBe('hello from probe')
+  })
+
+  // Claude Code 2.1.294 to 2.1.296 put a blank line before the paragraph
+  // (fixtures/claude-subagent-handback-2.1.296.ts). Read with only 2.1.283's
+  // single line break known, a short one the hook did not cut was drawn as the
+  // user's bubble, XML and all (2026-10-11).
+  it('is read the same with the blank line Claude Code 2.1.296 puts before that paragraph', () => {
+    expect(HANDBACK_IDLE_ROW.length).toBeLessThan(2000)
+    expect(parseSubagentMessage(HANDBACK_IDLE_ROW)).toEqual({
+      from: HANDBACK_IDLE_FROM,
+      body: 'The thumbnails now draw under the tool group. The full gate is green.\n\nsession:ok',
+      handback: true
+    })
+    expect(mergeDesktopPrompts([], [{ nonce: '1', text: HANDBACK_IDLE_ROW }])).toEqual([])
+    const short = `Another Claude session sent a message:\n<agent-message from="a7a46867b4f497c96">\nhello from probe\n</agent-message>\n\n${HANDBACK_DESCENDANT_TRAILER}`
+    expect(parseSubagentMessage(short)).toEqual({ from: 'a7a46867b4f497c96', body: 'hello from probe', handback: false })
+    // Two blank lines is not the frame.
+    expect(parseSubagentMessage(short.replace('</agent-message>\n\n', '</agent-message>\n\n\n'))).toBeNull()
   })
 
   it('is a person\'s prompt when anything else follows the closing tag', () => {

@@ -116,14 +116,30 @@ function foldedHolder(
   return null
 }
 
+/**
+ * The messages the chat draws: every one but a hand-back. A subagent's final
+ * report is a user-role record in Claude's transcript, and the Claude app
+ * draws nothing for it. The reply ends, then only the running-tasks line (the
+ * user's screenshots of 2026-10-11, where this chat drew "Message from
+ * general-purpose" at the end of the turn). Left out here, it is placed
+ * nowhere and takes no anchor, the same as the task-notification that
+ * follows it, which the chat's noise filter drops (native-chat-noise.ts). The
+ * rows on either side fold as if it never came. A message a subagent sends
+ * mid-run (no hand-back line) is still drawn.
+ */
+export function drawnAgentMessages(messages: readonly BeaconAgentMessage[]): readonly BeaconAgentMessage[] {
+  return messages.some((message) => message.handback === true) ? messages.filter((message) => message.handback !== true) : messages
+}
+
 /** The folded chat with each message drawn after its anchor. Same array when
  *  there is nothing to draw. */
 export function withAgentMessageRows(
   folded: readonly NativeChatMessage[],
   raw: readonly NativeChatMessage[],
-  messages: readonly BeaconAgentMessage[],
+  allMessages: readonly BeaconAgentMessage[],
   scope: string
 ): NativeChatMessage[] {
+  const messages = drawnAgentMessages(allMessages)
   if (messages.length === 0) {
     return folded as NativeChatMessage[]
   }
@@ -271,7 +287,7 @@ const loggedLate = new Set<string>()
 /** The folded chat with the prompt hook's subagent messages drawn in. Where
  *  each was drawn is stored with the beacon (rememberAgentMessagePlacement). */
 export function useAgentMessageRows(
-  messages: readonly BeaconAgentMessage[],
+  allMessages: readonly BeaconAgentMessage[],
   folded: readonly NativeChatMessage[],
   raw: readonly NativeChatMessage[],
   scope: string | null,
@@ -280,6 +296,7 @@ export function useAgentMessageRows(
    *  says it will not be drawn (review of bc9f07b4). */
   wholeSessionHeld = false
 ): NativeChatMessage[] {
+  const messages = useMemo(() => drawnAgentMessages(allMessages), [allMessages])
   const rows = useMemo(
     () => (scope === null ? (folded as NativeChatMessage[]) : withAgentMessageRows(folded, raw, messages, scope)),
     [folded, messages, raw, scope]

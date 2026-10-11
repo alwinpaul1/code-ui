@@ -303,7 +303,8 @@ export function MobileNativeChatOverlay({
     [absorbedEchoes, baseFolded, desktopEchoes, drawnOwn, session.messages]
   )
   // A subagent's message never reaches the transcript the phone reads; the
-  // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
+  // prompt hook carries it, drawn as the TUI's folded row (2026-09-26). A
+  // hand-back is not drawn: the Claude app draws nothing for one (2026-10-11).
   const agentMessages = controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES
   const wholeSessionHeld = session.status === 'ready' && session.baseRetained !== true && !session.hasMore
   const foldedWithAgents = useAgentMessageRows(agentMessages, foldedWithoutPeers, session.messages, controller.nativeChatStreamScopeKey, wholeSessionHeld)
