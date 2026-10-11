@@ -107,6 +107,19 @@ describe('the jump-to-latest arrow', () => {
     expect(latest!.showJumpToLatest).toBe(false)
   })
 
+  // The Claude app's rule (1.261009.20, decompiled): the newest message off
+  // screen, or more than 48 dp from where it rests.
+  it('shows only once the newest message is more than 48 dp from where it rests', () => {
+    mount(rowsOf(40))
+    act(() => latest!.onScrollBeginDrag())
+    act(() => latest!.evaluateEdge(at(44, 6000)))
+    expect(latest!.showJumpToLatest).toBe(false)
+    act(() => latest!.evaluateEdge(at(48, 6000)))
+    expect(latest!.showJumpToLatest).toBe(false)
+    act(() => latest!.evaluateEdge(at(49, 6000)))
+    expect(latest!.showJumpToLatest).toBe(true)
+  })
+
   it('shows once the reader has scrolled up into history, and goes when they come back to the end', () => {
     mount(rowsOf(40))
     act(() => latest!.onScrollBeginDrag())

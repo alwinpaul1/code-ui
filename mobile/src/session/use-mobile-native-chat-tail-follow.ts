@@ -13,6 +13,14 @@ import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
  *  against an offset that never moves. */
 const AT_TAIL_SLOP_PX = 40
 
+/** How far the newest row must sit from its resting place before the
+ *  jump-to-latest control shows: the Claude app's own rule (1.261009.20,
+ *  docs/claude-app-implementation-notes.md section 2: the newest item off
+ *  screen, or more than 48 dp from its resting offset). Wider than the tail
+ *  slop, so the control never shows while the list still counts as at the
+ *  tail. React Native reports offsets in dp. */
+const JUMP_SHOW_OFFSET_DP = 48
+
 /** Inside this many px of the far end — which in an inverted list is the start
  *  of loaded history — page in older messages. */
 const HISTORY_START_SLOP_PX = 60
@@ -106,11 +114,12 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const hasItems = rows.length > 0
   const listRef = useRef<FlashListRef<TItem>>(null)
   const jumpingRef = useRef(false)
-  // Geometry. The ref is what the handlers read; `contentBelow` is the same
-  // fact as a render flag, for the jump control alone. It flips only when the
-  // list crosses the tail slop, so it costs a render per crossing, not per
-  // sample. An empty list, one row, content shorter than the screen and an
-  // over-scroll past the end all sit at offset <= 0, inside the slop.
+  // Geometry. The ref is what the handlers read; `contentBelow` is the jump
+  // control's own render flag: the newest row more than JUMP_SHOW_OFFSET_DP
+  // from where it rests. It flips only when the list crosses that line, so it
+  // costs a render per crossing, not per sample. An empty list, one row,
+  // content shorter than the screen and an over-scroll past the end all sit at
+  // offset <= 0.
   const atTailRef = useRef(true)
   const [contentBelow, setContentBelow] = useState(false)
   const settleFrameRef = useRef<number | null>(null)
@@ -141,7 +150,6 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // Single writer for geometry, as `setFollowing` is for intent.
   const setAtTail = useCallback((next: boolean) => {
     atTailRef.current = next
-    setContentBelow(!next)
   }, [])
 
   const cancelSettle = useCallback(() => {
@@ -190,6 +198,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
 
   const detachFromTail = useCallback(() => {
     setAtTail(false)
+    setContentBelow(true)
     setFollowing(false)
   }, [setAtTail, setFollowing])
 
@@ -206,6 +215,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const applyMetrics = useCallback(
     (metrics: NativeScrollEvent) => {
       setAtTail(isAtTail(metrics))
+      setContentBelow(metrics.contentOffset.y > JUMP_SHOW_OFFSET_DP)
       // A gesture in flight owns the list; only a settled one may hand it back.
       // A FINGER STILL DOWN counts as in flight even though it is not a drag:
       // without that, the first sample inside the tail slop handed the list
@@ -355,6 +365,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       endDrag()
       jumpingRef.current = true
       setAtTail(true)
+      setContentBelow(false)
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
