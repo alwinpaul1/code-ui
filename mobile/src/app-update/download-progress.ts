@@ -1,6 +1,6 @@
 /** The install store's 0..1 download progress as a whole percent, clamped: a
  *  progress event can arrive a hair over 1, or as NaN from a server that sent
- *  no length. Home's download card and About's row both show it. */
+ *  no length. About's row shows it. */
 export function downloadProgressPercent(progress: number): number {
   if (!Number.isFinite(progress)) {
     return 0

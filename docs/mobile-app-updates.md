@@ -88,10 +88,9 @@ presentation (`src/app-update/AppUpdateDialog.tsx`, `UpdateCard.tsx`,
   Improvements and Security & Bug Fixes each draw under a marker icon of
   their own. A body with no section titles (older GitHub-generated ones)
   draws as one markdown column, as before.
-- A download still shows **no dialog** (the 2026-09-14 rule). Home draws a
-  non-interactive card over the bottom of the list while it runs
-  (`HomeUpdateDownloadCard.tsx`): a determinate bar, the percent, and a
-  TalkBack progressbar value. About's "Check for updates" row says
+- A download still shows **no dialog** (the 2026-09-14 rule). Home draws
+  nothing while it runs (its progress card was removed 2026-10-11 at the
+  user's request). About's "Check for updates" row says
   "Downloading 42%". There is no MB figure and no Cancel: the updater
   reports only a fraction, and neither engine can stop a download once it
   is handed over.
