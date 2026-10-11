@@ -78,6 +78,10 @@ function stepOf(raw: NativeChatMessage[], previews: Record<string, string[]>): N
   return drawn(raw, previews).find((message) => message.id === '790c0712-a09f-4359-9754-562f9f77ac86')!
 }
 
+/** What the hook holds while both pictures were asked of the host and none
+ *  has come back (pending or refused). */
+const ASKED = { [READ_CALL_ID]: [''], [SEND_CALL_ID]: [''] }
+
 function withSend(input: unknown): NativeChatMessage[] {
   return SEND_FILE_TURN.map((message) =>
     message.id === SEND_CALL_ID
@@ -147,7 +151,7 @@ describe('a file the agent sent with SendUserFile', () => {
   })
 
   it('shows a placeholder naming the file, and nothing to tap, while the host has not shared the picture', () => {
-    const step = stepOf(SEND_FILE_TURN, {})
+    const step = stepOf(SEND_FILE_TURN, ASKED)
     const root = render(step)
     expect(imageButtons(root)).toHaveLength(0)
     const placeholders = root.findAll(
@@ -161,7 +165,7 @@ describe('a file the agent sent with SendUserFile', () => {
 
   it('draws the placeholder in the dark theme with the dark surface, not the light one', () => {
     scheme = 'dark'
-    const root = render(stepOf(SEND_FILE_TURN, {}))
+    const root = render(stepOf(SEND_FILE_TURN, ASKED))
     const [chip] = root.findAll(
       (node) => (node.type as unknown) === 'View' && String(node.props.accessibilityLabel ?? '').startsWith('Image on Desktop: where.png')
     )
@@ -171,7 +175,7 @@ describe('a file the agent sent with SendUserFile', () => {
   })
 
   it('sends nothing to draw for an empty file list: the caption alone, no picture, no crash', () => {
-    const step = stepOf(withSend({ files: [], caption: SEND_FILE_CAPTION, status: 'normal', display: 'render' }), {})
+    const step = stepOf(withSend({ files: [], caption: SEND_FILE_CAPTION, status: 'normal', display: 'render' }), { [READ_CALL_ID]: [''] })
     expect(step.blocks.filter((block) => block.type === 'image-ref')).toHaveLength(1) // the Read's
     render(step)
     expect(json()).toContain(SEND_FILE_CAPTION)

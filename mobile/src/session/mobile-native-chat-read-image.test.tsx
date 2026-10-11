@@ -135,7 +135,7 @@ describe('an image the agent read', () => {
   // shared left no trace at all ("I don't see any images in my chat"). Now
   // its slot names the file, with nothing to tap.
   it('names the file in its place while the host has not sent the picture, with nothing to tap', () => {
-    const step = stepOf([BEFORE, ...READ_IMAGE_ROWS, AFTER], {})
+    const step = stepOf([BEFORE, ...READ_IMAGE_ROWS, AFTER], { [READ_IMAGE_CALL_ID]: [''] }) // asked, no answer yet
     expect(step.blocks.filter((block) => block.type === 'image-ref')).toEqual([
       { type: 'image-ref', path: READ_IMAGE_PATH, alt: 'Image the agent read' }
     ])

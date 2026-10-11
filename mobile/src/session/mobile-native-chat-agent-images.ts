@@ -116,9 +116,10 @@ function imageRef(path: string, uri: string | undefined, alt: string): NativeCha
  * A turn's blocks with its pictures put where the Claude app puts them, and
  * each SendUserFile call and its result taken out of the tool run.
  *
- * `previews` holds the picture URIs in `agentImagePaths` order; an empty or
- * missing one leaves that slot a placeholder (path, no URL). A message with
- * no image Read and no readable SendUserFile comes back as it was.
+ * `previews` holds the picture URIs in `agentImagePaths` order; an empty one
+ * leaves that slot a placeholder (path, no URL). With no `previews` at all
+ * (the host was never asked) no slot is drawn. A message with no image Read
+ * and no readable SendUserFile comes back as it was.
  */
 export function placeAgentImages(
   blocks: readonly NativeChatBlock[],
@@ -156,6 +157,11 @@ export function placeAgentImages(
     next += 1
     return uri || undefined
   }
+  // No entry at all means nobody asks the host: the fetch is off on the
+  // structured lane and while disconnected (use-mobile-native-chat-controller.ts).
+  // A placeholder there would never fill, so the slot is not drawn.
+  const slot = (path: string, uri: string | undefined, alt: string): NativeChatImageRefBlock[] =>
+    previews === undefined ? [] : [imageRef(path, uri, alt)]
   const flush = () => {
     out.push(...waiting)
     waiting = []
@@ -181,9 +187,9 @@ export function placeAgentImages(
       const pictures = new Set(sentImagePaths(sent))
       for (const file of sent.files) {
         out.push(
-          pictures.has(file)
-            ? imageRef(file, take(), AGENT_SENT_IMAGE_ALT)
-            : { type: 'text', text: file, presentation: SENT_FILE_PRESENTATION }
+          ...(pictures.has(file)
+            ? slot(file, take(), AGENT_SENT_IMAGE_ALT)
+            : [{ type: 'text', text: file, presentation: SENT_FILE_PRESENTATION } as const])
         )
       }
       continue
@@ -194,7 +200,7 @@ export function placeAgentImages(
       if (read) {
         const uri = take()
         if (!failed.has(block)) {
-          waiting.push(imageRef(read, uri, AGENT_READ_IMAGE_ALT))
+          waiting.push(...slot(read, uri, AGENT_READ_IMAGE_ALT))
         }
       }
       continue

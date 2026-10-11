@@ -51,6 +51,35 @@ describe('pictures from two records of one turn', () => {
     vi.restoreAllMocks()
   })
 
+  // The view draws a slot only for a row the hook holds an entry for
+  // (agent-images-unfetched.test.ts). Switched off — the structured lane, a
+  // dropped connection — it must hold none and ask nothing.
+  it('holds no entry and asks the host nothing while the fetch is switched off', async () => {
+    let previews: Record<string, string[]> | null = null
+    const client = hostClient()
+    const terminalHandleRef = { current: 'term' }
+    const local = {}
+    function Probe() {
+      previews = useHostImagePreviews({
+        client,
+        enabled: false,
+        hostId: 'host',
+        worktreeId: 'worktree',
+        nativeChatContext: { tabId: 'tab', sessionId: 'session' },
+        terminalHandleRef,
+        messages: turn,
+        localPreviews: local
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Probe))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(previews).toEqual({})
+    expect(client.sendRequest).not.toHaveBeenCalled()
+  })
+
   it('draws the sent picture in its own slot when the read one before it was refused', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     let previews: Record<string, string[]> = {}

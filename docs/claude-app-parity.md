@@ -268,7 +268,9 @@ Nothing here is built.
   Rechecked on Orca 1.4.224 and Claude Code 2.1.296 (2026-10-11): unchanged;
   the reader keeps an `image` block only when its source is a URL, and the
   Read result holds base64. Since then the phone draws the slot anyway: the
-  picture when the host sends it, else a placeholder naming the file.
+  picture when the host sends it, else a placeholder naming the file. Only
+  where the host was asked: on the structured lane and while disconnected the
+  fetch is off, and nothing is drawn.
 - **Files the agent sent (SendUserFile, 2026-10-11).** The Claude app draws the
   caption as a line of text and each sent picture as a 250 dp square tile,
   outside the tool group, and does not count the call as "used a tool". The
