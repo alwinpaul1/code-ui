@@ -340,9 +340,12 @@ Nothing here is built.
   read when they are). Codex's spinner is not read, so a Codex tab says
   "Working". The drag-to-full-screen sheet has not run on the device yet.
   The running rows' label shimmer (2026-09-26) replaced a breath that faded
-  icon and label together; its numbers come from the user's screen recording
-  of the Claude app: one sweep every 1.5 s, a band about six characters wide
-  at its foot, a glyph at its centre kept at 26% of its contrast. In that
+  icon and label together. Its numbers first came from the user's screen
+  recording of the Claude app (a band about six characters wide, 26% of a
+  glyph's contrast at its centre); since 2026-10-11 they are the app's own,
+  read from its code (1.261009.20): the label at 10% alpha at the band's
+  centre, the band half the text wide, its centre travelling from -0.25 to
+  1.25 of the width, 1500 ms, linear, restarting. In that
   recording the "N running tasks" star never moved, so the phone's star now
   stands still unless "Working" shows beside it. The shimmer has not run on
   the device yet either.

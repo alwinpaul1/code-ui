@@ -1,32 +1,33 @@
 // ─── The Claude app's running-label shimmer ──────────────────────────────────
 //
-// A still-running row ("◇ Running agent ›", "Running") keeps its icon and
-// chevron still, and a darker band sweeps left to right across the label.
-// Measured 2026-09-26 from the user's screen recording of the Claude app
-// (1080x2316, resampled to 50 fps, glyph by glyph):
+// A still-running row ("Running agent: …", "Running") keeps its icon and
+// chevron still, and a dimming band sweeps left to right across the label.
+// The values are the Claude app's own, read from its code (1.261009.20,
+// decompiled 2026-10-11; docs/claude-app-implementation-notes.md in the main
+// checkout, "Shimmer"): the label's brush is a horizontal linear gradient of
+// base, base at 10% alpha, base, centred on p * W with a half-width of
+// 0.25 * W (W the text's width, so the band is half the text wide), and p runs
+// from -0.25 to 1.25 on a 1500 ms linear tween that restarts. They replace the
+// values measured off a screen recording on 2026-09-26 (a six-character band
+// that left 26% of a glyph's contrast).
 //
-//   - one sweep every 1.50 s, at a constant 230 px/s, about 12 characters a
-//     second across "Running agent";
-//   - a triangle: about six characters wide at its foot, 3.4 at half depth;
-//   - at its centre a glyph keeps 26% of its contrast against the page
-//     (text 160, band 57, page 21 in 8-bit grey); everything else stays at
-//     the label's normal colour;
-//   - no gap to speak of between sweeps (0.06 s), and the icon and chevron
-//     never change.
-//
-// The band's centre travels from half a band before the first character to
-// half a band past the last, so a sweep starts and ends with nothing dimmed
-// and the loop has no seam.
+// This draws one span per glyph, so W is counted in glyphs and each glyph
+// takes the band's value at its own centre. The band starts and ends a
+// quarter of the width outside the text, so a sweep begins and ends with
+// nothing dimmed and the restart has no seam.
 
-/** One sweep, start to end. */
+/** One sweep, start to end: the tween's 1500 ms. */
 export const SHIMMER_PERIOD_MS = 1500
 
-/** Half the band's width at its foot, in characters. */
-export const SHIMMER_HALF_BAND = 3
+/** Where the band's centre starts and ends, as a fraction of the text width. */
+export const SHIMMER_SWEEP_FROM = -0.25
+export const SHIMMER_SWEEP_TO = 1.25
 
-/** How far the band's centre takes a glyph toward the page: the 74% that
- *  leaves it the recording's 26% of its contrast. */
-export const SHIMMER_BAND_DEPTH = 0.74
+/** Half the band's width, as a fraction of the text width. */
+export const SHIMMER_BAND_HALF_WIDTH = 0.25
+
+/** The label's alpha at the band's centre: base at 10% alpha. */
+export const SHIMMER_BAND_ALPHA = 0.1
 
 /** How often the glyph colours change. Each change is a Fabric commit (the
  *  clone to the label, Yoga, a new paragraph state, a new Spannable and
@@ -46,21 +47,28 @@ export function shimmerFramePhase(phase: number): number {
   return Math.floor(sweep * SHIMMER_STEPS) / SHIMMER_STEPS
 }
 
+/** Where the band's centre is at `phase` (one sweep is 0 to 1; whole numbers
+ *  wrap), as a fraction of the text width: -0.25 to 1.25, linear. */
+export function shimmerBandCentre(phase: number): number {
+  'worklet'
+  const sweep = phase - Math.floor(phase)
+  return SHIMMER_SWEEP_FROM + sweep * (SHIMMER_SWEEP_TO - SHIMMER_SWEEP_FROM)
+}
+
 /**
- * How much the band covers character `index` of `count` at `phase` (one sweep
- * is 0 to 1; whole numbers wrap): 1 under the band's centre, falling off in a
- * straight line to 0 half a band away. A worklet, so each glyph's colour runs
- * on the UI thread from the one shared phase.
+ * How much the band covers character `index` of `count` at `phase`: 1 under
+ * the band's centre, falling off in a straight line (the gradient's stops) to
+ * 0 a quarter of the width away. A worklet, so each glyph's colour runs on the
+ * UI thread from the one shared phase.
  */
 export function shimmerBandWeight(phase: number, index: number, count: number): number {
   'worklet'
   if (count <= 0 || index < 0 || index >= count) {
     return 0
   }
-  const sweep = phase - Math.floor(phase)
-  const centre = -SHIMMER_HALF_BAND + sweep * (count + 2 * SHIMMER_HALF_BAND)
-  const distance = Math.abs(index + 0.5 - centre)
-  return Math.max(0, 1 - distance / SHIMMER_HALF_BAND)
+  const at = (index + 0.5) / count
+  const distance = Math.abs(at - shimmerBandCentre(phase))
+  return Math.max(0, 1 - distance / SHIMMER_BAND_HALF_WIDTH)
 }
 
 function parseHex(color: string): [number, number, number] | null {
@@ -89,11 +97,12 @@ export function mixHexColor(from: string, to: string, amount: number): string | 
 }
 
 /**
- * The band's colour: the label sunk three quarters of the way into the page.
- * Darker than the label in dark mode, lighter in light mode, from the live
- * theme either way. A colour this cannot read leaves the label its own colour:
- * the sweep goes invisible and the label stays readable.
+ * The band's colour: the label at 10% alpha over the page, which is the label
+ * moved 90% of the way to the page. Darker than the label in dark mode,
+ * lighter in light mode, from the live theme either way. A colour this cannot
+ * read leaves the label its own colour: the sweep goes invisible and the
+ * label stays readable.
  */
 export function shimmerBandColor(label: string, page: string): string {
-  return mixHexColor(label, page, SHIMMER_BAND_DEPTH) ?? label
+  return mixHexColor(label, page, 1 - SHIMMER_BAND_ALPHA) ?? label
 }
