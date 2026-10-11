@@ -216,7 +216,10 @@ export function MobileNativeChatAttachmentChips({
                 </Pressable>
               </View>
             ) : null}
-            {onRemoveAttachment && !attachment.uploading ? (
+            {onRemoveAttachment ? (
+              // In every state, uploading too, as the Claude app draws it
+              // (g330.b): a photo on its way out can still be taken back. It
+              // comes after the ring in the tree, so it paints over it.
               <Pressable
                 accessibilityLabel={isFile ? 'Remove file' : 'Remove image'}
                 // Inset inside the chip: Android drops touches outside the parent's

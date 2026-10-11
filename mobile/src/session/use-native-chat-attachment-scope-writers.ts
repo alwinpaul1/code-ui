@@ -16,6 +16,8 @@ import {
 } from './mobile-native-chat-upload-retry'
 import {
   nativeChatChipIdCounter,
+  nativeChatRemovedUploads,
+  removedUploadKey,
   useNativeChatImageAttachmentsStore,
   type NativeChatVideoFrameExtractionState
 } from './mobile-native-chat-image-attachments-store'
@@ -28,7 +30,14 @@ export function useNativeChatAttachmentScopeWriters(
 ) {
   const setAttachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.update)
   const addUploadedImages = useCallback(
-    (scope: string, uploadedImages: Omit<PendingNativeChatImage, 'id'>[]) => {
+    (scope: string, landed: Omit<PendingNativeChatImage, 'id'>[]) => {
+      // A picture whose chip was removed while it went up stays out.
+      const uploadedImages = landed.filter(
+        (image) => !nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))
+      )
+      if (uploadedImages.length === 0) {
+        return
+      }
       setAttachmentsByScope((prev) => ({
         ...prev,
         [scope]: appendPendingNativeChatImages(prev[scope] ?? [], uploadedImages, nativeChatChipIdCounter)
@@ -53,6 +62,9 @@ export function useNativeChatAttachmentScopeWriters(
       image: { previewUri: string; batch?: string },
       retry: () => Promise<{ path: string; previewUri: string }>
     ): void => {
+      if (nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))) {
+        return
+      }
       const current = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
       const { chips, id } = failUploadingNativeChatImage(current, image)
       if (id === null) {
@@ -68,11 +80,21 @@ export function useNativeChatAttachmentScopeWriters(
     },
     [setAttachmentsByScope, showToast]
   )
-  // The chip's remove badge. A failed chip's retry goes with it: it holds the
-  // picture's bytes, up to megabytes for a photo.
+  // The chip's remove badge, in every state as in the Claude app. A failed
+  // chip's retry goes with it: it holds the picture's bytes, up to megabytes
+  // for a photo. One still uploading leaves a mark, so its landing (or its
+  // failure) cannot draw it again and a send waiting on it goes without it.
   const removeScopeAttachment = useCallback(
     (scope: string, id: string) => {
       forgetNativeChatUploadRetry(id)
+      const chip = useNativeChatImageAttachmentsStore.getState().byScope[scope]?.find((c) => c.id === id)
+      if (chip?.uploading) {
+        nativeChatRemovedUploads.ids.add(id)
+        // A retry or a markup save lands by chip id, which is gone already.
+        if (chip.batch !== undefined) {
+          nativeChatRemovedUploads.uploads.add(removedUploadKey(scope, chip.batch, chip.previewUri))
+        }
+      }
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, (prev[scope] ?? []).filter((attachment) => attachment.id !== id))
       )

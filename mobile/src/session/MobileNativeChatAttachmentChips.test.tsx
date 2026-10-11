@@ -372,8 +372,9 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(ring[0]!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].bgOverlay })
     const spinner = ring[0]!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]
     expect(spinner?.props.color).toBe(PALETTE[scheme].text)
-    // Nothing to take out or mark up again while the marks upload.
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(0)
+    // Nothing to mark up again while the marks upload, but the remove badge
+    // stays, as the Claude app keeps it on a chip in every state (g330.b).
+    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
     tap(thumbnails(screenNow)[0])
     expect(pictureInViewer(screenNow)).toBe('data:image/png;base64,ZZZZ')
     expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
@@ -546,3 +547,29 @@ describe('a chip whose upload failed', () => {
     expect(pressables(screenNow, 'Retry upload')).toHaveLength(0)
   })
 })
+
+// The Claude app draws its remove "x" on a chip in every state, and removing
+// one still uploading cancels that upload (`g330.b`, `j29.k`, 1.261009.20).
+describe('a chip still uploading', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const UPLOADING: PendingNativeChatImage = { id: 'img-7', path: '', previewUri: 'file:///u.jpg', uploading: true }
+
+  it.each(SCHEMES)('keeps its remove badge over the ring, in the theme\'s colours (%s)', (scheme) => {
+    const onRemoveAttachment = vi.fn()
+    act(() => {
+      renderer = create(screen(scheme, { attachments: [UPLOADING], onRemoveAttachment }))
+    })
+    expect(renderer!.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(1)
+    const [remove] = pressables(renderer!, 'Remove image')
+    expect(remove).toBeDefined()
+    expect(remove!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].text })
+    tap(remove)
+    expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-7')
+  })
+})
+

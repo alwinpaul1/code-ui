@@ -4,6 +4,7 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import { draftWasSent } from './mobile-native-chat-draft-reconcile'
 import {
   nativeChatAttachmentsResets,
+  nativeChatRemovedUploads,
   nativeChatWaitingSends,
   useNativeChatImageAttachmentsStore,
   videoFrameExtractionState
@@ -18,7 +19,7 @@ import {
  *  read) wrote nothing, and the chip it waited on — `null` for `extracting`,
  *  which has no chip yet to name. */
 export type MobileNativeChatSendChipsRefusal = {
-  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy' | 'extracting'
+  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy' | 'extracting' | 'removed'
   readonly chip: PendingNativeChatImage | null
 }
 
@@ -130,7 +131,8 @@ export async function settleMobileNativeChatSendChips(args: {
       if (chip?.uploading) {
         uploading.set(id, chip)
         waiting ??= chip
-      } else if (drawn && !chip) {
+      } else if (drawn && !chip && !nativeChatRemovedUploads.ids.has(id)) {
+        // Gone without the user's remove badge: its upload never landed.
         return { reason: 'failed', chip: drawn }
       } else if (drawn && chip && chip.previewUri !== drawn.previewUri) {
         return { reason: 'markup', chip }
@@ -175,6 +177,10 @@ export function mobileNativeChatSendChipsRefusalMessage({
       return `Message not sent: the last message is still waiting for ${chipNoun(chip)}`
     case 'extracting':
       return 'Message not sent: a video is still being read'
+    case 'removed':
+      // Every chip it waited on was taken out. The words stay in the box: a
+      // `!` line asked no shell question while a photo rode with it.
+      return 'Message not sent: its photo was removed. Send again to send the text alone'
     default: {
       const exhaustive: never = reason
       return exhaustive
@@ -296,7 +302,19 @@ export function useMobileNativeChatSendChips(args: {
       text,
       ids,
       batches: tapBatches,
-      whole: waited.then((settled) => (Array.isArray(settled) ? send(settled) : refuse(settled)))
+      // Every chip it waited on taken out with its remove badge (the Claude
+      // app keeps that badge on an uploading chip): with no words there is
+      // nothing to send and nothing to say; with words, they do not go alone
+      // unasked (a `!` line's shell question is skipped when a photo rides).
+      whole: waited.then((settled) =>
+        !Array.isArray(settled)
+          ? refuse(settled)
+          : settled.length > 0
+            ? send(settled)
+            : text.trim() === ''
+              ? false
+              : refuse({ reason: 'removed', chip: null })
+      )
     }
     nativeChatWaitingSends.set(scope, entry)
     // Runs after `send` has started, in the same turn, so no tap falls between
