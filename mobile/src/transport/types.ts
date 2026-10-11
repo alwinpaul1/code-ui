@@ -66,6 +66,7 @@ export type ConnectionDiagnosticCode =
   | 'host-open-failed'
   | 'app-paused'
   | 'chat-send-timing'
+  | 'chat-outbox'
 
 export type ConnectionLogEntry = {
   id: string

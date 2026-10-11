@@ -9,14 +9,30 @@ import { agentTitle, foldWhitespace, readLaunch, readString } from './mobile-bac
 // ─── A run of agents in the conversation ────────────────────────────────────
 //
 // The Claude app draws the calls that launched agents as one row, "Running
-// agent ›" with a moving highlight while any of them still runs, and a sheet
-// of "Ran agent <description>" rows behind it (recordings of 2026-09-24,
-// Claude Code 2.1.281). Whether an agent still runs is not in the run itself:
-// a background launch returns at once. It is the background-task reader's
-// answer, which the chat hands every row (`NativeChatAgentRunsContext`).
+// agent ›" with a moving highlight, and a sheet of "Ran agent <description>"
+// rows behind it (recordings of 2026-09-24, Claude Code 2.1.281).
+//
+// The highlight follows the CALL, not the agent: it sweeps while an Agent/Task
+// call of the run has no answer yet and the turn making it is live, and stops
+// the moment the answer lands. For a background launch that answer is the
+// launch result ("Async agent launched successfully"), seconds after the call;
+// the agent's own progress is the Background tasks sheet's to show.
+//
+// Why not the background-task reader's word, as it was until 2026-10-11: the
+// row then swept for as long as anything counted the agent as running, and on
+// a hand-started tab nothing ever stopped counting it. A background agent
+// that finishes while the lead is mid-turn is written only as a
+// `queue-operation` and an `attachment`/`queued_command` record, which Orca's
+// reader drops; with no beacon and no host roster to stand in, the row kept
+// sweeping "Running agent: …" over a finished agent and an ended turn
+// ("Running an Agent animation gets stuck", the user, 2026-10-11; 42 of the 67
+// background agents of session 0954729d ended that way). The reader's answer
+// still reaches the run sheet (`agentsRunning`), which tells an opened
+// transcript whether its agent is live.
 
 export type NativeChatAgentRunInputs = {
-  /** Agent ids the background-task reader counts as running. */
+  /** Agent ids the background-task reader counts as running: the run sheet's
+   *  `agentsRunning`, never the row's sweep. */
   runningIds: ReadonlySet<string>
   /** Agent id to the description Claude Code itself gave it
    *  (`confirmedAgentDescriptions`). */
@@ -31,15 +47,21 @@ export type NativeChatAgentRunInputs = {
 export type NativeChatAgentRunEntry = { title: string; agentId: string | null }
 
 export type NativeChatAgentRunState = {
+  /** An Agent/Task call of the run is still being made: it has no answer yet
+   *  and the turn is live. What the row sweeps for. */
   running: boolean
+  /** The background-task reader counts an agent this run launched as running.
+   *  Never drawn on the row (see above); the run sheet hands it to the
+   *  transcript it opens. */
+  agentsRunning: boolean
   entries: NativeChatAgentRunEntry[]
-  /** What the collapsed row names while the run works, the way the Claude app's
-   *  reads "Running agent: Review: story flow" (2026-10-09): the first agent of
-   *  the run that is known to still run, else the last agent call the run's own
-   *  results show unanswered. Never a call that has its answer: falling back to
-   *  the last call named a finished agent while another ran (review,
-   *  2026-10-09). Null where no agent is known to run, or it names nothing (a
-   *  call with no description, name or type). */
+  /** What the collapsed row names while a call is being made, the way the
+   *  Claude app's reads "Running agent: Review: story flow" (2026-10-09): the
+   *  first unanswered call the structured lane marks live, else the last agent
+   *  call the run's own results show unanswered. Never a call that has its
+   *  answer: falling back to the last call named a finished agent while
+   *  another ran (review, 2026-10-09). Null while the run is not running, and
+   *  where the call names nothing (no description, name or type). */
   subject: string | null
 }
 
@@ -161,21 +183,22 @@ export function agentRunState(
       }
     }
   }
-  const unanswered = hasUnansweredAgent(blocks)
-  const running =
-    calls.some((call) => call.live) ||
-    (unanswered && inputs.agentWorking) ||
-    launched.some((id) => inputs.runningIds.has(id))
+  // Only a live turn makes calls: one it left unanswered was abandoned and
+  // never sweeps on, a structured call still marked running included.
+  const running = inputs.agentWorking && hasUnansweredAgent(blocks)
   const entries = calls.map((call) => ({
     title: call.title,
     agentId:
       launched.find((id) => call.description !== null && inputs.confirmed.get(id) === call.description) ??
       (calls.length === 1 && launched.length === 1 ? launched[0]! : null)
   }))
-  const stillRunning = calls.findIndex(
-    (call, index) => call.live || (entries[index]!.agentId !== null && inputs.runningIds.has(entries[index]!.agentId!))
-  )
-  const subjectIndex = stillRunning !== -1 ? stillRunning : unansweredAgentCalls(blocks).at(-1)
+  const open = running ? unansweredAgentCalls(blocks) : []
+  const subjectIndex = open.find((index) => calls[index]!.live) ?? open.at(-1)
   const subjectCall = subjectIndex === undefined ? undefined : calls[subjectIndex]
-  return { running, entries, subject: subjectCall?.named ? subjectCall.title : null }
+  return {
+    running,
+    agentsRunning: launched.some((id) => inputs.runningIds.has(id)),
+    entries,
+    subject: subjectCall?.named ? subjectCall.title : null
+  }
 }

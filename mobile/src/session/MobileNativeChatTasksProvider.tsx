@@ -154,7 +154,7 @@ export function MobileNativeChatTasksProvider({
           visible={runSheet?.visible === true}
           title={runTitle}
           rows={rows}
-          running={openRun?.running ?? false}
+          running={openRun?.agentsRunning ?? false}
           onSelectPair={chooseRowPair}
           onOpenTranscript={agentRuns.openTranscript}
           onAfterClose={finishRunSheet}

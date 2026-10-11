@@ -105,7 +105,13 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       // Written down before the box empties (native-chat-outbox-sends.ts). Fail-open.
       // Not a host command: it writes no row, so nothing could tell it ran, and a resend would run it again.
       if (!isHostCommand) {
-        recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length || attachments?.length) })
+        // The uploaded paths go with it, so the app-wide drainer can send the photos again.
+        recordOutboxSend(origin, text, {
+          hasAttachments: Boolean(images?.length || attachments?.length),
+          ...(attachments?.length
+            ? { attachments: attachments.map(({ path, previewUri }) => ({ path, previewUri })) }
+            : {})
+        })
       }
       clearDraftForSend(origin, text)
       if (!isHostCommand && !images?.length && !attachments?.length) {

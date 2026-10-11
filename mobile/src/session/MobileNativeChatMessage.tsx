@@ -2,7 +2,7 @@ import { memo, useContext, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
-import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
+import { inFlightToolCall } from './mobile-native-chat-in-flight-call'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
@@ -261,10 +261,11 @@ function MobileNativeChatMessageImpl({
   const drawn = drawnNativeChatBlocks(message.blocks)
   const segments = splitTurnIntoSegments(drawn)
   // Still needed whole: the active call is chosen across the turn, and whether
-  // any work ran at all decides the settled-tools rule below.
+  // any work ran at all decides the settled-tools rule below. A call with its
+  // result is never the active one (mobile-native-chat-in-flight-call.ts).
   const { tools } = splitNativeChatBlocks(message.blocks)
   const activeCall = structuredActivityUi
-    ? selectActiveToolCall(tools, { activeTurnIsWorking })
+    ? inFlightToolCall(tools, { activeTurnIsWorking })
     : null
   // A completed turn's activity belongs behind the turn-status caret. Leaving the
   // grouped row visible made a failed child command read as a failed response.

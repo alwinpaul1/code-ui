@@ -60,12 +60,13 @@ export function parkUnconfirmedSend(args: {
         return
       }
       onExpire(entry)
-      // Its time is up with no sign of it. The outbox sees it through when it can: the chat's
-      // recovery, when its view is on screen with a settled transcript, looks again and sends it
-      // once, safely, or offers Retry; with the view hidden it waits for the next chat of its tab.
-      // A photo send, or a chat on screen that cannot tell yet, says what it always said and
-      // leaves the outbox: a recovery that resent it later would double it for a user who did
-      // what the notice says (releaseOutboxSend).
+      // Its time is up with no sign of it. The outbox sees it through: the chat's recovery when
+      // its view is on screen with a settled transcript, and the app-wide drainer otherwise, text
+      // and photos alike, whichever chat is showing; each looks for it again first and sends it
+      // once, safely, or says "Not sent" with Retry. Only an entry the outbox cannot send (no
+      // route, written by an older build, or no drainer mounted) says what it always said and
+      // leaves the outbox, so nothing announced as unconfirmed is resent behind the user
+      // (releaseOutboxSend).
       if (!releaseOutboxSend(entry.outboxId)) {
         void retireOutboxSend(entry.outboxId)
         onUnconfirmed()

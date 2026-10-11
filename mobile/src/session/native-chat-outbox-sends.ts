@@ -1,7 +1,9 @@
 import {
   changeNativeChatOutbox,
   nativeChatOutboxEntries,
-  type NativeChatOutboxEntry
+  type NativeChatOutboxAttachment,
+  type NativeChatOutboxEntry,
+  type NativeChatOutboxRoute
 } from '../storage/native-chat-outbox'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { structuredSessionOperationId, structuredSessionRandomUuid } from './structured-session-operation-id'
@@ -14,9 +16,11 @@ import { noteSendStage } from './native-chat-send-timing'
  * `clearDraftForSend` of a real send), and retired once the send's fate is known in this
  * process: accepted by the desktop, its words put back in the composer, or its transcript row
  * seen. An entry whose send is still running here is LIVE and nobody else touches it. One whose
- * process died, or whose send ended without knowing (an unconfirmed hold that ran out), is left
- * for the chat's recovery (use-native-chat-outbox-recovery.ts), which sends it again once, safely,
- * or puts it back in the composer.
+ * process died, or whose send ended without knowing (an unconfirmed hold that ran out), is seen
+ * through from there: by its chat's recovery (use-native-chat-outbox-recovery.ts) while that chat
+ * is on screen with a settled transcript, and by the app-wide drainer (native-chat-outbox-drainer.ts)
+ * everywhere else, whichever chat or screen is showing. Each looks for its row first and sends it
+ * again only when it did not land, under the entry's one operation id on a structured session.
  *
  * Every send of a press shares one entry: a photo send's start writes it, and the text send the
  * same press makes afterwards adopts it (`offerOutboxAdoption`); a recovery resend adopts the
@@ -36,6 +40,14 @@ type Adoption = { id: string; normalizedText: string; recovery: boolean }
 const adoptions = new Map<string, Adoption>()
 /** Entries whose send stopped in this process without knowing its fate (releaseOutboxSend). */
 const releasedThisRun = new Set<string>()
+/** Where each chat's sends go, by draft key, published by its chat controller
+ *  (use-mobile-native-chat-outbox.ts) and stamped on every entry it writes. */
+const chatRoutes = new Map<string, NativeChatOutboxRoute>()
+/** Whether a chat on screen is safe to type into, by draft key (its recovery's `idle`). */
+const chatIdle = new Map<string, boolean>()
+/** The app-wide drainer is mounted (counted: tests may mount two). */
+let mountedDrainers = 0
+const drainWanted = new Set<() => void>()
 
 export function newOutboxSendId(): string {
   return `send-${Date.now()}-${structuredSessionRandomUuid().slice(0, 12)}`
@@ -68,14 +80,25 @@ export function findOutboxEntry(id: string | undefined): NativeChatOutboxEntry |
 export function recordOutboxSend(
   origin: MobileNativeChatSendOrigin,
   text: string,
-  extra?: { hasAttachments?: boolean }
+  extra?: { hasAttachments?: boolean; attachments?: readonly NativeChatOutboxAttachment[] }
 ): void {
   const id = origin.outboxId
   if (!id) {
     return
   }
   live.add(id)
-  if (findOutboxEntry(id)) {
+  const route = chatRoutes.get(origin.draftKey)
+  const attachments = extra?.attachments?.length ? extra.attachments.map((item) => ({ ...item })) : undefined
+  const existing = findOutboxEntry(id)
+  if (existing) {
+    // The text leg of a photo press adopts the entry its start wrote: it knows the uploaded
+    // paths (a structured session) and the chat's route, which that start may not have.
+    if ((attachments && !existing.attachments) || (route && !existing.route)) {
+      void patchOutboxEntry(id, {
+        ...(attachments && !existing.attachments ? { attachments } : {}),
+        ...(route && !existing.route ? { route: { ...route } } : {})
+      })
+    }
     return
   }
   const entry: NativeChatOutboxEntry = {
@@ -91,7 +114,9 @@ export function recordOutboxSend(
     ...(origin.markersBefore !== undefined ? { markersBefore: origin.markersBefore } : {}),
     ...(origin.knownReceiptNonces ? { knownReceiptNonces: [...origin.knownReceiptNonces] } : {}),
     operationId: structuredSessionOperationId(),
-    ...(extra?.hasAttachments ? { hasAttachments: true as const } : {}),
+    ...(extra?.hasAttachments || attachments ? { hasAttachments: true as const } : {}),
+    ...(attachments ? { attachments } : {}),
+    ...(route ? { route: { ...route } } : {}),
     autoAttempts: 0
   }
   const startedAt = Date.now()
@@ -141,6 +166,13 @@ export function isOutboxSendLive(id: string): boolean {
  * through from here, so the caller says nothing; false means the caller says "Delivery
  * unconfirmed" itself.
  *
+ * With the app-wide drainer mounted (it always is in the app, from the root layout), every entry
+ * that carries its route (and, for a photo, its uploaded paths) is seen through: by the chat's
+ * recovery when that chat is on screen with a settled transcript, and by the drainer otherwise,
+ * whatever chat or screen is showing (the user: "All messages must be send reliability and must
+ * not drop", 2026-10-11). The rules below are for an entry without them (written by 0.9.128 or
+ * earlier, or by a send with no chat route) or a process with no drainer (tests):
+ *
  * - Its chat view is on screen with a settled transcript: that chat's recovery takes it over now.
  * - Its chat view is on screen but its transcript is not settled (loading, reloading): false. The
  *   recovery cannot tell whether it landed, and waiting for it left "Sending…" up for good.
@@ -160,13 +192,100 @@ export function releaseOutboxSend(id: string | undefined): boolean {
   live.delete(id)
   releasedThisRun.add(id)
   const entry = findOutboxEntry(id)
-  if (entry === undefined || entry.hasAttachments) {
+  if (entry === undefined) {
+    return false
+  }
+  if (mountedDrainers > 0 && outboxEntryDrainable(entry)) {
+    wantOutboxDrain()
+    return true
+  }
+  if (entry.hasAttachments) {
     return false
   }
   if ((recoveries.get(entry.draftKey) ?? 0) > 0) {
     return (settledRecoveries.get(entry.draftKey) ?? 0) > 0
   }
   return mountedRecoveries > 0
+}
+
+/** Whether the app-wide drainer can send this entry with no chat on screen: it knows where the
+ *  entry goes (with its session and, for a terminal, its agent) and, for photos and files, the
+ *  desktop paths to send again. */
+export function outboxEntryDrainable(entry: NativeChatOutboxEntry): boolean {
+  const route = entry.route
+  if (!route || !route.sessionId || (route.lane === 'terminal' && !route.agent)) {
+    // With no session (a first message before the agent named one) the drainer has no transcript
+    // to look in and no session to send to: the chat's recovery sees it through, as before.
+    return false
+  }
+  return !entry.hasAttachments || (entry.attachments?.length ?? 0) > 0
+}
+
+/** The chat controller publishes where this chat's sends go; returns the unpublish. */
+export function publishOutboxChatRoute(draftKey: string, route: NativeChatOutboxRoute): () => void {
+  chatRoutes.set(draftKey, route)
+  return () => {
+    if (chatRoutes.get(draftKey) === route) {
+      chatRoutes.delete(draftKey)
+    }
+  }
+}
+
+/** A chat on screen says whether it is safe to type into (its composer empty, the agent idle). */
+export function publishOutboxChatIdle(draftKey: string, idle: boolean): () => void {
+  chatIdle.set(draftKey, idle)
+  return () => {
+    if (chatIdle.get(draftKey) === idle) {
+      chatIdle.delete(draftKey)
+    }
+  }
+}
+
+/** Whether a chat whose view is on screen reported itself safe to type into; true for a chat not
+ *  on screen, which has no phone composer mirroring into its terminal. */
+export function outboxChatIdleOrHidden(draftKey: string): boolean {
+  return (recoveries.get(draftKey) ?? 0) === 0 || chatIdle.get(draftKey) === true
+}
+
+/** A chat's recovery is on screen with a settled transcript: it sees that chat's text entries through. */
+export function outboxChatRecoveryOwns(draftKey: string): boolean {
+  return (recoveries.get(draftKey) ?? 0) > 0 && (settledRecoveries.get(draftKey) ?? 0) > 0
+}
+
+/** Takes the entry for one automatic send: false when a send already carries it. */
+export function claimOutboxSend(id: string): boolean {
+  if (live.has(id)) {
+    return false
+  }
+  live.add(id)
+  return true
+}
+
+/** The automatic send that claimed it is over; the entry is free again (if still there). */
+export function unclaimOutboxSend(id: string): void {
+  live.delete(id)
+}
+
+/** The app-wide drainer is mounted; returns the unmount. */
+export function mountOutboxDrainer(): () => void {
+  mountedDrainers += 1
+  return () => {
+    mountedDrainers = Math.max(0, mountedDrainers - 1)
+  }
+}
+
+/** Something happened that the drainer should look at now (a send released, a Retry). */
+export function wantOutboxDrain(): void {
+  for (const listener of drainWanted) {
+    listener()
+  }
+}
+
+export function subscribeOutboxDrainWanted(listener: () => void): () => void {
+  drainWanted.add(listener)
+  return () => {
+    drainWanted.delete(listener)
+  }
 }
 
 /** An outbox recovery is mounted (the chat controller's), whatever its tab shows. */
@@ -205,4 +324,8 @@ export function resetOutboxSendsForTests(): void {
   mountedRecoveries = 0
   adoptions.clear()
   releasedThisRun.clear()
+  chatRoutes.clear()
+  chatIdle.clear()
+  mountedDrainers = 0
+  drainWanted.clear()
 }

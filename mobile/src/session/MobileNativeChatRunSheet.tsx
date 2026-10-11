@@ -61,7 +61,8 @@ export function MobileNativeChatRunSheet({
   /** The run's past-tense sentence: "Used a tool, ran 3 commands, ran an agent". */
   title: string
   rows: readonly RunSheetRow[]
-  /** An agent of the run still runs; handed to its transcript viewer. */
+  /** The background-task reader counts an agent of the run as running
+   *  (`agentsRunning`, not the row's sweep); handed to its transcript viewer. */
   running: boolean
   onSelectPair: (pair: NativeChatToolPair) => void
   onOpenTranscript?: (agentId: string, title: string, running: boolean) => void

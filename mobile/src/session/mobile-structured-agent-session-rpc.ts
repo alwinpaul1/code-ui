@@ -91,7 +91,8 @@ export type StructuredAgentSessionMutate = <TValue>(
   options?: MutateOptions
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
-class AgentSessionRpcResponseError extends Error {
+/** The host answered the call with an error: it ran, and refused (as against a link that failed). */
+export class AgentSessionRpcResponseError extends Error {
   constructor(
     readonly code: string,
     message: string,

@@ -118,3 +118,21 @@ describe('what the recovery does with it', () => {
     expect(plan({ entry: entry({ hasAttachments: true }) })).toEqual({ kind: 'give-back', reason: 'attachments' })
   })
 })
+
+// Found by the Opus review of 4efae5746: a terminal entry the app-wide drainer typed a moment ago
+// was called "Not sent" by the chat opened right after (its Retry then typed it twice), and a
+// Retry tapped before the drainer typed it again could follow straight behind the drainer.
+describe('a terminal entry typed a moment ago', () => {
+  it('waits out the confirm wait before it is called "Not sent" or typed again, Retry or not', () => {
+    const typed = entry({ autoAttempts: 1, lastAttemptAt: NOW - 5_000 })
+    expect(plan({ entry: typed })).toEqual({ kind: 'wait' })
+    expect(plan({ entry: typed, userRetry: true })).toEqual({ kind: 'wait' })
+    const confirmed = entry({ autoAttempts: 1, lastAttemptAt: NOW - 21_000 })
+    expect(plan({ entry: confirmed })).toEqual({ kind: 'fail' })
+    expect(plan({ entry: confirmed, userRetry: true })).toEqual({ kind: 'send' })
+  })
+
+  it('still retires one whose row landed inside the wait', () => {
+    expect(plan({ entry: entry({ autoAttempts: 1, lastAttemptAt: NOW - 5_000 }), landing: 'landed' })).toEqual({ kind: 'retire' })
+  })
+})

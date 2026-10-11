@@ -4,8 +4,13 @@ Shows the agent's background shells and subagents as "N running tasks" on
 the status line above the composer (beside the agent's own spinner verb, as
 the Claude app draws it since 2026-09-24), with a sheet of Running and
 Finished rows that opens part way and drags up to full screen. A run of Agent
-calls in the conversation reads "Running agent" while any of its agents is
-still in the running list below, and "Ran N agents" after.
+calls in the conversation reads "Running agent" only while a call is still
+being made (no answer yet, in a live turn), and "Ran N agents" once every
+launch has answered, a background agent still in the running list included.
+Until 2026-10-11 it followed the running list, and stuck: a background agent
+that finishes mid-turn is written only as records Orca's reader drops, so on a
+hand-started tab with no host roster nothing ever retired it
+(`mobile-native-chat-agent-run.ts`).
 
 **Two readers, one row.** Which one runs is decided by the lane, not by the
 agent:

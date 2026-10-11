@@ -50,12 +50,23 @@ vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => false }))
 // while the agent worked; Code UI read "Used a tool, ran 3 commands, ran an
 // agent" in the past tense. The fixture's inputs are stand-ins of the same shape.
 
+//
+// Since 2026-10-11 ("Running an Agent animation gets stuck") the row sweeps
+// only while the launch is being made: the Agent call has no answer yet and
+// the turn is live. Once the launch result is in it reads its sentence, the
+// background agent still running or not (mobile-native-chat-agent-run.ts).
+
 const RUNNING: NativeChatAgentRuns = {
   runningIds: new Set([MIXED_RUN_AGENT_ID]),
   confirmed: new Map(),
-  agentWorking: false
+  agentWorking: true
 }
 const REPORTED: NativeChatAgentRuns = { ...RUNNING, runningIds: new Set() }
+
+/** The run while the Agent call is still being made: its launch result not yet in. */
+function launching(): NativeChatBlock[] {
+  return mixedRunWithBackgroundAgent().slice(0, -1)
+}
 
 function Harness({
   blocks,
@@ -136,9 +147,20 @@ describe('a mixed run whose background agent is still running', () => {
 
   // 2026-10-09, same session side by side: the Claude app's row reads "Running
   // agent: Review: story flow ›". Ours read "Running agent  2 failed  +32 −0 ›".
-  it("reads Running agent and the agent it names while a mixed run's background agent still runs", () => {
-    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+  it("reads Running agent and the agent it names while a mixed run's agent launch is being made", () => {
+    const tree = render({ blocks: launching(), agentRuns: RUNNING })
     expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+  })
+
+  it('reads its sentence once the launch has answered, though the background agent still runs', () => {
+    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+    expect(headerText(tree)).toBe('Used a tool, ran 3 commands, ran an agent')
+    expect(tree.root.findAll(isLabel)).toHaveLength(0)
+  })
+
+  it('stops sweeping once the turn has ended with the launch never answered', () => {
+    const tree = render({ blocks: launching(), agentRuns: { ...RUNNING, agentWorking: false } })
+    expect(tree.root.findAll(isLabel)).toHaveLength(0)
   })
 
   it('names the first agent that still runs, not one that has reported', () => {
@@ -162,7 +184,7 @@ describe('a mixed run whose background agent is still running', () => {
   })
 
   it('draws the two-diamond glyph and a shimmering label, with the chevron after them', () => {
-    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+    const tree = render({ blocks: launching(), agentRuns: RUNNING })
     const header = tree.root.findByProps({ testID: 'tool-run-header' })
     expect(header.findAllByProps({ testID: 'agent-run-glyph' })).not.toHaveLength(0)
     const glyphs = agentLabel(tree).findAll((node) => String(node.type) === 'Text' && node !== agentLabel(tree))
@@ -196,7 +218,7 @@ describe('a mixed run whose background agent is still running', () => {
   // Claude Code writes results in the order they are acknowledged, and Orca drops
   // the tool_use ids: a background launch's answer can land before an earlier
   // call's. Paired by order, the Read's slot held the launch text.
-  it('reads Running agent when the launch result lands before the earlier call\'s result', () => {
+  it('settles when the launch result lands before the earlier call\'s result', () => {
     const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'Read', input: { file_path: 'notes.md' }, state: 'completed' },
@@ -205,16 +227,30 @@ describe('a mixed run whose background agent is still running', () => {
       { type: 'tool-result', output: '# Notes' }
     ]
     const tree = render({ blocks, agentRuns: RUNNING })
+    expect(tree.root.findAll(isLabel)).toHaveLength(0)
+  })
+
+  it('reads Running agent while the launch is unanswered, though the earlier call has answered', () => {
+    const [agentCall] = mixedRunWithBackgroundAgent().slice(-2)
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Read', input: { file_path: 'notes.md' }, state: 'completed' },
+      { type: 'tool-result', output: '# Notes' },
+      agentCall!
+    ]
+    const tree = render({ blocks, agentRuns: RUNNING })
     expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
   })
 
   // The failure count and the +A −R pill stay in the sheet (its title and its
   // file rows); the collapsed row says what is running and nothing else.
   it('leaves the failed count and the line-count pill off the Running agent row', () => {
-    const blocks = mixedRunWithBackgroundAgent()
+    const blocks = launching()
     const at = blocks.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')
     blocks[at] = { type: 'tool-result', output: 'ssh: timed out', isError: true }
-    blocks.push(
+    // Before the Agent call, which stays unanswered: the launch is being made.
+    blocks.splice(
+      -1,
+      0,
       { type: 'tool-call', name: 'Write', input: { file_path: '/repo/NEW.md', content: 'x\ny\n' } },
       { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
     )
@@ -235,7 +271,7 @@ describe('a mixed run whose background agent is still running', () => {
   })
 
   it('announces the agent it names, as the row says it', () => {
-    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+    const tree = render({ blocks: launching(), agentRuns: RUNNING })
     expect(tree.root.findByProps({ testID: 'tool-run-header' }).props.accessibilityLabel).toBe(
       `Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`
     )
@@ -250,7 +286,7 @@ describe('a mixed run whose background agent is still running', () => {
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)('keeps the label and glyph on the theme, in %s', (scheme, palette) => {
-    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING }, scheme)
+    const tree = render({ blocks: launching(), agentRuns: RUNNING }, scheme)
     expect(flattenColor(agentLabel(tree).props.style)).toBe(palette.textSecondary)
     expect(tree.root.findByProps({ testID: 'agent-run-glyph' }).props.children.props.stroke).toBe(
       palette.textMuted

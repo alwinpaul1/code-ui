@@ -77,8 +77,13 @@ function statusWith(running: readonly (typeof PARALLEL_AGENTS)[number][]): Agent
   } as AgentStatusEntry
 }
 
-function turn(): NativeChatMessage {
-  return foldMobileNativeChatMessages(parallelAgentMessages()).at(-1)!
+function turn(messages = parallelAgentMessages()): NativeChatMessage {
+  return foldMobileNativeChatMessages(messages).at(-1)!
+}
+
+/** The five calls made and none answered yet: the launches still being made. */
+function launchesBeingMade(): NativeChatMessage[] {
+  return parallelAgentMessages().filter((message) => message.role === 'assistant')
 }
 
 function texts(renderer: ReactTestRenderer): string[] {
@@ -141,17 +146,19 @@ describe('the conversation row for five agents launched at once', () => {
     status: AgentStatusEntry | null
     agentWorking: boolean
     scheme?: 'light' | 'dark'
+    messages?: NativeChatMessage[]
   }) {
+    const messages = args.messages ?? parallelAgentMessages()
     await act(async () => {
       renderer = create(
         <ThemeProvider initialPreference={args.scheme ?? 'light'}>
           <MobileNativeChatTasksProvider
-            messages={parallelAgentMessages()}
+            messages={messages}
             agent="claude"
             agentWorking={args.agentWorking}
             agentStatus={args.status}
           >
-            <MobileNativeChatMessage message={turn()} />
+            <MobileNativeChatMessage message={turn(messages)} />
           </MobileNativeChatTasksProvider>
         </ThemeProvider>
       )
@@ -174,9 +181,11 @@ describe('the conversation row for five agents launched at once', () => {
 
   // 2026-10-09, the Claude app: "Running agent: Review: story flow ›", the
   // agent it names, not a bare "Running agent".
-  it('reads "Running agent: <the agent that runs>" while any of them runs, not "Ran 5 agents"', async () => {
-    const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
-    expect(labelText(tree)).toBe(`Running agent: ${PARALLEL_AGENTS[2].description}`)
+  // Since 2026-10-11 the row sweeps while launches are being made, not for as
+  // long as the agents run (MobileNativeChatAgentRun-stuck.test.tsx).
+  it('reads "Running agent: <the agent being launched>" while the launches are being made, not "Ran 5 agents"', async () => {
+    const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, messages: launchesBeingMade() })
+    expect(labelText(tree)).toBe(`Running agent: ${PARALLEL_AGENTS[4].description}`)
     expect(texts(tree)).not.toContain('Ran 5 agents')
   })
 
@@ -184,8 +193,8 @@ describe('the conversation row for five agents launched at once', () => {
   // animations must be like this". There the diamonds and the chevron stand
   // still and a darker band sweeps across the label; nothing fades as a whole.
   // Until then icon and label breathed together (d96fef9b).
-  it('keeps the diamonds still and sweeps a shimmer across the label while an agent runs', async () => {
-    const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
+  it('keeps the diamonds still and sweeps a shimmer across the label while a launch is being made', async () => {
+    const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, messages: launchesBeingMade() })
     // The Svg alone: no animated wrapper around it.
     expect(tree.root.findAll((node) => node.props.testID === 'agent-run-glyph')).toHaveLength(1)
     const row = tree.root.find(
@@ -193,7 +202,7 @@ describe('the conversation row for five agents launched at once', () => {
     )
     expect(row.findAll((node) => opacityOf(node.props.style) !== undefined)).toEqual([])
     // The label is drawn a glyph at a time, each one coloured by the sweep.
-    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${PARALLEL_AGENTS[2].description}`)
+    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${PARALLEL_AGENTS[4].description}`)
   })
 
   it('draws "Ran 5 agents" whole, with nothing left sweeping, once they have all reported', async () => {

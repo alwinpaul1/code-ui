@@ -54,7 +54,8 @@ export function ToolRun(props: ToolRunProps) {
   return <ToolRunView {...props} />
 }
 
-/** Hands its children whether an agent of the run still runs. Only a run that
+/** Hands its children whether an Agent/Task call of the run is still being
+ *  made (`agentRunState`'s `running`: no answer yet, in a live turn). Only a run that
  *  holds an Agent/Task call reads the chat's agent state, which changes with
  *  every message and status update: read by every run it re-rendered each one
  *  under the memoised message row (review, 2026-10-01). It wraps the header
@@ -209,9 +210,9 @@ function ToolRunView({
   // a run that is one result whose call the window cut. Counted over every
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
-  // The Claude app's row for a run with an agent still working in it is
-  // "Running agent ›" (`runningAgent`, read by RunningAgentGate), whatever
-  // else the run did (2026-10-01 screenshots).
+  // The Claude app's row for a run with an agent launch in it is "Running
+  // agent ›" (`runningAgent`, read by RunningAgentGate), whatever else the run
+  // did (2026-10-01 screenshots), until the launch has its answer (2026-10-11).
   const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =

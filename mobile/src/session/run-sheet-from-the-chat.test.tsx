@@ -163,9 +163,11 @@ describe('the run sheet opened from the chat', () => {
   // a run-sheet row opens, is rendered after the chat and comes last.
   const detailPair = (tree: ReactTestRenderer) => tree.root.findAllByType('ToolDetailSheet' as never).at(-1)!.props.pair
 
-  it('reads Running agent on the row, then lists the five calls behind a tap', async () => {
+  // Since 2026-10-11 the row settles once the launch has answered, the agent
+  // still running or not (mobile-native-chat-agent-run.ts).
+  it('reads its sentence once the launch has answered, then lists the five calls behind a tap', async () => {
     const tree = await render(true)
-    expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label')).not.toHaveLength(0)
+    expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label')).toHaveLength(0)
     expect(tree.root.findAll((n) => n.props.testID === 'run-sheet')).toHaveLength(0)
     await press(tree, 'tool-run-header')
     expect(tree.root.findAll((n) => n.props.testID === 'tool-line')).toHaveLength(0)
