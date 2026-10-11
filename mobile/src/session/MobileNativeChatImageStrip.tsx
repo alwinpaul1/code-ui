@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Image, Pressable, ScrollView, useWindowDimensions } from 'react-native'
 import { openImagePreview } from './image-preview-store'
+import { chatMarkupOpener } from './chat-image-markup-target'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 /** A figure the agent read fills the message width, up to most of the screen
@@ -66,7 +67,7 @@ export const AGENT_IMAGE_TILE_RADIUS = 10
 export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; label: string }) {
   return (
     <Pressable
-      onPress={() => openImagePreview(uri, label)}
+      onPress={() => openImagePreview(uri, label, 0, chatMarkupOpener(uri))}
       accessibilityRole="imagebutton"
       accessibilityLabel={label}
       style={{ alignSelf: 'flex-start', maxWidth: '100%' }}

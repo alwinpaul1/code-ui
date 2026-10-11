@@ -103,9 +103,33 @@ export function ImagePreviewModal({
                 this exact photo, the one way into it (the Claude app's
                 pencil, 2026-09-24, on the right since 2026-09-26; a tap on the chip opens this preview
                 first, 2026-09-26). Absent
-                for a sent bubble or a markdown figure, which have no editor
-                behind them. */}
+                for a markdown figure or a sent bubble. A picture the agent
+                read or sent opens the same editor, its Done attaching the
+                drawing to the composer (chat-image-markup-target.ts). The
+                pencil sits left of download, as in the Claude app. */}
             <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {preview.onEdit ? (
+              <Pressable
+                onPress={() => {
+                  const onEdit = preview.onEdit
+                  closeImagePreview()
+                  onEdit?.()
+                }}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Edit image"
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
+                })}
+              >
+                <Pencil size={20} color="#fff" strokeWidth={2.2} />
+              </Pressable>
+            ) : null}
             {save.available && preview.sources[preview.index]?.kind === 'bitmap' ? (
               <Pressable
                 onPress={save.run}
@@ -132,30 +156,6 @@ export function ImagePreviewModal({
                 )}
               </Pressable>
             ) : null}
-            {preview.onEdit ? (
-              <Pressable
-                onPress={() => {
-                  const onEdit = preview.onEdit
-                  closeImagePreview()
-                  onEdit?.()
-                }}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Edit image"
-                style={({ pressed }) => ({
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
-                })}
-              >
-                <Pencil size={20} color="#fff" strokeWidth={2.2} />
-              </Pressable>
-            ) : (
-              <View />
-            )}
             </View>
           </View>
           {/* Why a paged ScrollView: the Claude app's viewer swipes through the

@@ -138,6 +138,17 @@ describe("the fullscreen preview's download button", () => {
     return renderer!
   }
 
+  // The Claude app's top bar: X at the left; the pencil, then download, at the right.
+  it('puts the pencil left of the download button', () => {
+    openImagePreview('file:///a.png', 'Image the agent sent', 0, vi.fn())
+    renderWith(vi.fn(async () => ({ status: 'saved' as const })))
+    const order = renderer!.root
+      .findAll((node) => String(node.type) === 'Pressable')
+      .map((node) => node.props.accessibilityLabel)
+      .filter((label) => label === 'Close' || label === 'Edit image' || label === 'Download image')
+    expect(order).toEqual(['Close', 'Edit image', 'Download image'])
+  })
+
   it('saves the picture on screen, and says so', async () => {
     const onSave = vi.fn(async () => ({ status: 'saved' as const }))
     openImagePreview(['file:///a.png', 'file:///b.png'], 'Image the agent sent', 1)
