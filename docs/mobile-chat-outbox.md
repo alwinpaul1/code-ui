@@ -94,6 +94,21 @@ its session (a first message), which has no transcript to look in.
   reads with its own composer and queue readers. An agent whose queue box the phone cannot read
   is never typed into by the drainer: its entries wait for their chat.
 
+### Written before the send gate (S4, 2026-10-11)
+
+A composer text send writes its entry before the send gate, marked `atGate` while its words are
+still in the composer (`native-chat-send-gate-outbox.ts`). If the gate refuses because the
+desktop could not be reached within the send's budget, the entry is handed to the outbox
+(`releaseOutboxSendFromGate`): the box empties, the bubble is drawn, the banner says "Message
+waits for your desktop: it is sent when the connection is back", and the drainer (or the chat's
+recovery) sends it once the link is up, by the same evidence-gated rules as any entry. Nothing
+was typed, so its first automatic try is not a resend. A refusal the outbox cannot see through
+(no route, no drainer) or any other refusal before a write gives the words back with a Retry
+(S5). The structured lane does the same, under the entry's operation id. Photo sends and recovery
+resends keep their own refusal paths. An app killed while a send waits at the gate leaves the
+words in the composer; its `atGate` entry is dropped when the store is read, so it is never sent
+beside them.
+
 ### One id per send (S1, 2026-10-11)
 
 Every part of one press carries the outbox entry's id (`send-<ms>-<12 hex>`): the entry, the

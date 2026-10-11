@@ -60,6 +60,10 @@ export type NativeChatOutboxEntry = {
   attachments?: NativeChatOutboxAttachment[]
   /** When the last automatic send of it started, by the phone's clock. */
   lastAttemptAt?: number
+  /** Written before the send gate (S4) and not past it yet: its words are still in the
+   *  composer. A process that dies here leaves them there, so such an entry is dropped when the
+   *  store is read instead of being sent beside them. */
+  atGate?: true
 }
 
 export type NativeChatOutboxRoute = {
@@ -160,7 +164,7 @@ function parseStored(raw: string | null, now: number): NativeChatOutboxEntry[] {
     return Array.isArray(parsed)
       ? parsed
           .filter(isEntry)
-          .filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS)
+          .filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS && entry.atGate !== true)
           .map(withReadableExtras)
       : []
   } catch {

@@ -14,6 +14,9 @@ import { structuredAgentSessionRejectionNotice } from '../../../src/shared/struc
 export type MobileNativeChatSendErrorDetails = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
   failure?: AgentSessionFailureFact
+  /** A send refused before anything was written, its words back in the composer: the banner
+   *  offers Retry, which sends them again (S5, the Claude app's snackbar). */
+  retry?: true
 }
 
 export type MobileNativeChatSendErrorReporter = (

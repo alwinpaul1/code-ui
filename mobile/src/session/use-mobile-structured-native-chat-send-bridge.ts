@@ -12,6 +12,8 @@ import {
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { outboxOperationId, recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 import { noteSendOutcome, noteSendStage } from './native-chat-send-timing'
+import { openSendGateOutbox } from './native-chat-send-gate-outbox'
+import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 
 type StructuredNativeChatAttachment = {
   id?: string
@@ -43,7 +45,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Draws a text send's bubble as its box empties (showSendingEchoWith). */
   showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
-  onSendError: (message: string) => void
+  onSendError: (message: string, details?: MobileNativeChatSendErrorDetails) => void
 }): {
   send: (text: string, images?: string[]) => Promise<boolean>
   sendWithOutcome: (
@@ -94,23 +96,36 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       // that waited hands the rest of its budget on, so the whole send stays
       // inside one; one that did not keeps the budget it was given.
       let deadline = sharedDeadline
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
+      // A text send is written down before the gate, so a gate that wanted the desktop hands it to
+      // the outbox, which sends it under its operation id once the link is back (S4). Not a host
+      // command: it writes no row, so nothing could tell it ran, and a resend would run it again.
+      const gate = openSendGateOutbox({
+        origin,
+        draftText: text,
+        chat: !isHostCommand && !attachments?.length,
+        syncComposer: true,
+        ...(images ? { images } : {}),
+        report: onSendError,
+        clearDraftForSend,
+        ...(showSendingEcho ? { showSendingEcho } : {})
+      })
+      gate.enter()
       if (!sendGate.isReady()) {
         deadline ??= openMobileNativeChatSendBudget()
-        if (!(await sendGate.wait(deadline))) {
-          return 'rejected'
+        let refused: 'rejected' | 'unknown' = 'rejected'
+        if (!(await sendGate.wait(deadline, undefined, (message, unready) => { refused = gate.refuse(message, unready) }))) {
+          return refused
         }
       }
       const sendStructured = latestSendStructured.current
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
-      // Written down before the box empties (native-chat-outbox-sends.ts). Fail-open.
-      // Not a host command: it writes no row, so nothing could tell it ran, and a resend would run it again.
-      if (!isHostCommand) {
+      // Before the box empties (native-chat-outbox-sends.ts). Fail-open.
+      gate.pass()
+      if (!isHostCommand && attachments?.length) {
         // The uploaded paths go with it, so the app-wide drainer can send the photos again.
         recordOutboxSend(origin, text, {
-          hasAttachments: Boolean(images?.length || attachments?.length),
-          ...(attachments?.length
-            ? { attachments: attachments.map(({ path, previewUri }) => ({ path, previewUri })) }
-            : {})
+          hasAttachments: true,
+          attachments: attachments.map(({ path, previewUri }) => ({ path, previewUri }))
         })
       }
       clearDraftForSend(origin, text)

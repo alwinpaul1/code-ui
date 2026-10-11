@@ -51,8 +51,13 @@ const MOBILE_NATIVE_CHAT_SEND_READY_POLL_MS = 100
 /** A lane's send gate. Each call resolves to the client to write on, or to
  *  null once the one line saying why not has gone to `onUnready`. */
 export type MobileNativeChatSendGate = {
-  /** Waits for the link and the lane, on the send's own budget. */
-  readonly wait: (deadline: number, abandoned?: () => boolean) => Promise<RpcClient | null>
+  /** Waits for the link and the lane, on the send's own budget. `onUnready` replaces the gate's
+   *  own for this one call, and hears why as well (a composer send's outbox, S4). */
+  readonly wait: (
+    deadline: number,
+    abandoned?: () => boolean,
+    onUnready?: (message: string, unready: MobileNativeChatSendUnready) => void
+  ) => Promise<RpcClient | null>
   /** Does not wait: for a write chosen against a screen the phone has not
    *  seen since the link dropped (a card answer, a command). `onUnready`
    *  replaces the gate's own for this one call: a pick from the option drawer
@@ -79,18 +84,23 @@ export function useMobileNativeChatSendGate(
     const settle = (
       readiness: MobileNativeChatSendReadiness,
       action?: string,
-      onUnready: (message: string) => void = latest.current.onUnready
+      onUnready?: (message: string, unready: MobileNativeChatSendUnready) => void
     ): RpcClient | null => {
       if (readiness.ready) {
         return readiness.client
       }
-      onUnready(
-        mobileNativeChatSendUnreadyMessage(action ?? latest.current.action, readiness, latest.current.lane)
-      )
+      const message = mobileNativeChatSendUnreadyMessage(action ?? latest.current.action, readiness, latest.current.lane)
+      // The gate's own reporter hears the line alone: a send-error reporter's second argument is
+      // its details, not this.
+      if (onUnready) {
+        onUnready(message, readiness)
+      } else {
+        latest.current.onUnready(message)
+      }
       return null
     }
     return {
-      wait: async (deadline, abandoned) => {
+      wait: async (deadline, abandoned, onUnready) => {
         const startedAt = Date.now()
         const readiness = await waitForMobileNativeChatSendable({ read, deadline, abandoned })
         // How long the send waited for the link and the lane, and the path it then had.
@@ -98,7 +108,7 @@ export function useMobileNativeChatSendGate(
         if (readiness.ready) {
           noteSendPath((readiness.client as Partial<StableLogicalRpcClient>).getActivePath?.())
         }
-        return settle(readiness)
+        return settle(readiness, undefined, onUnready)
       },
       now: (action, onUnready) => settle(mobileNativeChatSendReadinessNow(read()), action, onUnready),
       isReady: () => readyClient(read()) !== null
