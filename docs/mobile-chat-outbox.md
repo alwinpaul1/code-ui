@@ -109,6 +109,16 @@ resends keep their own refusal paths. An app killed while a send waits at the ga
 words in the composer; its `atGate` entry is dropped when the store is read, so it is never sent
 beside them.
 
+The composer's own send looks at the screen and waits for the link in the image hook
+(`sendFollowingTheTab`) before the text send runs, so the same hand-off sits there too
+(`parkRefusedComposerSend`): a text send refused for no input box ("Claude's input box isn't on
+the desktop screen. The message will send when it is back."), no screen, an unreadable screen,
+or a desktop that never came back waits in the outbox; a dialog, a changed session or a refused
+pairing keeps the words in the composer (Retry for the dialog). A parked entry is marked
+`unwritten`: until an automatic send of it starts it reads as missing, so one parked with no
+settled transcript (offline from launch) is still sent. The words go to the outbox OR stay in
+the composer, never both: both would let a Send in the composer and the drainer each deliver it.
+
 ### One id per send (S1, 2026-10-11)
 
 Every part of one press carries the outbox entry's id (`send-<ms>-<12 hex>`): the entry, the
