@@ -66,6 +66,7 @@ function flat(style: unknown, pressed = false): Record<string, unknown> {
 }
 
 type Extra = {
+  micActive?: boolean
   canStop?: boolean
   stopping?: boolean
   onStop?: () => void
@@ -127,6 +128,14 @@ describe('Stop in the composer’s send slot', () => {
 
   it('shows Send, never Stop, while the agent is idle', async () => {
     await render('', { canStop: false, onStop: vi.fn() })
+    expect(labelled('Stop the agent')).toHaveLength(0)
+    expect(trailing().props.accessibilityLabel).toBe('Send message')
+  })
+
+  it('keeps the slot on Send while dictating, so two red squares never sit side by side', async () => {
+    // Opus review, 2026-10-11: the mic's Stop dictation square sat beside Stop
+    // the agent; ending dictation could interrupt the turn instead.
+    await render('', { canStop: true, onStop: vi.fn(), micActive: true })
     expect(labelled('Stop the agent')).toHaveLength(0)
     expect(trailing().props.accessibilityLabel).toBe('Send message')
   })

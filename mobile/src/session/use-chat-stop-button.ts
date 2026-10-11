@@ -16,18 +16,24 @@ export const STOP_STILL_WORKING_MESSAGE = 'The agent is still working after Stop
  * disabled) until the turn ends; a stop that did not go, or an agent still
  * working {@link STOP_STILL_WORKING_MS} after it went, clears the mark.
  *
- * `stop` resolves false when the lane already reported a failure (the terminal
+ * `stop`'s verdict is false when the lane already reported a failure (the terminal
  * lane's "Stop not sent"), so the button comes back without a second message.
- * A lane that answers nothing (the structured cancel) counts as sent.
+ * A lane that answers nothing (the structured cancel) counts as sent at the tap.
+ * The 10 s starts when the verdict comes; on the terminal lane that is when both
+ * Escapes have settled, inside the send budget.
  */
 export function useChatStopButton(args: {
-  stop: () => Promise<boolean> | void
+  /** Calls `onVerdict` once its keys have settled when `reportsVerdict`. */
+  stop: (onVerdict: (sent: boolean) => void) => void
+  /** False for a lane that reports nothing (the structured cancel): its stop
+   *  counts as sent at the tap. */
+  reportsVerdict: boolean
   canStop: boolean
   /** The chat the button belongs to; a stop never carries over to another. */
   scope: string
   onSendError: (message: string) => void
 }): { onStop: () => void; stopping: boolean } {
-  const { stop, canStop, scope, onSendError } = args
+  const { stop, reportsVerdict, canStop, scope, onSendError } = args
   const [stopping, setStopping] = useState(false)
   const stoppingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,29 +78,26 @@ export function useChatStopButton(args: {
         latest.current.onSendError(STOP_STILL_WORKING_MESSAGE)
       }, STOP_STILL_WORKING_MS)
     }
-    const verdict = stop()
-    if (!verdict) {
-      watch()
+    const onVerdict = (sent: boolean): void => {
+      if (attemptRef.current !== attempt) {
+        return
+      }
+      if (sent) {
+        watch()
+      } else {
+        standDown()
+      }
+    }
+    try {
+      stop(onVerdict)
+    } catch {
+      standDown()
       return
     }
-    void verdict.then(
-      (sent) => {
-        if (attemptRef.current !== attempt) {
-          return
-        }
-        if (sent) {
-          watch()
-        } else {
-          standDown()
-        }
-      },
-      () => {
-        if (attemptRef.current === attempt) {
-          standDown()
-        }
-      }
-    )
-  }, [standDown, stop])
+    if (!reportsVerdict) {
+      watch()
+    }
+  }, [reportsVerdict, standDown, stop])
 
   return { onStop, stopping }
 }

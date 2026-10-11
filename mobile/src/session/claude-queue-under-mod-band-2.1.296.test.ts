@@ -31,6 +31,19 @@ describe('the queue box over a mod band above the input box', () => {
     expect(read.entries).toEqual([...CLAUDE_TWO_QUEUED_TEXTS])
   })
 
+  it('reads the queue when the slot holds only its toggle (a band folded away)', () => {
+    // Opus review, 2026-10-11: the toggle right above the rule was never skipped.
+    // The capture with its band row taken out; [+] is the folded state.
+    for (const toggle of ['[-]', '[+]']) {
+      const screen = CLAUDE_ONE_QUEUED_2_1_296
+        .filter((line) => !line.includes('Opus 5.5 medium'))
+        .map((line) => (/^\s+\[-\]$/.test(line) ? line.replace('[-]', toggle) : line))
+      const read = queueBoxReadFromScreen(screen, 'claude', PLACEHOLDER)
+      expect(read.readable, toggle).toBe(true)
+      expect(read.entries, toggle).toEqual([CLAUDE_QUEUED_TEXT])
+    }
+  })
+
   it('still refuses a row between the send-now row and the box with no toggle above it', () => {
     const screen = CLAUDE_ONE_QUEUED_2_1_296.filter((line) => !/^\s+\[-\]$/.test(line))
     expect(queueBoxReadFromScreen(screen, 'claude', PLACEHOLDER).readable).toBe(false)

@@ -241,7 +241,8 @@ export function MobileNativeChatComposer({
   // Done pasted the photo without its marks.
   const hasContent = trimmed.length > 0 || attachments.length > 0
   // Send or Stop, never both; typed text brings Send back (MobileNativeChatSendSlot.tsx).
-  const showStop = canStop && onStop !== undefined && !hasContent
+  // Not while dictating: the mic's own Stop dictation square sits beside the slot.
+  const showStop = canStop && onStop !== undefined && !hasContent && !micActive
   const canSend =
     hasContent &&
     !disabled &&

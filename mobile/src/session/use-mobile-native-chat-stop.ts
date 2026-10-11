@@ -32,7 +32,7 @@ export function useMobileNativeChatStop(args: {
   agent: string | null
   cancelPending: () => void
   onSendError: (message: string) => void
-}): () => Promise<boolean> {
+}): (onVerdict?: (sent: boolean) => void) => void {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, agent, cancelPending, onSendError } =
     args
   const agentRef = useRef(agent)
@@ -63,21 +63,27 @@ export function useMobileNativeChatStop(args: {
   // left this chat still has to reach them: `use-mobile-native-chat-send-error.ts`
   // turns it into a toast there.
   useEffect(() => cancelSecondEscape, [cancelSecondEscape, client, enabled, streamIdentity])
-  // Resolves once every key of this tap has settled: true when the agent took one,
-  // false when none went. The composer's Stop clears its stopping ring on false
-  // (use-chat-stop-button.ts); the words are this hook's to say.
-  return useCallback((): Promise<boolean> => {
+  // `onVerdict` hears once every key of this tap has settled: true when the agent
+  // took one, false when none went. The composer's Stop clears its stopping ring on
+  // false (use-chat-stop-button.ts); the words are this hook's to say. A callback,
+  // not a returned promise: the tap itself still returns nothing, as the pinned
+  // RPC recordings of it (rpc-foundation/goldens/native-chat-stop-*) expect.
+  return useCallback((onVerdict?: (sent: boolean) => void): void => {
     latestStopRef.current += 1
     const tap = latestStopRef.current
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
       onSendError('Stop not sent (terminal not ready)')
-      return Promise.resolve(false)
+      onVerdict?.(false)
+      return
     }
-    let settle!: (sent: boolean) => void
-    const verdict = new Promise<boolean>((resolve) => {
-      settle = resolve
-    })
+    let settled = false
+    const settle = (sent: boolean): void => {
+      if (!settled) {
+        settled = true
+        onVerdict?.(sent)
+      }
+    }
     cancelPending()
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
@@ -171,7 +177,7 @@ export function useMobileNativeChatStop(args: {
     }
     sendKey(keys.text)
     if (!keys.second) {
-      return verdict
+      return
     }
     dropSecondEscapeRef.current = () => {
       pending -= 1
@@ -185,7 +191,6 @@ export function useMobileNativeChatStop(args: {
       pending -= 1
       reportIfSettled()
     }, 80)
-    return verdict
   }, [
     cancelPending,
     cancelSecondEscape,

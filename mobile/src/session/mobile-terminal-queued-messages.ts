@@ -183,9 +183,10 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
     }
     // A mod's band in the slot over the box (Claude Code 2.1.294 on), under
     // Claude's own `[-]` toggle: skipped whole, toggle included, and only when
-    // that toggle bounds it within the window (captured 2.1.296, 2026-10-11).
+    // that toggle bounds it within the window (captured 2.1.296, 2026-10-11). The
+    // toggle may be this very row, with the band folded away under it.
     if (!SEND_NOW_HINT.test(line)) {
-      const toggle = lines.slice(Math.max(0, footer - 8), i).findLastIndex((row) => SLOT_TOGGLE_ROW.test(row))
+      const toggle = lines.slice(Math.max(0, footer - 8), i + 1).findLastIndex((row) => SLOT_TOGGLE_ROW.test(row))
       if (details === 0 && toggle !== -1) {
         i = Math.max(0, footer - 8) + toggle
         continue

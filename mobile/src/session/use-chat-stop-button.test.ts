@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('a Stop tap reports whether the agent took it', () => {
   let renderer: ReactTestRenderer | null = null
-  let stop: (() => Promise<boolean>) | null = null
+  let stop: ((onVerdict?: (sent: boolean) => void) => void) | null = null
   const onSendError = vi.fn()
 
   beforeEach(() => {
@@ -53,30 +53,31 @@ describe('a Stop tap reports whether the agent took it', () => {
     })
   }
 
-  async function tap(): Promise<boolean> {
-    let verdict!: Promise<boolean>
+  /** The verdicts one tap reported: exactly one, once its keys have settled. */
+  async function tap(): Promise<boolean[]> {
+    const verdicts: boolean[] = []
     await act(async () => {
-      verdict = stop!()
+      stop!((sent) => verdicts.push(sent))
       await vi.runAllTimersAsync()
     })
-    return verdict
+    return verdicts
   }
 
-  it('resolves true once an Escape was accepted', async () => {
+  it('reports true once an Escape was accepted', async () => {
     await mount(vi.fn().mockResolvedValue({ ok: true, result: { send: { accepted: true } } }))
-    await expect(tap()).resolves.toBe(true)
+    expect(await tap()).toEqual([true])
     expect(onSendError).not.toHaveBeenCalled()
   })
 
-  it('resolves false, after saying so, when both Escapes were refused', async () => {
+  it('reports false, after saying so, when both Escapes were refused', async () => {
     await mount(vi.fn().mockResolvedValue({ ok: true, result: { send: { accepted: false } } }))
-    await expect(tap()).resolves.toBe(false)
+    expect(await tap()).toEqual([false])
     expect(onSendError).toHaveBeenCalledWith('Stop not sent')
   })
 
-  it('resolves false when there is no terminal to stop', async () => {
+  it('reports false when there is no terminal to stop', async () => {
     await mount(vi.fn(), null)
-    await expect(tap()).resolves.toBe(false)
+    expect(await tap()).toEqual([false])
     expect(onSendError).toHaveBeenCalledWith('Stop not sent (terminal not ready)')
   })
 })
@@ -96,11 +97,12 @@ describe('the Stop button while a stop is under way', () => {
     button = null
   })
 
-  function Harness(props: { stop: () => Promise<boolean> | void; canStop: boolean; scope?: string }): null {
-    button = useChatStopButton({ ...props, scope: props.scope ?? 'tab', onSendError })
+  type Lane = { stop: (onVerdict: (sent: boolean) => void) => void; reportsVerdict?: boolean; canStop: boolean; scope?: string }
+  function Harness(props: Lane): null {
+    button = useChatStopButton({ ...props, reportsVerdict: props.reportsVerdict ?? true, scope: props.scope ?? 'tab', onSendError })
     return null
   }
-  async function render(props: { stop: () => Promise<boolean> | void; canStop: boolean; scope?: string }): Promise<void> {
+  async function render(props: Lane): Promise<void> {
     await act(async () => {
       if (renderer) {
         renderer.update(createElement(Harness, props))
@@ -111,7 +113,7 @@ describe('the Stop button while a stop is under way', () => {
   }
 
   it('shows it is stopping on the tap and takes no second tap while it waits', async () => {
-    const stop = vi.fn(() => new Promise<boolean>(() => {}))
+    const stop = vi.fn()
     await render({ stop, canStop: true })
     expect(button!.stopping).toBe(false)
     await act(async () => button!.onStop())
@@ -121,7 +123,7 @@ describe('the Stop button while a stop is under way', () => {
   })
 
   it('comes back at once when the lane says the stop did not go', async () => {
-    await render({ stop: () => Promise.resolve(false), canStop: true })
+    await render({ stop: (verdict) => verdict(false), canStop: true })
     await act(async () => button!.onStop())
     expect(button!.stopping).toBe(false)
     // The lane already said why ("Stop not sent"); a second line would repeat it.
@@ -129,31 +131,31 @@ describe('the Stop button while a stop is under way', () => {
   })
 
   it('comes back and says so when the agent is still working after the stop went', async () => {
-    await render({ stop: () => Promise.resolve(true), canStop: true })
+    await render({ stop: (verdict) => verdict(true), canStop: true })
     await act(async () => button!.onStop())
     expect(button!.stopping).toBe(true)
-    await act(async () => vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS - 1))
+    await act(async () => { await vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS - 1) })
     expect(button!.stopping).toBe(true)
-    await act(async () => vi.advanceTimersByTimeAsync(1))
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(button!.stopping).toBe(false)
     expect(onSendError).toHaveBeenCalledWith(STOP_STILL_WORKING_MESSAGE)
   })
 
   it('treats a lane that answers nothing (the structured cancel) as sent', async () => {
-    await render({ stop: () => undefined, canStop: true })
+    await render({ stop: () => undefined, reportsVerdict: false, canStop: true })
     await act(async () => button!.onStop())
     expect(button!.stopping).toBe(true)
-    await act(async () => vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS))
+    await act(async () => { await vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS) })
     expect(onSendError).toHaveBeenCalledWith(STOP_STILL_WORKING_MESSAGE)
   })
 
   it('stands down quietly when the turn ends', async () => {
-    const stop = () => Promise.resolve(true)
+    const stop = (verdict: (sent: boolean) => void) => verdict(true)
     await render({ stop, canStop: true })
     await act(async () => button!.onStop())
     await render({ stop, canStop: false })
     expect(button!.stopping).toBe(false)
-    await act(async () => vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS * 2))
+    await act(async () => { await vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS * 2) })
     expect(onSendError).not.toHaveBeenCalled()
     // The next turn starts with a live button.
     await render({ stop, canStop: true })
@@ -161,12 +163,12 @@ describe('the Stop button while a stop is under way', () => {
   })
 
   it('does not carry a stop over to another tab', async () => {
-    const stop = () => Promise.resolve(true)
+    const stop = (verdict: (sent: boolean) => void) => verdict(true)
     await render({ stop, canStop: true, scope: 'tab-a' })
     await act(async () => button!.onStop())
     await render({ stop, canStop: true, scope: 'tab-b' })
     expect(button!.stopping).toBe(false)
-    await act(async () => vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS * 2))
+    await act(async () => { await vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS * 2) })
     expect(onSendError).not.toHaveBeenCalled()
   })
 })
