@@ -272,7 +272,7 @@ Nothing here is built.
   where the host was asked: on the structured lane and while disconnected the
   fetch is off, and nothing is drawn.
 - **Files the agent sent (SendUserFile, 2026-10-11).** The Claude app draws the
-  caption as a line of text and each sent picture as a 250 dp square tile,
+  caption as a line of text and each sent picture as a 104 dp square tile,
   outside the tool group, and does not count the call as "used a tool". The
   transcript holds only the path, the caption and a `file_uuid`; the Claude app
   downloads the picture by that id from Anthropic, which the phone cannot. So

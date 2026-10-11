@@ -138,14 +138,14 @@ describe('a file the agent sent with SendUserFile', () => {
     expect(REPLY_TEXT.length).toBeGreaterThan(0)
   })
 
-  it('draws each picture as a 250 dp rounded square, cropped to fill, and a tap opens it full-screen', () => {
+  it('draws each picture as the Claude app does, a 104 dp square with 10 dp corners, cropped to fill, and a tap opens it full-screen', () => {
     const root = render(stepOf(SEND_FILE_TURN, { [READ_CALL_ID]: [READ_URI], [SEND_CALL_ID]: [SENT_URI] }))
     const tiles = imageButtons(root)
     expect(tiles).toHaveLength(2)
     const sent = tiles[1]!.findByType('Image' as never)
     expect(sent.props.resizeMode).toBe('cover')
     const style = Object.assign({}, ...[sent.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
-    expect(style).toMatchObject({ width: 250, height: 250, borderRadius: 16 })
+    expect(style).toMatchObject({ width: 104, height: 104, borderRadius: 10 })
     act(() => tiles[1]!.props.onPress())
     expect(peekImagePreview()).toMatchObject({ uri: SENT_URI })
   })

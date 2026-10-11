@@ -54,11 +54,14 @@ export function MobileNativeChatImageThumb({
 }
 
 /** The Claude app's thumbnail of a picture the agent read or sent (the
- *  user's screenshots of 2026-10-11): a 250 dp square with 16 dp corners,
+ *  user's screenshots of 2026-10-11): a 104 dp square with 10 dp corners,
  *  left-aligned, the picture cropped to fill it, no frame or label. A tap
- *  opens the whole picture full-screen. */
-export const AGENT_IMAGE_TILE_SIZE = 250
-export const AGENT_IMAGE_TILE_RADIUS = 16
+ *  opens the whole picture full-screen. Measured on the S23 Ultra (412 dp
+ *  across, the screenshot 991 px wide): the tile is about 248 px, corners
+ *  about 24 px. A first reading took those pixels for dp and drew 250 dp,
+ *  over half the screen. */
+export const AGENT_IMAGE_TILE_SIZE = 104
+export const AGENT_IMAGE_TILE_RADIUS = 10
 
 export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; label: string }) {
   return (
