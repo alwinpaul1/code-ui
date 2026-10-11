@@ -80,12 +80,12 @@ describe('a run reading its own progress', () => {
     ]
     expect(toolRunProgress(blocks, inputs, NEWEST)).toBeNull()
     // With the Read's answer still out, the Read is the open call.
-    expect(toolRunProgress(blocks.slice(0, 3), inputs, NEWEST)).toEqual({ kind: 'call', call: blocks[0] })
+    expect(toolRunProgress(blocks.slice(0, 3), inputs, NEWEST)).toEqual({ kind: 'call', call: blocks[0], background: false })
   })
 
   it("never reads an open call as running outside the chat's newest reply", () => {
     const open: NativeChatBlock[] = [{ type: 'tool-call', name: 'Read', input: { file_path: '/tmp/a.ts' } }]
-    expect(toolRunProgress(open, inputs, NEWEST)).toEqual({ kind: 'call', call: open[0] })
+    expect(toolRunProgress(open, inputs, NEWEST)).toEqual({ kind: 'call', call: open[0], background: false })
     expect(toolRunProgress(open, inputs, { inNewestReply: false })).toBeNull()
   })
 

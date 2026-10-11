@@ -151,7 +151,9 @@ describe('the collapsed row of a command that is still running', () => {
   it('draws the shimmering word "Running" for a running Bash call', () => {
     const tree = render(RUNNING_BASH)
     expect(glyphs(tree)).toBe('Running')
-    expect(header(tree).findAll((node) => String(node.type) === 'SquareTerminal')).toHaveLength(1)
+    // No icon while the call is being made, as the Claude app draws it
+    // (1.261009.20, decompiled); a shell moved to the background shows one.
+    expect(header(tree).findAll((node) => String(node.type) === 'SquareTerminal')).toHaveLength(0)
     expect(header(tree).findAll((node) => String(node.type) === 'ChevronRight')).toHaveLength(1)
   })
 

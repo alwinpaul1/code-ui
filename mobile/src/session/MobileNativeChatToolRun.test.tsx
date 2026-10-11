@@ -736,10 +736,12 @@ describe('a tool run while the turn is still working', () => {
     expect(mocks.loop).not.toHaveBeenCalled()
   })
 
-  it('keeps the running tool icon still beside the shimmering label', () => {
+  // The Claude app (1.261009.20, decompiled) draws no icon for a call still
+  // being made; only a task left running in the background shows its icon.
+  it('draws no icon beside the shimmering label while the call is being made, and fades nothing', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true })
     const header = tree.root.find((node) => node.props?.testID === 'tool-run-active-header')
-    expect(header.findAll((node) => String(node.type) === 'SquareTerminal')).toHaveLength(1)
+    expect(header.findAll((node) => String(node.type) === 'SquareTerminal')).toHaveLength(0)
     expect(header.findAll((node) => opacityOf(node.props?.style) !== undefined)).toEqual([])
   })
 
@@ -764,15 +766,15 @@ describe('a tool run while the turn is still working', () => {
     expect(texts(tree).some((text) => text.startsWith('Running'))).toBe(false)
   })
 
-  it('gives a Codex row that really ran a command the terminal glyph', () => {
+  it('reads a Codex row that really ran a command as Running', () => {
     const tree = render({ blocks: LIVE_CLASSIFIED_RUN, activeTurnIsWorking: true })
-    expect(tree.root.findAllByType('SquareTerminal')).toHaveLength(1)
-    expect(tree.root.findAllByType('Wrench')).toHaveLength(0)
+    expect(activeGlyphs(tree).join('')).toBe('Running')
+    expect(tree.root.findAllByType('SquareTerminal')).toHaveLength(0)
   })
 
-  it("does not claim a shell ran for Claude's Read, which shares the word", () => {
+  it("reads Claude's Read, which shares the word, as Reading, not as a shell", () => {
     const tree = render({ blocks: LIVE_CLAUDE_READ_RUN, activeTurnIsWorking: true })
-    expect(tree.root.findAllByType('Wrench')).toHaveLength(1)
+    expect(activeGlyphs(tree).join('')).toBe('Reading')
     expect(tree.root.findAllByType('SquareTerminal')).toHaveLength(0)
   })
 

@@ -140,18 +140,40 @@ describe('a tool row still running', () => {
     })
   })
 
+  describe("a call still being made reads the Claude app's present-tense verb", () => {
+    for (const [name, input, verb] of [
+      ['Read', { file_path: '/tmp/a.ts' }, 'Reading'],
+      ['Edit', { file_path: '/tmp/a.ts', old_string: 'a', new_string: 'b' }, 'Editing'],
+      ['Grep', { pattern: 'x' }, 'Searching'],
+      ['WebFetch', { url: 'https://example.com' }, 'Fetching'],
+      ['mcp__linear__create_issue', { title: 't' }, 'Using mcp__linear__create_issue']
+    ] as const) {
+      it(`reads "${verb}" for an open ${name} call`, () => {
+        const blocks: NativeChatBlock[] = [{ type: 'tool-call', name, input }]
+        const tree = render(blocks, { ...IDLE, agentWorking: true })
+        expect(rowText(tree)).toBe(verb)
+        expect(shimmer(tree)).toBeDefined()
+      })
+    }
+  })
+
   describe('the gate "Run the full gate on main"', () => {
     it('reads "Running" with the shimmer while its call has no result and the turn works', () => {
       const tree = render(bashRunUnanswered(), { ...IDLE, agentWorking: true })
       expect(rowText(tree)).toBe('Running')
       expect(shimmer(tree)).toBeDefined()
-      expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
+      // The Claude app draws no icon for a call still being made (decompiled
+      // 1.261009.20, and the 15:57:41 frame: "Running ›" alone).
+      expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(0)
+      expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
     })
 
-    it('reads "Running" once moved to the background, while that shell still runs', () => {
+    it('reads "Running" with the terminal glyph once moved to the background, while that shell still runs', () => {
       const tree = render(bashRunMovedToBackground(), { ...IDLE, agentWorking: true, liveTaskIds: new Set([RUNNING_ROWS_SHELL_ID]) })
       expect(rowText(tree)).toBe('Running')
       expect(shimmer(tree)).toBeDefined()
+      // The app's commandLinePrompt icon for a background shell (the 16:01 frames).
+      expect(tree.root.findAllByType('SquareTerminal' as never)).toHaveLength(1)
     })
 
     it('never glues "Ran" onto the description while it runs', () => {
