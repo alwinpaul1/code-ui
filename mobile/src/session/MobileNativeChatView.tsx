@@ -132,7 +132,7 @@ export function MobileNativeChatView({
   onOpenFile,
   onRevertHunk,
   keyboardInset = 0,
-  keyStrip, sessionDiff = null, onOpenDiff
+  keyStrip
 }: MobileNativeChatViewProps): React.JSX.Element {
   const { colors, space } = useTheme()
   const styles = useChatViewStyles()
@@ -443,7 +443,7 @@ export function MobileNativeChatView({
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}
-      <MobileNativeChatSessionBar list={composerList} diff={sessionDiff} onOpenDiff={onOpenDiff} working={agentWorking === true} />
+      <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}

@@ -152,13 +152,14 @@ describe('MobileNativeChatView, the session bar above the composer', () => {
     })
   }
 
-  it('hands the bar the plan Claude Code built with its Task tools, the diff, and the opener', async () => {
-    const onOpenDiff = vi.fn()
-    await render({ sessionDiff: { files: 2, added: 9, removed: 4 }, onOpenDiff })
+  // 2026-10-12 (screenshot circling "Diff +1305"): "Remove this diff". The
+  // bar keeps the task pill only; no diff pill, whatever the worktree holds.
+  it('hands the bar the plan Claude Code built with its Task tools, and no diff pill', async () => {
+    await render({})
     const bar = renderer!.root.find((node) => String(node.type) === 'SessionBar')
     expect(bar.props.list).toEqual({ tasks: [{ content: REBUILD, status: 'pending', activeForm: 'Rebuilding' }] })
-    expect(bar.props.diff).toEqual({ files: 2, added: 9, removed: 4 })
-    expect(bar.props.onOpenDiff).toBe(onOpenDiff)
+    expect(bar.props.diff ?? null).toBeNull()
+    expect(bar.props.onOpenDiff).toBeUndefined()
     expect(bar.props.working).toBe(true)
   })
 

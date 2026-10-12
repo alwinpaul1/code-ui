@@ -581,7 +581,9 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // session bar's diff pill. Same records; only the overlay's moved.
 // 2026-10-12 (parity gap G19): one new leaf record, <NativeChatFileReadProvider value> around the
 // chat overlay in the session content.
-const HEAD_LEAF_JSX_SHA256 = '40ef8e29961ea92807123e84546150535a6540ff93ed1f140ac4905c0e08fe07'
+// 2026-10-12 (later): the diff pill is gone ("Remove this diff"); the overlay is no longer handed
+// `sessionDiff` and `onOpenDiff`.
+const HEAD_LEAF_JSX_SHA256 = '5706a4a1d8236ec869e140a5d6d82e7e7165cd4a19fb1c7b015e8eed8f736ab6'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
