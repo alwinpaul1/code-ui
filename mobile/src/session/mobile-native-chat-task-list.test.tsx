@@ -16,7 +16,6 @@ import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
-import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 
 // A tapped row opens the real detail sheet in a bare shell: the draggable one
 // needs RN exports this mock leaves out, and what matters here is what the

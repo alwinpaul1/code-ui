@@ -260,8 +260,7 @@ export function MobileNativeChatComposer({
     onNeedFiles,
     onNeedSkills,
     popoverSpace,
-    dockHeight,
-    focused
+    dockHeight, focused
   })
 
   useEffect(() => {

@@ -78,6 +78,11 @@ export function MobileNativeChatSessionBar({
   const [cardOpen, setCardOpen] = useState(false)
   const closeCard = useCallback(() => setCardOpen(false), [])
   const todo = todoPillModel(list)
+  // A plan that goes away (/clear, another session in this view) takes the
+  // open card with it; the next plan comes up as a pill, not a card nobody opened.
+  if (cardOpen && !todo) {
+    setCardOpen(false)
+  }
   const showDiff = diff !== null && onOpenDiff !== undefined
   if (todo && cardOpen && list) {
     return <MobileNativeChatTodoCard list={list} working={working} onClose={closeCard} />

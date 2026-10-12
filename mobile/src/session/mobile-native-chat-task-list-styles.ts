@@ -10,7 +10,7 @@ import { useTheme, type Theme } from '../theme/theme-context'
 import { MONO_SIZE } from './mobile-native-chat-message-styles'
 
 export function makeTaskListStyles(theme: Theme) {
-  const { colors, fonts, space, radius } = theme
+  const { colors, fonts, space } = theme
   return StyleSheet.create({
     list: {
       gap: space.xs,

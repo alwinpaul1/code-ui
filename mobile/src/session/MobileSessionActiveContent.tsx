@@ -153,7 +153,8 @@ export function MobileSessionActiveContent({
     connState,
     hostId,
     worktreeId,
-    agentWorking: nativeChatController.nativeChatAgentWorking === true
+    agentWorking: nativeChatController.nativeChatAgentWorking === true,
+    enabled: nativeChatController.showNativeChat || nativeChatController.chatViewSelected
   })
   const openSessionDiff = () => router.push(sessionReviewRoute({ hostId, worktreeId, worktreeName }))
   const selectAgentMode = async (target: TerminalAgentMode) => {

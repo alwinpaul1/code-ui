@@ -21,8 +21,15 @@ const CLIENT = {} as RpcClient
 let shown: SessionDiffTotals | null | undefined
 let renderer: ReactTestRenderer | null = null
 
-function Harness(props: { read: SessionDiffRead; connState: ConnectionState; agentWorking: boolean; client?: RpcClient | null }) {
+function Harness(props: {
+  read: SessionDiffRead
+  connState: ConnectionState
+  agentWorking: boolean
+  client?: RpcClient | null
+  enabled?: boolean
+}) {
   shown = useSessionDiffTotals({
+    enabled: props.enabled,
     client: props.client === undefined ? CLIENT : props.client,
     connState: props.connState,
     hostId: 'host',
@@ -101,6 +108,19 @@ describe('the diff pill’s totals', () => {
     await render({ read, connState: 'connected', agentWorking: false })
     expect(read).toHaveBeenCalledTimes(2)
     expect(shown).toEqual({ files: 1, added: 3, removed: 3 })
+  })
+
+  // Opus review, 2026-10-12: it read git.status on terminal and file tabs too,
+  // where no pill is drawn.
+  it('reads nothing while the chat is not on screen, and reads when it comes up', async () => {
+    const read = vi.fn<SessionDiffRead>().mockResolvedValue({ files: 1, added: 2, removed: 0 })
+    await render({ read, connState: 'connected', agentWorking: false, enabled: false })
+    await render({ read, connState: 'connected', agentWorking: true, enabled: false })
+    await render({ read, connState: 'connected', agentWorking: false, enabled: false })
+    expect(read).not.toHaveBeenCalled()
+    await render({ read, connState: 'connected', agentWorking: false, enabled: true })
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(shown).toEqual({ files: 1, added: 2, removed: 0 })
   })
 
   it('reads nothing without a client', async () => {

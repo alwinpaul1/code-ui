@@ -42,6 +42,10 @@ export function MobilePermissionModeSheet({
         icon: ICONS[row.mode],
         selected: row.selected,
         disabled: row.disabled,
+        // Auto can open its opt-in sheet (MobileNativeChatComposerSheets.tsx):
+        // that second modal waits for this one to finish closing, the
+        // codebase's sequencing for a sheet opened from a sheet.
+        closeBeforePress: row.mode === 'auto',
         onPress: () => onSelect(row.mode)
       }))}
       onClose={onClose}

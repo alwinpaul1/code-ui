@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // row; Auto is refused with "Not available for the selected model" when the
 // running model is a Claude 3, or a Claude 4 up to 4.5.
 
-type Action = { label: string; hint?: string; selected?: boolean; disabled?: boolean }
+type Action = { label: string; hint?: string; selected?: boolean; disabled?: boolean; closeBeforePress?: boolean }
 const sheetProps = vi.hoisted(() => [] as { message?: string; actions: Action[] }[])
 
 vi.mock('../components/ActionSheetModal', () => ({
@@ -66,6 +66,19 @@ describe('the Select mode sheet', () => {
       const auto = open('manual', model).actions.find((a) => a.label === 'Auto')!
       expect(auto, String(model)).toMatchObject({ disabled: false, hint: 'Claude handles permission decisions' })
     }
+  })
+
+  // Opus review, 2026-10-12: Auto can open the opt-in sheet, and a second
+  // modal opened in the same beat as this one closes can be dropped. The row
+  // waits for this sheet to finish closing, as every sheet-from-a-sheet does.
+  it('lets Auto run only after the sheet has closed, and the other rows at once', () => {
+    const rows = open('manual').actions
+    expect(rows.map((a) => [a.label, a.closeBeforePress === true])).toEqual([
+      ['Manual', false],
+      ['Accept edits', false],
+      ['Plan', false],
+      ['Auto', true]
+    ])
   })
 
   it('never locks the row a session is already in', () => {

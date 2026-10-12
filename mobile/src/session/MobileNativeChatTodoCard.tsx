@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { ActivityIndicator, BackHandler, ScrollView, View } from 'react-native'
+import { useRef } from 'react'
+import { useBackClaim } from '../navigation/use-back-claim'
+import { ActivityIndicator, ScrollView, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { Check, X } from 'lucide-react-native'
 import type { NativeChatTask, NativeChatTaskList } from '../../../src/shared/native-chat-task-list'
@@ -156,14 +157,12 @@ export function MobileNativeChatTodoCard({
   const scrolled = useRef(false)
   const focus = todoCardFocusIndex(list)
 
-  // Android Back closes the card, as it does the app's.
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
-      return true
-    })
-    return () => subscription.remove()
-  }, [onClose])
+  // Back closes the card, as it does the app's: the device key natively, the
+  // shell's key inside the web page (use-back-claim.ts).
+  useBackClaim(() => {
+    onClose()
+    return true
+  })
 
   const model = todoPillModel(list)
   if (!model) {

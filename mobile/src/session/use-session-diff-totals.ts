@@ -31,9 +31,11 @@ export function useSessionDiffTotals(args: {
   hostId: string
   worktreeId: string
   agentWorking: boolean
+  /** The chat is on screen. A terminal or file tab draws no pill, so it reads nothing. */
+  enabled?: boolean
   read?: SessionDiffRead
 }): SessionDiffTotals | null {
-  const { client, connState, hostId, worktreeId, agentWorking, read = readSessionDiffTotals } = args
+  const { client, connState, hostId, worktreeId, agentWorking, enabled = true, read = readSessionDiffTotals } = args
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [totals, setTotals] = useState<SessionDiffTotals | null>(null)
   // Bumped when a turn ends: working → idle.
@@ -47,7 +49,7 @@ export function useSessionDiffTotals(args: {
   }
   const readRef = useRef(read)
   readRef.current = read
-  const ready = client !== null && connState === 'connected'
+  const ready = enabled && client !== null && connState === 'connected'
 
   useEffect(() => {
     setTotals(null)

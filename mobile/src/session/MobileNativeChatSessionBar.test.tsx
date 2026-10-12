@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatTaskList } from '../../../src/shared/native-chat-task-list'
@@ -64,11 +63,14 @@ function mount(props: {
 }) {
   act(() => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: props.scheme ?? 'light' },
-        createElement(MobileNativeChatSessionBar, props)
-      )
+      <ThemeProvider initialPreference={props.scheme ?? 'light'}>
+        <MobileNativeChatSessionBar
+          list={props.list}
+          diff={props.diff}
+          onOpenDiff={props.onOpenDiff}
+          working={props.working}
+        />
+      </ThemeProvider>
     )
   })
 }
@@ -87,7 +89,7 @@ function pill(id: string): ReactTestInstance {
 }
 function colourOf(node: ReactTestInstance): string | undefined {
   const styles = [node.props.style].flat(3) as ({ color?: string } | null)[]
-  return styles.reverse().find((style) => style?.color)?.color
+  return styles.findLast((style) => style?.color)?.color
 }
 
 describe('the todo pill', () => {
@@ -180,6 +182,29 @@ describe('the todo card', () => {
     })
     expect(handled).toBe(true)
     expect(byTestId('todo-card')).toEqual([])
+    expect(back.handlers).toHaveLength(0)
+  })
+
+  // Opus review, 2026-10-12: the open flag outlived the plan, so the next plan
+  // (after a /clear, or another session in the same view) came up as a card
+  // nobody opened, holding Back.
+  it('comes back as a pill, not an open card, when the plan goes away and a new one arrives', () => {
+    mount({ list: PLAN })
+    act(() => pill('todo-pill').props.onPress())
+    expect(byTestId('todo-card')).toHaveLength(1)
+    const update = (list: NativeChatTaskList | null) =>
+      act(() =>
+        renderer!.update(
+          <ThemeProvider initialPreference="light">
+            <MobileNativeChatSessionBar list={list} />
+          </ThemeProvider>
+        )
+      )
+    update(null)
+    expect(renderer!.toJSON()).toBeNull()
+    update({ tasks: [{ content: 'Fix the parser', status: 'pending' }] })
+    expect(byTestId('todo-card')).toEqual([])
+    expect(textsIn(pill('todo-pill'))).toEqual(['0/1 tasks'])
     expect(back.handlers).toHaveLength(0)
   })
 
