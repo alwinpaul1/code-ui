@@ -113,10 +113,10 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
     expect(row('Spaces').props.accessibilityState).toMatchObject({ checked: false })
   })
 
-  it('waits for the typed text when "Other…" is picked', async () => {
+  it('waits for the typed text when "Something else" is picked', async () => {
     const onAnswer = render({ questions: [indent] } as AskPrompt)
 
-    press('Other…')
+    press('Something else')
     await passAutoAdvanceBeat()
 
     expect(onAnswer).not.toHaveBeenCalled()
