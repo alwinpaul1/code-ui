@@ -66,7 +66,9 @@ function frames(count: number): PendingNativeChatImage[] {
       sourceName: 'v1.mp4',
       durationLabel: '1:00',
       intervalLabel: '3 s',
-      intervalMs: 3000
+      intervalMs: 3000,
+      sourceSizeLabel: '40 MB',
+      stoppedEarly: false
     }
   }))
 }
