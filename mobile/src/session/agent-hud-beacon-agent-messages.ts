@@ -5,7 +5,7 @@ import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
  * A session's subagent messages, kept on its beacon apart from the desktop
  * prompts (`AgentHudBeacon.agentMessagePrompts`).
  *
- * The chat draws each as a "Message from" row, and the prompt hook is that
+ * The chat draws each as a "Received message from" row, and the prompt hook is that
  * row's only source. The beacon keeps the last 40 prompts of a terminal
  * (MAX_DESKTOP_PROMPTS in agent-hud-beacon.ts), and every prompt the hook
  * fires for counts, so after 40 more a message scrolled off that list and

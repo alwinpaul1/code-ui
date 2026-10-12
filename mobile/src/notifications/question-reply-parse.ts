@@ -27,7 +27,7 @@ function answerOne(
     return { ok: false, reason: `${label}: empty answer` }
   }
   if (mode === 'other' || question.options.length === 0) {
-    // The card draws an "Other…" row under every question, for every agent it
+    // The card draws a free-answer row ("Something else") under every question, for every agent it
     // can drive, and sends it as an empty pick with the text. Same here — and
     // a question with no options has nothing a number could be confused with,
     // so "2024" is its answer, not a pick out of range.

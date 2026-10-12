@@ -8,7 +8,12 @@ import { Txt } from '../ui/Txt'
 import { TextInputModal } from '../components/TextInputModal'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
-import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
+import {
+  claudePlanApprovalLabel,
+  isClaudePlanFeedbackOptionLabel,
+  PLAN_SUGGEST_EDITS_LABEL,
+  PLAN_SUGGEST_EDITS_PLACEHOLDER
+} from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import {
@@ -16,6 +21,8 @@ import {
   proposedEditPreview,
   type ProposedEditPreview
 } from './mobile-permission-proposed-edit'
+import { permissionRawArgs } from './mobile-permission-raw-args'
+import { MobileNativeChatPermissionRawArgs } from './MobileNativeChatPermissionRawArgs'
 
 /** Rows a proposed change opens with. Past this the user asks for the rest,
  *  so a 2,000-row write does not mount 2,000 rows into the dock unasked. */
@@ -89,6 +96,12 @@ function MobileNativeChatPermissionImpl({
     () => (plan ? null : proposedEditPreview(permission.title, permission.detail)),
     [permission.title, permission.detail, plan]
   )
+  // Any other tool input the host sent whole is listed argument by argument,
+  // the Claude app's raw-input face; a clipped one or the TUI's words stay text.
+  const rawArgs = useMemo(
+    () => (plan || (preview !== null && preview.kind !== 'none') ? null : permissionRawArgs(permission.detail)),
+    [plan, preview, permission.detail]
+  )
   const [showAllRows, setShowAllRows] = useState(false)
   const folded = useMemo(
     () =>
@@ -106,6 +119,8 @@ function MobileNativeChatPermissionImpl({
     (option) => !/^Yes, and switch to auto mode\b/i.test(option.label)
   )
   const choices = withoutAutoMode.length > 0 ? withoutAutoMode : permission.options
+  // Claude Code's plan review, named the Claude app's way (G11).
+  const planReview = choices.some((option) => isClaudePlanFeedbackOptionLabel(option.label))
   const [accepted, setAccepted] = useState(false)
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
@@ -275,7 +290,8 @@ function MobileNativeChatPermissionImpl({
           {truncatedNotice(preview)}
         </Txt>
       ) : null}
-      {!folded && (description || command) ? (
+      {rawArgs ? <MobileNativeChatPermissionRawArgs raw={rawArgs} maxHeight={diffMaxHeight} /> : null}
+      {!folded && !rawArgs && (description || command) ? (
         <ScrollView
           style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
           nestedScrollEnabled
@@ -329,8 +345,8 @@ function MobileNativeChatPermissionImpl({
             : /^No$/i.test(option.label)
               ? 'Deny'
               : opensCommentSheet
-                ? 'Send back'
-                : option.label
+                ? PLAN_SUGGEST_EDITS_LABEL
+                : ((planReview ? claudePlanApprovalLabel(option.label) : null) ?? option.label)
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
               {submittingIndex === index ? (
@@ -380,9 +396,9 @@ function MobileNativeChatPermissionImpl({
           this one card. */}
       <TextInputModal
         visible={commentTarget != null}
-        title="Tell Claude what to change"
-        placeholder="What should Claude do differently?"
-        submitLabel="Send back"
+        title={PLAN_SUGGEST_EDITS_LABEL}
+        placeholder={PLAN_SUGGEST_EDITS_PLACEHOLDER}
+        submitLabel="Send"
         allowEmpty
         onCancel={() => setCommentTarget(null)}
         onSubmit={(comment) => {

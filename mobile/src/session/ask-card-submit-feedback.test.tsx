@@ -514,7 +514,7 @@ describe('the sent state on the other card shapes', () => {
     open(ASK_USER_QUESTION_CLEANUP)
     pick('Tier 1 caches (~45 GB) (Recommended)')
     pick('Hugging Face models (22 GB)')
-    pick('Other…')
+    pick('Something else')
     const input = renderer!.root.findAll((node) => isHost(node, 'TextInput'))[0]!
     act(() => input.props.onChangeText('the old simulator images'))
     await tap(primary())

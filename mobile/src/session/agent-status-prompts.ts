@@ -349,7 +349,7 @@ export function observeAgentStatusPrompt(
       : 'watched arriving'
   const placed = `[desk-prompt] drawn: "${preview(text)}" (${how}) placed from ${at === null ? 'no time, at the tail' : `${new Date(at).toISOString()}, ${clockName}`}`
   // The subagent messages stay (`...state`): dropping them here took the
-  // words off a "Message from" row the moment the person replied (review of
+  // words off a "Received message from" row the moment the person replied (review of
   // 2026-09-27).
   return { ...state, last: text, prompts, issued: state.issued + 1, placed }
 }

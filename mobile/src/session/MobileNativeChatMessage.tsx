@@ -21,6 +21,9 @@ import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoiler
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
+import { errorRowOf } from './mobile-native-chat-error-rows'
+import type { TurnEditedFile } from './mobile-native-chat-turn-edits'
+import { MobileNativeChatTurnEditsCard } from './MobileNativeChatTurnEditsCard'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
@@ -97,6 +100,7 @@ function MobileNativeChatMessageImpl({
   anchorsTurnActions = false,
   turnTrailingWork,
   turnIsNewest = false,
+  turnEdits,
   subagentGroupsOpen,
   onToggleSubagentGroup
 }: {
@@ -159,6 +163,9 @@ function MobileNativeChatMessageImpl({
   /** Whether this row's turn is the newest in the list, so the agent's
    *  working state speaks for it. */
   turnIsNewest?: boolean
+  /** The files this row's turn changed, given only to the row that ends it:
+   *  the turn edits card is drawn under it once the turn is over. */
+  turnEdits?: readonly TurnEditedFile[]
   /** The spawn groups the reader opened, held by the transcript so a remounted row keeps them;
    *  only a row holding a roster gets it (Orca #26125). */
   subagentGroupsOpen?: ReadonlySet<string>
@@ -194,6 +201,17 @@ function MobileNativeChatMessageImpl({
   const agentMessage = agentMessageOf(message)
   if (agentMessage) {
     return <MobileNativeChatAgentMessageRow {...agentMessage} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
+  }
+
+  // A failed or stopped turn is drawn as the Claude app draws it: its own row
+  // in the danger colour, not the agent's prose with a Copy under it.
+  const errorRow = errorRowOf(message)
+  if (errorRow) {
+    return (
+      <View style={styles.row}>
+        <MobileNativeChatNoticeRow block={{ type: 'text', text: errorRow.text, tone: 'error' }} fontScale={fontScale} />
+      </View>
+    )
   }
 
   // A host-authored notice — a compaction boundary, a plan document, a toned
@@ -327,8 +345,8 @@ function MobileNativeChatMessageImpl({
         >
           {segments.map((segment, segmentIndex) =>
             segment.kind === 'prose' ? (
-              // No line beside the agent's own words, interim or final: the
-              // Claude app draws one only beside a thought (2026-09-25).
+              // No line beside the agent's own words, interim or final
+              // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
                 {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
                   // Air between a picture and the caption under it.
@@ -403,6 +421,14 @@ function MobileNativeChatMessageImpl({
             sentPromptControls
           )}
         </Bubble>
+        {isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
+          <MobileNativeChatTurnEditsCard
+            files={turnEdits}
+            turnIsNewest={turnIsNewest}
+            trailingWork={turnTrailingWork}
+            styles={styles}
+          />
+        ) : null}
         {/* Under the bubble, in the page's ink rather than the bubble's. */}
         {copyError ? (
           <Txt variant="caption" tone="danger" style={{ marginTop: 4 }} accessibilityLiveRegion="polite">

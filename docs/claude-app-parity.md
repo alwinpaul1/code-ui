@@ -58,7 +58,12 @@ Nothing here is built.
   have no line (2026-09-25, the same session side by side; the phone had drawn
   one beside every note but the newest). So the phone draws the line beside a
   `reasoning` message and nothing else, and folds a thought past 600
-  characters behind Show more (#17579). On a terminal Claude tab thinking still
+  characters behind Show more (#17579). **Superseded 2026-10-12** (parity gap
+  G1): the decompiled Claude app 1.261009.20 never draws thinking inline. A
+  thought is one "Thought process" row, like a finished run, that opens a sheet
+  with the text, so the line and the fold are gone
+  (`MobileNativeChatReasoningNote.tsx`, `MobileNativeChatThinkingSheet.tsx`,
+  `mobile-native-chat-thought-process.test.tsx`). On a terminal Claude tab thinking still
   reaches the phone as ordinary prose, so it gets no line. That is a refusal,
   not a miss: the phone does not guess thinking from the words. The cause is
   in Orca (origin/main 8d6fec597b, 2026-09-23): `claudeMessageRole()` in

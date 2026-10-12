@@ -14,6 +14,7 @@ import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-block
 import { isRenderableNativeChatNotice } from './mobile-native-chat-notice-kind'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { isHarnessTurnStart } from './mobile-native-chat-harness-turn-starts'
+import { errorRowOf } from './mobile-native-chat-error-rows'
 
 /** The roles that carry on a turn the agent has begun: its words, its tool
  *  results and its thoughts. A prompt or a host notice does not. */
@@ -99,12 +100,13 @@ export function trailingWorkIsRunning(
 }
 
 /** Whether a row draws as the agent's reply and so can carry its actions:
- *  not a prompt, a thought, a host notice, the harness's words around a peer
- *  message or a subagent's message, which MobileNativeChatMessage draws
- *  without them. A system row whose hint this build does not know falls
- *  through to ordinary prose there, and does here too. */
+ *  not a prompt, a thought, a host notice, an error row, the harness's words
+ *  around a peer message or a subagent's message, which
+ *  MobileNativeChatMessage draws without them. A system row whose hint this
+ *  build does not know falls through to ordinary prose there, and does here
+ *  too. */
 function drawsAsReply(message: NativeChatMessage): boolean {
-  if (message.role === 'user' || message.role === 'reasoning') {
+  if (message.role === 'user' || message.role === 'reasoning' || errorRowOf(message) !== null) {
     return false
   }
   if (message.role !== 'system') {

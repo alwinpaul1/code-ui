@@ -12,7 +12,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): ReactNode =>
-    React.createElement('Text', props, children)
+    React.createElement('Text', props, children as ReactNode)
   return {
     Animated: {
       View: 'View',
@@ -28,10 +28,10 @@ vi.mock('react-native', async () => {
     Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('ScrollView', props, children),
+      React.createElement('ScrollView', props, children as ReactNode),
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('View', props, children),
+      React.createElement('View', props, children as ReactNode),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
@@ -52,6 +52,14 @@ vi.mock('lucide-react-native', () => {
   })
 })
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+// The subagent message's sheet: a frame that draws its content while open.
+vi.mock('../components/BottomDrawer', async () => {
+  const React = await import('react')
+  return {
+    BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
+      visible ? React.createElement('BottomDrawer', null, children as ReactNode) : null
+  }
+})
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({
   MobileNativeChatToolDetailSheet: 'MobileNativeChatToolDetailSheet'
@@ -118,7 +126,6 @@ describe('the chat transcript’s type', () => {
 
   it.each([
     ['a reply', reply],
-    ['a thought', { ...reply, id: 'r1', role: 'reasoning', blocks: [{ type: 'text', text: 'Thinking it over.' }] }],
     [
       'a plan document',
       { ...reply, id: 's1', role: 'system', blocks: [{ type: 'text', text: '1. Do it', presentation: 'plan-document' }] }
@@ -148,6 +155,20 @@ describe('the chat transcript’s type', () => {
     }
   })
 
+  // A thought is a "Thought process" row since 2026-10-12; its words are in the sheet it opens.
+  it('draws a thought, opened, at the same size', () => {
+    render(
+      createElement(MobileNativeChatMessage, {
+        message: { ...reply, id: 'r1', role: 'reasoning', blocks: [{ type: 'text', text: 'Thinking it over.' }] }
+      })
+    )
+    expect(byType('MobileMarkdown')).toHaveLength(0)
+    const row = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Thought process')!
+    act(() => row.props.onPress())
+    const [markdown] = byType('MobileMarkdown')
+    expect(markdown!.props.typography).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY)
+  })
+
   it('draws a subagent’s message, opened, at the same size', () => {
     const styles = makeChatMessageStyles(themeFor('light'))
     render(
@@ -158,7 +179,7 @@ describe('the chat transcript’s type', () => {
         styles
       })
     )
-    const toggle = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Message from @general-purpose')!
+    const toggle = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Received message from general-purpose')!
     act(() => toggle.props.onPress())
     const [markdown] = byType('MobileMarkdown')
     expect(markdown!.props.typography).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY)

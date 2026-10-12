@@ -102,9 +102,10 @@ function questionActions(prompt: AskPrompt, agent: string | null): QuestionNotif
     label: shortenLabel(option.label),
     pick: index
   }))
-  // The card draws an "Other…" row under every question; the shade draws its
-  // field only while a slot is free. Three choices fill the shade, and a
-  // one-tap choice is the likelier need than typing.
+  // The card draws a free-answer row ("Something else") under every question; the shade draws its
+  // field (still "Other…": the shade's button is not the Claude app's card)
+  // only while a slot is free. Three choices fill the shade, and a one-tap
+  // choice is the likelier need than typing.
   return picks.length < MAX_ACTIONS ? [...picks, otherField()] : picks
 }
 

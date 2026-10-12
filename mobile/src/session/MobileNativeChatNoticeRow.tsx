@@ -9,7 +9,10 @@ import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
-  compaction: 'Context compacted',
+  /** The Claude app's word for the boundary (`ccr_context_compacted`,
+   *  1.261009.20). It adds "· saved N tokens" from the stream's pre/post token
+   *  counts; Orca's status row carries no counts, so the phone says no number. */
+  compaction: 'Compacted conversation',
   contextCleared: 'Context cleared',
   plan: 'Plan'
 } as const

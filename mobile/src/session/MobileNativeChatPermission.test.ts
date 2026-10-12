@@ -513,10 +513,10 @@ describe('MobileNativeChatPermission', () => {
         'Yes, manually approve edits',
         'Tell Claude what to change'
       ])
-      const sendBack = renderer!.root
+      const suggest = renderer!.root
         .findAllByType('Text')
-        .find((text) => text.props.children === 'Send back')
-      expect(sendBack).toBeDefined()
+        .find((text) => text.props.children === 'Suggest Edits')
+      expect(suggest).toBeDefined()
       await act(async () => buttons[2]!.props.onPress())
       expect(onRespond).not.toHaveBeenCalled()
       expect(onRespondWithComment).not.toHaveBeenCalled()
@@ -603,9 +603,9 @@ describe('MobileNativeChatPermission', () => {
       const button = renderer!.root
         .findAllByType('Pressable')
         .find((candidate) => candidate.props.accessibilityLabel === 'Tell Claude what to change')
-      // No "Send back" affordance without a way to carry the comment.
+      // No "Suggest Edits" affordance without a way to carry the comment.
       expect(
-        renderer!.root.findAllByType('Text').some((text) => text.props.children === 'Send back')
+        renderer!.root.findAllByType('Text').some((text) => text.props.children === 'Suggest Edits')
       ).toBe(false)
       await act(async () => button!.props.onPress())
       expect(onRespond).toHaveBeenCalledExactlyOnceWith('3')

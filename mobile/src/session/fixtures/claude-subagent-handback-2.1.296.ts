@@ -25,7 +25,7 @@
 // hand-back only from its own prompt hook and from the TUI's row. The Claude
 // app draws nothing for it. After the reply, the user's screenshot of
 // 2026-10-11 shows only the "1 running task" line, where Code UI drew a
-// folded "Message from general-purpose" row.
+// "Received message from general-purpose" row (the TUI folds it as "Message from").
 
 /** The harness's line ahead of every report (2.1.283 to 2.1.296, unchanged). */
 export const HANDBACK_FRAME =

@@ -135,7 +135,6 @@ describe('holding a reply on Android selects its text in place', () => {
   })
 
   it.each([
-    ['a thought', { ...reply, id: 'r1', role: 'reasoning', blocks: [{ type: 'text', text: 'Thinking it over.\n\nThen again.' }] }],
     [
       'a plan document',
       { ...reply, id: 's1', role: 'system', blocks: [{ type: 'text', text: 'Plan intro.\n\n1. Do it', presentation: 'plan-document' }] }

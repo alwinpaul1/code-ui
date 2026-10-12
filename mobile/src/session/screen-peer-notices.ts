@@ -19,8 +19,8 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * nothing of the message or the sender (the user's call, 2026-09-21; the
  * earlier card and one-liner are gone). A subagent's row gets no bubble
  * (drawsPeerBubble); where no prompt hook carries the message, a message sent
- * mid-run is drawn as the folded "Message from <sender>" row the desktop TUI
- * shows (2026-09-26), and a hand-back is not drawn at all (2026-10-11).
+ * mid-run is drawn as a "Received message from <sender>" row (the desktop
+ * TUI's folded row, 2026-09-26; the Claude app's words since 2026-10-12), and a hand-back is not drawn at all (2026-10-11).
  * The body is still remembered for what follows. When the transcript
  * later carries the turn itself (a row Orca did publish, surfaced by
  * mobile-native-chat-peer-messages.ts) at or after that anchor, the notice

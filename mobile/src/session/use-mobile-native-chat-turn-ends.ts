@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentTurnPlainText, agentTurnsByEnd, type AgentTurn } from './mobile-native-chat-turn-end'
+import { sameTurnEdits, turnEditedFiles, type TurnEditedFile } from './mobile-native-chat-turn-edits'
 
 /** What a row of the chat list is told about the turn it may end. */
 export type MobileNativeChatTurnEndProps = {
@@ -18,6 +19,9 @@ export type MobileNativeChatTurnEndProps = {
   /** Whether this row's turn is the newest thing in the list, so the agent's
    *  working state is about it. */
   turnIsNewest: boolean | undefined
+  /** The files the turn changed, told only to the row that ends it, which
+   *  draws the turn edits card under it (mobile-native-chat-turn-edits.ts). */
+  turnEdits: readonly TurnEditedFile[] | undefined
 }
 
 const NO_PENDING: readonly { id: string }[] = []
@@ -54,6 +58,24 @@ export function useMobileNativeChatTurnEnds(
     }
     return byWords
   }, [turnsByEnd])
+  // Per turn end; each row's own files are worked out once per row object. A
+  // turn whose files read the same as last time keeps last time's list, so its
+  // memoised row is not re-rendered by every update to the transcript.
+  const lastEditsRef = useRef<ReadonlyMap<string, readonly TurnEditedFile[]>>(new Map())
+  const editsByEnd = useMemo(() => {
+    const byEnd = new Map<string, readonly TurnEditedFile[]>()
+    for (const [endId, turn] of turnsByEnd) {
+      const files = turnEditedFiles(turn.replyRows)
+      if (files.length > 0) {
+        const last = lastEditsRef.current.get(endId)
+        byEnd.set(endId, last && sameTurnEdits(last, files) ? last : files)
+      }
+    }
+    return byEnd
+  }, [turnsByEnd])
+  useEffect(() => {
+    lastEditsRef.current = editsByEnd
+  }, [editsByEnd])
   const turnsRef = useRef({ turnsByEnd, turnsByWords })
   useEffect(() => {
     turnsRef.current = { turnsByEnd, turnsByWords }
@@ -75,9 +97,10 @@ export function useMobileNativeChatTurnEnds(
         copyTurnText,
         anchorsTurnActions: worded !== undefined,
         turnTrailingWork: turn?.trailingWork,
-        turnIsNewest: turn?.isNewest
+        turnIsNewest: turn?.isNewest,
+        turnEdits: editsByEnd.get(id)
       }
     },
-    [turnsByEnd, turnsByWords, copyTurnText]
+    [turnsByEnd, turnsByWords, copyTurnText, editsByEnd]
   )
 }
