@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ScrollView, View } from 'react-native'
 import { ChevronDown, FilePen, FilePlus2 } from 'lucide-react-native'
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
@@ -34,28 +36,34 @@ export function turnEditsToggleLabel(hidden: number, open: boolean): string {
  * cards. Sizes and colours are Code UI's.
  *
  * Drawn once the turn is over: not while the agent still works on the newest
- * turn, where the Claude app has no result for it yet either.
+ * turn, nor while its last call waits on an answer (a permission prompt), where
+ * the Claude app has no result for it yet either.
  */
 export function MobileNativeChatTurnEditsCard({
   files,
   turnIsNewest,
+  trailingWork,
   styles
 }: {
   files: readonly TurnEditedFile[]
   turnIsNewest: boolean
+  /** The turn's work after its last words: a call there with no answer yet
+   *  (a permission prompt pauses the agent mid-turn) means the turn is open. */
+  trailingWork: readonly NativeChatBlock[] | undefined
   styles: ChatMessageStyles
 }) {
   const runs = useNativeChatAgentRuns()
   const { colors, radius, space } = useTheme()
-  const [open, setOpen] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [reviewing, setReviewing] = useState(false)
-  if (files.length === 0 || (turnIsNewest && runs.agentWorking)) {
+  const open = turnIsNewest && (runs.agentWorking || pairToolBlocks(trailingWork ?? []).some((pair) => pair.call && !pair.result))
+  if (files.length === 0 || open) {
     return null
   }
   const title = turnEditsTitle(files)
   const stat = turnEditsStat(files)
   const several = files.length > 1
-  const listed = several ? (open ? files : files.slice(0, TURN_EDITS_FOLDED_ROWS)) : []
+  const listed = several ? (showAll ? files : files.slice(0, TURN_EDITS_FOLDED_ROWS)) : []
   const hidden = files.length - TURN_EDITS_FOLDED_ROWS
   const rowStyle = {
     flexDirection: 'row',
@@ -121,16 +129,16 @@ export function MobileNativeChatTurnEditsCard({
       {several && hidden > 0 ? (
         <PressScale
           accessibilityRole="button"
-          accessibilityLabel={turnEditsToggleLabel(hidden, open)}
-          accessibilityState={{ expanded: open }}
+          accessibilityLabel={turnEditsToggleLabel(hidden, showAll)}
+          accessibilityState={{ expanded: showAll }}
           pressedScale={0.98}
-          onPress={() => setOpen((value) => !value)}
+          onPress={() => setShowAll((value) => !value)}
           style={[rowStyle, { borderTopWidth: 1, borderTopColor: colors.border }]}
         >
           <Txt variant="caption" tone="secondary">
-            {turnEditsToggleLabel(hidden, open)}
+            {turnEditsToggleLabel(hidden, showAll)}
           </Txt>
-          <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
+          <View style={{ transform: [{ rotate: showAll ? '180deg' : '0deg' }] }}>
             <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
           </View>
         </PressScale>

@@ -1,6 +1,10 @@
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { editFileCountIsWhole, type MobileEditFile } from './mobile-native-chat-edit-wire-cut'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../src/shared/native-chat-types'
+import { editFileCountIsWhole, landedEditIsUncountable, type MobileEditFile } from './mobile-native-chat-edit-wire-cut'
 import type { NativeChatToolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 
@@ -13,7 +17,8 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * The evidence is the tool-run chip's (mobile-native-chat-tool-run-diff-stat.ts):
  * a call that landed and is edit-shaped. A file's count is drawn only when
  * every change to it is whole; one the wire cut keeps its row and loses its
- * pill rather than show the part that survived. Codex 0.153.4 applies patches
+ * pill rather than show the part that survived. A landed edit with no rows at
+ * all (landedEditIsUncountable) withholds the whole card. Codex 0.153.4 applies patches
  * inside its `exec` script, which nothing splits into files, so a Codex turn
  * gets no card rather than an invented one.
  */
@@ -27,49 +32,64 @@ export type TurnEditedFile = {
   changes: MobileEditFile[]
 }
 
-/** One row's files, worked out once per row object: the list hands the same
- *  objects back on every transcript update, and a turn is re-read each time. */
-const ROW_FILES = new WeakMap<NativeChatMessage, TurnEditedFile[]>()
+/** One call's files, worked out once per call: the fold clones a row each
+ *  time a record joins it, but hands the same call and result blocks along,
+ *  so a turn re-read on every transcript update reuses them. */
+const CALL_FILES = new WeakMap<
+  NativeChatToolCallBlock,
+  { result: NativeChatToolResultBlock | null; files: TurnEditedFile[] | 'uncountable' }
+>()
 
-function rowEditedFiles(row: NativeChatMessage): TurnEditedFile[] {
-  const cached = ROW_FILES.get(row)
-  if (cached) {
-    return cached
+function callEditedFiles(
+  call: NativeChatToolCallBlock,
+  result: NativeChatToolResultBlock | null
+): TurnEditedFile[] | 'uncountable' {
+  const cached = CALL_FILES.get(call)
+  if (cached && cached.result === result) {
+    return cached.files
   }
-  const files: TurnEditedFile[] = []
-  for (const pair of pairToolBlocks(row.blocks)) {
-    if (!pair.call) {
-      continue
-    }
-    for (const file of editFilesForToolCall(pair.call, pair.result ?? null) ?? []) {
-      files.push({
-        path: file.path,
-        created: file.changeKind === 'added',
-        stat: editFileCountIsWhole(file) ? { added: file.added, removed: file.removed } : null,
-        changes: [file]
-      })
-    }
-  }
-  ROW_FILES.set(row, files)
+  const edits = editFilesForToolCall(call, result)
+  const files: TurnEditedFile[] | 'uncountable' =
+    !edits || edits.length === 0
+      ? landedEditIsUncountable(call, result)
+        ? 'uncountable'
+        : []
+      : edits.map((file) => ({
+          path: file.path,
+          created: file.changeKind === 'added',
+          stat: editFileCountIsWhole(file) ? { added: file.added, removed: file.removed } : null,
+          changes: [file]
+        }))
+  CALL_FILES.set(call, { result, files })
   return files
 }
 
-/** In the order the turn first touched each file. `rows` are the turn's rows
- *  as the list draws them (folded: a call carries its own result). */
 export function turnEditedFiles(rows: readonly NativeChatMessage[]): TurnEditedFile[] {
   const byPath = new Map<string, TurnEditedFile>()
   for (const row of rows) {
-    for (const file of rowEditedFiles(row)) {
-      const entry = byPath.get(file.path)
-      if (!entry) {
-        byPath.set(file.path, { ...file, changes: [...file.changes] })
+    for (const pair of pairToolBlocks(row.blocks)) {
+      if (!pair.call) {
         continue
       }
-      entry.changes.push(...file.changes)
-      entry.stat =
-        entry.stat && file.stat
-          ? { added: entry.stat.added + file.stat.added, removed: entry.stat.removed + file.stat.removed }
-          : null
+      const files = callEditedFiles(pair.call, pair.result ?? null)
+      // A landed edit the phone cannot read: a list without it, and a total,
+      // would claim the turn changed less than it did. The run's chip draws
+      // no count for it either.
+      if (files === 'uncountable') {
+        return []
+      }
+      for (const file of files) {
+        const entry = byPath.get(file.path)
+        if (!entry) {
+          byPath.set(file.path, { ...file, changes: [...file.changes] })
+          continue
+        }
+        entry.changes.push(...file.changes)
+        entry.stat =
+          entry.stat && file.stat
+            ? { added: entry.stat.added + file.stat.added, removed: entry.stat.removed + file.stat.removed }
+            : null
+      }
     }
   }
   return [...byPath.values()]

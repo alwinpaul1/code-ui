@@ -118,6 +118,32 @@ describe('the files a turn changed', () => {
   })
 })
 
+// Review of 2026-10-12: a landed edit the phone cannot read (the wire dropped
+// the keys that held a Write's content) was skipped, and the card named the other file with a
+// total, while the run's own chip drew no count. Refuse the card instead.
+describe('a turn with an edit the phone cannot read', () => {
+  const droppedWrite: NativeChatMessage = {
+    id: 'm1',
+    role: 'assistant',
+    timestamp: null,
+    source: 'transcript',
+    blocks: [
+      { type: 'tool-call', name: 'Write', input: { file_path: '/repo/a.ts', '…': 'truncated' } },
+      { type: 'tool-result', output: 'File created successfully at: /repo/a.ts' }
+    ]
+  }
+
+  it('gets no card, rather than a list and total that leave the edit out', () => {
+    expect(turnEditedFiles([...TURN, droppedWrite])).toEqual([])
+  })
+
+  it('works each call out once: the same records folded again give the same changes', () => {
+    const first = turnEditedFiles(TURN)
+    const again = turnEditedFiles(foldMobileNativeChatMessages(CLAUDE_EDIT_RUN_ROWS))
+    expect(again[1]!.changes[0]).toBe(first[1]!.changes[0])
+  })
+})
+
 describe('the turn the list names', () => {
   it('hands the turn’s files to the row that ends it, and to no other row', () => {
     const seen: Record<string, MobileNativeChatTurnEndProps> = {}
@@ -234,6 +260,29 @@ describe('the turn edits card', () => {
   it('draws no "Show more" for exactly three files', () => {
     const root = render(['a.ts', 'b.ts', 'c.ts'].map((name) => file(`/w/${name}`)))
     expect(texts(card(root)[0]!).some((text) => text.startsWith('Show '))).toBe(false)
+  })
+
+  // Review of 2026-10-12: paused on a permission, the agent is not working,
+  // but the turn is not over: its last call has no answer yet.
+  it('waits while the newest turn’s last call is unanswered, as at a permission prompt', () => {
+    const open: NativeChatMessage['blocks'] = [{ type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' } }]
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: 'light' },
+          createElement(MobileNativeChatMessage, {
+            message: TURN.at(-1)!,
+            endsTurn: true,
+            turnIsNewest: true,
+            turnTrailingWork: open,
+            turnEdits: turnEditedFiles(TURN)
+          })
+        )
+      )
+    })
+    expect(card(renderer!.root)).toHaveLength(0)
   })
 
   it('waits for the newest turn to finish, and draws nothing for a turn with no edits', () => {

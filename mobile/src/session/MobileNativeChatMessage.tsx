@@ -422,7 +422,12 @@ function MobileNativeChatMessageImpl({
           )}
         </Bubble>
         {isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
-          <MobileNativeChatTurnEditsCard files={turnEdits} turnIsNewest={turnIsNewest} styles={styles} />
+          <MobileNativeChatTurnEditsCard
+            files={turnEdits}
+            turnIsNewest={turnIsNewest}
+            trailingWork={turnTrailingWork}
+            styles={styles}
+          />
         ) : null}
         {/* Under the bubble, in the page's ink rather than the bubble's. */}
         {copyError ? (
