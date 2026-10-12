@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { CHAT_FRAME_HOLD_MS } from './use-native-chat-frame'
+import { COMPOSER_KEYBOARD_SETTLE_MS } from './use-composer-keeps-keyboard'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 // Reported from the phone (2026-10-12, 0.9.130), and confirmed: "it happens
@@ -70,6 +71,15 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
 vi.mock('./text-field-focus', () => ({ anyTextFieldFocused: () => keyboardState.someFieldFocused }))
+// The session screen is on top: useFocusEffect reports focus as each composer mounts.
+vi.mock('./use-native-chat-screen-focus', async () => {
+  const { useEffect } = await import('react')
+  return {
+    useNativeChatScreenFocus: (onFocusChange: (focused: boolean) => void) => {
+      useEffect(() => onFocusChange(true), [onFocusChange])
+    }
+  }
+})
 // The chat view, reduced to the real composer it docks, wired as the view wires
 // it (chat-view-tells-composer-keyboard-up.test.ts pins keyboardUp's wiring).
 vi.mock('./MobileNativeChatView', async () => {
@@ -166,6 +176,7 @@ function nodeMock(element: { type: unknown }): Field | null {
 let root: ReactTestRenderer | null = null
 beforeEach(() => {
   vi.useFakeTimers()
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   fields = []
   keyboardState.someFieldFocused = false
 })
@@ -173,6 +184,7 @@ afterEach(() => {
   act(() => root?.unmount())
   root = null
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 const show = (moment: Moment) =>
@@ -197,14 +209,19 @@ describe('opening a new agent tab from the phone', () => {
     })
     show({ typed: '', chat: false, keyboard: 320 })
     expect(composers()).toHaveLength(0)
-    // React Native blurs a focused field that unmounts; Android lost that blur
-    // on the device, and the keyboard stayed.
+    // React Native blurs a focused field that unmounts, which clears its record.
+    // That the keyboard stays up through it is the report's premise, not
+    // something observed on a device.
     keyboardState.someFieldFocused = false
     // The agent is identified: chat again, with a fresh composer.
     show({ typed: '', chat: true, keyboard: 320 })
     expect(composers()).toHaveLength(1)
     const fresh = fields[fields.length - 1]!
     expect(fresh).not.toBe(fields[0])
+    expect(fresh.focused).toBe(false)
+    act(() => {
+      vi.advanceTimersByTime(COMPOSER_KEYBOARD_SETTLE_MS)
+    })
     expect(fresh.focused).toBe(true)
   })
 
@@ -213,6 +230,9 @@ describe('opening a new agent tab from the phone', () => {
       root = create(overlay({ typed: '', chat: false, keyboard: 0 }), { createNodeMock: nodeMock })
     })
     show({ typed: '', chat: true, keyboard: 0 })
+    act(() => {
+      vi.advanceTimersByTime(COMPOSER_KEYBOARD_SETTLE_MS)
+    })
     expect(fields.some((field) => field.focused)).toBe(false)
   })
 })

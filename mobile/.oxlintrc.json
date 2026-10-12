@@ -549,7 +549,10 @@
             // chip's props) — an over-the-cap video's frame-reading progress,
             // handed to MobileNativeChatAttachmentChips. The extraction logic
             // lives in mobile-video-frame-extractor.ts.
-            "max": 426,
+            // 2026-10-12: +3 for `keyboardUp` (the prop, its destructure, the
+            // hook call): the composer claims an open keyboard no field holds
+            // (use-composer-keeps-keyboard.ts). The logic lives there.
+            "max": 429,
             "skipBlankLines": true,
             "skipComments": true
           }

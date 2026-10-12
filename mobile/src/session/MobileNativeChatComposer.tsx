@@ -46,7 +46,8 @@ type Props = {
   /** Bumped (any increase over 0) to focus the text field once — the file
    *  reader's "Ask about lines" after switching back to this chat tab. */
   focusRequest?: number
-  keyboardUp?: boolean // The soft keyboard is up; one no field holds is claimed here (use-composer-keeps-keyboard.ts).
+  /** The soft keyboard is up; one no field holds is claimed here (use-composer-keeps-keyboard.ts). */
+  keyboardUp?: boolean
   onSend: (text: string) => Promise<boolean>
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
@@ -150,7 +151,8 @@ const COMPOSER_INPUT_LINES_WITH_MENU = 2
 export function MobileNativeChatComposer({
   value,
   onChangeText,
-  focusRequest, keyboardUp = false,
+  focusRequest,
+  keyboardUp = false,
   onSend,
   sendSurfaceId,
   getSendCompletionGeneration,
@@ -207,7 +209,8 @@ export function MobileNativeChatComposer({
     null
   )
   const textInputRef = useRef<TextInput>(null)
-  useRichPasteInput(textInputRef, onPasteImageFile); useComposerKeepsKeyboard(textInputRef, keyboardUp)
+  useRichPasteInput(textInputRef, onPasteImageFile)
+  useComposerKeepsKeyboard(textInputRef, keyboardUp)
   // Only on an actual increase, never on a re-render at the same value — a
   // route revisit that leaves focusRequest untouched must not steal the
   // keyboard back from whatever the user is doing now.
