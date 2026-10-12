@@ -20,6 +20,9 @@ const NO_FEEDS: Feeds = new Map()
 
 let request: SubagentActivityRequest | null = null
 let feeds: Feeds = NO_FEEDS
+/** Agents whose feed is a window that starts after the transcript does (the
+ *  read has earlier pages it never loads): a count over it is a floor. */
+let windowed: ReadonlySet<string> = new Set()
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -75,6 +78,29 @@ export function publishSubagentFeed(agentId: string, messages: readonly NativeCh
   emit()
 }
 
+/** Whether this agent's feed leaves earlier rows unread. */
+export function publishSubagentFeedWindowed(agentId: string, hasMore: boolean): void {
+  if (windowed.has(agentId) === hasMore) {
+    return
+  }
+  const next = new Set(windowed)
+  if (hasMore) {
+    next.add(agentId)
+  } else {
+    next.delete(agentId)
+  }
+  windowed = next
+  emit()
+}
+
+export function useSubagentFeedsWindowed(): ReadonlySet<string> {
+  return useSyncExternalStore(
+    subscribe,
+    () => windowed,
+    () => windowed
+  )
+}
+
 function dropFeedsOutside(targets: readonly SubagentTranscriptTarget[]): void {
   const wanted = new Set(targets.map((target) => target.agentId))
   if ([...feeds.keys()].every((id) => wanted.has(id))) {
@@ -126,5 +152,6 @@ export function peekSubagentActivityRequest(): SubagentActivityRequest | null {
 export function resetSubagentActivityForTests(): void {
   request = null
   feeds = NO_FEEDS
+  windowed = new Set()
   listeners.clear()
 }

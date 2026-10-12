@@ -194,15 +194,16 @@ describe('the run sheet opened from the chat', () => {
     expect(detailPair(tree)?.call?.input).toMatchObject({ description: 'Cancel our two pending jobs on the build host' })
   })
 
-  it("opens the agent's own transcript from its row, with the sheet left open as before", async () => {
+  // Parity gap G29: the agent's row opens its Agent call's own sheet, which
+  // lists the agent's calls and keeps the transcript behind "View transcript".
+  it("opens the agent's own call sheet from its row, naming the agent, not the transcript viewer", async () => {
     const tree = await render(true)
     await press(tree, 'tool-run-header')
     await press(tree, 'run-sheet-row', 4)
-    expect(peekSubagentTranscript()).toMatchObject({
-      running: true,
-      target: { agentId: MIXED_RUN_AGENT_ID, title: MIXED_RUN_AGENT_DESCRIPTION }
-    })
-    expect(detailPair(tree)).toBeNull()
+    expect(peekSubagentTranscript()).toBeNull()
+    const sheet = tree.root.findAllByType('ToolDetailSheet' as never).at(-1)!
+    expect(sheet.props.pair.call.name).toBe('Agent')
+    expect(sheet.props.agentId).toBe(MIXED_RUN_AGENT_ID)
   })
 
   // Review of feat/tool-run-sheet: the provider kept the blocks of the tap, so a

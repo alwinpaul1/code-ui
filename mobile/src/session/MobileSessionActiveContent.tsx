@@ -23,6 +23,8 @@ import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
 import { useSessionDiffTotals } from './use-session-diff-totals'
 import { sessionReviewRoute } from '../source-control/mobile-review-route'
+import { NativeChatFileReadProvider } from './native-chat-file-read-context'
+import { useNativeChatFileReaderFor } from './use-native-chat-file-reader'
 
 export function MobileSessionActiveContent({
   controller
@@ -120,6 +122,8 @@ export function MobileSessionActiveContent({
 
   // The line counts of created files the wire cut, read back from the host.
   const createdFileCounts = useMobileNativeChatCreatedFileCounts({ client, hostId, worktreeId })
+  // What the Read sheet's "Load full file" reads with (parity gap G19).
+  const fileReader = useNativeChatFileReaderFor(client, hostId, worktreeId, connState)
   // Images a document names, read off the host for the .md tab and the file
   // tab's rendered view; one resolver per document, so a figure fetches once.
   const documentPath = activeMarkdownTab?.relativePath ?? activeFileTab?.relativePath ?? null
@@ -348,6 +352,7 @@ export function MobileSessionActiveContent({
           onOpenUrl={handleTerminalOpenUrl}
         />
       ))}
+      <NativeChatFileReadProvider value={fileReader}>
       <MobileNativeChatOverlay
         controller={nativeChatController}
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
@@ -379,6 +384,7 @@ export function MobileSessionActiveContent({
         sessionDiff={sessionDiff}
         onOpenDiff={openSessionDiff}
       />
+      </NativeChatFileReadProvider>
       {/* Opened from a subagent row in the background-tasks sheet, through its
           store; mounted here because this is the screen that knows the host. */}
       <MobileSubagentTranscriptModal hostId={hostId} worktreeId={worktreeId} />

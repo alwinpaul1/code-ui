@@ -87,7 +87,6 @@ describe('the tool group sheet, the Claude app way', () => {
             visible
             title={title}
             rows={runSheetRows(blocks, [])}
-            running={false}
             onSelectPair={vi.fn()}
             onClose={vi.fn()}
           />

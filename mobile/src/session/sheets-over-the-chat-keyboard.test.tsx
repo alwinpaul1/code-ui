@@ -110,7 +110,6 @@ const SHEETS: [string, () => ReactElement][] = [
         visible: true,
         title: 'Ran an agent',
         rows: [],
-        running: false,
         onSelectPair: noop,
         onClose: noop
       })

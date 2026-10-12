@@ -98,7 +98,6 @@ describe('the run sheet, the Claude app way', () => {
             visible
             title={title ?? toolRunSentence(blocks, 0)}
             rows={runSheetRows(blocks, [])}
-            running={false}
             onSelectPair={vi.fn()}
             onClose={vi.fn()}
           />

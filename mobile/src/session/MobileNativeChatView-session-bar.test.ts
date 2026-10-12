@@ -11,6 +11,7 @@ vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 // The system interrupting a touch is not what these tests are about; see
 // use-mobile-native-chat-tail-follow.settle.test.ts for that.
 vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
+vi.mock('./MobileBackgroundShellOutputSheet', () => ({ MobileBackgroundShellOutputSheet: 'ShellOutputSheet' }))
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   Animated: {

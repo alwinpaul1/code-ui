@@ -9,7 +9,7 @@ import { useLastConnectedAt } from '../transport/client-context-connection-metri
 import { useHostClient } from '../transport/host-client-hooks'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
-import { publishSubagentFeed, useSubagentActivityRequest } from './subagent-activity-store'
+import { publishSubagentFeed, publishSubagentFeedWindowed, useSubagentActivityRequest } from './subagent-activity-store'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 
 /** These reads are never kept for a warm start: the shared cache holds twelve
@@ -100,6 +100,17 @@ function SubagentActivityFeed({
       publishSubagentFeed(target.agentId, session.messages)
     }
   }, [ready, target.agentId, session.messages])
-  useEffect(() => () => publishSubagentFeed(target.agentId, null), [target.agentId])
+  useEffect(() => {
+    if (ready) {
+      publishSubagentFeedWindowed(target.agentId, session.hasMore)
+    }
+  }, [ready, target.agentId, session.hasMore])
+  useEffect(
+    () => () => {
+      publishSubagentFeed(target.agentId, null)
+      publishSubagentFeedWindowed(target.agentId, false)
+    },
+    [target.agentId]
+  )
   return null
 }

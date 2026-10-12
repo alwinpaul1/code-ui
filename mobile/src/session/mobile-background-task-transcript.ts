@@ -322,14 +322,14 @@ export function takeAnsweredCall<Call extends PendingCall>(
 
 /** A background task's output file, as Claude Code names it in the launch
  *  result: `<session tmp>/tasks/<id>.output`. */
-const TASK_OUTPUT_FILE = /\/tasks\/([A-Za-z0-9_-]+)\.output\b/g
+export const TASK_OUTPUT_FILE = /\/tasks\/([A-Za-z0-9_-]+)\.output\b/g
 /** The line Claude Code writes last into a background task's output file when
  *  the task ends: `[exited with code N]`, or `[killed]` for one that was
  *  stopped (Claude Code 2.1.295–2.1.296; every one of the 195 ended tasks'
  *  files in session 0954729d ends so, and none of the 4 still running did,
  *  2026-10-11). A whole line, after the line number a Read result puts in
  *  front, so a command that merely prints the words is not one. */
-const OUTPUT_TRAILER = /^(?:\s*\d+(?:\t|→))?\[(?:exited with code (-?\d+)|(killed))\]\s*$/
+export const OUTPUT_TRAILER = /^(?:\s*\d+(?:\t|→))?\[(?:exited with code (-?\d+)|(killed))\]\s*$/
 
 /** The task a read of its own output file proves ended, and how: a Bash or
  *  Read call naming exactly one task's output file, whose answer holds the end

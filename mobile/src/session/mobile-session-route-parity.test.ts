@@ -579,7 +579,9 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // controller />.
 // 2026-10-12 (parity gap G6): the chat overlay is handed `sessionDiff` and `onOpenDiff`, the
 // session bar's diff pill. Same records; only the overlay's moved.
-const HEAD_LEAF_JSX_SHA256 = 'f482d136189419e2197ac06808d71e9d7869152a115180ad132e595661c63ba5'
+// 2026-10-12 (parity gap G19): one new leaf record, <NativeChatFileReadProvider value> around the
+// chat overlay in the session content.
+const HEAD_LEAF_JSX_SHA256 = '40ef8e29961ea92807123e84546150535a6540ff93ed1f140ac4905c0e08fe07'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1182,7 +1184,9 @@ describe('mobile session route extraction parity', () => {
     // 75 again later on 2026-10-11: the user asked for the ring back in the composer, so the
     // header no longer mounts <MobileSessionHeaderContext>; the menu stays.
     // 74 later on 2026-10-11: the header's model pill text leaf is gone too.
-    expect(jsx.leaf).toHaveLength(74)
+    // 75 since 2026-10-12 (parity gap G19): the chat overlay sits in a
+    // <NativeChatFileReadProvider>, what the Read sheet's Load full file reads with.
+    expect(jsx.leaf).toHaveLength(75)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

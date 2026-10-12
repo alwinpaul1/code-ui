@@ -84,8 +84,7 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
     props: Partial<Parameters<typeof MobileNativeChatRunSheet>[0]> = {},
     scheme: 'light' | 'dark' = 'light'
   ) {
-    const onSelectPair = vi.fn<(pair: NativeChatToolPair) => void>()
-    const onOpenTranscript = vi.fn()
+    const onSelectPair = vi.fn<(pair: NativeChatToolPair, agentId: string | null) => void>()
     const onClose = vi.fn()
     act(() => {
       renderer = create(
@@ -94,16 +93,14 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
             visible
             title={toolRunSentence(BLOCKS, 0)}
             rows={runSheetRows(BLOCKS, ENTRIES)}
-            running
             onSelectPair={onSelectPair}
-            onOpenTranscript={onOpenTranscript}
             onClose={onClose}
             {...props}
           />
         </ThemeProvider>
       )
     })
-    return { tree: renderer!, onSelectPair, onOpenTranscript, onClose }
+    return { tree: renderer!, onSelectPair, onClose }
   }
 
   const rowNodes = (tree: ReactTestRenderer): ReactTestInstance[] =>
@@ -133,22 +130,31 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
     expect(onSelectPair.mock.calls[0]![0].call?.name).toBe('Bash')
   })
 
-  it("opens a known agent's transcript from its row instead of the detail sheet", () => {
-    const { tree, onSelectPair, onOpenTranscript } = render()
+  // Parity gap G29: the Claude app opens the Agent call's own sheet (its
+  // prompt, then "Tool calls (N)"), and the transcript from there.
+  it("opens a known agent's own call sheet from its row, naming the agent", () => {
+    const { tree, onSelectPair } = render()
     act(() => rowNodes(tree)[4]!.props.onPress())
-    expect(onOpenTranscript).toHaveBeenCalledWith(MIXED_RUN_AGENT_ID, MIXED_RUN_AGENT_DESCRIPTION, true)
-    expect(onSelectPair).not.toHaveBeenCalled()
+    expect(onSelectPair).toHaveBeenCalledTimes(1)
+    const [pair, agentId] = onSelectPair.mock.calls[0]!
+    expect(agentId).toBe(MIXED_RUN_AGENT_ID)
+    expect(pair.call?.name).toBe('Agent')
+  })
+
+  it('opens any other row with no agent named', () => {
+    const { tree, onSelectPair } = render()
+    act(() => rowNodes(tree)[1]!.props.onPress())
+    expect(onSelectPair.mock.calls[0]![1]).toBeNull()
   })
 
   // The generic detail sheet of a launch showed its result's "internal metadata,
   // never quote" text, so an agent row with no known id is not tappable.
   it('leaves an agent row with no known id disabled, opening nothing', () => {
-    const { tree, onSelectPair, onOpenTranscript } = render({ rows: runSheetRows(BLOCKS, []) })
+    const { tree, onSelectPair } = render({ rows: runSheetRows(BLOCKS, []) })
     const row = rowNodes(tree)[4]!
     expect(row.props.disabled).toBe(true)
     act(() => row.props.onPress?.())
     expect(onSelectPair).not.toHaveBeenCalled()
-    expect(onOpenTranscript).not.toHaveBeenCalled()
     expect(rowNodes(tree).slice(0, 4).every((node) => node.props.disabled !== true)).toBe(true)
   })
 

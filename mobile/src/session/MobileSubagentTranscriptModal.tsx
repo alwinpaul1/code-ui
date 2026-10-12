@@ -128,7 +128,7 @@ export function MobileSubagentTranscriptScreen({
         title={target.title}
         subtitle={`Subagent · ${running ? 'Running' : 'Finished'}`}
         onBack={onClose}
-        backLabel="Back to background tasks"
+        backLabel="Back to the agent"
       />
       {body.kind === 'messages' ? (
         <FlashList
