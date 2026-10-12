@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -24,6 +24,9 @@ export function useComposerSuggestions(args: {
   onNeedSkills?: () => void
   popoverSpace: number
   dockHeight: number
+  /** The composer's field has focus. Leaving it with the menu up closes the
+   *  menu for that token, as a tap outside does in the Claude app. */
+  focused?: boolean
 }) {
   const {
     value,
@@ -36,9 +39,29 @@ export function useComposerSuggestions(args: {
     onNeedFiles,
     onNeedSkills,
     popoverSpace,
-    dockHeight
+    dockHeight,
+    focused = true
   } = args
-  const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
+  const typed = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
+  // Claude Android 1.261009.20: a tap outside the `/` menu closes it for the
+  // token it was showing, and it stays shut until that token is gone (a space,
+  // the caret leaving it) or another one opens. Here "outside" is the field
+  // losing focus with the menu up; the rows are not focusable, so a pick never
+  // counts. Keyed on where the token starts and what opened it, which is what
+  // tells one token from the next.
+  const typedKey = typed ? `${typed.kind}:${typed.start}` : null
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const [wasFocused, setWasFocused] = useState(focused)
+  if (wasFocused !== focused) {
+    setWasFocused(focused)
+    if (!focused && typedKey !== null) {
+      setDismissedKey(typedKey)
+    }
+  }
+  if (dismissedKey !== null && dismissedKey !== typedKey) {
+    setDismissedKey(null)
+  }
+  const trigger = typed !== null && typedKey !== dismissedKey ? typed : null
   const suggestions = useMemo<ComposerSuggestion[]>(() => {
     if (!trigger) {
       return []

@@ -1,3 +1,4 @@
+import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
@@ -214,4 +215,8 @@ export type MobileNativeChatViewProps = {
   keyboardInset?: number
   /** Terminal accessory keys shown above the composer (Tab, Shift+Tab, arrows, Esc…). */
   keyStrip?: MobileNativeChatKeyStripProps
+  /** The worktree's uncommitted +/- for the session bar's diff pill; null leaves it out. */
+  sessionDiff?: SessionDiffTotals | null
+  /** Opens the changes, from the diff pill. */
+  onOpenDiff?: () => void
 }

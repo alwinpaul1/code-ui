@@ -21,6 +21,8 @@ import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-termina
 import { readingPositionKey } from '../storage/reading-positions'
 import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
+import { useSessionDiffTotals } from './use-session-diff-totals'
+import { sessionReviewRoute } from '../source-control/mobile-review-route'
 
 export function MobileSessionActiveContent({
   controller
@@ -43,6 +45,8 @@ export function MobileSessionActiveContent({
   const {
     hostId,
     worktreeId,
+    worktreeName,
+    router,
     insets,
     connState,
     client,
@@ -142,6 +146,17 @@ export function MobileSessionActiveContent({
     }
   }
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+  // The session bar's diff pill (Claude app parity, G6): the worktree's
+  // uncommitted +/-, opening the Changes review on tap.
+  const sessionDiff = useSessionDiffTotals({
+    client,
+    connState,
+    hostId,
+    worktreeId,
+    agentWorking: nativeChatController.nativeChatAgentWorking === true,
+    enabled: nativeChatController.showNativeChat || nativeChatController.chatViewSelected
+  })
+  const openSessionDiff = () => router.push(sessionReviewRoute({ hostId, worktreeId, worktreeName }))
   const selectAgentMode = async (target: TerminalAgentMode) => {
     const startedOn = liveHandleRef.current
     const reached = await stepTerminalMode<TerminalAgentMode>({
@@ -361,6 +376,8 @@ export function MobileSessionActiveContent({
         keyboardInset={keyboardLift}
         onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
         onSelectAgentMode={(mode) => void selectAgentMode(mode)}
+        sessionDiff={sessionDiff}
+        onOpenDiff={openSessionDiff}
       />
       {/* Opened from a subagent row in the background-tasks sheet, through its
           store; mounted here because this is the screen that knows the host. */}

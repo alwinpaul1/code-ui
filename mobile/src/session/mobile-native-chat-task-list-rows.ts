@@ -11,6 +11,7 @@ import {
 } from '../../../src/shared/native-chat-task-list'
 import { pairToolBlocks, type NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { ClaudeTaskToolFold } from './claude-task-tools-list'
 
 export type MobileTaskListRow = {
   list: NativeChatTaskList
@@ -82,11 +83,15 @@ export function mobileTaskListRows(
   })
 }
 
-/** The newest accepted plan in the transcript, for the strip above the composer. */
+/** The newest plan in the transcript, for the todo pill above the composer:
+ *  a whole list from TodoWrite or Codex's update_plan, or the list Claude
+ *  Code's TaskCreate and TaskUpdate calls have built so far
+ *  (claude-task-tools-list.ts). Whichever changed last is the one shown. */
 export function mobileTaskListState(
   messages: readonly NativeChatMessage[]
 ): { list: NativeChatTaskList | null } {
   let list: NativeChatTaskList | null = null
+  const taskTools = new ClaudeTaskToolFold()
   for (const message of messages) {
     if (message.role !== 'assistant') {
       continue
@@ -95,6 +100,8 @@ export function mobileTaskListState(
       const found = listFromPair(pair.call, pair.result)
       if (found) {
         list = found.list
+      } else if (taskTools.apply(pair)) {
+        list = taskTools.list()
       }
     }
   }
