@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ReactNode, type ComponentType } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -9,7 +9,7 @@ vi.mock('react-native', async () => {
   const host =
     (name: string) =>
     ({ children, ...props }: { children?: unknown }) =>
-      React.createElement(name, props, children)
+      React.createElement(name, props, children as ReactNode)
   return {
     Animated: {
       View: host('View'),
@@ -49,11 +49,14 @@ vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children?: ReactNode }) =>
-      visible ? React.createElement('BottomDrawer', null, header, children) : null
+      visible ? React.createElement('BottomDrawer', null, header, children as ReactNode) : null
   }
 })
 
 import { ThemeProvider } from '../theme/theme-context'
+
+/** The provider as these tests mount it: createElement passes its child as the third argument. */
+const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -204,11 +207,11 @@ describe('the turn edits card', () => {
     act(() => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          Themed,
           { initialPreference: scheme },
           createElement(
             NativeChatAgentRunsContext.Provider,
-            { value: { runningIds: new Set(), confirmed: new Map(), agentWorking: working } },
+            { value: { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: working } },
             createElement(MobileNativeChatMessage, {
               message: TURN.at(-1)!,
               endsTurn: true,
@@ -270,7 +273,7 @@ describe('the turn edits card', () => {
     act(() => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          Themed,
           { initialPreference: 'light' },
           createElement(MobileNativeChatMessage, {
             message: TURN.at(-1)!,

@@ -1,4 +1,4 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement, type ReactNode, type ComponentType } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -7,7 +7,7 @@ vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetail
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
-    React.createElement('Text', props, children)
+    React.createElement('Text', props, children as ReactNode)
   return {
     Animated: {
       View: 'View',
@@ -25,7 +25,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Pressable: 'Pressable',
     Text,
-    View: ({ children, ...props }: { children?: unknown }) => React.createElement('View', props, children),
+    View: ({ children, ...props }: { children?: unknown }) => React.createElement('View', props, children as ReactNode),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light'
   }
@@ -44,12 +44,15 @@ vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children?: ReactNode }) =>
-      visible ? React.createElement('BottomDrawer', null, header, children) : null
+      visible ? React.createElement('BottomDrawer', null, header, children as ReactNode) : null
   }
 })
 
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { ThemeProvider } from '../theme/theme-context'
+
+/** The provider as these tests mount it: createElement passes its child as the third argument. */
+const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
@@ -85,7 +88,7 @@ describe("a thought in the chat", () => {
     act(() => renderer?.unmount())
     act(() => {
       renderer = create(
-        createElement(ThemeProvider, { initialPreference: scheme }, createElement(MobileNativeChatMessage, { message }))
+        createElement(Themed, { initialPreference: scheme }, createElement(MobileNativeChatMessage, { message }))
       )
     })
     return renderer!.root

@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode, type ComponentType } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT, type NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -7,7 +7,7 @@ vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetail
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
-    React.createElement('Text', props, children)
+    React.createElement('Text', props, children as ReactNode)
   return {
     Animated: {
       View: 'View',
@@ -25,7 +25,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Pressable: 'Pressable',
     Text,
-    View: ({ children, ...props }: { children?: unknown }) => React.createElement('View', props, children),
+    View: ({ children, ...props }: { children?: unknown }) => React.createElement('View', props, children as ReactNode),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light'
   }
@@ -55,6 +55,9 @@ vi.mock('../components/MobileMarkdown', async () => {
 })
 
 import { ThemeProvider } from '../theme/theme-context'
+
+/** The provider as these tests mount it: createElement passes its child as the third argument. */
+const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { agentTurnsByEnd } from './mobile-native-chat-turn-end'
@@ -131,7 +134,7 @@ describe('an error row on screen', () => {
     act(() => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          Themed,
           { initialPreference: scheme },
           createElement(MobileNativeChatMessage, {
             message,

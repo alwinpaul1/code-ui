@@ -1,8 +1,11 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode, type ComponentType } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
+
+/** The provider as these tests mount it: createElement passes its child as the third argument. */
+const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 
 vi.mock('react-native', () => ({
@@ -55,7 +58,7 @@ describe('the plan review on the card', () => {
         await act(async () => {
           renderer = create(
             createElement(
-              ThemeProvider,
+              Themed,
               { initialPreference: scheme },
               createElement(MobileNativeChatPermission, {
                 permission: { title: 'Ready to code?', options: planOptions },
@@ -65,9 +68,9 @@ describe('the plan review on the card', () => {
             )
           )
         })
-        const buttons = renderer!.root.findAllByType('Pressable')
+        const buttons = renderer!.root.findAllByType('Pressable' as never)
         const shown = buttons.map(
-          (button) => button.findAllByType('Text').map((text) => text.props.children)[0]
+          (button) => button.findAllByType('Text' as never).map((text) => text.props.children)[0]
         )
         expect(shown).toEqual(['Approve & auto mode', 'Approve Plan', 'Suggest Edits'])
         // The first is the filled one, from the theme in use.
@@ -91,7 +94,7 @@ describe('the plan review on the card', () => {
           })
         )
       })
-      const sheet = renderer!.root.findByType('TextInputModal')
+      const sheet = renderer!.root.findByType('TextInputModal' as never)
       expect(sheet.props.title).toBe('Suggest Edits')
       expect(sheet.props.placeholder).toBe('Describe what you’d like changed…')
     })
@@ -115,8 +118,8 @@ describe('the plan review on the card', () => {
         )
       })
       const shown = renderer!.root
-        .findAllByType('Pressable')
-        .map((button) => button.findAllByType('Text').map((text) => text.props.children)[0])
+        .findAllByType('Pressable' as never)
+        .map((button) => button.findAllByType('Text' as never).map((text) => text.props.children)[0])
       expect(shown).toEqual(['Yes, clear context and auto-accept edits', 'Approve Plan', 'Suggest Edits'])
     })
 })

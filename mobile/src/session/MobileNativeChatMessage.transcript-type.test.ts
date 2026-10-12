@@ -12,7 +12,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): ReactNode =>
-    React.createElement('Text', props, children)
+    React.createElement('Text', props, children as ReactNode)
   return {
     Animated: {
       View: 'View',
@@ -28,10 +28,10 @@ vi.mock('react-native', async () => {
     Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('ScrollView', props, children),
+      React.createElement('ScrollView', props, children as ReactNode),
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement('View', props, children),
+      React.createElement('View', props, children as ReactNode),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
@@ -57,7 +57,7 @@ vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
-      visible ? React.createElement('BottomDrawer', null, children) : null
+      visible ? React.createElement('BottomDrawer', null, children as ReactNode) : null
   }
 })
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))

@@ -1,8 +1,11 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode, type ComponentType } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
+
+/** The provider as these tests mount it: createElement passes its child as the third argument. */
+const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 
 vi.mock('react-native', () => ({
@@ -70,7 +73,7 @@ describe('a tool input on a permission card', () => {
     act(() => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          Themed,
           { initialPreference: scheme },
           createElement(MobileNativeChatPermission, {
             permission: { title, detail, options: OPTIONS },
@@ -83,7 +86,7 @@ describe('a tool input on a permission card', () => {
   const block = () => renderer!.root.findAllByProps({ testID: 'native-chat-approval-raw-args' })
   const texts = (): string[] =>
     renderer!.root
-      .findAllByType('Text')
+      .findAllByType('Text' as never)
       .map((node) => node.props.children)
       .filter((value): value is string => typeof value === 'string')
   const toggle = () =>
@@ -154,12 +157,12 @@ describe('a tool input on a permission card', () => {
   it.each(['light', 'dark'] as const)('sits in the sunken block and the theme’s inks, in %s', (scheme) => {
     const palette = scheme === 'dark' ? darkColors : lightColors
     render('Allow WebFetch?', JSON.stringify(WEB_FETCH_2_1_239), scheme)
-    const scroller = block()[0]!.findByType('ScrollView')
+    const scroller = block()[0]!.findByType('ScrollView' as never)
     expect([scroller.props.style].flat(Infinity)).toEqual(
       expect.arrayContaining([expect.objectContaining({ backgroundColor: palette.bgSunken })])
     )
     const colorOf = (text: string): string | undefined => {
-      const node = renderer!.root.findAllByType('Text').find((entry) => entry.props.children === text)
+      const node = renderer!.root.findAllByType('Text' as never).find((entry) => entry.props.children === text)
       const styles = [node?.props.style].flat(Infinity) as { color?: string }[]
       return styles.reduce<string | undefined>((found, entry) => entry?.color ?? found, undefined)
     }

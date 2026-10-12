@@ -10,7 +10,7 @@ vi.mock('../components/pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'Mer
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
-    React.createElement('Text', props, children)
+    React.createElement('Text', props, children as ReactNode)
   return {
     Animated: {
       View: 'View',
@@ -63,7 +63,7 @@ vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
     BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
-      visible ? React.createElement('BottomDrawer', null, children) : null
+      visible ? React.createElement('BottomDrawer', null, children as ReactNode) : null
   }
 })
 
