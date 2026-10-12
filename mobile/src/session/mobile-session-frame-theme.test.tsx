@@ -43,6 +43,7 @@ vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => nul
 vi.mock('./MobileSubagentTranscriptModal', () => ({ MobileSubagentTranscriptModal: () => null }))
 vi.mock('./MobileSubagentActivityFeeds', () => ({ MobileSubagentActivityFeeds: () => null }))
 vi.mock('../transport/host-mobile-capabilities', () => ({ useHostMobileCapability: () => false }))
+vi.mock('./use-native-chat-file-reader', () => ({ useNativeChatFileReaderFor: () => null }))
 vi.mock('./use-mobile-native-chat-created-file-counts', () => ({
   useMobileNativeChatCreatedFileCounts: () => new Map()
 }))
