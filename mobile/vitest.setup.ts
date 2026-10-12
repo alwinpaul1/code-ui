@@ -49,6 +49,15 @@ vi.mock('./src/session/use-native-chat-screen-focus', () => ({
   useNativeChatScreenFocus: () => undefined
 }))
 
+// Why: the chat composer claims an orphaned keyboard when the app comes back
+// (use-composer-keeps-keyboard.ts) through this AppState seam, and most tests
+// that draw the composer mock 'react-native' with no AppState. Stubbed, a
+// return is never reported, so only the mount and route-return claims run.
+// composer-keeps-keyboard-focus.test.tsx mocks it locally, which takes priority.
+vi.mock('./src/session/use-app-returns', () => ({
+  useAppReturns: () => undefined
+}))
+
 // Why: the shared press primitives (PressScale, Button, IconButton) call the
 // haptics helpers, which import expo-haptics and through it expo-modules-core's
 // EventEmitter — unavailable when 'react-native' is mocked to host tags. Tests

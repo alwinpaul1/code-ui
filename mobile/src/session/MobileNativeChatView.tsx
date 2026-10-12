@@ -448,6 +448,7 @@ export function MobileNativeChatView({
         value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}
+        keyboardUp={keyboardInset > 0}
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}
         {...{ getSendCompletionGeneration, getComposerEditGeneration }}
