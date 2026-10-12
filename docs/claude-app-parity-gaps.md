@@ -1,0 +1,615 @@
+# Claude app parity: gaps and batches
+
+The user's instruction (2026-10-11): "copy everything from the Claude mobile
+app, even the input box, everything, also regarding how they use Claude Code in
+mobile", and then: "check how Claude mobile sends the message and how it lands,
+and add that to Code UI."
+
+**Source.** The Claude Android app **1.261009.20**, decompiled with jadx in a
+scratch directory, read but never run. It is compared with Code UI `main` on
+2026-10-11. Behaviour is described in words. No decompiled code is in this repo.
+Class names are R8 pointers that change every release. `ccr_*` string names are
+stable. Companion docs:
+
+- `claude-app-typography.md`: fonts, type scales, colour tokens.
+- `claude-app-implementation-notes.md`: tool-run row, shimmer, ↓ button,
+  thumbnails, viewers, markup, composer shell, queue, status line, Background
+  tasks sheet, hand-backs, chat list build.
+- `claude-app-parity.md`: the screenshot-driven parity items 1–17.
+
+**The constraint that shapes every row below.** The Claude app drives a session
+through Anthropic's servers: an HTTP events API and an SSE stream, with typed
+control requests. Code UI talks only to Orca on the user's desktop. It types into
+Claude Code's terminal through `terminal.send`, and reads three things back: the
+screen, the transcript through `nativeChat.*`, and the agent's status through
+`session.tabs.subscribe` and the invisible HUD beacon. Nothing may be installed
+or drawn on the desktop (root `CLAUDE.md`). So "the same behaviour" often means
+the same thing seen by the user, reached by keys and screen reads, with refusal
+whenever the screen is ambiguous.
+
+**Classification used below**
+
+- **Match**: same behaviour and look.
+- **Differs**: present, but not the same; the cell says how.
+- **Missing**: not built, and buildable.
+- **Impossible via Orca**: needs Anthropic's servers or a desktop change.
+- **In progress**: already being worked on (see the list below).
+
+**Already in progress, not re-planned here**
+
+- Typography and colours.
+- Composer look and the queue.
+- Thumbnails and markup.
+- The running-row shimmer and the ↓ arrow's threshold.
+- The Background tasks sheet's titles and its Stop button.
+
+Where a gap below touches one of these, it is marked **in progress** and only
+the extra behaviour is listed.
+
+---
+
+## 1. How a message is sent and how it lands (priority section)
+
+### 1.1 The Claude app, step by step
+
+Sources: `rs8` (screen ViewModel: `F4` normal send, `G4` send with a priority,
+`h6` the local queue), `o9a` (pending-send state), `sessions.store.a` (send
+dispatcher), `hju` (session controller), `y2v` (REST), `qhu` (transcript
+reducer), `ujw`/`lvu` (SSE loop and parser).
+
+**1. The send action**
+
+- The composer's send lambda picks one of three paths:
+  - a **steering** send, behind the flag `code_steering_messages`, used while a
+    turn is active (and not in an edit or bash mode);
+  - a **normal** send (`F4`);
+  - while busy without steering: a **server "post later"** send (flag
+    `ccr_queued_send_post_at_later`), or else the **local queue**.
+- If the chosen path accepts the send, the composer is cleared in one edit
+  transaction.
+- `F4` **refuses and leaves the text in the composer** in these cases:
+  - a send is already in flight;
+  - a retry is being held for this session;
+  - a bash-mode prompt is pending;
+  - the text is empty and there are no uploaded attachments.
+- While the remote-control computer is offline it also refuses, showing "Remote
+  control session is offline. Reconnect or run /remote-control to start a new
+  session."
+- Editing an earlier message sends a rewind first, then the message (see 2.1).
+
+**2. The request**
+
+- **Client message id.** `UUID.randomUUID()` is minted before anything is sent.
+  There is **no idempotency header**. The event's `uuid` is the only dedupe key.
+- **Endpoint.** **POST `v1/code/sessions/{cse_id}/events`**. The `session_…`
+  id is rewritten to `cse_…` in both the path and the body.
+- **Body.** `{session_id, events: [ClientEventEnvelope]}`. Each envelope is
+  `{payload, device_attestation?, user_declared_urls?}`.
+- **The user payload** has these fields:
+  - `type: "user"`;
+  - `uuid`;
+  - `message: {role: "user", content: "<plain string>"}`;
+  - `file_attachments: [{file_uuid, file_name, is_image}]`;
+  - `priority`, set to `"next"` (steering) or `"later"` (post-later), and absent
+    on a normal send;
+  - `seeded_kind` / `seeded_summon`, used for artifact comments.
+- **Pasted long-content chips** are appended to the text after `\n\n---\n\n`.
+- **Settings ride in the same batch.** A pending model change goes as a
+  `control_request` (`set_model`) before the user event, and a pending mode
+  change as `set_permission_mode`. So the setting and the message land together,
+  in order.
+- **Attachments are never inline.** Each is uploaded when it is attached (POST
+  `{org}/upload`, multipart part `file`), and only chips that have **finished
+  uploading** are referenced, by `file_uuid`.
+- **Response.** It carries no message id. It holds only
+  `attestation_feedback`, and **a 2xx is the whole ack**.
+
+**3. Optimistic display, then confirmation.** Two optimistic layers share the
+client uuid:
+
+- **The `pending_message` row** (the bottom-most list item after the queue).
+  - While the send is unconfirmed it is drawn at **50% alpha** with the label
+    **"Sending"** (`ccr_send_unconfirmed`).
+  - The Send button shows a 24 dp progress ring, stroke 2, in the same state.
+- **An optimistic transcript row** inserted by the reducer, with the same uuid
+  and a local, monotonically increasing sequence number.
+
+The send then confirms in two steps:
+
+- **The HTTP ack** clears the in-flight state, which takes the "Sending" label
+  off the transcript row. It does **not** remove the pending row.
+- **The echo** arrives on the SSE stream (`GET …/events/stream?from_sequence_num=N`)
+  as a `client_event` with `source: "client"` and `payload.uuid` as the row id.
+  It clears the pending row **by uuid match, never by text**. One exception: a
+  plain user echo with no `origin` (or from the team lead) clears the pending
+  row whatever its uuid, because only one send can be pending.
+- **A failure that raced its echo** counts as a **success**: the POST failed,
+  but the echo for that uuid was already seen.
+- **Delivery states.** `delivery_update` frames (RECEIVED / PROCESSING /
+  PROCESSED) mark when the agent picked an event up.
+
+**4. Failure, timeout and retry**
+
+- **Retry is off by default.** The remote flag `claudeai_code_send_retry` turns
+  it on. Its defaults:
+
+  | Field | Default |
+  |---|---|
+  | `max_attempts` | 0 |
+  | `initial_delay_ms` | 500 |
+  | multiplier | ×2 |
+  | `max_delay_ms` | 10 000 |
+  | `retry_on_io_exception` | false |
+  | `retry_on_http_codes` | [] |
+  | `wait_for_network_ms` | 0 |
+  | `send_deadline_ms` | none |
+
+- **Every retry re-posts the same events list**, so the same uuid. While a retry
+  is held, further sends are refused.
+- **Held records live in memory only.**
+- **The failure UI in a Code session:**
+  - the optimistic row is removed;
+  - **the text, and any pasted chips, go back into the composer**;
+  - the error reads "The Internet connection appears to be offline." or "Unknown
+    error" (with the server's message where it gave one);
+  - a **snackbar offers Retry**, which re-sends the restored text;
+  - a mode change bundled with the send is reverted, with "Couldn't change mode.
+    Try again."
+- **"Failed to send. Tap to retry." is not used in Code sessions.** That row,
+  and "Failed to send." with Dismiss, belong to the project-channel timeline.
+
+**5. Sending while Claude is busy**
+
+| Mode | Where the text lives | When it is delivered |
+|---|---|---|
+| Steering (`code_steering_messages`) | server | at once, `priority: "next"` |
+| Post later (`ccr_queued_send_post_at_later`) | server | sent at once with `priority: "later"`. The server holds it, inferred until the turn ends; `delivery_update` PROCESSING then marks the pickup. Not available for slash commands, a new session, or when a local queue already exists |
+| Local queue (fallback) | **one in-memory string** on the ViewModel; a further send is appended after a blank line | at turn end, as an ordinary send (see below) |
+
+- **Turn end, local queue.** The queue is sent as an ordinary send if nothing
+  blocks it. Otherwise it is **moved back into the composer**. Blockers:
+  - a permission prompt;
+  - bash mode;
+  - a draft in the composer;
+  - attachments;
+  - pasted chips;
+  - an edit in progress.
+- **Leaving the session screen** with a queue left posts it as a `"later"`
+  message with a fresh uuid.
+- **Look.** 80% width, 12 dp radius, 15 sp italic muted text, and an "x" ("Edit
+  queued message"). A tap anywhere moves the text back to the composer.
+
+**6. Offline and background**
+
+- **There is no offline queue and nothing is written to disk.**
+- With no session attached, a send fails at once ("Not connected to a session")
+  and the text returns to the composer.
+- Sends run on the session store's coroutine scope. Inferred: they survive
+  navigation but not process death.
+- **No WorkManager job or foreground service sends messages.** The only
+  WorkManager job in the session code handles permission actions from
+  notifications.
+
+**7. Ordering**
+
+- **Exactly one send in flight.** A second tap is refused, not queued.
+- There is no client mutex and no client sequence number. The server's
+  `sequence_num` orders the transcript, and within one POST the batch is ordered:
+  control requests first, then the message.
+
+### 1.2 Code UI today
+
+Sources: `mobile/src/session/use-mobile-native-chat-message-send.ts`,
+`mobile-native-chat-send-write.ts` (`writeChatSend`),
+`mobile-native-chat-submit-verify.ts`, `native-chat-outbox-*.ts`,
+`mobile/src/storage/native-chat-outbox.ts`, `docs/mobile-chat-outbox.md`.
+
+**1. The send action**
+
+- One send per composer at a time: Send stays grey until the send settles,
+  verify step included.
+- A per-terminal write lock refuses a second sequence: "Another input is still
+  being sent. Try again."
+- Each tap gets a **15 s budget**. No write starts with under 2 s left.
+
+**2. The write**
+
+- **Clear first, verified.** It counts the input's rows on screen and sends
+  Ctrl+U/K, under 64 bytes. It settles 150 ms, looks again, makes at most 2
+  passes, and refuses if text is still there.
+- **Then the body.** `terminal.send {text, enter: true}`. Enter comes from the
+  host flag; there is no bracketed paste for the body.
+- **Photos.** They are uploaded first through `clipboard.*Upload` to a desktop
+  temp path, pasted as bracketed paths, and the `[Image #N]` chips are polled
+  for (250 ms, up to 6 s) before the text goes.
+
+**3. The optimistic row and how it lands**
+
+- **Drawn at once.** The echo is drawn the moment the box empties. Its id is
+  `pending-outbox-send-<ts>-<uuid12>`, a client id that never leaves the phone.
+- **No "Sending" label.** It was removed on 2026-10-10.
+- **Retired only by a transcript row**, matched by **normalised text plus an
+  occurrence count after a baseline**. The baseline is the transcript's tail and
+  how many times the same words already appear.
+- **The delivery-on-record rule.** Claude's own record proves the send arrived:
+  - the beacon's `up=` field;
+  - Orca's `agentStatus.prompt`;
+  - a drawn `❯` prompt or queue row;
+  - the transcript row.
+
+  The first three only stop the "unconfirmed" clock. The bubble retires on the
+  transcript row.
+- **Persistence.** The echoes are stored in AsyncStorage
+  `orca:chatPendingEchoes:*` for 24 h.
+
+**4. Verify (Claude only)**
+
+- It settles 300 ms, then checks for 4.5 s.
+- If Claude says it removed invisible characters, the result is **not-sent**,
+  and the draft goes back.
+- If the words are still typed at the end, it presses Enter **once more**, but
+  only after two looks 600 ms apart show exactly those words.
+
+**5. Failure and retry: the outbox**
+
+- **When the entry is written.** Before the composer empties, chat sends only
+  (`orca:chatOutbox`, pruned after 7 days).
+- **An `unknown` ack** (the ack was lost or the client cut over) is held for
+  **20 s of foreground time**, then handed to the drainer or the chat recovery.
+- **The drainer**, mounted at the app root:
+  - backoff **2, 5, 15, 30, 60 s** (the last repeats);
+  - **3** terminal tries, **8** structured tries;
+  - gives up after **24 h**;
+  - never dials; it waits for a live link.
+- **The chat recovery**, while the chat is open:
+  - waits for **2 s** of unbroken idle before typing;
+  - **1** automatic terminal resend;
+  - gives the message back after 10 min busy.
+- **Dedupe on the terminal**
+  - With no id, it types again **only on evidence the message did not land**:
+    the tab and session are unchanged, `agentStatus.prompt` was not changed to
+    these words, no transcript row exists after the baseline, the composer is
+    live, and the queue does not hold it.
+  - On the structured lane it reuses `clientOperationId`.
+- **Failure UI.** "Not sent · Retry · Edit" under the bubble, plus give-back
+  notices. A failed photo entry has no Retry.
+
+**6. Busy**
+
+- It types into **Claude Code's own queue**. The placeholder becomes "Queue a
+  message…".
+- The phone reads the queue box from the screen. Per-message edit and
+  send-now (Ctrl+X Ctrl+S) are driven by keys.
+
+**7. Offline**
+
+- The send gate waits for a re-dial inside the 15 s budget, else refuses with
+  "Message not sent: …" and gives the words back.
+- **Known gap:** a send refused at the gate never enters the outbox, because the
+  entry is written after the gate.
+- An entry already on disk survives an app kill and drains on the next start.
+
+### 1.3 What Code UI can adopt, and what it cannot
+
+| Claude app mechanism | Adopt? | How, in Code UI's terms |
+|---|---|---|
+| A client uuid minted before the send and carried end to end | **Partly.** There is no wire field on the terminal lane, so the id cannot travel with the text. | Already minted (`newOutboxSendId`). The gain is to key **every** artifact of one send by it: echo, outbox entry, verify, queue-row binding, retirement. Today the echo id comes from `acceptSend` on some paths and from the outbox on others. Note that the structured lane already sends it as `clientOperationId`. |
+| Echo matching by uuid | **No** for the terminal lane: Claude Code writes its own uuid into the transcript, and the phone cannot set it. | Keep text plus occurrence matching. But record the **transcript uuid of the row that retired the echo** on the outbox entry, so a later recount (a reload, a cut screen) cannot hand the same row to a second identical send. This is the documented "same words twice" limit. |
+| "A failure that raced the echo is a success" | **Yes.** | Before a send is marked failed (`rejected` / `unknown` → hold), check whether a transcript row or `agentStatus.prompt` for it has already arrived. Today the hold does this at release time. Doing it at failure time too avoids a "Not sent" flash. |
+| Two-stage confirmation: ack clears "Sending", echo clears the pending row | **Yes.** | Bring back a **"Sending" state at 50% alpha** until the `terminal.send` ack (or until verify passes, for Claude), then full opacity until the transcript row retires the echo. "Sending" was removed on 2026-10-10 because it lingered; with the ack as its end it lasts one round trip, as in the Claude app. Confirm with the user first, since they asked for the removal. |
+| Send button becomes a 24 dp progress ring, stroke 2, while sending | **Yes.** | Composer button state; composer look is in progress, so hand this to that batch. |
+| Retry with backoff 500 ms ×2 up to 10 s, same uuid | **No** for the terminal: a blind retype can duplicate, which is why the outbox demands evidence of non-delivery first. | Keep the outbox's evidence gate and its 2/5/15/30/60 s ladder. The Claude app's numbers are a remote-config default with retry **off**, so there is nothing faster to copy safely. |
+| One send in flight; a second tap is refused, not queued | **Already matches** (the composer guard and the write lock). | Keep it. The Claude app shows no message on a refused tap; Code UI shows "Another input is still being sent". Keep Code UI's message, because it is a diagnostic. |
+| Failure: text back into the composer, snackbar with Retry | **Differs on purpose.** | Code UI keeps the bubble with "Not sent · Retry · Edit", which never loses the words and survives a restart. Adopt one piece: the **snackbar with Retry** for a send refused **before** any write (gate timeout or offline), where the words already go back to the composer. Today that case only shows the notice text. |
+| Offline: nothing persisted | **Code UI is ahead.** | Keep the outbox. Close the gap where a gate refusal never enters the outbox: record the entry before the gate, and retire it on a pre-write refusal only when the words went back into the composer. |
+| Local queue: one string joined by a blank line, sent at turn end, moved back to the composer when blocked | **No.** Typing into Claude Code's own queue is the native equivalent, and the agent then decides when to take it, so mid-turn steering works. | Keep Claude Code's queue as the store. What can be copied is the **look** (80% width, italic, muted, tap to edit; in progress) and the **turn-end hand-back rule**: if the agent drops a queued message (a permission prompt opened, the turn errored), put the text back in the composer instead of losing it. Verify how Claude Code 2.1.29x treats its queue on an error ending first. |
+| `priority: "next"` (steering) vs `"later"` | **Implicit.** | Claude Code takes queued input between tool calls, which is steering. "Later" (hold until turn end) has no terminal key. Leave it. |
+| Model or mode change bundled with the next message | **Partly.** | Code UI applies them at once (`/model`, Shift+Tab stepping). Equivalent outcome; nothing to do unless a change made while busy must wait for the turn to end. |
+| `delivery_update` PROCESSING (the agent picked it up) | **Yes, by proxy.** | The beacon `up=` and `agentStatus.prompt` are exactly the "picked up" signal. Draw it: the bubble goes from "Sending" (dimmed) to normal at pickup, not only at the transcript row. |
+| Leaving the screen with a queued message posts it as "later" | **N/A.** | Claude Code's queue lives in the agent, and survives the phone leaving. |
+
+**Batch S (send path) gaps.** S1 to S6 are in the table in section 4.
+
+---
+
+## 2. How the Claude app drives a Claude Code session, and Code UI's path
+
+### 2.1 Channel API shape (Claude app) and the Orca equivalent
+
+Every control action is a `control_request` `{type, uuid, request_id,
+request: {subtype…}}` posted to the same events endpoint. Replies arrive on the
+SSE stream as `control_response` with the same `request_id`.
+
+| Action | Claude app wire | Code UI via Orca | Parity without Anthropic's servers? |
+|---|---|---|---|
+| Send a prompt | POST events, `user` event (1.1) | `terminal.send` with Enter after a verified clear | Yes, done (section 1) |
+| Attachments | upload to `{org}/upload`, referenced by `file_uuid` | `clipboard.*Upload` to a desktop temp file, pasted as a bracketed path | Yes, done |
+| Stop | `interrupt`, no reply awaited; failure "Couldn't stop the session. Try again." | Escape twice, 80 ms apart (`use-mobile-native-chat-stop.ts`); structured lane `agentSession.cancel` | Yes. Missing: the failure snackbar, and Stop re-enabling on failure (gap G24) |
+| Allow once / Always allow / Deny | `control_response` with `behavior`, `updatedInput`, `updatedPermissions`, `message: "Denied by user"` | the option's digit key after a screen re-read (`mobile-native-chat-permission-send.ts`) | Yes, done |
+| Deny with comment | deny with `message` (notification inline reply) | "Send back" exists for plans only | Yes, by typing into the TUI's "No, and tell Claude…" option (gap G21) |
+| AskUserQuestion | allow with `updatedInput.answers` | paced key groups (`mobile-native-chat-answer-stepping.ts`) | Yes, done |
+| Plan approve / approve & auto / suggest edits | allow plus `setMode`; deny with feedback | the plan permission card's digit keys; "Send back" | Yes (gap G11 is the look) |
+| Model | `set_model`, 30 s | `/model <id>` typed | Yes, done |
+| Effort | `apply_flag_settings {effortLevel, fastMode}`, 45 s | `/effort <v>` typed | Yes, done |
+| Permission mode | `set_permission_mode`, 30 s | Shift+Tab stepping, verified on the footer | Yes, done |
+| Rewind / edit an earlier message | `rewind_conversation {target_message_uuid}`, 15 s; prefill into the composer | structured lane only | Partly: Claude Code's Esc-Esc rewind menu could be driven by keys, but choosing a row from a rendered list breaks the "never reconstruct agent state from a preview" rule unless the row is matched exactly (gap G30) |
+| Stop a background task | `stop_task {task_id}` | keys into Claude's Background dialog (`claude-background-task-stop.ts`) | Yes, in progress |
+| Background shell output | `get_task_output {task_id}`, 10 s | none | Possibly, if Orca's file read reaches the task's output file. Otherwise impossible (gap G27) |
+| Read a file ("Load full file") | `read_file {path, max_bytes}` | `files.read` exists | Yes (gap G19) |
+| Context usage | `get_context_usage` → the Context window card | beacon context figures; no category breakdown | Totals yes; per-category (MCP tools, memory files, agents) only from `/context` output on screen (gap G25) |
+| Workspace diff | `get_workspace_diff` | source-control routes (git through Orca) | Yes, done by another path |
+| Transcript stream | SSE `…/events/stream?from_sequence_num`, reconnect 1/3/7/15/31 s, then "Connection lost" | `nativeChat.subscribe` (snapshot/append), `nativeChat.readSession` for pages, `session.tabs.subscribe`, beacon, screen poll; relay reconnect plus `useLastConnectedAt` refetch | Yes |
+| History load | newest first, pages of 200, backfill pages of 500 (×10) | first page 40 (ladder 40/12/4), then earlier pages | Yes |
+| Session create | POST `v1/code/sessions` with an `idempotency_key` | `session.tabs.createTerminal` / new worktree | Yes, by another path. Cloud environments: impossible |
+| Archive / delete / rename / share / feedback / move to cloud / mark read / presence | `v1/code/sessions/{id}/…` | close tab; rename tab; no archive | Share, feedback, move to cloud, presence: impossible (Anthropic's servers). Archive: maps to closing a tab |
+| Notifications | FCM push from Anthropic, one per session | Orca `notifications.subscribe` plus relay push | Yes, by another path |
+
+---
+
+## 3. Surface by surface
+
+File paths are under `mobile/` unless shown in full. Claude app values come from
+`claude-app-implementation-notes.md` or from this audit's scratch notes.
+
+### 3.1 Session list and home
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| **Rows**: 24 dp radius, 16 dp padding, a 16 dp leading state mark. States in priority order: Waiting (amber dot `#FAB219`), Working (grey dot pulsing 1.0↔0.3 over 600 ms), Failed (icon), New (blue dot `#2A78D6`), Quiet (1.5 dp ring). Title 15/400, trailing relative time, a second line with status, repo and branch or PR state | Worktree rows (`src/components/WorktreeListRow.tsx`, `AgentSpinner.tsx`) with a spinning ring, a bell for unread, and per-agent rows | **Differs**. `AgentSpinner.tsx` also uses **hardcoded hex** (`#eab308`, `#10b981`, `#ef4444`), against the light/dark rule |
+| **Filter**: All, Working, Needs input, Ready for review, Completed, Archived; plus a text filter | Filter / Sort / Group / Search (`src/host-screen/host-screen-header.tsx`) | Differs |
+| **Long-press menu**: Copy branch, Share, Rename, project, Archive, Delete | the tab long-press sheet (`src/session/mobile-terminal-action-sheet-actions.ts`) | Differs |
+| Empty states, "Load more sessions" | `src/home/MobileHomeEmptyState.tsx` | Differs (a different model) |
+| **Starter screen** "Let's start coding" (Serif 28) and the new-session composer | "New Tab" sheet (`src/session/MobileSessionSheets.tsx`), `NewWorktreeModal*` | Differs. Environment and repo rows are cloud-only, so impossible |
+| Devices / Remote control / `claude rc` | host pairing (`app/pair*.tsx`) | Differs by design |
+| Launcher widget "Code shortcuts" (New session, Search) | none | **Missing** (P3) |
+
+### 3.2 Session header and menu
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| **Title** 15/550, one line; subtitle 13 sp `#898781`: repo · branch · destination | `src/session/MobileSessionHeader.tsx`: worktree name; subline with status dot, tab count and model pill | **Differs** |
+| **Context ring** in the header: 18 dp, 2 dp stroke, blue <75%, amber 75–89%, red ≥90%; opens Usage | ring in the composer row (`MobileNativeChatComposer.tsx`), opens `MobileContextWindowSheet.tsx` | **Differs** (place and colour thresholds) |
+| Open pull request button | Checks in the "…" sheet | Differs |
+| **Menu**: Copy branch, Continue in cloud, Background tasks, Share, Rename, Archive, Feedback, (internal) Copy session ID | "…" sheet (`MobileSessionHeaderMoreActionsSheet.tsx`): Agent History, Checks, MCP Servers, Permission Rules, Project Memory | **Missing**: Copy branch, Background tasks entry, Rename here, Copy session ID. **Impossible**: Continue in cloud, Share, Feedback |
+| Connection row: "Connected" (green) / "Disconnected" · "Reconnect from <host>" | subline label plus "— tap to retry" (`use-mobile-session-presentation.ts`) | Differs (wording) |
+| Session bar above the composer: **"Open diff" pill** (+A −R) and **todo pill** "N/M tasks" with a 16 dp ring | none | **Missing** |
+
+### 3.3 Chat transcript
+
+| Row | Claude app | Code UI | Class |
+|---|---|---|---|
+| User card | 12 dp radius, fill `pl7.w0`, hairline, 12×14 padding, 15 sp | `mobile-native-chat-message-styles.ts` | **In progress** (typography and colours) |
+| Assistant prose | `zv.d` 17/400/1.5, Anthropic Sans | `MobileNativeChatProse.tsx`, 15/22 | **In progress** |
+| Assistant action row | Copy, Read aloud, thumbs; 36 dp icons in `pl7.Q` | one Copy per turn | **Differs** (no read aloud: G31) |
+| Thinking | a row like a finished tool run: `extendedThinking` icon + "Thought process" (15/400, muted); a tap opens a sheet with the text as Markdown; **never inline** | inline text with a side rail, folded past 600 characters (`MobileNativeChatReasoningNote.tsx`); terminal Claude tabs get none (Orca role bug) | **Differs** (G1). Terminal tabs: **impossible** until Orca emits `reasoning` |
+| Tool-run row | sentence, shimmer, pill, chevron | `MobileNativeChatToolRun*.tsx` | Match; shimmer **in progress** |
+| Run sheet | sentence title, child rows | `MobileNativeChatRunSheet.tsx` | Match |
+| Per-call sheet | 13/550 labels, `pl7.s` boxes, 12 dp padding; Prettify for JSON only; Read: **line-numbered viewer, "Showing N of M lines (truncated)", "Load full file"**, "Render" for .md; Write: line-numbered; Edit: diff; generic "Inputs" key/value mono | `MobileNativeChatToolDetailSheet.tsx`, `mobile-native-chat-tool-detail-sections.ts`; Prettify/Raw; output capped at 400 lines | **Differs**: no Read viewer, no Load full file, no Render (G19) |
+| Turn edits card | "Edited X" / "Created X" + pill + **Review**; 3 files, then "Show N more" | per-edit `MobileNativeChatDiffCard.tsx`, `MobileNativeChatFileCard.tsx` | **Differs** (G12) |
+| Diff screen | "No changes yet" / "Loading changes…" / "Unable to load changes" | `MobileDiffReviewRouteScreen.tsx`, source control | Match by another path; entry from the "Open diff" pill missing (G6) |
+| Todos | pill + card ("N/M tasks complete"); done = blue-tint circle and check, struck through; in progress = a one-third ring | inline checklist (`MobileNativeChatTaskList.tsx`) | **Differs** (G6, G13) |
+| Plan | "Proposed plan" row; Plan sheet; buttons above the composer: **Approve Plan** (or **Approve & auto mode**) + **Suggest Edits**; the placeholder becomes "Describe what you'd like changed…" | the permission card with "Plan file:" and "Send back" (`claude-plan-permission.ts`) | **Differs** (G11) |
+| Permission card | 24 dp radius, fill `ad5.O`, 16 dp padding; "Allow Claude to <verb> <target>?"; raw input shows 6 arguments, then "Show full input" (cap 360 dp); Edit/Write get a diff face; 40 dp buttons: Allow once (filled ink), Always allow…, Deny (outline) | `MobileNativeChatPermission.tsx`; Allow once / the agent's own rule label / Deny / Send back | **Differs** (G10). The remembered-rule label keeps the agent's wording on purpose (2026-09-27) |
+| AskUserQuestion | pager "1 of N", option rows, "Something else" field (options dim to 0.4 over 150 ms once typed), Next/Submit 48 dp, **Skip**; an answered summary ("Skipped" for blanks) | wizard `MobileNativeChatAsk.tsx` with tabs, Next/Submit, Cancel, "Other…" | **Differs** (G14) |
+| Images | 96 dp thumbnails; assistant images full width ≤400 dp, Fit | `MobileNativeChatImageStrip.tsx` | **In progress** |
+| API errors / result rows | `result` rows ("Session interrupted"); refusal "Session paused" notices with "Edit and retry"; "Switched to X · Why?" | API error drawn as prose (`claude-api-error-text.ts` only ends the turn) | **Missing** (G15) |
+| Rate-limit banner | 16 dp radius, `pl7.s`: "Approaching limit" / "Limit reached" / "Now using usage credits", "Resets at …", "View usage" | limits only inside the context sheet | **Missing** (G16) |
+| Context cleared / compacted | centred 11 sp at 30% ink between rules; "Compacted conversation · saved N tokens" | "Context compacted" / "Context cleared" (`MobileNativeChatNoticeRow.tsx`) | **Differs** (wording; style in progress) (G17) |
+| Context window card (`/context`) | expandable card: segmented bar, "X of Y tokens", MCP tools / Memory files / Custom agents | none (sheet from the ring only) | **Missing** (G25) |
+| Peer message | "Received message from <name>" row; a sheet "Message", "From: <name>"; names checked against spoofing | folded "Message from <agent>" (`MobileNativeChatAgentMessageRow.tsx`) | **Differs** (G26) |
+| Subagent hand-back | nothing drawn | nothing drawn | Match |
+| Init / resume card | cloud container steps | n/a | **Impossible** (cloud only) |
+| Next-prompt suggestion | ghost text in the empty composer plus a caret pill; a tap fills | none | **Missing** (G28). Readable only if Claude Code paints it in the TUI input |
+| Code block | 12 dp clip; 40 dp header in `pl7.s`, language in mono 13, Copy ("Copied"), **Expand**; wrap per setting (default off) | `MobileMarkdownCodeBlock.tsx`: language, Copy, line gutter, always scrolls | **Differs** (G18) |
+| Inline file links | file-path code becomes a link; long-press: Open / Copy file name / Copy relative path | none found | **Missing** (G20) |
+| Artifacts | cards and chips | n/a | **Impossible** (claude.ai artifacts) |
+| Pending row | 50% alpha + "Sending" until the ack | full opacity, no label | **Differs** (S2) |
+| Queued row | 80% width, italic, tap moves it back | queue box from the screen (`MobileNativeChatQueue.tsx`) | **In progress** |
+
+### 3.4 Composer
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| Shell, text field, button row, one-row collapse | `MobileNativeChatComposer.tsx` | **In progress** |
+| Placeholder "Type / for commands" (idle), "Queue a message…" (busy) | "Reply, @files, /commands" / "Queue a message…" (`use-mobile-native-chat-input-lock.ts`) | **In progress** (composer look) |
+| **Stop** in the trailing slot, replacing Send (`pl7.x0` fill; a 36 dp ring stroke 1 while stopping) | Stop in the chrome row (`MobileNativeChatChromeRow.tsx`) | **In progress** (composer look); confirm it is in scope |
+| **Mode chip** in the leading group: a pill with an icon (Manual = hand, Accept edits = code, Plan = scroll, Auto = lightning) and a label | mode only inside the attach sheet's "Permission" row (`MobileNativeChatAttachSheet.tsx`) | **Missing** (G4) |
+| Model chip: model name + effort, a 36 dp pill, ≤220 dp | model pill in the composer and the header | Match-ish; look **in progress** |
+| Attach sheet "Add context": Camera / Photos / Files tiles (12 dp, `pl7.q`, 1 dp border); a limit line | `MobileNativeChatAttachSheet.tsx` with the same three | Match |
+| Select mode: Manual, Accept edits, Plan, Auto with descriptions and per-mode colours (Accept edits `#9747FF`, Plan `#006666`, Auto clay); **Bypass never listed**; "Not available for the selected model" | `MobilePermissionModeSheet.tsx` (lists bypass when available) | **Differs** (G5) |
+| Model sheet with an **Effort row** inside, "Other models", "Update Claude Code…" for models too new for the CLI | `MobileNativeChatSessionOptionPickers.tsx` ("More models") | **Differs** (G5) |
+| Slash popup: CLI commands plus the app's own; "/name" mono 15 in link blue; description `jn7.H` muted; ≤240 dp, 12 dp radius, hairline, 3 dp shadow, 150 ms size animation | `MobileNativeChatComposerSuggestions.tsx` | **Differs** (G7) |
+| @ mention: members only; **no @file in Code** | @files supported | **Code UI is ahead**: keep it |
+| Attachment chips 96 dp; remove at 18 dp; spinner while uploading; red failed pill; reorder | `MobileNativeChatAttachmentChips.tsx` | **In progress** (thumbnails) |
+| Voice: mic, hold-to-talk behind a flag, waveform, "Transcribing…" | `src/dictation/*`, toggle or hold in `app/voice-settings.tsx` | Match-ish |
+| Key strip | none in the Claude app | Code UI extra (needed for a TUI) |
+
+### 3.5 Status line, tasks, subagents
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| Status line: a 16 dp clay spinner; **"12s · 1,234 tokens · N running tasks · thinking…"**; the thinking word escalates at 15/30/45/60 s; "thought for Ns" for 2 s; without timing, a random verb that changes after 3 s, 4 s, then every 6 s | "✳ Working · N running tasks · <thinking>…" (`MobileNativeChatStatusLine.tsx`); no elapsed time or tokens, **at the user's earlier request** | **Differs on purpose** (G3: needs the user's decision, since "copy everything" may overrule it) |
+| Background tasks sheet | `MobileBackgroundTasksSheet.tsx` | **In progress** (titles, Stop) |
+| Finished shell row → "Show output" sheet (Loading / No output captured / Output truncated / Retry) | none | **Missing** (G27) |
+| "View transcript" opens the Agent call's tool sheet with its nested "Tool calls (N)" | removed from the card 2026-10-10; `MobileSubagentTranscriptModal.tsx` from run-sheet agent rows | **Differs** (G29) |
+| Workflow card with an agent grid (≤24 squares, 8 dp) and phases | none | **Missing** (P3, G32) |
+| ↓ button | `mobile-native-chat-list-edges.tsx` | **In progress** (threshold) |
+
+### 3.6 Settings
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| Transcript text size Small 0.85 / Medium 1.0 / Large 1.15 | pinch-zoom 0.8–1.8, not persisted (`use-mobile-native-chat-pinch-gesture.ts`) | **Missing** (G8) |
+| Transcript font Anthropic Sans / System; code font JetBrains Mono / System | fixed Instrument Sans and JetBrains Mono | **Missing** (G8) |
+| "Wrap long lines" (default off) | none; always scrolls | **Missing** (G8) |
+| Notification toggles "Code updates" / "Code permission requests" | one "Agent notifications" toggle (`app/notifications.tsx`) | **Differs** (G22) |
+| Auto mode opt-in dialog | none | **Missing** (P3, G33) |
+
+### 3.7 Notifications
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| Channel "Code sessions", importance HIGH; one notification per session; MessagingStyle keeps the last 25 | `src/notifications/*` | Match-ish |
+| An inline **Reply** on an ordinary notification ("Reply to Claude") | none | **Missing** (G21) |
+| Permission notification: a monospace body (8 lines, `$ ` for Bash); Approve / Deny / **Deny with comment** ("Tell Claude what to do instead"); Approve withheld for AskUserQuestion, ExitPlanMode and destructive tools; ongoing, 24 h timeout | up to 3 option buttons from a screen read (`permission-notification-*.ts`) | **Differs** (G21) |
+| Question notification | option buttons plus "Answer" / "Other…" | Code UI extra |
+
+### 3.8 Viewer and markup
+
+All **in progress** (thumbnails and markup). The values are in
+`claude-app-implementation-notes.md` §3.
+
+### 3.9 Start, resume, stop
+
+| Claude app | Code UI | Class |
+|---|---|---|
+| Start: snackbar "Session started in a new worktree at …" | New Tab / New worktree | Differs (a different model) |
+| Stop: no confirmation; on failure Stop re-enables and "Couldn't stop the session. Try again." | Escape ×2; no failure message | **Differs** (G24) |
+| Archive (with a dialog) / Delete (with a dialog) / Rename (a dialog) | Close tab; Rename | Differs |
+| Rewind: edit and retry | structured lane only | **Differs** (G30) |
+| Resume a past session | Agent History (`src/agent-history/*`) | Match by another path |
+
+---
+
+## 4. Prioritised gaps
+
+Size: **S** under a day, **M** 1–3 days, **L** more. Priority: **P1** visible
+on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
+
+| ID | P | Gap | Class | Size | Batch | Status |
+|---|---|---|---|---|---|---|
+| S1 | P1 | One id per send, keyed through echo, outbox, verify, queue binding and retirement; store the transcript uuid that retired each echo, so an identical later send cannot claim the same row | Differs | M | S | |
+| S2 | P1 | Two-stage pending row: 50% alpha + "Sending" until the `terminal.send` ack or verify, normal at pickup (`up=` / `agentStatus.prompt`), retired at the transcript row. **Ask the user**, since "Sending" was removed on 2026-10-10 | Differs | S | S | |
+| S3 | P2 | A failure that raced its echo is a success: check the record at failure time, not only at release | Differs | S | S | |
+| S4 | P2 | Record the outbox entry **before** the send gate, so a gate or offline refusal is still recoverable | Missing | S | S | |
+| S5 | P2 | Snackbar with **Retry** when a send is refused before any write (the words are already back in the composer) | Missing | S | S | |
+| S6 | P2 | Turn-end hand-back: a queued message the agent dropped (permission prompt, error ending) goes back into the composer | Missing | M | S | |
+| G1 | P1 | Thinking as a "Thought process" row that opens a Markdown sheet, never inline | Differs | M | B | |
+| G2 | P1 | Typography and colours of every row | — | — | — | in progress |
+| G3 | P1 | Status line: elapsed · tokens · thinking word escalation · "thought for Ns" · rotating verb. **Needs the user's decision**: they asked for "Working" only. Tokens and elapsed time come from the beacon (Claude's status-line payload carries `cost.total_duration_ms` and token totals) | Differs | M | D | |
+| G4 | P1 | Mode chip in the composer's leading group (icon + label) | Missing | S | — | fold into the in-progress composer work |
+| G5 | P2 | Mode sheet icons, colours and descriptions; drop Bypass from the list; Effort row inside the model sheet; "Not available for the selected model" | Differs | S | C | |
+| G6 | P1 | Session bar above the composer: "Open diff" pill (+A −R, opens review) and todo pill "N/M tasks" with a ring | Missing | M | C | |
+| G7 | P2 | Slash popup look (mono 15 link-blue names, ≤240 dp, hairline, 150 ms animation) | Differs | S | C | |
+| G8 | P2 | Reading settings: transcript text size S/M/L (0.85/1.0/1.15), transcript font, code font, wrap long lines | Missing | M | E | |
+| G9 | P1 | Header: 15/550 title; repo · branch subtitle; the context ring moves to the header with blue/amber/red at 75/90 % | Differs | M | A | |
+| G10 | P2 | Permission card: 24 dp card, 40 dp buttons, a filled primary; raw input to 6 arguments then "Show full input" (360 dp cap); a diff face for Edit/Write | Differs | M | B | |
+| G11 | P2 | Plan approval buttons above the composer: Approve Plan / Approve & auto mode / Suggest Edits; Plan sheet; "Describe what you'd like changed…" placeholder | Differs | M | B | |
+| G12 | P2 | Turn edits card: "Edited X" + pill + Review; 3 files, then "Show N more" | Differs | M | B | |
+| G13 | P2 | Todo card from the pill: blue-tint done circle, one-third ring for in progress, struck-through text | Differs | S | C | |
+| G14 | P2 | AskUserQuestion: "1 of N" pager, Skip, options dim when "Something else" is typed, answered summary row | Differs | M | B | |
+| G15 | P2 | Error rows: API error and "Session interrupted" result rows styled in the danger colour, not as prose | Missing | S | B | |
+| G16 | P3 | Rate-limit banner in the chat ("Approaching limit", "Resets at …"), from beacon rate limits | Missing | S | D | |
+| G17 | P2 | Compacted marker wording "Compacted conversation · saved N tokens" when the figure is known | Differs | S | B | |
+| G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Differs | S | E | |
+| G19 | P2 | Read sheet: line-numbered viewer, "Showing N of M lines (truncated)", **Load full file** via `files.read`, Render for .md | Differs | M | F | |
+| G20 | P2 | Inline file links: tap opens the file viewer; long-press Open / Copy file name / Copy relative path | Missing | M | E | |
+| G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Missing | M | G | |
+| G22 | P3 | Two notification toggles (updates vs permission requests) | Differs | S | G | |
+| G23 | P1 | ↓ arrow threshold, running-row shimmer | — | — | — | in progress |
+| G24 | P2 | Stop failure: re-enable Stop and say "Couldn't stop the session. Try again." when the agent is still working after Escape | Missing | S | D | |
+| G25 | P3 | Context window card in the transcript for `/context` output (categories, MCP tools, memory files, agents) | Missing | M | F | |
+| G26 | P3 | Peer message row "Received message from <name>" plus a "Message" sheet ("From: <name>"); reject spoofed names | Differs | S | B | |
+| G27 | P3 | Background shell "Show output" sheet. Needs proof that Orca's file read reaches the task output file; otherwise impossible | Missing | M | F | |
+| G28 | P3 | Next-prompt suggestion chip, only if Claude Code paints the suggestion in its input (verify on 2.1.29x) | Missing | M | C | |
+| G29 | P3 | "View transcript" on an agent task opens that Agent call's sheet with "Tool calls (N)" | Differs | S | F | |
+| G30 | P3 | Edit an earlier message / rewind on terminal tabs via Claude Code's rewind menu, matched exactly or refused | Differs | L | H | |
+| G31 | P3 | Read aloud under assistant messages, with on-device TTS (the Claude app uses Anthropic's voice service) | Missing | M | E | |
+| G32 | P3 | Workflow card with an agent grid and phases | Missing | L | F | |
+| G33 | P3 | Auto mode opt-in dialog the first time Auto is picked | Missing | S | C | |
+| G34 | P2 | Session list rows: state mark (Waiting amber / Working pulsing / Failed / New blue / Quiet ring), status second line, trailing time, state filter; **replace the hardcoded hex in `AgentSpinner.tsx` with theme tokens** | Differs | L | I | |
+| G35 | P2 | Header menu: Copy branch, Background tasks, Rename, Copy session ID | Missing | S | A | |
+| G36 | P3 | Launcher widget "Code shortcuts" (New session, Search) | Missing | M | I | |
+| G37 | P1 | Composer look, Stop placement, one-row collapse, placeholder, queue look | — | — | — | in progress |
+| G38 | P2 | Thumbnails, viewer, markup | — | — | — | in progress |
+| G39 | P2 | Background tasks titles and Stop | — | — | — | in progress |
+
+### Top 10 by impact
+
+1. **S1** One id per send, plus the retiring row's uuid kept (P1, M). It closes the "same words twice" duplicate.
+2. **S2** The two-stage pending row (P1, S). The user sees whether the desktop took it. Ask about "Sending" first.
+3. **G1** Thinking as a "Thought process" row (P1, M).
+4. **G9** Header title, subtitle and context ring (P1, M).
+5. **G6** The "Open diff" and todo pills above the composer (P1, M).
+6. **G3** Status line elapsed, tokens and thinking words (P1, M). Needs a decision.
+7. **G11** Plan approval buttons and Plan sheet (P2, M).
+8. **G10** Permission card look and "Show full input" (P2, M).
+9. **G8** Reading settings: text size, fonts, wrap (P2, M).
+10. **S4 + S5** Outbox before the gate, and the Retry snackbar (P2, S each).
+
+---
+
+## 5. Implementation batches (disjoint files, can run in parallel)
+
+Each batch lists the files it owns. No file appears in two batches. The
+in-progress work owns `MobileNativeChatComposer.tsx`, `MobileNativeChatQueue.tsx`,
+`MobileNativeChatChromeRow.tsx`, the theme tokens, `MobileNativeChatImageStrip.tsx`,
+`ImagePreviewModal.tsx`, `MobileImageMarkupEditor.tsx`,
+`MobileNativeChatShimmerText.tsx`, `mobile-native-chat-list-edges.tsx`, and the
+Background tasks sheet files. None of the batches below touches them.
+
+| Batch | Gaps | Files owned (under `mobile/src/session/` unless shown) |
+|---|---|---|
+| **S: send path** | S1–S6 | `use-mobile-native-chat-message-send.ts`, `mobile-native-chat-send-write.ts`, `mobile-native-chat-submit-verify.ts`, `native-chat-outbox-*.ts`, `mobile-native-chat-pending-retirement.ts`, `mobile-native-chat-outbox-drafts.ts`, `mobile-native-chat-unconfirmed-hold.ts`, `MobileNativeChatOutboxStatus.tsx`, `mobile-native-chat-beacon-confirm.ts`, `use-queued-own-sends.ts`, `src/storage/native-chat-outbox.ts`, `src/storage/native-chat-pending-echoes.ts`, `docs/mobile-chat-outbox.md`. S2's dimming is drawn through a prop that `MobileNativeChatMessage.tsx` reads; hand that one-line change to batch B, or sequence it after B |
+| **A: header** | G9, G35 | `MobileSessionHeader.tsx`, `MobileSessionHeaderMoreActionsSheet.tsx`, `use-mobile-session-presentation.ts`, `MobileContextWindowSheet.tsx` (the ring moves; the composer drops it in the in-progress composer batch, so coordinate one handover commit) |
+| **B: transcript rows** | G1, G10, G11, G12, G14, G15, G17, G26 | `MobileNativeChatReasoningNote.tsx`, `MobileNativeChatPermission.tsx`, `claude-plan-permission.ts`, `MobileNativeChatAsk.tsx`, `MobileNativeChatDiffCard.tsx`, `MobileNativeChatFileCard.tsx`, a new `MobileNativeChatTurnEditsCard.tsx`, `MobileNativeChatNoticeRow.tsx`, `MobileNativeChatAgentMessageRow.tsx`, `MobileNativeChatMessage.tsx`, a new `MobileNativeChatThinkingSheet.tsx`, a new `MobileNativeChatPlanSheet.tsx`. It can split into B1 (thinking, notices, errors, peer) and B2 (permission, plan, ask, edits) |
+| **C: composer satellites** | G5, G6, G7, G13, G28, G33 | `MobilePermissionModeSheet.tsx`, `MobileNativeChatSessionOptionPickers.tsx`, `MobileNativeChatSessionOptionRows.tsx`, `MobileNativeChatComposerSuggestions.tsx`, a new `MobileNativeChatSessionBar.tsx` (diff and todo pills, mounted by the overlay), `MobileNativeChatTaskList.tsx`, `mobile-native-chat-task-list-rows.ts`, `MobileNativeChatOverlay.tsx` (mount only) |
+| **D: status and stop** | G3 (after the decision), G16, G24 | `MobileNativeChatStatusLine.tsx`, `mobile-terminal-spinner-line.ts`, `use-mobile-native-chat-stop.ts`, `agent-hud-beacon.ts` (read-side fields only), a new `MobileNativeChatRateLimitBanner.tsx` (mounted through C's session-bar slot, so it never edits `MobileNativeChatOverlay.tsx` itself). A new beacon field means a change to the launch-flag command in `agent-hud-launch-args.ts`; that is still phone-side, but re-check the 64-byte and splice rules in `docs/mobile-agent-hud.md` |
+| **E: reading** | G8, G18, G20, G31 | `app/native-chat-settings.tsx`, a new `src/settings/chat-reading-settings.ts`, `src/components/MobileMarkdown.tsx`, `MobileMarkdownCodeBlock.tsx`, `MobileMarkdownCodeHeader.tsx`, `src/components/mobile-markdown-prose-scale.ts` (scale factor only; the typography batch owns the values, so land it after that batch), `MobileNativeChatProse.tsx` (file-link spans), `use-mobile-native-chat-pinch-gesture.ts` |
+| **F: tool sheets** | G19, G25, G27, G29, G32 | `MobileNativeChatToolDetailSheet.tsx`, `mobile-native-chat-tool-detail-sections.ts`, a new `MobileNativeChatReadViewer.tsx`, a new `MobileNativeChatContextCard.tsx`, `MobileSubagentTranscriptModal.tsx`, `mobile-subagent-transcript.ts`, a new `MobileBackgroundShellOutputSheet.tsx` (mounted from the tasks sheet after that batch lands) |
+| **G: notifications** | G21, G22 | `src/notifications/*`, `app/notifications.tsx` |
+| **H: rewind** | G30 | a new `claude-rewind-*.ts`; touches the message tap handler in `MobileNativeChatMessage.tsx`, so sequence it after B |
+| **I: home** | G34, G36 | `src/components/WorktreeListRow.tsx`, `AgentSpinner.tsx`, `WorktreeAgentRow.tsx`, `src/worktree/agent-row-display.ts`, `src/host-screen/host-workspace-list.tsx`, `host-screen-header.tsx`; the widget is native (`modules/`) |
+
+Order of dependency:
+
+- B before H.
+- The typography batch before E's scale factor.
+- The composer batch hands the ring to A.
+- The tasks-sheet batch before F mounts the shell output sheet.
+
+Each batch carries the project's bar:
+
+- a failing-first test from the real screen;
+- both agents, where a parser is touched;
+- light and dark checked on the phone;
+- the full gate:
+
+  ```
+  cd mobile && npx tsc --noEmit && pnpm test && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs
+  ```
+
+---
+
+## 6. Impossible via Orca, and why
+
+| Item | Why |
+|---|---|
+| Echo matching by the client uuid | Claude Code writes its own uuid into the transcript. The terminal lane has no field to carry the phone's. Text plus occurrence matching stays, hardened by S1 |
+| Server "post later" (`priority: "later"`) | No terminal key holds a message until the turn ends. Claude Code's own queue delivers between tool calls instead |
+| Cloud sessions: init card, environments, Continue in cloud, runners | Anthropic's cloud |
+| Share, Feedback to Anthropic, session presence, mark read across devices | Anthropic's servers |
+| Artifacts and the artifact viewer | claude.ai artifacts |
+| Usage card **cost** across devices / extra-usage credits | account data from Anthropic. A per-session cost from the beacon is possible, if a field is added (D) |
+| Thinking rows on terminal Claude tabs | Orca's `claudeMessageRole()` returns `assistant` for thinking-only messages (`claude-app-parity.md` item 1). This is an upstream Orca fix, not a phone one |
+| Read aloud with Anthropic's voice | the Claude app streams server TTS. Only on-device TTS is possible (G31) |
+| Project threads, members, @member mentions, reactions | the claude.ai project channel |
+| Remote-control device list and `claude rc` | a different pairing model. Code UI's host pairing replaces it |
+
+## 7. Not determined
+
+- **Server queue timing.** Whether the server echoes a `"later"` message at once
+  or at turn end.
+- **Double row.** How the Claude app avoids drawing both the pending row and the
+  optimistic transcript row.
+- **Retry values.** The production values of `claudeai_code_send_retry`. The
+  defaults mean no retry.
+- **Model and limits.** The effort level names (server-supplied), the attachment
+  limit (remote config), and the exact slash-trigger rule.
+- **Notification wording.** Finished vs needs-input comes from the push payload,
+  not the APK.
+- **Deny with comment.** Which in-app flow, if any, sends it for ordinary tools.
+  Only the notification and the plan path were seen.
+- **Claude Code's side, on 2.1.29x:**
+  - whether it paints prompt suggestions in the TUI input (G28);
+  - what happens to its queue when a turn ends in an error (S6).
