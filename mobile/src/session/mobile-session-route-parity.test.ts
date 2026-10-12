@@ -577,7 +577,9 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // context usedTokens /> (the ring and its sheet, moved from the composer). The title and subline
 // Txt records are unchanged. The sheets' more-actions record is now <MobileSessionHeaderMenu
 // controller />.
-const HEAD_LEAF_JSX_SHA256 = '32a3d0729024d4b217b2321c1f2758b3dfbce1873cb8550f7c6c31774d0b7899'
+// 2026-10-12 (parity gap G6): the chat overlay is handed `sessionDiff` and `onOpenDiff`, the
+// session bar's diff pill. Same records; only the overlay's moved.
+const HEAD_LEAF_JSX_SHA256 = 'f482d136189419e2197ac06808d71e9d7869152a115180ad132e595661c63ba5'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).

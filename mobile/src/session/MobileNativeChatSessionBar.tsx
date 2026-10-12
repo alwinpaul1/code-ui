@@ -4,6 +4,7 @@ import { Check } from 'lucide-react-native'
 import type { NativeChatTaskList } from '../../../src/shared/native-chat-task-list'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   diffPillCounts,
   todoPillModel,
@@ -18,6 +19,9 @@ import { MobileNativeChatTodoCard, TodoRing } from './MobileNativeChatTodoCard'
 // opens the changes. Code UI's own sizes and colours; the app's wording.
 
 const PILL_ICON = 20
+const PILL_HEIGHT = 36
+// Grown to the 44 dp floor vertically only; the pills sit side by side.
+const PILL_HIT_SLOP = tapTargetHitSlop({ minHeight: PILL_HEIGHT })
 
 function BarPill({
   accessibilityLabel,
@@ -40,11 +44,12 @@ function BarPill({
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       onPress={onPress}
+      hitSlop={PILL_HIT_SLOP}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.xs,
-        minHeight: 36,
+        minHeight: PILL_HEIGHT,
         paddingHorizontal: space.md,
         borderRadius: radius.pill,
         borderWidth: 1,

@@ -46,6 +46,9 @@ vi.mock('../transport/host-mobile-capabilities', () => ({ useHostMobileCapabilit
 vi.mock('./use-mobile-native-chat-created-file-counts', () => ({
   useMobileNativeChatCreatedFileCounts: () => new Map()
 }))
+// The diff pill's git.status read reaches the transport, which loads the real
+// react-native through a dependency; the frame's theme is all this file reads.
+vi.mock('./use-session-diff-totals', () => ({ useSessionDiffTotals: () => null }))
 vi.mock('../files/markdown-image-resolver', () => ({
   createMarkdownImageResolver: () => undefined
 }))
@@ -113,6 +116,8 @@ function controllerFor(overrides: Partial<MobileSessionController>): MobileSessi
     setMobileSessionRootRef: () => undefined,
     handleSessionContentRowLayout: () => undefined,
     fileTapMatchPicker: null,
+    // Read for the diff pill's turn-end refresh (use-session-diff-totals.ts).
+    nativeChatController: { nativeChatAgentWorking: false },
     ...overrides
   } as unknown as MobileSessionController
 }

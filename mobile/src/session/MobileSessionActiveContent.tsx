@@ -21,7 +21,6 @@ import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-termina
 import { readingPositionKey } from '../storage/reading-positions'
 import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
-import { router } from 'expo-router'
 import { useSessionDiffTotals } from './use-session-diff-totals'
 import { sessionReviewRoute } from '../source-control/mobile-review-route'
 
@@ -47,6 +46,7 @@ export function MobileSessionActiveContent({
     hostId,
     worktreeId,
     worktreeName,
+    router,
     insets,
     connState,
     client,
