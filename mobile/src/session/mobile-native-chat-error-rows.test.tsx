@@ -102,6 +102,9 @@ describe('which rows are error rows', () => {
   it.each([
     ['an answer that quotes an error below its first line', assistant('a1', 'Here is what failed.\n\nAPI Error: 500')],
     ['an answer that mentions one mid-sentence', assistant('a2', 'The API Error: 500 you saw came from the proxy.')],
+    // Review of 2026-10-12: every recorded API error on this machine is one
+    // line; an answer that opens with the words and goes on is the agent talking.
+    ['an answer that opens with one and goes on', assistant('a4', 'API Error: 529 means the API is overloaded.\n\nRetry later.')],
     ['a user prompt pasting one', { ...assistant('u1', API_ERROR_2_1_283), role: 'user' as const }],
     [
       'an error row that also carries tool work',

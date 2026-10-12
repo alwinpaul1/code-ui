@@ -13,9 +13,10 @@ export const SESSION_INTERRUPTED_TEXT = 'Session interrupted'
  *   `interruptedMessageId` record and Codex's `turn_aborted`, in the Claude
  *   app's words.
  * - A Claude Code API error: an assistant record holding nothing but the
- *   error's words (claude-api-error-text.ts knows the shapes). One that also
- *   carries tool work, or a second text, stays prose: that is not the shape
- *   Claude Code writes, and refusing costs only the colour.
+ *   error's one line (claude-api-error-text.ts knows the shapes; every one
+ *   recorded on this machine, 2.1.222 to 2.1.295, is a single line). One
+ *   that goes on past it, carries tool work, or has a second text stays
+ *   prose: that is the agent talking, and refusing costs only the colour.
  */
 export function errorRowOf(message: NativeChatMessage): { text: string } | null {
   if (isInterruptedStatusMessage(message)) {
@@ -29,5 +30,5 @@ export function errorRowOf(message: NativeChatMessage): { text: string } | null 
     return null
   }
   const text = block.text.trim()
-  return text !== '' && isClaudeApiErrorText(text) ? { text } : null
+  return text !== '' && !text.includes('\n') && isClaudeApiErrorText(text) ? { text } : null
 }
