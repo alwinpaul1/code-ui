@@ -10,6 +10,7 @@ vi.mock('./mobile-image-source-picker', () => ({
 }))
 
 import type { RpcClient } from '../transport/rpc-client'
+import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import {
   registerVideoFrameExtractionController,
   useNativeChatImageAttachmentsStore
@@ -113,6 +114,23 @@ describe('useMobileNativeChatImageUpload — video-frame extraction', () => {
     expect(showToast).not.toHaveBeenCalled()
   })
 
+  it('says the size limit in the Claude app\'s words for a file over the cap', async () => {
+    // The Claude app's chat_input_file_too_large ("File size exceeds ^1 MB
+    // limit", 1.261009.20), with Orca's own cap, not Claude's 30 MB.
+    // oxlint-disable-next-line require-yield -- fails before any file is ever yielded.
+    pickDocumentsMock.mockImplementation(async function* () {
+      throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
+    })
+    const showToast = vi.fn()
+    mount(baseArgs({ showToast }))
+
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+
+    expect(showToast).toHaveBeenCalledExactlyOnceWith('File size exceeds 18 MB limit', 1500)
+  })
+
   it('falls back to the "too large" toast with the reason, when extraction itself fails', async () => {
     // oxlint-disable-next-line require-yield -- fails before any frame is ever yielded.
     pickDocumentsMock.mockImplementation(async function* () {
@@ -129,7 +147,7 @@ describe('useMobileNativeChatImageUpload — video-frame extraction', () => {
       // "Unsupported codec" (a raw native-shaped message) maps to a short,
       // generic reason rather than being repeated verbatim in the toast
       // (2026-09-27 review).
-      'File too large to attach (18 MB max) — the video could not be read',
+      'File size exceeds 18 MB limit — the video could not be read',
       1500
     )
   })

@@ -5,6 +5,31 @@ import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-ope
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
 import type { VideoFrameAttachmentMeta } from '../platform/media-picker-contract'
 
+/** The most attachments one message takes: the Claude app's
+ *  `cai_file_upload_config.max_per_message_upload_count`, 20 unless its server
+ *  says otherwise (`l1f`, com.anthropic.claude 1.261009.20). */
+export const NATIVE_CHAT_ATTACHMENT_LIMIT = 20
+
+/** What the Claude app says when a pick runs past the limit, and under the
+ *  + sheet's tiles once the strip is full (`chat_input_attachment_limit_reached_toast`). */
+export const NATIVE_CHAT_ATTACHMENT_LIMIT_LINE = `You can add at most ${NATIVE_CHAT_ATTACHMENT_LIMIT} attachments to a message.`
+
+/** How many attachments a strip holds as the user picked them: every frame
+ *  read from one video counts once, as the video it came from. */
+export function nativeChatAttachmentCount(chips: readonly PendingNativeChatImage[]): number {
+  const videos = new Set<string>()
+  let count = 0
+  for (const chip of chips) {
+    if (!chip.videoFrame) {
+      count += 1
+    } else if (!videos.has(chip.videoFrame.groupId)) {
+      videos.add(chip.videoFrame.groupId)
+      count += 1
+    }
+  }
+  return count
+}
+
 /** A picked-and-uploaded image held in the native-chat composer until submit.
  *  `path` is the host temp file pasted into the agent on send; `previewUri` is a
  *  local URI used only to render the composer thumbnail. */
@@ -231,7 +256,14 @@ export type UploadNativeChatImagesDeps = {
     image: UploadingNativeChatImage,
     error: unknown,
     retry: () => Promise<{ path: string; previewUri: string }>
-  ) => void
+  ) => boolean | void
+  /** Whether the strip has room for one more chip, asked before each picture
+   *  of a selection. Without room the picture is skipped, never read or sent,
+   *  and `onLimitReached` fires once: the Claude app keeps the first ones that
+   *  fit (`cym`, `rs8.v`). A video's frames are one attachment to the user:
+   *  its first frame asks for room and the rest ride with it. */
+  readonly hasRoom?: () => boolean
+  readonly onLimitReached?: () => void
   /** The connection a retry goes out on, read when it is tapped: a reconnect is a new client,
    *  and a retry pinned to the pick's own could never succeed (Opus review, 2026-10-12). */
   readonly retryConnection?: () => {
@@ -255,7 +287,9 @@ export async function uploadMobileNativeChatImages(
     onImageStart,
     onImageUploaded,
     onImageFailed,
-    retryConnection
+    retryConnection,
+    hasRoom,
+    onLimitReached
   }: UploadNativeChatImagesDeps
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
   const picked = await pickImages(source)
@@ -263,7 +297,21 @@ export async function uploadMobileNativeChatImages(
   let connectionId: string | null = null
   let started = false
   let firstFailure: { error: unknown } | null = null
+  let limitReached = false
+  // Videos given room in this pick: their later frames are the same attachment.
+  const roomedVideos = new Set<string>()
   for await (const image of picked) {
+    const video = image.videoFrame?.groupId
+    if (!(video !== undefined && roomedVideos.has(video)) && hasRoom && !hasRoom()) {
+      if (!limitReached) {
+        limitReached = true
+        onLimitReached?.()
+      }
+      continue
+    }
+    if (video !== undefined) {
+      roomedVideos.add(video)
+    }
     if (!started) {
       started = true
       onUploadStart?.()
@@ -292,8 +340,8 @@ export async function uploadMobileNativeChatImages(
       if (!onImageFailed) {
         throw error
       }
-      firstFailure ??= { error }
-      onImageFailed(chip, error, async () => {
+      // False: the user took the chip out while it went up, so nothing failed for them.
+      const kept = onImageFailed(chip, error, async () => {
         const base64 = image.base64 || (image.load ? await image.load() : '')
         if (!base64) {
           throw new Error('The picture could not be read')
@@ -307,6 +355,9 @@ export async function uploadMobileNativeChatImages(
         })
         return { path, previewUri }
       })
+      if (kept !== false) {
+        firstFailure ??= { error }
+      }
     }
   }
   if (firstFailure) {

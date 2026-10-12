@@ -6,6 +6,26 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { openImagePreview } from './image-preview-store'
 import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
+import { moveNativeChatAttachment } from './mobile-native-chat-attachment-order'
+
+/** "Move earlier" / "Move later" where the chip can go, the Claude app's
+ *  screen-reader reorder (ccr_reorder_move_earlier_a11y / _later_a11y). */
+function reorderActions(index: number, count: number): { name: string; label: string }[] {
+  return [
+    ...(index > 0 ? [{ name: 'moveEarlier', label: 'Move earlier' }] : []),
+    ...(index < count - 1 ? [{ name: 'moveLater', label: 'Move later' }] : [])
+  ]
+}
+
+function onReorderAction(id: string) {
+  return (event: { nativeEvent: { actionName: string } }): void => {
+    if (event.nativeEvent.actionName === 'moveEarlier') {
+      moveNativeChatAttachment(id, 'earlier')
+    } else if (event.nativeEvent.actionName === 'moveLater') {
+      moveNativeChatAttachment(id, 'later')
+    }
+  }
+}
 
 /** The strip above the composer text: image thumbnails and named document
  *  chips, each with its remove badge, plus (while a document attach is
@@ -97,8 +117,9 @@ export function MobileNativeChatAttachmentChips({
           ) : null}
         </View>
       ) : null}
-      {attachments.map((attachment) => {
+      {attachments.map((attachment, index) => {
         const isFile = attachment.kind === 'file'
+        const reorderable = reorderActions(index, attachments.length)
         return (
           <View
             key={attachment.id}
@@ -113,6 +134,10 @@ export function MobileNativeChatAttachmentChips({
           >
             {isFile ? (
               <View
+                accessible
+                accessibilityLabel={attachment.name ?? 'File'}
+                accessibilityActions={reorderable}
+                onAccessibilityAction={onReorderAction(attachment.id)}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -138,6 +163,8 @@ export function MobileNativeChatAttachmentChips({
               <Pressable
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
+                accessibilityActions={reorderable}
+                onAccessibilityAction={onReorderAction(attachment.id)}
                 style={{ flex: 1 }}
                 onPress={() =>
                   openImagePreview(
@@ -186,6 +213,7 @@ export function MobileNativeChatAttachmentChips({
               // itself is kept by chip id (mobile-native-chat-upload-retry.ts).
               <View
                 pointerEvents="box-none"
+                accessibilityLabel="Upload failed"
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -216,9 +244,13 @@ export function MobileNativeChatAttachmentChips({
                 </Pressable>
               </View>
             ) : null}
-            {onRemoveAttachment && !attachment.uploading ? (
+            {onRemoveAttachment ? (
+              // In every state, uploading too, as the Claude app draws it
+              // (g330.b): a photo on its way out can still be taken back. It
+              // comes after the ring in the tree, so it paints over it.
               <Pressable
-                accessibilityLabel={isFile ? 'Remove file' : 'Remove image'}
+                // The Claude app's words for it (ccr_remove_attachment).
+                accessibilityLabel="Remove attachment"
                 // Inset inside the chip: Android drops touches outside the parent's
                 // bounds, so an overhanging badge would lose part of its tap target.
                 style={{

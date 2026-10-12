@@ -166,7 +166,7 @@ describe('a photo picked from the + sheet', () => {
       expect.objectContaining({ previewUri: 'file:///b.jpg', path: '/tmp/b.jpg' })
     ])
     expect(hook!.attachments[0]?.uploading).toBeUndefined()
-    expect(showToast).toHaveBeenCalledWith('Attach failed', 1500)
+    expect(showToast).toHaveBeenCalledWith('Upload failed', 1500)
   })
 
   it('retries a failed photo from its chip and makes it ready to send', async () => {

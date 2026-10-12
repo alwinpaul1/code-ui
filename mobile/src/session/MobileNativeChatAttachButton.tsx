@@ -21,7 +21,8 @@ export function MobileNativeChatAttachButton({
   onAttachFile,
   permissionMode,
   agentMode = null,
-  onOpenPermission
+  onOpenPermission,
+  attachmentCount = 0
 }: {
   iconButtonStyle: ViewStyle
   disabled: boolean
@@ -35,6 +36,8 @@ export function MobileNativeChatAttachButton({
   /** Opens the permission-mode sheet (the agent-mode sheet on Codex) from the
    *  attach sheet's permission row. */
   onOpenPermission?: () => void
+  /** Chips already in the strip, for the sheet's attachment limit. */
+  attachmentCount?: number
 }): React.JSX.Element {
   const { colors } = useTheme()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -86,6 +89,7 @@ export function MobileNativeChatAttachButton({
           permissionMode={permissionMode}
           agentMode={agentMode}
           onOpenPermission={onOpenPermission}
+          attachmentCount={attachmentCount}
         />
       ) : null}
     </>

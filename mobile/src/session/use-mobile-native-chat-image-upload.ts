@@ -12,6 +12,9 @@ import {
 // the media seam's contract has no member for either, so they stay on the phone's picker.
 import { pickMobileDocuments, pickMobileImageFiles } from './mobile-image-source-picker'
 import {
+  NATIVE_CHAT_ATTACHMENT_LIMIT,
+  NATIVE_CHAT_ATTACHMENT_LIMIT_LINE,
+  nativeChatAttachmentCount,
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
@@ -19,6 +22,7 @@ import {
   cancelVideoFrameExtractionFor,
   clearVideoFrameExtractionController,
   registerVideoFrameExtractionController,
+  useNativeChatImageAttachmentsStore,
   videoFrameExtractionControllerFor,
   videoFrameExtractionState,
   type NativeChatVideoFrameExtractionState
@@ -63,12 +67,13 @@ export function useMobileNativeChatImageUpload(args: {
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
-  /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`. */
+  /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`.
+   *  False when no chip stayed (the user removed it while it went up). */
   onImageFailed?: (
     scope: string,
     image: UploadingNativeChatImage & { batch: string },
     retry: () => Promise<{ path: string; previewUri: string }>
-  ) => void
+  ) => boolean
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
    *  `null` once the attach settles, extracted or not. */
@@ -150,6 +155,8 @@ export function useMobileNativeChatImageUpload(args: {
       // stopped early is only known then, and the note reads it off every frame.
       const uploadedImages: UploadedNativeChatImage[] = []
       let settledAny = false
+      // A picture's own upload failed and its chip stayed, failed, with a retry.
+      let chipFailed = false
       let uploadError: unknown = null
       try {
         await uploadMobileNativeChatImages(source, {
@@ -168,9 +175,18 @@ export function useMobileNativeChatImageUpload(args: {
             onImagesUploaded(scope, [{ ...image, batch }])
           },
           onImageFailed: onImageFailed
-            ? (image, _error, retry) => onImageFailed(scope, { ...image, batch }, retry)
+            ? (image, _error, retry) => {
+                const kept = onImageFailed(scope, { ...image, batch }, retry)
+                chipFailed ||= kept
+                return kept
+              }
             : undefined,
           retryConnection: () => liveConnectionRef.current,
+          // Counted live, so two picks landing together still stop at the limit.
+          hasRoom: () =>
+            nativeChatAttachmentCount(useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []) <
+            NATIVE_CHAT_ATTACHMENT_LIMIT,
+          onLimitReached: () => showToast(NATIVE_CHAT_ATTACHMENT_LIMIT_LINE, 2500),
           onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
           onUploadStart: () => {
             started = true
@@ -259,16 +275,18 @@ export function useMobileNativeChatImageUpload(args: {
           // the same "too large" story stands, with a short reason (never the
           // raw native exception text) appended.
           showToast(
-            `File too large to attach (18 MB max) — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
+            `File size exceeds 18 MB limit — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
             1500
           )
           return
         }
+        // The Claude app's words (chat_input_file_too_large, ccr_upload_failed),
+        // with Orca's own cap: its slot RPCs take 24 MiB of base64, 18 MB of file.
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
-          showToast('File too large to attach (18 MB max)', 1500)
+          showToast('File size exceeds 18 MB limit', 1500)
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(chipFailed ? 'Upload failed' : 'Attach failed', 1500)
       }
     },
     [

@@ -80,7 +80,7 @@ describe('useMobileImageAttachment — attachDocument and a video', () => {
     })
 
     expect(showToast).toHaveBeenCalledExactlyOnceWith(
-      'File too large to attach (18 MB max) — the video took too long to load',
+      'File size exceeds 18 MB limit — the video took too long to load',
       1500
     )
   })

@@ -216,7 +216,7 @@ describe('a send tapped while a photo is still uploading', () => {
         'Message not sent: a photo did not upload'
       )
       // The attach path still says why, on its own channel.
-      expect(showToast).toHaveBeenCalledWith('Attach failed', 1500)
+      expect(showToast).toHaveBeenCalledWith('Upload failed', 1500)
       expect(sentPaths(lane, args, pasted)).toEqual([])
       expect(args.baseSend).not.toHaveBeenCalled()
       expect(args.beginImageSend).not.toHaveBeenCalled()

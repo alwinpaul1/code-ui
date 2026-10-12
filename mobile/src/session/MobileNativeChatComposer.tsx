@@ -32,7 +32,7 @@ import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { nativeChatAttachmentCount, type PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 const NO_FILE_PATHS: string[] = []
 const NO_SKILLS: DiscoveredSkill[] = []
@@ -240,14 +240,13 @@ export function MobileNativeChatComposer({
   // markup's re-upload never marked its chip, and a send tapped just after
   // Done pasted the photo without its marks.
   const hasContent = trimmed.length > 0 || attachments.length > 0
+  // A failed chip turns Send off until retried or removed (Claude's yv8.i Idle over j29.e).
+  const hasFailedChip = attachments.some((attachment) => attachment.failed === true)
   // Send or Stop, never both; typed text brings Send back (MobileNativeChatSendSlot.tsx).
   // Not while dictating: the mic's own Stop dictation square sits beside the slot.
-  const showStop = canStop && onStop !== undefined && !hasContent && !micActive
-  const canSend =
-    hasContent &&
-    !disabled &&
-    !sending &&
-    !sessionOptionDispatching
+  // A failed chip alone sends nothing, so it does not hold the slot from Stop.
+  const showStop = canStop && onStop !== undefined && (!hasContent || (hasFailedChip && !trimmed)) && !micActive
+  const canSend = hasContent && !hasFailedChip && !disabled && !sending && !sessionOptionDispatching
 
   const { trigger, suggestions, popoverMaxHeight, onPopoverLayout } = useComposerSuggestions({
     value,
@@ -462,6 +461,7 @@ export function MobileNativeChatComposer({
                     ? () => setShowModeSheet(true)
                     : undefined
                 }
+                attachmentCount={nativeChatAttachmentCount(attachments)}
               />
             ) : null}
             {sessionOptions ? (

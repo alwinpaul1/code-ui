@@ -425,7 +425,7 @@ describe('MobileNativeChatComposer', () => {
     expect(thumbs.map((t) => t.props.source.uri)).toEqual(['file:///a.png', 'file:///b.png'])
 
     const remove = renderer!.root.findAll(
-      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Remove image'
+      (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Remove attachment'
     ) as Array<{ props: { onPress: () => void } }>
     remove[1].props.onPress()
     expect(onRemoveAttachment).toHaveBeenCalledWith('img-2')

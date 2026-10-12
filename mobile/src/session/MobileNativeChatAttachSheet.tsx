@@ -11,6 +11,10 @@ import {
   type TerminalAgentMode,
   type TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
+import {
+  NATIVE_CHAT_ATTACHMENT_LIMIT,
+  NATIVE_CHAT_ATTACHMENT_LIMIT_LINE
+} from './mobile-native-chat-image-attachment'
 
 /** The mode row's title, caption and label. A Codex tab (agentMode set) names
  *  its own Plan/Default mode: Codex has no permission mode, and its footer
@@ -47,7 +51,8 @@ export function MobileNativeChatAttachSheet({
   onAttachFile,
   permissionMode,
   agentMode = null,
-  onOpenPermission
+  onOpenPermission,
+  attachmentCount = 0
 }: {
   visible: boolean
   onClose: () => void
@@ -58,9 +63,13 @@ export function MobileNativeChatAttachSheet({
   /** Set only on a Codex tab. */
   agentMode?: TerminalAgentMode | null
   onOpenPermission?: () => void
+  /** Chips already in the strip. At the limit every source tile is off and
+   *  the limit line sits under them, as in the Claude app's sheet (`hta.a`). */
+  attachmentCount?: number
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
   const modeRow = modeRowText(agentMode, permissionMode ?? null)
+  const full = attachmentCount >= NATIVE_CHAT_ATTACHMENT_LIMIT
   const cards: { key: string; label: string; icon: LucideIcon; onPress?: () => void }[] = [
     { key: 'camera', label: 'Camera', icon: Camera, onPress: onCaptureImage },
     { key: 'photos', label: 'Photos', icon: ImageIcon, onPress: onAttachImage },
@@ -111,12 +120,13 @@ export function MobileNativeChatAttachSheet({
       <View style={{ flexDirection: 'row', gap: space.sm, paddingHorizontal: space.md }}>
         {cards.map((card) => {
           const Icon = card.icon
+          const on = Boolean(card.onPress) && !full
           return (
             <Pressable
               key={card.key}
               accessibilityRole="button"
               accessibilityLabel={card.label}
-              disabled={!card.onPress}
+              disabled={!on}
               onPress={runAfterClose(card.onPress)}
               style={({ pressed }) => ({
                 flex: 1,
@@ -128,7 +138,7 @@ export function MobileNativeChatAttachSheet({
                 borderWidth: 1,
                 borderColor: colors.border,
                 backgroundColor: pressed ? colors.bgRaised : colors.bgPanel,
-                opacity: card.onPress ? 1 : 0.4
+                opacity: on ? 1 : 0.4
               })}
             >
               <Icon size={24} color={colors.text} strokeWidth={1.8} />
@@ -139,6 +149,15 @@ export function MobileNativeChatAttachSheet({
           )
         })}
       </View>
+      {full ? (
+        <Txt
+          variant="caption"
+          tone="secondary"
+          style={{ paddingTop: space.sm, paddingHorizontal: space.md }}
+        >
+          {NATIVE_CHAT_ATTACHMENT_LIMIT_LINE}
+        </Txt>
+      ) : null}
       {onOpenPermission ? (
         <Pressable
           accessibilityRole="button"

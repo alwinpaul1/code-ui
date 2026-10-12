@@ -30,6 +30,20 @@ export const nativeChatWaitingSends = new Map<string, NativeChatWaitingSend>()
  *  photo to reuse its chip's id for its own (2026-09-26 review). */
 export const nativeChatAttachmentsResets = { current: 0 }
 
+/** Chips the user took out with the remove badge while their bytes were still
+ *  going up. The Claude app draws its remove "x" on a chip in every state and
+ *  cancels that chip's upload (`g330.b`, `j29.k`, 1.261009.20). An RPC already
+ *  on the relay cannot be called back, so the upload is let finish and its
+ *  result dropped: `uploads` (scope, selection and picture) keeps the landing
+ *  from drawing the chip again, and `ids` (every chip removed, landed or not)
+ *  tells a send waiting beside it that it was taken out, not lost to a failed
+ *  upload. */
+export const nativeChatRemovedUploads = { ids: new Set<string>(), uploads: new Set<string>() }
+
+export function removedUploadKey(scope: string, batch: string | undefined, previewUri: string): string {
+  return `${scope}\u0000${batch ?? ''}\u0000${previewUri}`
+}
+
 /** A video's frames are read one at a time, which can take a while — the
  *  extraction progress a still-reading pick shows lives here, NOT in
  *  `byScope`, so it can never be seen by the send-chip settlement in
@@ -139,6 +153,8 @@ export const useNativeChatImageAttachmentsStore = create<{
     nativeChatChipIdCounter.current = 0
     nativeChatAttachmentsResets.current += 1
     nativeChatWaitingSends.clear()
+    nativeChatRemovedUploads.ids.clear()
+    nativeChatRemovedUploads.uploads.clear()
     for (const controller of videoFrameExtractionControllers.values()) {
       controller.abort()
     }

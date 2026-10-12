@@ -176,7 +176,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(onEditAttachment).not.toHaveBeenCalled()
     expect(onRemoveAttachment).not.toHaveBeenCalled()
     expect(chipPictures(screenNow)).toEqual(['file:///a.jpg'])
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
   })
 
   it.each(SCHEMES)('opens the photo that was tapped, and marks up that one, among several (%s)', (scheme) => {
@@ -372,8 +372,9 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(ring[0]!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].bgOverlay })
     const spinner = ring[0]!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]
     expect(spinner?.props.color).toBe(PALETTE[scheme].text)
-    // Nothing to take out or mark up again while the marks upload.
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(0)
+    // Nothing to mark up again while the marks upload, but the remove badge
+    // stays, as the Claude app keeps it on a chip in every state (g330.b).
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
     tap(thumbnails(screenNow)[0])
     expect(pictureInViewer(screenNow)).toBe('data:image/png;base64,ZZZZ')
     expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
@@ -384,7 +385,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
       await vi.waitFor(() => expect(uploadRings(screenNow)).toHaveLength(0))
     })
     expect(chipPictures(screenNow)).toEqual(['data:image/png;base64,ZZZZ'])
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
     expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]).toEqual([
       expect.objectContaining({ id: 'img-1', path: '/tmp/a-marked.png', previewUri: 'data:image/png;base64,ZZZZ' })
     ])
@@ -521,8 +522,12 @@ describe('a chip whose upload failed', () => {
     expect(retry!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].danger })
     const icon = retry!.findAll((node) => String(node.type) === 'RotateCcw')[0]
     expect(icon?.props.color).toBe(PALETTE[scheme].onDanger)
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(2)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(2)
     expect(screenNow.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(0)
+    // Read out as the Claude app reads its failed tile (ccr_upload_failed).
+    expect(
+      screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.accessibilityLabel === 'Upload failed')
+    ).toHaveLength(1)
   })
 
   it('sends the picture again from the retry', () => {
@@ -534,7 +539,7 @@ describe('a chip whose upload failed', () => {
   it('takes it out of the strip from the remove badge', () => {
     const onRemoveAttachment = vi.fn()
     const screenNow = draw('dark', { attachments: [FAILED], onRemoveAttachment })
-    tap(pressables(screenNow, 'Remove image')[0])
+    tap(pressables(screenNow, 'Remove attachment')[0])
     expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-9')
   })
 
@@ -546,3 +551,94 @@ describe('a chip whose upload failed', () => {
     expect(pressables(screenNow, 'Retry upload')).toHaveLength(0)
   })
 })
+
+// The Claude app draws its remove "x" on a chip in every state, and removing
+// one still uploading cancels that upload (`g330.b`, `j29.k`, 1.261009.20).
+describe('a chip still uploading', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const UPLOADING: PendingNativeChatImage = { id: 'img-7', path: '', previewUri: 'file:///u.jpg', uploading: true }
+
+  it.each(SCHEMES)('keeps its remove badge over the ring, in the theme\'s colours (%s)', (scheme) => {
+    const onRemoveAttachment = vi.fn()
+    act(() => {
+      renderer = create(screen(scheme, { attachments: [UPLOADING], onRemoveAttachment }))
+    })
+    expect(renderer!.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(1)
+    const [remove] = pressables(renderer!, 'Remove attachment')
+    expect(remove).toBeDefined()
+    expect(remove!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].text })
+    tap(remove)
+    expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-7')
+  })
+})
+
+// The Claude app reorders composer chips (g330.a, rs8.moveUpload), and offers
+// it to a screen reader as "Move earlier" and "Move later"
+// (ccr_reorder_move_earlier_a11y / _later_a11y, 1.261009.20). Order is the
+// order the photos are pasted, so it is the order the agent reads them in.
+describe('reordering the chips from a screen reader', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    useNativeChatImageAttachmentsStore.getState().reset()
+  })
+
+  const DOC: PendingNativeChatImage = { id: 'img-4', path: '/tmp/d.pdf', previewUri: 'file:///d.pdf', kind: 'file', name: 'd.pdf' }
+
+  function drawFromStore(scheme: Scheme, chips: PendingNativeChatImage[]): void {
+    useNativeChatImageAttachmentsStore.getState().update((prev) => ({ ...prev, [MARKUP_SCOPE]: chips }))
+    act(() => {
+      renderer = create(screen(scheme, { attachments: chips, onRemoveAttachment: vi.fn() }))
+    })
+  }
+
+  function actionsOf(node: ReactTestInstance): string[] {
+    return (node.props.accessibilityActions ?? []).map((action: { label: string }) => action.label)
+  }
+
+  function movable(): ReactTestInstance[] {
+    return renderer!.root.findAll(
+      (node) => node.props.accessible !== false && Array.isArray(node.props.accessibilityActions)
+    )
+  }
+
+  it.each(SCHEMES)('offers Move earlier and Move later only where the chip can go (%s)', (scheme) => {
+    drawFromStore(scheme, [PHOTO, SECOND, DOC])
+    const chips = movable()
+    expect(chips).toHaveLength(3)
+    expect(chips.map(actionsOf)).toEqual([['Move later'], ['Move earlier', 'Move later'], ['Move earlier']])
+  })
+
+  it('moves the chip one place in the strip the send pastes from', () => {
+    drawFromStore('light', [PHOTO, SECOND, THIRD])
+    act(() => {
+      movable()[1]!.props.onAccessibilityAction({ nativeEvent: { actionName: 'moveEarlier' } })
+    })
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]?.map((chip) => chip.id)).toEqual([
+      'img-2',
+      'img-1',
+      'img-3'
+    ])
+    act(() => {
+      movable()[0]!.props.onAccessibilityAction({ nativeEvent: { actionName: 'moveLater' } })
+    })
+    // The strip as drawn still has img-1 first; the move is by chip id.
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]?.map((chip) => chip.id)).toEqual([
+      'img-2',
+      'img-3',
+      'img-1'
+    ])
+  })
+
+  it('offers no move on a lone chip', () => {
+    drawFromStore('dark', [PHOTO])
+    expect(movable().flatMap(actionsOf)).toEqual([])
+  })
+})
+
