@@ -11,7 +11,12 @@ import { MobileNativeChatAgentToolCalls } from './MobileNativeChatAgentToolCalls
 import { ToolDetailBody } from './MobileNativeChatToolDetailSheet'
 import { AgentToolCallsSlotProvider } from './native-chat-agent-tool-calls-slot'
 import { NativeChatAgentRunsContext, type NativeChatAgentRuns } from './native-chat-tasks-context'
-import { peekSubagentActivityRequest, publishSubagentFeed, resetSubagentActivityForTests } from './subagent-activity-store'
+import {
+  peekSubagentActivityRequest,
+  publishSubagentFeed,
+  publishSubagentFeedWindowed,
+  resetSubagentActivityForTests
+} from './subagent-activity-store'
 import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 
 // Parity gap G29: in the Claude app, an agent's "View transcript" and its run
@@ -133,6 +138,15 @@ describe("an agent's own sheet lists the calls it made, as the Claude app's does
     expect(labels(renderer)).toContain('Tool calls (4)')
     expect(callRows(renderer)).toHaveLength(4)
     expect(texts(renderer)).toContain('Start a 120-second background sleep')
+  })
+
+  it("says the count is a floor when the read left the transcript's earlier pages unread", () => {
+    renderer = renderTree(sheet(BACKGROUND_AGENT.agentId))
+    act(() => {
+      publishSubagentFeed(BACKGROUND_AGENT.agentId, orcaTranscriptRows(probeARecords()))
+      publishSubagentFeedWindowed(BACKGROUND_AGENT.agentId, true)
+    })
+    expect(labels(renderer)).toContain('Tool calls (4+)')
   })
 
   it("stops asking once the sheet goes", () => {

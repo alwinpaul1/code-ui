@@ -23,8 +23,8 @@
 //   0954729d was such a command).
 //
 // The latest such read is shown. A transcript result is paired with its call
-// first in, first out, so a read is trusted only when it was the one read in
-// flight (as `soleOutputRead`).
+// first in, first out, so a read is trusted only when no other call was in
+// flight beside it.
 
 import { isToolCallBlock, isToolResultBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
@@ -85,15 +85,16 @@ function endsWithTrailer(text: string): boolean {
   return OUTPUT_TRAILER.test(last)
 }
 
-/** How a Bash command reads the file: whole, a part, or not only the file. */
-function bashReadShape(command: string, path: string): 'whole' | 'part' | null {
+/** How a Bash command reads the file: whole, its end, its start, or not only the file. */
+function bashReadShape(command: string, path: string): 'whole' | 'tail' | 'head' | null {
   const bare = command.replace(LEADING_CD, '').trim()
   const file = String.raw`(["']?)${escapeRegExp(path)}\1`
   if (new RegExp(String.raw`^cat\s+${file}${QUIET}$`).test(bare)) {
     return 'whole'
   }
+  // No capture group before the file's: its quote is back-referenced as \1.
   if (new RegExp(String.raw`^(?:tail|head)(?:\s+-n\s*\d+|\s+-\d+|\s+-c\s*\d+)?\s+${file}${QUIET}$`).test(bare)) {
-    return 'part'
+    return bare.startsWith('tail') ? 'tail' : 'head'
   }
   return null
 }
@@ -145,30 +146,47 @@ function judge(call: PendingCall, output: string, taskId: string): ShellOutputCa
     return null
   }
   const { text, cut } = stripWireCut(output)
-  const truncated = cut || shape === 'part'
-  // A tail still shows the end trailer when there is one.
-  return { kind: 'captured', text, truncated, whileRunning: !cut && !endsWithTrailer(text), via: 'Bash' }
+  const truncated = cut || shape !== 'whole'
+  // Only a read that reaches the file's end can show the trailer is missing:
+  // the whole file, or a tail. A head never reaches it.
+  const reachesEnd = !cut && shape !== 'head'
+  return { kind: 'captured', text, truncated, whileRunning: reachesEnd && !endsWithTrailer(text), via: 'Bash' }
 }
 
 /** The latest read of this shell's output the transcript holds. */
 export function capturedShellOutput(messages: readonly NativeChatMessage[], taskId: string): ShellOutputCapture {
   const pending: PendingCall[] = []
+  // Calls that were ever in flight beside another: their answers may have
+  // landed in either order.
+  const overlapped = new Set<PendingCall>()
   let latest: ShellOutputCapture = { kind: 'none' }
   for (const message of messages) {
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        pending.push({ name: block.name, input: block.input, startedAt: null, ...(block.callId ? { callId: block.callId } : {}) })
+        const call: PendingCall = { name: block.name, input: block.input, startedAt: null, ...(block.callId ? { callId: block.callId } : {}) }
+        if (pending.length > 0) {
+          overlapped.add(call)
+          for (const other of pending) {
+            overlapped.add(other)
+          }
+        }
+        pending.push(call)
         continue
       }
       if (!isToolResultBlock(block)) {
         continue
       }
-      const readsInFlight = pending.filter((call) => READING_TOOLS.has(call.name)).length
+      // A transcript answer names no call and is paired first in, first out,
+      // over every call in flight, read or not: with a Glob beside a `cat`,
+      // an answer landing out of order hands the Glob's file list to the
+      // `cat`, even once the Glob's own slot has gone. So an answer with no
+      // call id is trusted only for a call that was never in flight beside
+      // another.
       const call = takeAnsweredCall(pending, block)
       if (!call || !READING_TOOLS.has(call.name) || isFailedAnswer(block)) {
         continue
       }
-      if (block.callId === undefined && readsInFlight !== 1) {
+      if (block.callId === undefined && overlapped.has(call)) {
         continue
       }
       const found = judge(call, block.output, taskId)

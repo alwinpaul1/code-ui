@@ -577,7 +577,9 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // context usedTokens /> (the ring and its sheet, moved from the composer). The title and subline
 // Txt records are unchanged. The sheets' more-actions record is now <MobileSessionHeaderMenu
 // controller />.
-const HEAD_LEAF_JSX_SHA256 = '32a3d0729024d4b217b2321c1f2758b3dfbce1873cb8550f7c6c31774d0b7899'
+// 2026-10-12 (parity gap G19): one new leaf record, <NativeChatFileReadProvider value> around the
+// chat overlay in the session content.
+const HEAD_LEAF_JSX_SHA256 = '5706a4a1d8236ec869e140a5d6d82e7e7165cd4a19fb1c7b015e8eed8f736ab6'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1180,7 +1182,9 @@ describe('mobile session route extraction parity', () => {
     // 75 again later on 2026-10-11: the user asked for the ring back in the composer, so the
     // header no longer mounts <MobileSessionHeaderContext>; the menu stays.
     // 74 later on 2026-10-11: the header's model pill text leaf is gone too.
-    expect(jsx.leaf).toHaveLength(74)
+    // 75 since 2026-10-12 (parity gap G19): the chat overlay sits in a
+    // <NativeChatFileReadProvider>, what the Read sheet's Load full file reads with.
+    expect(jsx.leaf).toHaveLength(75)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

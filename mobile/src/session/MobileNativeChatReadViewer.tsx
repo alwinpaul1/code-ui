@@ -12,6 +12,7 @@ import {
   type ReadView,
   type ReadViewLine
 } from './mobile-native-chat-read-view'
+import { createStaleAfterReconnectLedger, shouldRefetchAfterReconnect } from '../transport/stale-after-reconnect'
 import { useNativeChatFileReader } from './native-chat-file-read-context'
 import { SelectableSheetText } from './SelectableSheetText'
 
@@ -67,6 +68,7 @@ export function MobileNativeChatReadViewer({
     },
     []
   )
+  const [ledger] = useState(createStaleAfterReconnectLedger)
   const markdown = path !== null && isMarkdownPath(path)
   const shown = load.kind === 'loaded' ? load.file : view
   const startLoad = () => {
@@ -90,6 +92,17 @@ export function MobileNativeChatReadViewer({
       }
     })
   }
+  // A load that failed on the way (or was asked for while disconnected) is
+  // asked again by itself once per NEW connection, never in a loop
+  // (CLAUDE.md, "Nothing stays stale once the relay connects").
+  const retryable = load.kind === 'failed' && !load.final
+  const connectedAt = reader?.connectedAt ?? null
+  useEffect(() => {
+    if (shouldRefetchAfterReconnect(ledger, 'load', retryable ? 'error' : 'ready', connectedAt) && retryable && reader?.connected) {
+      startLoad()
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- startLoad reads the current reader; only a new connection or a new failure may trigger it.
+  }, [retryable, connectedAt, reader?.connected])
   const canLoad =
     reader !== null &&
     path !== null &&

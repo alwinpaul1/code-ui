@@ -87,11 +87,16 @@ async function settle(): Promise<void> {
   })
 }
 
-function reader(outcome: CreatedFileReadOutcome, connected = true): NativeChatFileReader & { asked: string[] } {
+function reader(
+  outcome: CreatedFileReadOutcome,
+  connected = true,
+  connectedAt: number | null = 1
+): NativeChatFileReader & { asked: string[] } {
   const asked: string[] = []
   return {
     asked,
     connected,
+    connectedAt,
     read: (path) => {
       asked.push(path)
       return Promise.resolve(outcome)
@@ -194,6 +199,29 @@ describe('the Read sheet numbers its lines and can load the whole file', () => {
     press(renderer, 'read-viewer-load')
     expect(fileReader.asked).toEqual([])
     expect(joined(renderer, 'read-viewer-load-error')).toBe('Not connected to session')
+  })
+
+  it('loads by itself once a new connection comes up after a load that failed on the way', async () => {
+    const failing = reader({ kind: 'failed', reason: "couldn't read: not connected" }, true, 1)
+    renderer = renderTree(sheet(readPair(REAL_READS.wholeTypescript), failing))
+    press(renderer, 'read-viewer-load')
+    await settle()
+    expect(failing.asked).toHaveLength(1)
+    const healed = reader({ kind: 'read', content: `${WHOLE_FILE}\n`, truncated: false }, true, 2)
+    act(() => renderer!.update(<ThemeProvider initialPreference="light">{sheet(readPair(REAL_READS.wholeTypescript), healed)}</ThemeProvider>))
+    await settle()
+    expect(healed.asked).toEqual([REAL_READS.wholeTypescript.input.file_path])
+    expect(gutter(renderer)).toHaveLength(REAL_READS.wholeTypescript.file.totalLines)
+  })
+
+  it('does not ask again on the same connection after a failure', async () => {
+    const failing = reader({ kind: 'failed', reason: 'timeout' }, true, 1)
+    renderer = renderTree(sheet(readPair(REAL_READS.wholeTypescript), failing))
+    press(renderer, 'read-viewer-load')
+    await settle()
+    act(() => renderer!.update(<ThemeProvider initialPreference="light">{sheet(readPair(REAL_READS.wholeTypescript), failing)}</ThemeProvider>))
+    await settle()
+    expect(failing.asked).toHaveLength(1)
   })
 
   it('has no Load full file where nothing can read the desktop', () => {

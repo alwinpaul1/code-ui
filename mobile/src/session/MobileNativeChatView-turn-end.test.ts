@@ -71,6 +71,7 @@ vi.mock('./MobileBackgroundTasksSheet', () => ({
 }))
 vi.mock('./MobileNativeChatRunSheet', () => ({ MobileNativeChatRunSheet: 'RunSheet' }))
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: 'ToolDetailSheet' }))
+vi.mock('./MobileBackgroundShellOutputSheet', () => ({ MobileBackgroundShellOutputSheet: 'ShellOutputSheet' }))
 // The Rewind confirm sheet reaches the same drawer; its rows are covered in
 // MobileNativeChatView-rewind.test.ts.
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))

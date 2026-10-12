@@ -7,7 +7,12 @@ import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { RunSheetRowView } from './MobileNativeChatRunSheet'
 import type { AgentToolCallsProps } from './native-chat-agent-tool-calls-slot'
 import { useNativeChatAgentRuns } from './native-chat-tasks-context'
-import { stopWatchingSubagentActivity, useSubagentActivityFeeds, watchSubagentActivity } from './subagent-activity-store'
+import {
+  stopWatchingSubagentActivity,
+  useSubagentActivityFeeds,
+  useSubagentFeedsWindowed,
+  watchSubagentActivity
+} from './subagent-activity-store'
 import { openSubagentTranscript } from './subagent-transcript-store'
 
 /**
@@ -35,6 +40,9 @@ export function MobileNativeChatAgentToolCalls({ agentId, title, inSection }: Ag
     return () => stopWatchingSubagentActivity(owner)
   }, [owner, target])
   const feeds = useSubagentActivityFeeds()
+  // The feed reads the transcript's latest page only; with earlier pages
+  // unread the count is a floor, and says so ("Tool calls (40+)").
+  const windowed = useSubagentFeedsWindowed().has(agentId)
   const messages = target ? feeds.get(target.agentId) : undefined
   const rows = useMemo(() => {
     if (!messages) {
@@ -51,7 +59,7 @@ export function MobileNativeChatAgentToolCalls({ agentId, title, inSection }: Ag
     <>
       {rows.length > 0
         ? inSection(
-            `Tool calls (${rows.length})`,
+            `Tool calls (${rows.length}${windowed ? '+' : ''})`,
             <View style={{ gap: space.xs }}>
               {rows.map((row, index) => (
                 <RunSheetRowView key={index} row={row} testID="agent-tool-call-row" />

@@ -21,7 +21,8 @@ import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-termina
 import { readingPositionKey } from '../storage/reading-positions'
 import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
-import { NativeChatFileReadProvider, useNativeChatFileReaderFor } from './native-chat-file-read-context'
+import { NativeChatFileReadProvider } from './native-chat-file-read-context'
+import { useNativeChatFileReaderFor } from './use-native-chat-file-reader'
 
 export function MobileSessionActiveContent({
   controller
@@ -118,7 +119,7 @@ export function MobileSessionActiveContent({
   // The line counts of created files the wire cut, read back from the host.
   const createdFileCounts = useMobileNativeChatCreatedFileCounts({ client, hostId, worktreeId })
   // What the Read sheet's "Load full file" reads with (parity gap G19).
-  const fileReader = useNativeChatFileReaderFor(client, worktreeId, connState === 'connected')
+  const fileReader = useNativeChatFileReaderFor(client, hostId, worktreeId, connState)
   // Images a document names, read off the host for the .md tab and the file
   // tab's rendered view; one resolver per document, so a figure fetches once.
   const documentPath = activeMarkdownTab?.relativePath ?? activeFileTab?.relativePath ?? null

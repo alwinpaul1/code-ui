@@ -866,10 +866,12 @@ Bash command that is nothing but `cat` of it (whole) or `tail`/`head` of it (a
 part). A command that also runs anything else is not read, because its result
 holds the other commands' output too; every read of the 7h gate in session
 0954729d was such a command, so that shell says "No output captured". A read
-is trusted only when it was the one read in flight (transcript results pair
-first in, first out). "Output truncated" marks a part, a ranged Read, or
-Orca's 4000-character wire cut; "Read while the shell was still running" marks
-a read with no end trailer.
+is trusted only when no other call was in flight beside it (transcript results
+pair first in, first out over every call, so a Glob answering out of order
+could otherwise be taken for a `cat`). "Output truncated" marks a part, a
+ranged Read, or Orca's 4000-character wire cut; "Read while the shell was still
+running" marks a whole read or a tail with no end trailer (a head never reaches
+the end, so it claims nothing). Only the loaded conversation is searched.
 
 ## Stop all (2026-10-10, removed 2026-10-11)
 

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
@@ -7,7 +7,8 @@ import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
-import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
+import { subagentTranscriptTarget } from './mobile-subagent-transcript'
+import { openSubagentTranscript, peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { PARALLEL_AGENTS, parallelAgentMessages } from './fixtures/claude-parallel-agents-2.1.281'
 
@@ -36,16 +37,35 @@ vi.mock('lucide-react-native', () =>
     ['ChevronDown', 'ChevronRight', 'Copy', 'Image', 'ListTodo', 'Eye', 'Globe', 'MessageSquare', 'Pencil', 'Search', 'SquareChevronRight', 'SquareTerminal', 'TextCursorInput', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle', 'AlertTriangle', 'Info', 'ArrowUp', 'Briefcase', 'FileText', 'TriangleAlert'].map((name) => [name, name])
   )
 )
+// `onAfterClose` fires the moment `visible` goes false, as the drawer does once it has left.
 vi.mock('../components/BottomDrawer', () => ({
-  BottomDrawer: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children: ReactNode }) =>
-    visible ? (
+  BottomDrawer: function MockDrawer({
+    visible,
+    header,
+    onAfterClose,
+    children
+  }: {
+    visible: boolean
+    header?: ReactNode
+    onAfterClose?: () => void
+    children: ReactNode
+  }) {
+    const wasVisible = useRef(visible)
+    useEffect(() => {
+      if (wasVisible.current && !visible) {
+        onAfterClose?.()
+      }
+      wasVisible.current = visible
+    }, [visible, onAfterClose])
+    return visible ? (
       <>
         {header}
         {children}
       </>
     ) : null
+  }
 }))
-// A row's own detail sheet needs gesture-handler; the run tests never open it.
+// A row's own detail sheet needs gesture-handler: a stand-in that keeps its props.
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: 'ToolDetailSheet' }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => false }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
@@ -230,21 +250,19 @@ describe('the conversation row for five agents launched at once', () => {
     }
   })
 
-  it("opens the tapped agent's own transcript, not the one its launch result was paired with", async () => {
+  // Since parity gap G29 the row opens the Agent call's own sheet, which reads
+  // that agent's calls and opens its transcript; the id it hands over is the
+  // one this test pins.
+  it("opens the tapped agent's own sheet with its own id, not the one its launch result was paired with", async () => {
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true })
     await press(tree, /Show the agents/)
     // "Keep phone's own message copy" is the first call, but the first launch
     // result belongs to "Composer clears text and media together".
     const [keep] = PARALLEL_AGENTS
     await press(tree, `Ran agent ${keep.description}`)
-    expect(peekSubagentTranscript()).toMatchObject({
-      running: true,
-      target: {
-        agentId: keep.agentId,
-        title: keep.description,
-        sessionId: `agent-${keep.agentId}`
-      }
-    })
+    const sheet = tree.root.findAllByType('ToolDetailSheet' as never).at(-1)!
+    expect(sheet.props.agentId).toBe(keep.agentId)
+    expect(sheet.props.pair.call.input).toMatchObject({ description: keep.description })
   })
 
   // 2026-09-26: the viewer's header said "Subagent · Running" from the moment it
@@ -254,8 +272,13 @@ describe('the conversation row for five agents launched at once', () => {
   it('tells an open transcript its agent finished once the roster no longer runs it', async () => {
     const [keep, ...others] = PARALLEL_AGENTS
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true })
-    await press(tree, /Show the agents/)
-    await press(tree, `Ran agent ${keep.description}`)
+    const target = subagentTranscriptTarget({
+      agent: 'claude',
+      task: { id: keep.agentId, kind: 'agent', title: keep.description },
+      parentTranscriptPath: null
+    })!
+    // What the Agent sheet's View transcript does.
+    act(() => openSubagentTranscript(target, true))
     const opened = peekSubagentTranscript()
     expect(opened?.running).toBe(true)
 

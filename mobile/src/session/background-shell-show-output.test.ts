@@ -61,6 +61,32 @@ describe("a background shell's output, from the agent's own reads of it", () => 
     expect(lines.at(-1)).toMatch(/^line \d+ of the build log$/)
   })
 
+  // Review of the first cut (2026-10-12): the guard counted only reads in
+  // flight, but pairing is first in, first out over every call. These rows are
+  // put together from the real shapes above, for the orders a parallel turn
+  // can write.
+  const path = `/private/tmp/claude-501/x/s/tasks/${READ_SHELL}.output`
+  const call = (name: string, input: Record<string, unknown>) => ({ type: 'tool-call' as const, name, input })
+  const answer = (output: string) => ({ type: 'tool-result' as const, output })
+
+  it("never hands another tool's answer to a cat that was in flight beside it", () => {
+    const rows: NativeChatMessage[] = [
+      { id: 'a', role: 'assistant', timestamp: null, source: 'transcript', blocks: [call('Glob', { pattern: '**/*.ts' }), call('Bash', { command: `cat ${path}` })] },
+      // The cat answers first; the Glob's file list lands second.
+      { id: 'b', role: 'tool', timestamp: null, source: 'transcript', blocks: [answer('lint=0\n[exited with code 0]')] },
+      { id: 'c', role: 'tool', timestamp: null, source: 'transcript', blocks: [answer('src/a.ts\nsrc/b.ts')] }
+    ]
+    expect(capturedShellOutput(rows, READ_SHELL)).toEqual({ kind: 'none' })
+  })
+
+  it('does not call a finished shell running because a head of its file shows no end', () => {
+    const rows: NativeChatMessage[] = [
+      { id: 'a', role: 'assistant', timestamp: null, source: 'transcript', blocks: [call('Bash', { command: `head -n 2 ${path}` })] },
+      { id: 'b', role: 'tool', timestamp: null, source: 'transcript', blocks: [answer('lint=1\nsrc/a.ts:5:10: error')] }
+    ]
+    expect(capturedShellOutput(rows, READ_SHELL)).toMatchObject({ kind: 'captured', truncated: true, whileRunning: false })
+  })
+
   it('finds nothing in an empty transcript, or for a shell nothing read', () => {
     expect(capturedShellOutput([], READ_SHELL)).toEqual({ kind: 'none' })
     expect(capturedShellOutput(readShellRows(), 'bnotreadx')).toEqual({ kind: 'none' })

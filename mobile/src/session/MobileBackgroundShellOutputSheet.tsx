@@ -67,7 +67,8 @@ export function BackgroundShellOutputBody({ capture }: { capture: ShellOutputCap
           No output captured
         </Txt>
         <Txt variant="caption" tone="muted">
-          The desktop does not share a shell's output file with the phone, and the agent has not read this one itself.
+          The desktop does not share a shell's output file with the phone, and the loaded conversation holds no read of this one by
+          the agent.
         </Txt>
       </View>
     )
