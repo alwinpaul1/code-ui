@@ -74,7 +74,12 @@
             // 2026-10-08: 304. The handler holds each attach snapshot for the
             // startup-frame reader above its covered return (an import and the call;
             // claude-startup-frame-snapshot.ts).
-            "max": 304,
+            // 2026-10-13: 320. A pane stays covered until its first kept frame
+            // (terminal-first-frame-reveal.ts): the subscribe arms the timeout, and
+            // the stream ending, a desktop-mode frame, a server resize and the fit
+            // pass's verdict each say the pane may be shown, the last three once the
+            // WebView has drawn the frame (revealTerminalAfterPaint).
+            "max": 320,
             "skipBlankLines": true,
             "skipComments": true
           }

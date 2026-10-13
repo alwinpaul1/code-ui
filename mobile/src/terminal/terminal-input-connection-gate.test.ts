@@ -128,7 +128,7 @@ describe('session route offline-compose wiring', () => {
   it('keeps the live/buffered mode toggle reachable offline', () => {
     const modeToggle = sourceSlice(
       accessoryStripSource,
-      'active: liveInputEnabled })',
+      'active: liveBar })',
       'onPress={toggleLiveInput}'
     )
     expect(modeToggle).toContain('disabled={!canCompose}')

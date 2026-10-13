@@ -90,6 +90,8 @@ function controllerFor(w: World): MobileSessionController {
     activeSessionTab: w.fileTabOpen ? { type: 'file', id: 'file-1' } : { type: 'terminal', id: 'tab-1' },
     canSend: true,
     canCompose: true,
+    activeHandle: handle,
+    terminalModes: new Map(),
     liveInputEnabled: handle ? w.liveInputTerminalHandlesRef.current.has(handle) : false,
     showNativeChat: false,
     dictation: { isStarting: false, isRecording: false, isProcessing: false },

@@ -52,6 +52,8 @@ export function MobileSessionActiveContent({
     terminalTextScale,
     setTerminalTextScale,
     activeHandle,
+    revealedTerminalHandles,
+    revealTerminalFirstFrame,
     markdownDocs,
     fileDocs,
     diffComments,
@@ -314,6 +316,7 @@ export function MobileSessionActiveContent({
           key={terminal.handle}
           handle={terminal.handle}
           active={terminal.handle === activeHandle}
+          revealed={revealedTerminalHandles.has(terminal.handle)}
           keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
           terminalTheme={terminal.terminalTheme}
           textScale={terminalTextScale}
@@ -324,6 +327,7 @@ export function MobileSessionActiveContent({
           }}
           onRef={setTerminalWebViewRef}
           onWebReady={handleTerminalWebReady}
+          onEngineError={(handle) => revealTerminalFirstFrame(handle, 'engine-error')}
           onSelectionMode={handleSelectionMode}
           onSelectionCopy={handleSelectionCopy}
           onSelectionEvicted={handleSelectionEvicted}
