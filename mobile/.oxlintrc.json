@@ -289,7 +289,13 @@
             // source handed to the contract (nativeChatVisualSource); the
             // reading and drawing live in mobile-native-chat-visual-read.ts and
             // MobileNativeChatVisual.tsx.
-            "max": 509,
+            // 2026-10-13: +4 for the refused picture's "Ask Claude to share
+            // it": the composer's text send wrapped in the terminal write lock
+            // and handed to the placeholders' context, and the message send's
+            // draft restore and report made ask-aware (no restore, no Retry);
+            // the asks themselves live in agent-image-share-ask.ts and
+            // agent-image-share-context.ts.
+            "max": 513,
             "skipBlankLines": true,
             "skipComments": true
           }

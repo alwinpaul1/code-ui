@@ -10,7 +10,8 @@ import {
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatAgentImageTile, MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
-import { isAgentImageAlt } from './mobile-native-chat-agent-images'
+import { AGENT_UNSAVED_SCREENSHOT_ALT, isAgentImageAlt } from './mobile-native-chat-agent-images'
+import { useAgentImageSharePhase } from './agent-image-share-context'
 import { hostImageMissing, subscribeHostImageMissing, type HostImageMissing } from './host-image-refusals'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
 import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
@@ -89,6 +90,10 @@ export function Prose({
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare
     // host path (not loadable on the device) falls back to a text placeholder.
     const uri = block.url ?? block.path
+    // A screenshot whose picture was never a file: a note, never a wait.
+    if (!invert && block.alt === AGENT_UNSAVED_SCREENSHOT_ALT) {
+      return <AgentImagePlaceholder path={undefined} unsaved fontScale={fontScale} styles={styles} />
+    }
     // A picture the agent read or sent: a square tile, as the Claude app
     // draws it, or, until the host sends it (or when it will not), a
     // placeholder naming the file.
@@ -150,30 +155,38 @@ function missingPictureNote(why: HostImageMissing | undefined): string {
   }
 }
 
+const UNSAVED_SCREENSHOT_NOTE = "This screenshot was never saved as a file, so the phone can't show it."
+
 /** A picture the host has not sent, or will not. A tap says which, under the
  *  chip, and a second tap folds it away. Opening the path is no use: it asks
  *  the same host the same question. An open note follows the host's latest
- *  answer. */
+ *  answer. Under "didn't share", one tap asks the agent to write the path,
+ *  which is what makes the desktop share it (agent-image-share-ask.ts). */
 function AgentImagePlaceholder({
   path,
+  unsaved = false,
   fontScale,
   styles
 }: {
   path: string | undefined
+  /** A screenshot that was never a file: nothing to wait for or ask about. */
+  unsaved?: boolean
   fontScale: number
   styles: ChatMessageStyles
 }) {
   const [explained, setExplained] = useState(false)
   const why = useSyncExternalStore(subscribeHostImageMissing, () => hostImageMissing(path))
-  const name = fileName(path)
+  const { share, phase } = useAgentImageSharePhase(unsaved ? undefined : path, why)
+  const name = unsaved ? 'Screenshot' : fileName(path)
   const textStyle = [styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]
+  const asked = phase === 'asked'
   return (
     <View style={styles.imagePlaceholder}>
       <Pressable
         onPress={() => setExplained((shown) => !shown)}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Image on Desktop: ${name}. Preview unavailable.`}
+        accessibilityLabel={unsaved ? 'Screenshot on Desktop. Never saved as a file.' : `Image on Desktop: ${name}. Preview unavailable.`}
         accessibilityHint="Says why the picture is not shown"
         accessibilityState={{ expanded: explained }}
         style={({ pressed }) => [styles.imageChip, pressed && styles.controlPressed]}
@@ -185,8 +198,22 @@ function AgentImagePlaceholder({
       </Pressable>
       {explained ? (
         <Text accessibilityLiveRegion="polite" style={textStyle}>
-          {missingPictureNote(why)}
+          {unsaved ? UNSAVED_SCREENSHOT_NOTE : missingPictureNote(why)}
         </Text>
+      ) : null}
+      {explained && share && path && phase !== 'none' ? (
+        <Pressable
+          onPress={asked ? undefined : () => share.ask(path)}
+          disabled={asked}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: asked }}
+          style={({ pressed }) => [styles.imageShareAction, pressed && !asked && styles.controlPressed]}
+        >
+          <Text style={[textStyle, asked ? styles.imageShareAsked : styles.imageShareAsk]}>
+            {asked ? `Asked — waiting for ${share.agentName}'s reply` : `Ask ${share.agentName} to share it`}
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   )

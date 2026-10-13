@@ -29,6 +29,9 @@ import { toolCallKind } from './mobile-native-chat-tool-kind'
 
 export const AGENT_READ_IMAGE_ALT = 'Image the agent read'
 export const AGENT_SENT_IMAGE_ALT = 'Image the agent sent'
+/** A screenshot whose picture rode only as base64 in its tool result: no file
+ *  exists to ask the host for, so its slot is a note and never fills. */
+export const AGENT_UNSAVED_SCREENSHOT_ALT = 'Screenshot the agent took'
 /** A text block whose text is the path of a non-image file SendUserFile sent:
  *  drawn as a file card (mobile-native-chat-prose-groups.ts). */
 export const SENT_FILE_PRESENTATION = 'sent-file'
@@ -77,6 +80,24 @@ export function sentImagePaths(sent: SentFiles): string[] {
   return sent.display === 'attach' ? [] : sent.files.filter(isImageFilePath)
 }
 
+const CHROME_DEVTOOLS_SCREENSHOT = /chrome-devtools__take_screenshot$/
+
+/** A screenshot call that saved no file: claude-in-chrome `computer` with
+ *  action `screenshot` or `zoom`, or chrome-devtools take_screenshot without
+ *  a `filePath`. Their results carry the picture only as a base64 `image`
+ *  item (Claude Code 2.1.226 to 2.1.296 on this machine), which Orca's reader
+ *  drops, and no rule of the desktop can share a file that never existed. */
+function isUnsavedScreenshot(block: NativeChatBlock): boolean {
+  if (!isToolCallBlock(block)) {
+    return false
+  }
+  const input = block.input as { action?: unknown; filePath?: unknown } | null
+  if (block.name === 'mcp__claude-in-chrome__computer') {
+    return input?.action === 'screenshot' || input?.action === 'zoom'
+  }
+  return CHROME_DEVTOOLS_SCREENSHOT.test(block.name) && typeof input?.filePath !== 'string'
+}
+
 function readImagePath(block: NativeChatToolCallBlock): string | null {
   if (toolCallKind(block.name) !== 'read') {
     return null
@@ -118,7 +139,8 @@ function imageRef(path: string, uri: string | undefined, alt: string): NativeCha
  *
  * `previews` holds the picture URIs in `agentImagePaths` order; an empty one
  * leaves that slot a placeholder (path, no URL). With no `previews` at all
- * (the host was never asked) no slot is drawn. A file read twice in one run
+ * (the host was never asked) no slot is drawn, except an unsaved
+ * screenshot's note, which never waits on the host. A file read twice in one run
  * (between two blocks of text) has one slot. A message with no image Read
  * and no readable SendUserFile comes back as it was.
  */
@@ -135,7 +157,7 @@ export function placeAgentImages(
   const failed = new Set<NativeChatBlock>()
   let any = false
   for (const { call, result } of pairToolBlocks(blocks)) {
-    if (call && result?.isError && (readSentFiles(call) || readImagePath(call))) {
+    if (call && result?.isError && (readSentFiles(call) || readImagePath(call) || isUnsavedScreenshot(call))) {
       any = true
       failed.add(call)
     } else if (call && readSentFiles(call)) {
@@ -143,7 +165,7 @@ export function placeAgentImages(
       if (result) {
         sentResults.add(result)
       }
-    } else if (call && readImagePath(call)) {
+    } else if (call && (readImagePath(call) || isUnsavedScreenshot(call))) {
       any = true
     }
   }
@@ -213,6 +235,11 @@ export function placeAgentImages(
     }
     if (isToolCallBlock(block)) {
       out.push(block)
+      // Drawn with or without previews: it is a statement, not a wait. One
+      // per run, as a run of browser steps can take a screenshot per step.
+      if (isUnsavedScreenshot(block) && !failed.has(block) && !waiting.some((held) => held.type === 'image-ref' && held.alt === AGENT_UNSAVED_SCREENSHOT_ALT)) {
+        waiting.push({ type: 'image-ref', alt: AGENT_UNSAVED_SCREENSHOT_ALT })
+      }
       const read = readImagePath(block)
       if (read) {
         const uri = take()

@@ -345,6 +345,17 @@ describe('the line a refused agent-read picture leaves behind', () => {
     )
   })
 
+  // Opus review of the ask (2026-10-13): Orca's rule 1 also refuses a file that
+  // exists when the tab's session or agent does not match (a hand-started
+  // agent's agentType expires), so the line keeps naming the rules, beside
+  // the likelier cause.
+  it('keeps naming both rules when the agent text names the path cleanly and the desktop still refuses', async () => {
+    const line = await lineFor({ agentTextNamesPath: true, agentTextNamesPathCleanly: true })
+    expect(line).toContain('the file may be gone')
+    expect(line).toContain("Rule 1, named in the agent's text: this chat's text names it, but the desktop's transcript tail did not.")
+    expect(line).toContain(`Rule 2, printed in terminal ${handle}`)
+  })
+
   it('says which rule was never tried when no chat session and no terminal went with the ask', async () => {
     expect(await lineFor({ nativeChatContext: null, terminalHandle: null })).toBe(
       `[host-image] no picture for ${path}: the desktop did not share it (outside every workspace). ` +

@@ -17,7 +17,7 @@ import { useMobileNativeChatSessionOptionController } from './use-mobile-native-
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
 import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
-import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'
+import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend, withoutAskDraftRestore, withoutAskRetry } from './agent-image-share-ask'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
@@ -341,6 +341,8 @@ export function useMobileNativeChatController(
   // the options hook needs the seam's dispatcher; a ref breaks the cycle.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
+  // A refused picture's ask rides this send, but its words were never in the box: no restore, no Retry (agent-image-share-ask.ts).
+  const askAwareRestore = useMemo(() => withoutAskDraftRestore(restoreRejectedDraft), [restoreRejectedDraft]); const askAwareSendError = useMemo(() => withoutAskRetry(onSendError), [onSendError])
   const {
     send: _rawHandleNativeChatSend,
     sendWithOutcome: rawHandleNativeChatSendWithOutcome,
@@ -356,10 +358,10 @@ export function useMobileNativeChatController(
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
-    restoreRejectedDraft, showSendingEcho,
+    restoreRejectedDraft: askAwareRestore, showSendingEcho,
     acceptSend,
     holdUnconfirmedSend,
-    onSendError,
+    onSendError: askAwareSendError,
     beforeSend: settleDraftMirrorBeforeSend,
     onCommandDispatched: peekTerminalForDispatchedCommand, promptReceipts: tailPrompts, sendOnRecord
   })
@@ -483,6 +485,11 @@ export function useMobileNativeChatController(
     rawSendWithOutcome: rawHandleNativeChatSendWithOutcome
   })
   const { handleNativeChatSend, handleNativeChatSendWithOutcome } = codexIntercept
+  // A refused picture's tap asks the agent for its path through the composer's own text send (outbox, echo, queue),
+  // under the terminal's write lock; read through a ref so the placeholders' context is not new each render.
+  const shareSendRef = useRef({ send: handleNativeChatSendWithOutcome, onSendError }); shareSendRef.current = { send: handleNativeChatSendWithOutcome, onSendError }
+  const shareAskSend = useMemo(() => lockedShareAskSend({ handleRef: activeHandleRef, send: (text) => shareSendRef.current.send(text), onSendError: (message) => shareSendRef.current.onSendError(message) }), [activeHandleRef])
+  const nativeChatImageShare = useAgentImageShareAsks({ tabId: activeSessionTabId, sessionId: activeChatSessionId, agent: activeChatResolution?.agent ?? null, messages: nativeChatSession.messages, working: nativeChatAgentWorking, send: !activeChatStructured && activeChatResolution != null ? shareAskSend : null })
   useEffect(() => setModelSheetRequestState(codexIntercept.modelSheetRequest), [codexIntercept.modelSheetRequest])
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
@@ -550,7 +557,7 @@ export function useMobileNativeChatController(
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable,
-    chatImagePreviewsByMessageId,
+    chatImagePreviewsByMessageId, nativeChatImageShare,
     nativeChatSession,
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,

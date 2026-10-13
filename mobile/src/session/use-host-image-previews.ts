@@ -11,12 +11,9 @@ import {
   previewErrorFromRefusal
 } from '../files/mobile-file-preview-response'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
-import {
-  isImageRefBlock,
-  isTextBlock,
-  type NativeChatMessage
-} from '../../../src/shared/native-chat-types'
+import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentImagePaths } from './mobile-native-chat-agent-images'
+import { agentTextNamesPath, agentTextNamesPathCleanly } from './agent-image-share-ask'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 import { hostImageAskState, recordHostImageFailure, recordHostImageMissing, refusedBeforeNamed, resetHostImageRefusals, RETRY_MS } from './host-image-refusals'
 import {
@@ -107,16 +104,8 @@ function explainMissing(key: string, path: string, why: string): void {
   console.warn(`[host-image] no picture for ${path}: ${why}`)
 }
 
-/** True when assistant TEXT the phone holds names the path. That is the
- *  desktop's rule 1; a Read call's own input does not count there. */
-export function agentTextNamesPath(messages: readonly NativeChatMessage[], path: string): boolean {
-  return messages.some(
-    (message) =>
-      message.role === 'assistant' &&
-      Array.isArray(message.blocks) &&
-      message.blocks.some((block) => isTextBlock(block) && block.text.includes(path))
-  )
-}
+// Whether assistant TEXT names a path (the desktop's rule 1), loosely or as that rule accepts it.
+export { agentTextNamesPath } from './agent-image-share-ask'
 
 /** The host resolved the path and granted nothing. Outside every workspace
  *  Orca 1.4.223's resolveTerminalPath shares a file on one of two rules:
@@ -166,6 +155,9 @@ export async function loadHostImage(args: {
   /** Whether agent text the phone holds names the path (for the line a
    *  refusal leaves behind; the desktop decides on its own transcript). */
   agentTextNamesPath?: boolean
+  /** Whether that text names it the way the desktop's rule 1 accepts. Refused
+   *  even so, the file is most likely gone: said as "couldn't be fetched". */
+  agentTextNamesPathCleanly?: boolean
   /** Where the picture is kept; the platform's own when not given. */
   files?: HostImageFileStore | null
 }): Promise<string | null> {
@@ -177,7 +169,8 @@ export async function loadHostImage(args: {
   // Its cache file was cleared, or now holds another picture: read it again.
   dataUriByPath.delete(key)
   const named = args.agentTextNamesPath === true
-  const { allowed, newlyNamed } = hostImageAskState(key, named)
+  const cleanly = args.agentTextNamesPathCleanly === true
+  const { allowed, newlyNamed } = hostImageAskState(key, named, cleanly)
   if (!allowed) {
     return null
   }
@@ -186,13 +179,14 @@ export async function loadHostImage(args: {
     // An ask sent before the agent's text named the path may come back
     // refused after it does: ask once more then, rather than at the next timer.
     return args.agentTextNamesPath === true
-      ? pending.then((uri) => uri ?? (refusedBeforeNamed(key) ? loadHostImage(args) : null))
+      ? pending.then((uri) => uri ?? (refusedBeforeNamed(key, cleanly) ? loadHostImage(args) : null))
       : pending
   }
   // Back-off rules: host-image-refusals.ts.
+  const gone = cleanly && args.nativeChatContext != null
   const fail = (refused = false) => {
-    recordHostImageFailure(key, { refused, named, newlyNamed })
-    recordHostImageMissing(args.path, refused ? 'not-shared' : 'failed')
+    recordHostImageFailure(key, { refused, named, cleanly, newlyNamed })
+    recordHostImageMissing(args.path, refused && !gone ? 'not-shared' : 'failed')
   }
   const run = (async () => {
     try {
@@ -245,7 +239,7 @@ export async function loadHostImage(args: {
             : null
       if (!request) {
         fail(true)
-        explainMissing(key, args.path, notShared(args))
+        explainMissing(key, args.path, `${gone ? "the agent's text names it cleanly, so the file may be gone (moved or deleted), or Orca's rule 1 did not apply (another session or agent on the tab, a transcript it could not read, older than its 2,000-message tail); " : ''}${notShared(args)}`)
         return null
       }
       const read = await args.client.sendRequest(request.method, request.params, {
@@ -314,6 +308,7 @@ export function useHostImagePreviews(args: {
     () => new Set(Object.values(wanted).flat().filter((path) => agentTextNamesPath(messages, path))),
     [messages, wanted]
   )
+  const namedCleanly = useMemo(() => new Set([...namedInAgentText].filter((path) => agentTextNamesPathCleanly(messages, path))), [messages, namedInAgentText])
   const [loaded, setLoaded] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -336,7 +331,8 @@ export function useHostImagePreviews(args: {
             nativeChatContext: tabId && sessionId ? { tabId, sessionId } : null,
             terminalHandle: terminalHandleRef.current,
             path,
-            agentTextNamesPath: namedInAgentText.has(path)
+            agentTextNamesPath: namedInAgentText.has(path),
+            agentTextNamesPathCleanly: namedCleanly.has(path)
           })
           if (active && uri) {
             setLoaded((current) => (current[key] === uri ? current : { ...current, [key]: uri }))
@@ -356,7 +352,7 @@ export function useHostImagePreviews(args: {
       active = false
       clearTimeout(timer)
     }
-  }, [client, enabled, hostId, namedInAgentText, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
+  }, [client, enabled, hostId, namedInAgentText, namedCleanly, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
 
   return useMemo(() => {
     const previews: Record<string, string[]> = {}
