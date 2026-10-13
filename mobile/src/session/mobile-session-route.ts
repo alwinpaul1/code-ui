@@ -4,6 +4,11 @@ export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
   name?: string
+  /** A tab to select on arrival: the terminal pane (`<tabId>:<leafId>`) a
+   *  notification came from. Spent and cleared by the screen once applied. */
+  paneKey?: string
+  /** The same for a structured agent session tab, by its session id. */
+  agentSessionId?: string
 }
 
 /** Identities stay raw — the navigator owns the params, so pre-encoding a
@@ -11,10 +16,18 @@ export type MobileSessionRouteParams = {
 export function mobileSessionRouteTarget({
   hostId,
   worktreeId,
-  name
+  name,
+  paneKey,
+  agentSessionId
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
     name: '[hostId]/session/[worktreeId]',
-    params: name ? { hostId, worktreeId, name } : { hostId, worktreeId }
+    params: {
+      hostId,
+      worktreeId,
+      ...(name ? { name } : {}),
+      ...(paneKey ? { paneKey } : {}),
+      ...(agentSessionId ? { agentSessionId } : {})
+    }
   }
 }

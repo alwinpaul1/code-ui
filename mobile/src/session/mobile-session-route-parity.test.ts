@@ -116,7 +116,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // prompt-cancel one in the feedback capabilities, which the status probe sets.
 // 307 since 2026-10-06 (Orca #24759 ported): the feedback hook's mountedRef (useRef) and its
 // effect (useEffect) join the family.
-const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd345cdb28a61a7f31'
+// 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, the notification tap's
+// tab selection. Not expanded, so only the hook pins moved.
+const HEAD_MAIN_HOOK_SHA256 = 'e3da9ec492bde777a14fcb381c803a9e38f5f1130a2daa39abb9a901eaa00a0b'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -129,7 +131,8 @@ const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd3
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
 // 2026-10-11: the foundation also takes `branch: worktreeBranch` out of useLiveWorktreeName, for
 // the header menu's Copy branch (parity gap G35).
-const HEAD_HOOK_BINDING_SHA256 = '61bb3427f8f29707e60787ccade3525549a55d36ad19fa2d298caca2f84e0d51'
+// 2026-10-13: the controller's useMobileSessionNotificationTab call (a bare call, bound to nothing).
+const HEAD_HOOK_BINDING_SHA256 = '884dae969fbf5ef1db3d074ac2a69f04d98d42e23ea8cc0962cd89bdb977b5d8'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -1024,7 +1027,9 @@ describe('mobile session route extraction parity', () => {
     // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
     // 309 since 2026-10-10: the native-chat banner's useMemo (Orca #26544, sign-in guidance steps
     // aside once the transcript says it) and the hostRefusesOtherRuntime useState (Orca #27196).
-    expect(main.hooks).toHaveLength(309)
+    // 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, which selects the
+    // tab a notification tap named. Not expanded: its params read and effect stay inside it.
+    expect(main.hooks).toHaveLength(310)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
