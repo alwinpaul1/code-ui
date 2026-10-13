@@ -183,11 +183,22 @@ export function makeChatMessageStyles(theme: Theme) {
       borderWidth: 1,
       borderColor: colors.border
     },
+    // A picture the host has not sent: its chip, and what a tap says under it.
+    imagePlaceholder: {
+      alignSelf: 'flex-start',
+      maxWidth: '100%',
+      gap: space.xs
+    },
     // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
     // next one showing so the row reads as scrollable.
     // Air between a picture and the caption under it, as the Claude app has.
     imageLead: {
       marginBottom: space.md
+    },
+    // Between pictures that follow each other: 8 dp, the gap between a strip's
+    // tiles. A strip adds its own 4 dp of padding above and below.
+    imageAfterImage: {
+      marginTop: space.sm
     },
     imageStripFrame: {
       height: IMAGE_TILE_HEIGHT + space.xs * 2,
