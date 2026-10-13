@@ -440,6 +440,34 @@ describe('the question card, choose first and Submit after', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith('blue-token')
   })
 
+  // Review finding, 2026-10-13: a chosen row and typed words could stand
+  // together, and each control silently dropped the other. One answer at a
+  // time, as the Claude app keeps it: typing clears the row, a row clears the text.
+  it('never holds a chosen row and typed words at once on a single-select card', async () => {
+    const onAnswer = vi.fn(async () => true)
+    renderer = renderQuestion(pickOne, onAnswer)
+    const input = () => renderer!.root.findByType('TextInput' as never)
+
+    await act(async () => radios(renderer!)[0]!.props.onPress())
+    await act(async () => input().props.onChangeText('Push to a new branch'))
+    expect(radios(renderer).map((row) => row.props.accessibilityState.checked)).toEqual([false, false])
+    expect(submit(renderer).props.disabled).toBe(true)
+
+    await act(async () => radios(renderer!)[1]!.props.onPress())
+    expect(input().props.value).toBe('')
+    await act(async () => submit(renderer!).props.onPress())
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith('no-token')
+  })
+
+  it('names the page-turn button Next for a screen reader too', () => {
+    renderer = renderQuestion({ ...pickOne, nextStep: true }, vi.fn(async () => true))
+    const labels = renderer.root
+      .findAll((node) => (node.type as unknown) === 'Pressable' && typeof node.props.accessibilityLabel === 'string')
+      .map((node) => node.props.accessibilityLabel as string)
+    expect(labels).toContain('Next question')
+    expect(labels).not.toContain('Submit selected options')
+  })
+
   it.each(['light', 'dark'] as const)('marks the chosen row in the accent, in %s', async (scheme) => {
     const palette = scheme === 'dark' ? darkColors : lightColors
     renderer = renderQuestion(pickOne, vi.fn(async () => true), scheme)

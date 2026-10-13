@@ -56,10 +56,16 @@ export function MobileNativeChatQuestion({
   // Keyed by position, not by label: an agent may repeat a label inside one
   // question, and label-keyed selection makes both rows toggle as one. A tap
   // never sends: single-select makes the row the choice (tapping it again keeps
-  // it), multi-select toggles it.
+  // it), multi-select toggles it. On single-select a row and typed words are
+  // two different answers, so choosing one clears the other (as the Claude app
+  // keeps one answer per page); otherwise each button would silently drop what
+  // the other holds.
   const toggle = (optionIndex: number): void => {
     if (locked || sendingRef.current) {
       return
+    }
+    if (!question.multiSelect && !question.freeTextInput) {
+      setFreeText('')
     }
     setSelectedOptionIndexes((prev) => {
       if (!question.multiSelect) {
@@ -253,7 +259,8 @@ export function MobileNativeChatQuestion({
               ? 'Next'
               : `Submit${question.multiSelect && selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}`
           }
-          accessibilityLabel="Submit selected options"
+          // A grouped step's button only turns the page; say so to a screen reader too.
+          accessibilityLabel={question.nextStep ? 'Next question' : 'Submit selected options'}
           variant="accent"
           block
           disabled={!canSubmitChoice}
@@ -280,7 +287,12 @@ export function MobileNativeChatQuestion({
               paddingBottom: space.sm + 2
             }}
             value={freeText}
-            onChangeText={setFreeText}
+            onChangeText={(text) => {
+              setFreeText(text)
+              if (!question.multiSelect && text.trim().length > 0) {
+                setSelectedOptionIndexes([])
+              }
+            }}
             editable={!locked}
             placeholder={
               question.freeTextInput?.placeholder ??

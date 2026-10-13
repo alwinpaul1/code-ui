@@ -134,9 +134,9 @@ function row(label: string): ReactTestInstance {
   return found!
 }
 
-/** The card's one send button: Next on step 1 (stays on the phone), Submit on the last. */
-async function pressSubmitOrNext(): Promise<void> {
-  const button = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
+/** Step 1's Next: folds the answer into the draft on the phone. */
+async function pressNext(): Promise<void> {
+  const button = renderer!.root.findByProps({ accessibilityLabel: 'Next question' })
   await act(async () => button.props.onPress())
 }
 
@@ -167,7 +167,7 @@ describe('a grouped question on the structured lane, after its last step is sent
     // Step 1: a tap only chooses; Next folds it into the draft on the phone.
     await act(async () => row('Postgres').props.onPress())
     expect(frames.at(-1)).toBe('Which database? (1 of 2)')
-    await pressSubmitOrNext()
+    await pressNext()
     expect(mutate).not.toHaveBeenCalled()
     expect(frames.at(-1)).toBe('Which regions? (2 of 2)')
     // Step 2: pick one, Submit. The group goes to the host.
@@ -200,7 +200,7 @@ describe('a grouped question on the structured lane, after its last step is sent
   // starts again from the first question, as a retry must.
   it('starts again from the first question when the host cannot confirm the group', async () => {
     await act(async () => row('Postgres').props.onPress())
-    await pressSubmitOrNext()
+    await pressNext()
     await act(async () => row('us-east').props.onPress())
     const submit = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
     await act(async () => submit.props.onPress())
