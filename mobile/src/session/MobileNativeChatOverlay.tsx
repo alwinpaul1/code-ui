@@ -9,7 +9,7 @@ import { placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-p
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet } from 'react-native'; import { AgentImageShareView } from './AgentImageShareView' // the overlay's box; a refused picture's ask (agent-image-share-ask.ts)
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'; import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
@@ -537,9 +537,9 @@ export function MobileNativeChatOverlay({
   }
   return (
     <CreatedFileCountProvider store={createdFileCounts} messages={shown.messages} live={shown.wholeSession}>
-      <View style={styles.overlay}>
+      <AgentImageShareView share={controller.nativeChatImageShare ?? null} style={styles.overlay}>
         {shown === live ? chat : cloneElement(chat, shown.chat)}
-      </View>
+      </AgentImageShareView>
     </CreatedFileCountProvider>
   )
 }

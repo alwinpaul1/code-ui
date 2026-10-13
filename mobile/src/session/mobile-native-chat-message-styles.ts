@@ -189,6 +189,16 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '100%',
       gap: space.xs
     },
+    // Under "didn't share": the one-tap ask, and the line it becomes once asked.
+    imageShareAction: {
+      alignSelf: 'flex-start'
+    },
+    imageShareAsk: {
+      color: colors.accentText
+    },
+    imageShareAsked: {
+      color: colors.textMuted
+    },
     // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
     // next one showing so the row reads as scrollable.
     // Air between a picture and the caption under it, as the Claude app has.

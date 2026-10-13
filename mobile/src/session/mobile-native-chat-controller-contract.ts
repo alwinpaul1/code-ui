@@ -38,6 +38,7 @@ import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
 import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { AgentImageShare } from './agent-image-share-context'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -107,6 +108,9 @@ export type MobileNativeChatController = {
    *  publishes no draft and the recall is refused (native-queue-editor.ts). */
   nativeChatQueueEditable?: boolean
   chatImagePreviewsByMessageId: Record<string, string[]>
+  /** What a refused picture's placeholder needs to ask the agent for it; null
+   *  where pictures are never asked of the host (agent-image-share-ask.ts). */
+  nativeChatImageShare?: AgentImageShare | null
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
