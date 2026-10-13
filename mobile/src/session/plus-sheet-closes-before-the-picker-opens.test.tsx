@@ -56,6 +56,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   Image: 'Image',
   Paperclip: 'Paperclip',
+  FileUp: 'FileUp',
   Plus: 'Plus',
   Zap: 'Zap'
 }))

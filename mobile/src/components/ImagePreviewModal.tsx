@@ -17,10 +17,12 @@ import type { MobileImageDownloadOutcome } from '../files/mobile-image-download'
 
 /** Full-screen viewer for an image the app already holds (a phone upload's
  *  local file, a host thumbnail already fetched, a markdown figure read off
- *  the host). Pinch, pan and double-tap to read it (2026-09-19); tap the
- *  picture at fit, the scrim or the X to close. Dark scrim in both themes,
- *  like the Claude app's viewer. Mounted once, in the root layout, so any
- *  screen can open it. */
+ *  the host). Pinch, pan and double-tap to read it (2026-09-19). It closes
+ *  on the X, Back, or a deliberate swipe down at fit, and on nothing else
+ *  (2026-10-13: a pinch read as a tap closed it under the reader's fingers,
+ *  ZoomableImage.tsx says how). Opaque black in both themes, like the Claude
+ *  app's gallery, so the chat never shows through. Mounted once, in the root
+ *  layout, so any screen can open it. */
 export function ImagePreviewModal({
   onSave
 }: {
@@ -57,16 +59,13 @@ export function ImagePreviewModal({
           Android, and gesture-handler only sees touches under a root view in
           the same window. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* Why not one Pressable around everything: the picture's own taps
-            are gesture-handler's now, and a responder-system press underneath
-            would also fire on the first tap of a double tap. The bar and the
-            caption close on a tap; the picture closes itself at fit. */}
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.94)' }}>
+        {/* Why nothing around the picture closes on a tap: a stray touch
+            beside a picture being pinched shut the viewer, and the reader
+            reaches the X, Back or a swipe down on purpose. */}
+        <View style={{ flex: 1, backgroundColor: VIEWER_BACKGROUND }}>
           {/* The close (and, on an editable photo, edit) buttons own a bar of
               their own above the picture, so neither ever sits on top of the
-              image. Tapping the bar's own background still closes, same as
-              before; the buttons are later siblings so they win the touch
-              over that background without any z-index. */}
+              image. */}
           <View
             style={{
               height: barHeight,
@@ -77,12 +76,6 @@ export function ImagePreviewModal({
               justifyContent: 'space-between'
             }}
           >
-            <Pressable
-              onPress={closeImagePreview}
-              accessibilityRole="button"
-              accessibilityLabel="Close image preview"
-              style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-            />
             <Pressable
               onPress={closeImagePreview}
               hitSlop={12}
@@ -180,17 +173,12 @@ export function ImagePreviewModal({
                 height={pictureHeight}
                 aspectRatio={aspectRatios[sourceKey(source)]}
                 accessibilityLabel={`${preview.label} ${index + 1} of ${preview.sources.length}`}
-                onSingleTap={zoomed ? undefined : closeImagePreview}
+                onSwipeDown={closeImagePreview}
                 onZoomedChange={index === preview.index ? onZoomedChange : undefined}
               />
             ))}
           </ScrollView>
-          <Pressable
-            onPress={closeImagePreview}
-            accessibilityRole="button"
-            accessibilityLabel="Close image preview"
-            style={{ flex: 1, paddingVertical: space.lg + space.md }}
-          >
+          <View style={{ flex: 1, paddingVertical: space.lg + space.md }}>
             <Txt
               variant="caption"
               align="center"
@@ -200,7 +188,7 @@ export function ImagePreviewModal({
                 ? `${preview.index + 1} of ${preview.sources.length}`
                 : preview.label}
             </Txt>
-          </Pressable>
+          </View>
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -208,6 +196,9 @@ export function ImagePreviewModal({
 }
 
 const NO_SOURCES: ImagePreviewSource[] = []
+/** The same in light and dark: a photo reads against black, as in the Claude
+ *  app's gallery, and the screen under the viewer must not show through. */
+const VIEWER_BACKGROUND = '#000'
 const SAVE_FEEDBACK_MS = 2000
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 

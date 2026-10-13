@@ -6,6 +6,7 @@ import {
   clampTranslation,
   containedSize,
   doubleTapTarget,
+  isDeliberateSwipeDown,
   translationKeepingFocal
 } from './zoomable-image-math'
 
@@ -75,5 +76,34 @@ describe('a figure pinched to read its labels', () => {
     const zoomed = doubleTapTarget(1, { x: 200, y: 0 }, drawn, BOX)
     // 200 - 200*2.5 = -300: exactly the slack, so the right edge meets the box.
     expect(zoomed.translation.x).toBe(-300)
+  })
+})
+
+// 2026-10-13: the viewer closes on a deliberate swipe down at fit, with the
+// Claude app's chat-gallery numbers (past 120 dp, or a fling faster than
+// 1200 px/s), and on nothing a pinch or a nudge produces. gesture-handler
+// reports velocity in dp/s, so the fling is compared in px/s through the
+// screen's pixel ratio.
+describe('a swipe down on the picture at fit', () => {
+  it('closes past 120 of travel, at any speed', () => {
+    expect(isDeliberateSwipeDown(121, 0, 1)).toBe(true)
+    expect(isDeliberateSwipeDown(120, 0, 1)).toBe(false)
+  })
+
+  it('closes on a fast fling down that travelled less', () => {
+    expect(isDeliberateSwipeDown(40, 1300, 1)).toBe(true)
+  })
+
+  it("measures the fling in pixels, as the Claude app does, not in gesture-handler's dp", () => {
+    // 500 dp/s on a 2.75x screen is 1375 px/s: past the app's 1200.
+    expect(isDeliberateSwipeDown(40, 500, 2.75)).toBe(true)
+    // 400 dp/s there is 1100 px/s: short of it.
+    expect(isDeliberateSwipeDown(40, 400, 2.75)).toBe(false)
+  })
+
+  it('stays open on a slow short drag, an upward fling, or a fling that ends where it began', () => {
+    expect(isDeliberateSwipeDown(50, 300, 1)).toBe(false)
+    expect(isDeliberateSwipeDown(-200, -2000, 1)).toBe(false)
+    expect(isDeliberateSwipeDown(0, 2000, 1)).toBe(false)
   })
 })

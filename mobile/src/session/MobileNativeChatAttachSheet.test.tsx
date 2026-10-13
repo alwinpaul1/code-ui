@@ -20,6 +20,7 @@ vi.mock('lucide-react-native', () => ({
   Camera: 'Camera',
   Image: 'Image',
   Paperclip: 'Paperclip',
+  FileUp: 'FileUp',
   Zap: 'Zap',
   ChevronRight: 'ChevronRight'
 }))
@@ -69,6 +70,33 @@ describe('the Claude-style Add context sheet', () => {
     expect(labels).toEqual(['Camera', 'Photos', 'Files'])
     // The old vertical list carried a "Paste image" row; it is gone.
     expect(labels.some((label: string) => /paste/i.test(label))).toBe(false)
+  })
+
+  // The user's screenshot of the Claude app's sheet, 2026-10-13: a camera
+  // outline, a picture (mountain and sun in a rounded square), and a document
+  // with an up arrow in it. Code UI's own size, stroke and colour stay.
+  it("draws the Claude app's icons on the tiles: a camera, a picture, a file with an up arrow", () => {
+    const root = render({
+      visible: true,
+      onClose: vi.fn(),
+      onCaptureImage: vi.fn(),
+      onAttachImage: vi.fn(),
+      onAttachFile: vi.fn()
+    })
+    const iconOf = (label: string) => {
+      const tile = root
+        .findAllByType('Pressable')
+        .find((node) => node.props.accessibilityLabel === label)!
+      const icon = tile.findAll((node) => ['Camera', 'Image', 'FileUp', 'Paperclip'].includes(String(node.type)))
+      expect(icon).toHaveLength(1)
+      return { name: String(icon[0]!.type), props: icon[0]!.props }
+    }
+    expect(['Camera', 'Photos', 'Files'].map((label) => iconOf(label).name)).toEqual([
+      'Camera',
+      'Image',
+      'FileUp'
+    ])
+    expect(iconOf('Files').props).toMatchObject({ size: 24, color: '#fff', strokeWidth: 1.8 })
   })
 
   it('carries no description text under the source cards', () => {
