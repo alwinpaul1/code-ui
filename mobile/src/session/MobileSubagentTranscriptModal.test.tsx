@@ -347,6 +347,22 @@ describe('the subagent transcript viewer', () => {
     expect(await jumpColors('dark')).toEqual([darkColors.text, darkColors.bgPanel])
   })
 
+  // Opus review, 2026-10-13: the transcript's body moved to the chat's
+  // `chatBg` while its shared ScreenHeader stayed on `bg`, a band across the
+  // top in both schemes.
+  it('paints its header and its body in the one chat background, in light and dark', async () => {
+    for (const [scheme, palette] of [['light', lightColors], ['dark', darkColors]] as const) {
+      await mount(scheme)
+      const views = renderer!.root.findAllByType('View' as never)
+      const fills = (node: (typeof views)[number]): unknown =>
+        [node.props.style].flat(3).reduce<unknown>((found, entry) => entry?.backgroundColor ?? found, undefined)
+      expect(fills(views[0]!), `${scheme} body`).toBe(palette.chatBg)
+      expect(fills(views[1]!), `${scheme} header`).toBe(palette.chatBg)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
   it('names a finished agent as finished in the header', async () => {
     await mount('light', request(false))
     expect(readTree(renderer!).texts).toContain('Subagent · Finished')

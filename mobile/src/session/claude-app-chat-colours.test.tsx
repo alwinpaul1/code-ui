@@ -103,7 +103,7 @@ function composerSurface(colors: ThemeColors): string {
   return over(colors.composerFill, colors.chatBg)
 }
 
-async function renderComposer(scheme: 'light' | 'dark', extra: { showStop?: boolean } = {}): Promise<void> {
+async function renderComposer(scheme: 'light' | 'dark', extra: { canStop?: boolean } = {}): Promise<void> {
   await act(async () => {
     renderer = create(
       <ThemeProvider initialPreference={scheme}>

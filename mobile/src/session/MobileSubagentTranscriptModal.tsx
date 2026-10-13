@@ -129,6 +129,7 @@ export function MobileSubagentTranscriptScreen({
         subtitle={`Subagent · ${running ? 'Running' : 'Finished'}`}
         onBack={onClose}
         backLabel="Back to the agent"
+        background={colors.chatBg}
       />
       {body.kind === 'messages' ? (
         <FlashList
