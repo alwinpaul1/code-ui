@@ -6,6 +6,7 @@ import {
   clampTranslation,
   containedSize,
   doubleTapTarget,
+  isDeliberateSwipeDown,
   translationKeepingFocal
 } from './zoomable-image-math'
 
@@ -75,5 +76,25 @@ describe('a figure pinched to read its labels', () => {
     const zoomed = doubleTapTarget(1, { x: 200, y: 0 }, drawn, BOX)
     // 200 - 200*2.5 = -300: exactly the slack, so the right edge meets the box.
     expect(zoomed.translation.x).toBe(-300)
+  })
+})
+
+// 2026-10-13: the viewer closes on a deliberate swipe down at fit, with the
+// Claude app's chat-gallery numbers (past 120 dp, or a fling faster than
+// 1200/s), and on nothing a pinch or a nudge produces.
+describe('a swipe down on the picture at fit', () => {
+  it('closes past 120 of travel, at any speed', () => {
+    expect(isDeliberateSwipeDown(121, 0)).toBe(true)
+    expect(isDeliberateSwipeDown(120, 0)).toBe(false)
+  })
+
+  it('closes on a fast fling down that travelled less', () => {
+    expect(isDeliberateSwipeDown(40, 1300)).toBe(true)
+  })
+
+  it('stays open on a slow short drag, an upward fling, or a fling that ends where it began', () => {
+    expect(isDeliberateSwipeDown(50, 300)).toBe(false)
+    expect(isDeliberateSwipeDown(-200, -2000)).toBe(false)
+    expect(isDeliberateSwipeDown(0, 2000)).toBe(false)
   })
 })

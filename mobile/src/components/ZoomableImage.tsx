@@ -15,12 +15,18 @@ import {
   clampTranslation,
   containedSize,
   doubleTapTarget,
+  isDeliberateSwipeDown,
   translationKeepingFocal
 } from './zoomable-image-math'
 
 export type ZoomableImageSource = { kind: 'bitmap'; uri: string } | { kind: 'svg'; xml: string }
 
 const SETTLE = { damping: 22, stiffness: 240, mass: 0.6 }
+/** A tap that moves further than this is not a tap: a pinch's spread is not. */
+const TAP_SLOP = 12
+/** How far a drag goes down before it is a swipe, and sideways before it is
+ *  the pager's instead. */
+const DISMISS_SLOP = 24
 
 /**
  * A picture the reader can pinch into, pan around and double-tap, inside a
@@ -35,6 +41,13 @@ const SETTLE = { damping: 22, stiffness: 240, mass: 0.6 }
  *
  * `onZoomedChange` tells a pager around the image to stop paging while the
  * reader is zoomed in, so a pan moves the picture and not the page.
+ *
+ * No single tap does anything (2026-10-13). gesture-handler's Tap has no
+ * movement limit unless given one and counts a two-finger touch, so a pinch
+ * released inside 500 ms was a single tap too, and the viewer's tap-to-close
+ * shut it under the reader's fingers. The double tap carries a movement limit
+ * for the same reason. `onSwipeDown` is the deliberate way out instead: a drag
+ * down at fit, past the Claude app's distance or speed.
  */
 export function ZoomableImage({
   source,
@@ -42,7 +55,7 @@ export function ZoomableImage({
   height,
   aspectRatio,
   accessibilityLabel,
-  onSingleTap,
+  onSwipeDown,
   onZoomedChange
 }: {
   source: ZoomableImageSource
@@ -52,7 +65,9 @@ export function ZoomableImage({
    *  fill the box, and the clamp is looser than it could be. */
   aspectRatio?: number
   accessibilityLabel?: string
-  onSingleTap?: () => void
+  /** Called on a deliberate drag down while the picture is at fit; absent,
+   *  a drag down at fit does nothing. */
+  onSwipeDown?: () => void
   onZoomedChange?: (zoomed: boolean) => void
 }) {
   const box = { width, height }
@@ -139,9 +154,38 @@ export function ZoomableImage({
       savedTy.value = ty.value
     })
 
+  // A drag down at fit closes the viewer when it was meant to, and springs
+  // the picture back when it was not. One finger only, and it gives way to a
+  // horizontal drag so the pager still pages. Zoomed in, the pan above owns
+  // every drag; the worklet re-checks the scale because `zoomed` is React
+  // state and trails the gesture by a frame.
+  const dismissPan = Gesture.Pan()
+    .enabled(onSwipeDown !== undefined && !zoomed)
+    .minPointers(1)
+    .maxPointers(1)
+    .activeOffsetY(DISMISS_SLOP)
+    .failOffsetX([-DISMISS_SLOP, DISMISS_SLOP])
+    .onUpdate((event) => {
+      if (scale.value > ZOOM_MIN + 0.01) {
+        return
+      }
+      ty.value = Math.max(0, event.translationY)
+    })
+    .onEnd((event, success) => {
+      if (scale.value > ZOOM_MIN + 0.01) {
+        return
+      }
+      if (success && onSwipeDown && isDeliberateSwipeDown(event.translationY, event.velocityY)) {
+        runOnJS(onSwipeDown)()
+        return
+      }
+      ty.value = withSpring(0, SETTLE)
+    })
+
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .maxDuration(260)
+    .maxDistance(TAP_SLOP)
     .onEnd((event) => {
       const target = doubleTapTarget(
         scale.value,
@@ -158,15 +202,7 @@ export function ZoomableImage({
       runOnJS(setZoomed)(target.scale > ZOOM_MIN + 0.01)
     })
 
-  const singleTap = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd(() => {
-      if (onSingleTap) {
-        runOnJS(onSingleTap)()
-      }
-    })
-
-  const gesture = Gesture.Simultaneous(pinch, pan, Gesture.Exclusive(doubleTap, singleTap))
+  const gesture = Gesture.Simultaneous(pinch, pan, dismissPan, doubleTap)
 
   const transform = useAnimatedStyle(
     () => ({

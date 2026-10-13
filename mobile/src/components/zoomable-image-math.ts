@@ -86,3 +86,20 @@ export function doubleTapTarget(
   const translation = translationKeepingFocal(focal, { x: 0, y: 0 }, ZOOM_MIN, ZOOM_DOUBLE_TAP)
   return { scale: ZOOM_DOUBLE_TAP, translation: clampTranslation(translation, drawn, box, ZOOM_DOUBLE_TAP) }
 }
+
+/** How far a drag down at fit has to travel to close the viewer, and how fast
+ *  a shorter one has to be flung: the Claude app's chat gallery (`lfh`,
+ *  docs/claude-app-implementation-notes.md, "Full-screen viewers"). */
+export const SWIPE_DISMISS_DISTANCE = 120
+export const SWIPE_DISMISS_VELOCITY = 1200
+
+/** Whether a drag down on the picture at fit was meant to close the viewer:
+ *  past the distance, or a fling down faster than the velocity. A drag that
+ *  ends at or above where it began never closes, however fast. */
+export function isDeliberateSwipeDown(translationY: number, velocityY: number): boolean {
+  'worklet'
+  if (!(translationY > 0)) {
+    return false
+  }
+  return translationY > SWIPE_DISMISS_DISTANCE || velocityY > SWIPE_DISMISS_VELOCITY
+}

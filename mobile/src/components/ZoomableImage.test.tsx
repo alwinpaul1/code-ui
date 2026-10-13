@@ -12,31 +12,8 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('react-native-svg', () => ({ SvgXml: 'SvgXml' }))
-vi.mock('react-native-gesture-handler', () => {
-  const chain: Record<string, unknown> = {}
-  for (const name of [
-    'onStart',
-    'onUpdate',
-    'onEnd',
-    'enabled',
-    'minPointers',
-    'maxPointers',
-    'numberOfTaps',
-    'maxDuration'
-  ]) {
-    chain[name] = () => chain
-  }
-  return {
-    Gesture: {
-      Pinch: () => chain,
-      Pan: () => chain,
-      Tap: () => chain,
-      Simultaneous: () => ({}),
-      Exclusive: () => ({})
-    },
-    GestureDetector: 'GestureDetector'
-  }
-})
+// gesture-handler is the shared stand-in (vitest.config.ts alias): every
+// builder call chains, so new gesture config needs no edit here.
 
 let renderer: ReactTestRenderer | null = null
 afterEach(() => {
