@@ -127,11 +127,17 @@ function row(label: string): ReactTestInstance {
   const found = renderer!.root.findAll(
     (node) =>
       (node.type as unknown) === 'Pressable' &&
-      (node.props.accessibilityRole === 'button' || node.props.accessibilityRole === 'checkbox') &&
+      (node.props.accessibilityRole === 'radio' || node.props.accessibilityRole === 'checkbox') &&
       texts(node).includes(label)
   )[0]
   expect(found, `no row "${label}" on the card`).toBeDefined()
   return found!
+}
+
+/** The card's one send button: Next on step 1 (stays on the phone), Submit on the last. */
+async function pressSubmitOrNext(): Promise<void> {
+  const button = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
+  await act(async () => button.props.onPress())
 }
 
 function saysSent(): boolean {
@@ -158,8 +164,11 @@ afterEach(() => {
 describe('a grouped question on the structured lane, after its last step is sent', () => {
   it('stays on the last step as sent until the journal resolves it, never going back to the first', async () => {
     expect(frames.at(-1)).toBe('Which database? (1 of 2)')
-    // Step 1 answers on the tap and stays on the phone.
+    // Step 1: a tap only chooses; Next folds it into the draft on the phone.
     await act(async () => row('Postgres').props.onPress())
+    expect(frames.at(-1)).toBe('Which database? (1 of 2)')
+    await pressSubmitOrNext()
+    expect(mutate).not.toHaveBeenCalled()
     expect(frames.at(-1)).toBe('Which regions? (2 of 2)')
     // Step 2: pick one, Submit. The group goes to the host.
     await act(async () => row('us-east').props.onPress())
@@ -191,6 +200,7 @@ describe('a grouped question on the structured lane, after its last step is sent
   // starts again from the first question, as a retry must.
   it('starts again from the first question when the host cannot confirm the group', async () => {
     await act(async () => row('Postgres').props.onPress())
+    await pressSubmitOrNext()
     await act(async () => row('us-east').props.onPress())
     const submit = renderer!.root.findByProps({ accessibilityLabel: 'Submit selected options' })
     await act(async () => submit.props.onPress())

@@ -87,8 +87,10 @@ describe('MobileNativeChatQuestion', () => {
       onAnswer
     )
 
-    const choices = renderer.root.findAllByProps({ accessibilityRole: 'button' })
+    const choices = renderer.root.findAllByProps({ accessibilityRole: 'radio' })
     await act(async () => choices[1]!.props.onPress())
+    const submit = renderer.root.findByProps({ accessibilityLabel: 'Submit selected options' })
+    await act(async () => submit.props.onPress())
 
     expect(onAnswer).toHaveBeenCalledWith('Choice')
   })
@@ -204,8 +206,9 @@ describe('MobileNativeChatQuestion', () => {
 
 // The same shape as the ask card's (ask-card-submit-feedback.test.tsx): this
 // card has no dismissal, so it stays up until the hook row moves on, and an
-// accepted answer used to hand every row back. A single-select row answers on
-// the tap itself, so a second tap before the row moved sent a second answer.
+// accepted answer used to hand every row back, so a second answer before the
+// row moved sent a second answer. (A single-select row answered on the tap
+// itself then; since 2026-10-13 a tap chooses and Submit sends.)
 describe('the question card between the tap and the agent taking the answer', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -223,11 +226,23 @@ describe('the question card between the tap and the agent taking the answer', ()
     optionTokens: ['1', '2']
   }
 
-  /** The option rows: host Pressables in the button role (single-select). */
+  /** The option rows: host Pressables in the radio role (single-select). */
   function optionRows(tree: ReactTestRenderer) {
     return tree.root.findAll(
-      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityRole === 'button'
+      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityRole === 'radio'
     )
+  }
+
+  /** Choose a row, then Submit it: the card's two taps for one answer. */
+  async function answerWith(tree: ReactTestRenderer, row: number): Promise<void> {
+    await act(async () => optionRows(tree)[row]!.props.onPress())
+    const submit = tree.root.find(
+      (node) =>
+        (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Submit selected options'
+    )
+    await act(async () => {
+      submit.props.onPress()
+    })
   }
 
   function captions(tree: ReactTestRenderer): { text: string; color: unknown }[] {
@@ -243,12 +258,11 @@ describe('the question card between the tap and the agent taking the answer', ()
   it('does not send the answer twice when an option is tapped again before the card goes', async () => {
     const onAnswer = vi.fn(async () => true)
     renderer = renderQuestion(pickOne, onAnswer)
-    const rows = optionRows(renderer)
-    await act(async () => rows[0]!.props.onPress())
+    await answerWith(renderer, 0)
     // The test renderer does not drop taps on a disabled Pressable, so these
     // also prove the handlers refuse; the disabled flags are checked after.
     const again = optionRows(renderer)
-    await act(async () => again[1]!.props.onPress())
+    await answerWith(renderer, 1)
     const reply = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
     act(() => renderer!.root.findByType('TextInput' as never).props.onChangeText('the other one'))
     await act(async () => reply.props.onPress())
@@ -269,10 +283,7 @@ describe('the question card between the tap and the agent taking the answer', ()
       scheme
     )
     const palette = scheme === 'dark' ? darkColors : lightColors
-    const rows = optionRows(renderer)
-    await act(async () => {
-      rows[0]!.props.onPress()
-    })
+    await answerWith(renderer, 0)
     expect(captions(renderer)).toContainEqual({ text: 'Sending answer…', color: palette.textSecondary })
     await act(async () => settle(true))
     expect(captions(renderer)).toContainEqual({ text: 'Answer sent · waiting for agent', color: palette.textSecondary })
@@ -282,10 +293,10 @@ describe('the question card between the tap and the agent taking the answer', ()
     const onAnswer = vi.fn(async () => false)
     renderer = renderQuestion(pickOne, onAnswer)
     const rows = () => optionRows(renderer!)
-    await act(async () => rows()[0]!.props.onPress())
+    await answerWith(renderer, 0)
     expect(rows()[1]!.props.disabled).toBeFalsy()
     expect(captions(renderer).map((caption) => caption.text)).not.toContain('Answer sent · waiting for agent')
-    await act(async () => rows()[1]!.props.onPress())
+    await answerWith(renderer, 1)
     expect(onAnswer).toHaveBeenCalledTimes(2)
   })
 
@@ -339,5 +350,102 @@ describe('the question card between the tap and the agent taking the answer', ()
     renderer.unmount()
     renderer = renderQuestion(question, onAnswer)
     expect(renderer.root.findByProps({ accessibilityLabel: 'Send reply' }).props.disabled).toBe(true)
+  })
+})
+
+// 2026-10-13, from the phone: "as soon as I select the answer it gets
+// submitted, instead of [waiting for] me clicking the Submit button." On the
+// structured lane an AskUserQuestion is drawn by this card, and a single-select
+// row used to answer on the tap itself. Now a tap chooses and Submit sends; a
+// grouped question's earlier steps say Next and only fold into the draft.
+describe('the question card, choose first and Submit after', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    colorScheme = 'light'
+  })
+
+  const pickOne = {
+    question: 'Push it and update the pull request?',
+    options: ['Yes, push to PR 1100', 'No, keep it local'],
+    optionDescriptions: ['Push the branch.', 'Leave the commits here.'],
+    multiSelect: false,
+    allowOther: true,
+    optionTokens: ['yes-token', 'no-token']
+  }
+
+  const radios = (tree: ReactTestRenderer) =>
+    tree.root.findAll((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityRole === 'radio')
+  const submit = (tree: ReactTestRenderer) =>
+    tree.root.find(
+      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Submit selected options'
+    )
+  const borderOf = (node: { props: { style?: unknown } }): unknown => {
+    const style =
+      typeof node.props.style === 'function'
+        ? (node.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false })
+        : node.props.style
+    return (style as { borderColor?: unknown }).borderColor
+  }
+
+  it('does not send an answer when an option is tapped, only on Submit', async () => {
+    const onAnswer = vi.fn(async () => true)
+    renderer = renderQuestion(pickOne, onAnswer)
+
+    expect(submit(renderer).props.disabled).toBe(true)
+    await act(async () => radios(renderer!)[1]!.props.onPress())
+    expect(onAnswer).not.toHaveBeenCalled()
+    expect(radios(renderer)[1]!.props.accessibilityState).toMatchObject({ checked: true })
+
+    await act(async () => submit(renderer!).props.onPress())
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith('no-token')
+  })
+
+  it('lets the choice change before Submit', async () => {
+    const onAnswer = vi.fn(async () => true)
+    renderer = renderQuestion(pickOne, onAnswer)
+
+    await act(async () => radios(renderer!)[0]!.props.onPress())
+    await act(async () => radios(renderer!)[1]!.props.onPress())
+    await act(async () => radios(renderer!)[1]!.props.onPress())
+    expect(radios(renderer).map((row) => row.props.accessibilityState.checked)).toEqual([false, true])
+    expect(onAnswer).not.toHaveBeenCalled()
+
+    await act(async () => submit(renderer!).props.onPress())
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith('no-token')
+  })
+
+  it('says Next on a grouped question’s earlier step, Submit on its last', () => {
+    renderer = renderQuestion({ ...pickOne, nextStep: true }, vi.fn(async () => true))
+    const labels = () =>
+      renderer!.root
+        .findAllByType('Text' as never)
+        .map((node) => node.props.children as unknown)
+        .filter((text) => text === 'Next' || text === 'Submit')
+    expect(labels()).toEqual(['Next'])
+    renderer.unmount()
+    renderer = renderQuestion(pickOne, vi.fn(async () => true))
+    expect(labels()).toEqual(['Submit'])
+  })
+
+  it('waits for Submit on a single question with a single option', async () => {
+    const onAnswer = vi.fn(async () => true)
+    renderer = renderQuestion({ ...pickOne, options: ['Blue'], optionTokens: ['blue-token'] }, onAnswer)
+
+    await act(async () => radios(renderer!)[0]!.props.onPress())
+    expect(onAnswer).not.toHaveBeenCalled()
+    await act(async () => submit(renderer!).props.onPress())
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith('blue-token')
+  })
+
+  it.each(['light', 'dark'] as const)('marks the chosen row in the accent, in %s', async (scheme) => {
+    const palette = scheme === 'dark' ? darkColors : lightColors
+    renderer = renderQuestion(pickOne, vi.fn(async () => true), scheme)
+
+    await act(async () => radios(renderer!)[1]!.props.onPress())
+    expect(borderOf(radios(renderer)[1]!)).toBe(palette.accent)
+    expect(borderOf(radios(renderer)[0]!)).toBe(palette.border)
   })
 })
