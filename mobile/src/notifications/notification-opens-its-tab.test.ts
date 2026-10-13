@@ -113,8 +113,27 @@ describe('a notification tap opens the tab that raised it', () => {
     expect(getNotificationNavigationTarget(data)?.sessionTarget?.params).toEqual({
       hostId: 'host-1',
       worktreeId: WORKTREE,
-      paneKey: NOTIFIED_PANE
+      paneKey: NOTIFIED_PANE,
+      agentSessionId: ''
     })
+  })
+
+  // Review finding 3: SET_PARAMS merges, so a tap that wrote only its own key
+  // left an earlier tap's other key on the route, and the screen applied the
+  // older tap after the newer one. Each tap writes both, the absent one empty.
+  it('replaces an earlier tap still waiting on the screen, whichever kind it was', () => {
+    const structured = getNotificationNavigationTarget({
+      hostId: 'host-1',
+      worktreeId: WORKTREE,
+      notificationId: 'agent-attention:scope:session-9:prompt:p1'
+    })
+    expect(structured?.sessionTarget?.params).toEqual({
+      hostId: 'host-1',
+      worktreeId: WORKTREE,
+      paneKey: '',
+      agentSessionId: 'session-9'
+    })
+    expect(tapTarget(NOTIFIED_PANE).sessionTarget?.params.agentSessionId).toBe('')
   })
 
   it('names a different tab for each of two agents in one workspace', () => {
@@ -207,7 +226,7 @@ describe('a notification tap opens the tab that raised it', () => {
       expect.objectContaining({
         type: 'REPLACE',
         payload: expect.objectContaining({
-          params: { hostId: 'host-1', worktreeId: WORKTREE, paneKey: NOTIFIED_PANE }
+          params: { hostId: 'host-1', worktreeId: WORKTREE, paneKey: NOTIFIED_PANE, agentSessionId: '' }
         })
       })
     )
@@ -224,7 +243,7 @@ describe('a notification tap opens the tab that raised it', () => {
       expect.objectContaining({
         type: 'REPLACE',
         payload: expect.objectContaining({
-          params: { hostId: 'host-2', worktreeId: WORKTREE, paneKey: NOTIFIED_PANE }
+          params: { hostId: 'host-2', worktreeId: WORKTREE, paneKey: NOTIFIED_PANE, agentSessionId: '' }
         })
       })
     )

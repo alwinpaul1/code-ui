@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import { NOTIFICATION_TAB_GONE_AFTER_MS } from './notification-tab-request'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 
 const route = vi.hoisted(() => ({ params: {} as Record<string, string | string[]> }))
@@ -40,6 +41,7 @@ function scopeWith(sessionTabs: MobileSessionTab[]) {
     worktreeId: 'wt',
     sessionTabs,
     terminalsLoaded: true,
+    connState: 'connected',
     switchSessionTab: vi.fn()
   }
 }
@@ -72,9 +74,14 @@ describe('the native session screen and a notification tap', () => {
   })
 
   it('says the tab is gone when it closed since the notification', () => {
+    vi.useFakeTimers()
     route.params = { hostId: 'h', worktreeId: 'wt', paneKey: 'tab-gone:leaf-gone' }
     const scope = scopeWith([ACTIVE])
     render(scope)
+    act(() => {
+      vi.advanceTimersByTime(NOTIFICATION_TAB_GONE_AFTER_MS)
+    })
+    vi.useRealTimers()
     expect(scope.switchSessionTab).not.toHaveBeenCalled()
     expect(scope.showToast).toHaveBeenCalledWith(NOTIFICATION_TAB_GONE_MESSAGE, expect.any(Number))
     expect(scope.router.setParams).toHaveBeenCalledExactlyOnceWith({ paneKey: '' })

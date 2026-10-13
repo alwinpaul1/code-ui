@@ -185,7 +185,11 @@ export function getNotificationNavigationTarget(
   return {
     hostId,
     sessionTarget: worktreeId
-      ? mobileSessionRouteTarget({ hostId, worktreeId, ...tappedTabSubject(record, worktreeId) })
+      ? mobileSessionRouteTarget({
+          hostId,
+          worktreeId,
+          tab: tappedTabSubject(record, worktreeId) ?? undefined
+        })
       : null,
     ...(credentialStatus === 'missing'
       ? { credentialRecovery: 're-pair' as const }

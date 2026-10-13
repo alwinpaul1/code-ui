@@ -23,7 +23,15 @@ export function useMobileSessionNotificationTab(scope: MobileSessionTabSwitching
   const agentSessionId = firstParam(params.agentSessionId)
   const request: NotificationTabRequest | null =
     paneKey !== '' ? { paneKey } : agentSessionId !== '' ? { agentSessionId } : null
-  const { router, showToast, worktreeId, sessionTabs, terminalsLoaded, switchSessionTab } = scope
+  const {
+    router,
+    showToast,
+    worktreeId,
+    sessionTabs,
+    terminalsLoaded,
+    connState,
+    switchSessionTab
+  } = scope
   const onTabGone = useCallback(
     () => showToast(NOTIFICATION_TAB_GONE_MESSAGE, 3000),
     [showToast]
@@ -38,6 +46,7 @@ export function useMobileSessionNotificationTab(scope: MobileSessionTabSwitching
     request,
     sessionTabs,
     tabsLoaded: terminalsLoaded,
+    connected: connState === 'connected',
     switchSessionTab,
     onTabGone,
     clearRequest

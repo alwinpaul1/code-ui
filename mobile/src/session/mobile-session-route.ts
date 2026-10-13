@@ -4,11 +4,10 @@ export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
   name?: string
-  /** A tab to select on arrival: the terminal pane (`<tabId>:<leafId>`) a
-   *  notification came from. Spent and cleared by the screen once applied. */
-  paneKey?: string
-  /** The same for a structured agent session tab, by its session id. */
-  agentSessionId?: string
+  /** A tab to select on arrival: the terminal pane (`<tabId>:<leafId>`) or the
+   *  structured agent session a notification came from. Spent and cleared by
+   *  the screen once applied. */
+  tab?: { paneKey: string } | { agentSessionId: string }
 }
 
 /** Identities stay raw — the navigator owns the params, so pre-encoding a
@@ -17,8 +16,7 @@ export function mobileSessionRouteTarget({
   hostId,
   worktreeId,
   name,
-  paneKey,
-  agentSessionId
+  tab
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
     name: '[hostId]/session/[worktreeId]',
@@ -26,8 +24,15 @@ export function mobileSessionRouteTarget({
       hostId,
       worktreeId,
       ...(name ? { name } : {}),
-      ...(paneKey ? { paneKey } : {}),
-      ...(agentSessionId ? { agentSessionId } : {})
+      // Both keys, the absent one empty: a tap onto the screen already showing
+      // this workspace is a SET_PARAMS, which merges, so a key left out would
+      // keep an earlier tap's request alive beside this one.
+      ...(tab
+        ? {
+            paneKey: 'paneKey' in tab ? tab.paneKey : '',
+            agentSessionId: 'agentSessionId' in tab ? tab.agentSessionId : ''
+          }
+        : {})
     }
   }
 }

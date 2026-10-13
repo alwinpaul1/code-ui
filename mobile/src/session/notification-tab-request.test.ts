@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import {
+  NOTIFICATION_TAB_GONE_AFTER_MS,
   resolveNotificationTab,
   useNotificationTabRequest,
   type NotificationTabRequest
@@ -43,6 +44,8 @@ type HarnessProps = {
   request: NotificationTabRequest | null
   sessionTabs: readonly MobileSessionTab[]
   tabsLoaded: boolean
+  /** The host link is up; true unless a test says otherwise. */
+  connected?: boolean
 }
 
 function harness(initial: HarnessProps) {
@@ -50,7 +53,13 @@ function harness(initial: HarnessProps) {
   const onTabGone = vi.fn<() => void>()
   const clearRequest = vi.fn<() => void>()
   function Screen(props: HarnessProps) {
-    useNotificationTabRequest({ ...props, switchSessionTab, onTabGone, clearRequest })
+    useNotificationTabRequest({
+      ...props,
+      connected: props.connected ?? true,
+      switchSessionTab,
+      onTabGone,
+      clearRequest
+    })
     return null
   }
   let renderer: ReactTestRenderer | null = null
@@ -163,12 +172,113 @@ describe('the session screen selects the tab a notification named', () => {
     mounted = harness({
       worktreeId: 'wt',
       request: { paneKey: NOTIFIED_PANE },
+      sessionTabs: [],
+      tabsLoaded: false
+    })
+    mounted.update({
+      worktreeId: 'wt',
+      request: { paneKey: NOTIFIED_PANE },
       sessionTabs: [LAST_USED],
       tabsLoaded: true
     })
     expect(mounted.switchSessionTab).not.toHaveBeenCalled()
     expect(mounted.onTabGone).toHaveBeenCalledOnce()
     expect(mounted.clearRequest).toHaveBeenCalledOnce()
+  })
+
+  // Review finding 1 (2026-10-13): back from the background, the tabs on screen
+  // are the ones from before it, still marked loaded while the relay redials.
+  // A tab that opened meanwhile is not in them; the tap must wait for the
+  // reconnect snapshot instead of calling it closed.
+  it('does not call a tab gone from the tabs held over from before the app was backgrounded', () => {
+    mounted = harness({
+      worktreeId: 'wt',
+      request: null,
+      sessionTabs: [LAST_USED],
+      tabsLoaded: true,
+      connected: false
+    })
+    mounted.update({
+      worktreeId: 'wt',
+      request: { paneKey: NOTIFIED_PANE },
+      sessionTabs: [LAST_USED],
+      tabsLoaded: true,
+      connected: false
+    })
+    expect(mounted.onTabGone).not.toHaveBeenCalled()
+    mounted.update({
+      worktreeId: 'wt',
+      request: { paneKey: NOTIFIED_PANE },
+      sessionTabs: [LAST_USED, NOTIFIED],
+      tabsLoaded: true,
+      connected: true
+    })
+    expect(mounted.onTabGone).not.toHaveBeenCalled()
+    expect(mounted.switchSessionTab).toHaveBeenCalledExactlyOnceWith(NOTIFIED)
+  })
+
+  // Review finding 2: an empty snapshot is transient on this host (the tab
+  // application keeps surfaces through one), so it is no proof of a close.
+  it('does not call a tab gone from an empty first snapshot', () => {
+    mounted = harness({
+      worktreeId: 'wt',
+      request: { paneKey: NOTIFIED_PANE },
+      sessionTabs: [],
+      tabsLoaded: false
+    })
+    mounted.update({ worktreeId: 'wt', request: { paneKey: NOTIFIED_PANE }, sessionTabs: [], tabsLoaded: true })
+    expect(mounted.onTabGone).not.toHaveBeenCalled()
+    mounted.update({
+      worktreeId: 'wt',
+      request: { paneKey: NOTIFIED_PANE },
+      sessionTabs: [LAST_USED, NOTIFIED],
+      tabsLoaded: true
+    })
+    expect(mounted.switchSessionTab).toHaveBeenCalledExactlyOnceWith(NOTIFIED)
+    expect(mounted.onTabGone).not.toHaveBeenCalled()
+  })
+
+  // No newer snapshot ever comes when nothing changed on the desktop: an
+  // identical republication keeps the same list. Connected for a while with
+  // the tab still missing is the answer, not a wait for ever.
+  it('says the tab is gone once connected long enough with no snapshot naming it', () => {
+    vi.useFakeTimers()
+    try {
+      mounted = harness({
+        worktreeId: 'wt',
+        request: { paneKey: NOTIFIED_PANE },
+        sessionTabs: [LAST_USED],
+        tabsLoaded: true
+      })
+      expect(mounted.onTabGone).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(NOTIFICATION_TAB_GONE_AFTER_MS)
+      })
+      expect(mounted.onTabGone).toHaveBeenCalledOnce()
+      expect(mounted.clearRequest).toHaveBeenCalledOnce()
+      expect(mounted.switchSessionTab).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not time a tab out while the host is not connected', () => {
+    vi.useFakeTimers()
+    try {
+      mounted = harness({
+        worktreeId: 'wt',
+        request: { paneKey: NOTIFIED_PANE },
+        sessionTabs: [LAST_USED],
+        tabsLoaded: true,
+        connected: false
+      })
+      act(() => {
+        vi.advanceTimersByTime(NOTIFICATION_TAB_GONE_AFTER_MS * 3)
+      })
+      expect(mounted.onTabGone).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // Cached tabs from the last visit are on screen before the live snapshot;
@@ -268,11 +378,26 @@ describe('which tab a notification names', () => {
     })
   })
 
-  it('falls back to the tab when its leaf is not on the strip', () => {
-    const tab = terminalTab('tab-b', 'leaf-other')
-    expect(resolveNotificationTab([LAST_USED, tab], { paneKey: NOTIFIED_PANE }, true)).toEqual({
+  // Review finding 5: the phone draws a pill per leaf, so a closed leaf of a
+  // split is a closed tab; opening its sibling would be a positional pick.
+  it('does not open a sibling pane when the notified leaf of a split has closed', () => {
+    const sibling = terminalTab('tab-b', 'leaf-other')
+    expect(resolveNotificationTab([LAST_USED, sibling], { paneKey: NOTIFIED_PANE }, true)).toEqual({
+      kind: 'gone'
+    })
+  })
+
+  it('finds a tab from a host that publishes no leaf address, by its tab id', () => {
+    const legacy: TerminalTab = {
+      type: 'terminal',
+      id: 'tab-b',
+      title: 'claude',
+      terminal: 'term-b',
+      isActive: false
+    }
+    expect(resolveNotificationTab([LAST_USED, legacy], { paneKey: NOTIFIED_PANE }, true)).toEqual({
       kind: 'open',
-      tab
+      tab: legacy
     })
   })
 
