@@ -7,6 +7,7 @@ vi.mock('react-native', async () => {
   const { createElement } = await import('react')
   return {
     Image: (props: Record<string, unknown>) => createElement('RNImage', props),
+    PixelRatio: { get: () => 2.75 },
     StyleSheet: { create: (styles: unknown) => styles },
     View: 'View'
   }

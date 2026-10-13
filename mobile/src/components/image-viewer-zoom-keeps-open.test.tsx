@@ -84,6 +84,8 @@ vi.mock('react-native', async () => {
       getSize: (_uri: string, ok: (w: number, h: number) => void) => ok(1600, 900)
     }),
     Modal: 'Modal',
+    // The S23 Ultra's ratio: gesture-handler's dp/s velocity is scaled by it.
+    PixelRatio: { get: () => 2.75 },
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
     StatusBar: 'StatusBar',
@@ -147,20 +149,28 @@ function fire(g: Recorded, name: string, event: Record<string, unknown> = {}, su
 }
 
 /** What gesture-handler fires for a two-finger pinch out, released quickly:
- *  the pinch runs, and a Tap with no movement limit recognises the same
- *  touch as a tap. A Tap with a movement limit fails on the spread. */
+ *  the pinch runs, and any single tap recognises the same touch as a tap.
+ *  A movement limit does not reliably stop that: Tap measures the average of
+ *  the fingers, which a symmetric pinch barely moves. */
 function quickPinchOut(): void {
   const pinch = live('Pinch')[0]!
   fire(pinch, 'onBegin')
   fire(pinch, 'onStart')
   fire(pinch, 'onUpdate', { scale: 2.2, focalX: 200, focalY: 300 })
   for (const tap of live('Tap')) {
-    if (tap.config.maxDistance === undefined) {
+    if (tap.config.numberOfTaps?.[0] !== 2) {
       fire(tap, 'onEnd', { x: 200, y: 300 })
     }
   }
   fire(pinch, 'onEnd')
   fire(pinch, 'onFinalize')
+}
+
+/** The pan that closes the viewer: the one that is not the zoomed pan. */
+function dismissPan(): Recorded {
+  const pans = gestures().filter((g) => g.kind === 'Pan' && g.config.activeOffsetY !== undefined)
+  expect(pans).toHaveLength(1)
+  return pans[0]!
 }
 
 function pictureScale(): number {
@@ -246,6 +256,39 @@ describe('the image viewer while the picture is zoomed', () => {
     quickPinchOut()
     swipeDown(300, 2500)
     expect(peekImagePreview()).not.toBeNull()
+  })
+
+  it('does not close when the zoom state trails the gesture: the swipe re-checks the scale itself', () => {
+    openAgentImage()
+    // Captured at fit, before the pinch re-renders the gestures: the same
+    // builder gesture-handler still holds for one frame after the zoom.
+    const staleDismiss = dismissPan()
+    quickPinchOut()
+    fire(staleDismiss, 'onStart')
+    fire(staleDismiss, 'onUpdate', { translationX: 0, translationY: 300, velocityY: 2500 })
+    fire(staleDismiss, 'onEnd', { translationX: 0, translationY: 300, velocityY: 2500 })
+    expect(peekImagePreview()).not.toBeNull()
+  })
+
+  it('stays open when a second finger lands mid-swipe and cancels it', () => {
+    openAgentImage()
+    const pan = dismissPan()
+    fire(pan, 'onStart')
+    fire(pan, 'onUpdate', { translationX: 0, translationY: 200, velocityY: 2000 })
+    // maxPointers(1): gesture-handler cancels the active pan, onEnd(success=false).
+    fire(pan, 'onEnd', { translationX: 0, translationY: 200, velocityY: 2000 }, false)
+    expect(peekImagePreview()).not.toBeNull()
+  })
+
+  it('swipes to close with one finger, downward only, giving a sideways drag to the pager', () => {
+    openAgentImage()
+    const pan = dismissPan()
+    expect(pan.config.maxPointers).toEqual([1])
+    // One positive number: activates on a drag DOWN past it, never up.
+    expect(pan.config.activeOffsetY?.[0]).toBeGreaterThan(0)
+    const [left, right] = pan.config.failOffsetX?.[0] as number[]
+    expect(left).toBeLessThan(0)
+    expect(right).toBeGreaterThan(0)
   })
 })
 

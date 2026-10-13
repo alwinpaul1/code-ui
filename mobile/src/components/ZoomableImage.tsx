@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Image, StyleSheet, View } from 'react-native'
+import { Image, PixelRatio, StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   runOnJS,
@@ -159,6 +159,7 @@ export function ZoomableImage({
   // horizontal drag so the pager still pages. Zoomed in, the pan above owns
   // every drag; the worklet re-checks the scale because `zoomed` is React
   // state and trails the gesture by a frame.
+  const pixelRatio = PixelRatio.get()
   const dismissPan = Gesture.Pan()
     .enabled(onSwipeDown !== undefined && !zoomed)
     .minPointers(1)
@@ -175,7 +176,7 @@ export function ZoomableImage({
       if (scale.value > ZOOM_MIN + 0.01) {
         return
       }
-      if (success && onSwipeDown && isDeliberateSwipeDown(event.translationY, event.velocityY)) {
+      if (success && onSwipeDown && isDeliberateSwipeDown(event.translationY, event.velocityY, pixelRatio)) {
         runOnJS(onSwipeDown)()
         return
       }
