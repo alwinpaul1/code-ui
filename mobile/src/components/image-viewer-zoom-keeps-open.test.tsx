@@ -286,7 +286,7 @@ describe('the image viewer while the picture is zoomed', () => {
     expect(pan.config.maxPointers).toEqual([1])
     // One positive number: activates on a drag DOWN past it, never up.
     expect(pan.config.activeOffsetY?.[0]).toBeGreaterThan(0)
-    const [left, right] = pan.config.failOffsetX?.[0] as number[]
+    const [left, right] = (pan.config.failOffsetX?.[0] ?? []) as number[]
     expect(left).toBeLessThan(0)
     expect(right).toBeGreaterThan(0)
   })
