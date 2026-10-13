@@ -132,6 +132,7 @@ function overlay(moment: Moment): React.JSX.Element {
       {createElement(MobileNativeChatOverlay, {
       controller,
       hasTerminalUnderneath: true,
+      ptyTab: true,
       onOpenFile: vi.fn(),
       hostAllowsRewind: true,
       images: {} as never,

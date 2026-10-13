@@ -9,13 +9,13 @@ describe('what the chat overlay shows', () => {
     // reads as "reloading empty" on every render, and there was no earlier
     // frame to replay.
     expect(
-      mobileNativeChatFrameToShow({ blank: true, showNativeChat: true, hasHeldFrame: false, hasTerminalUnderneath: false })
+      mobileNativeChatFrameToShow({ blank: true, showNativeChat: true, hasHeldFrame: false, hasTerminalUnderneath: false, ptyTab: true })
     ).toBe('draw')
   })
 
   it('still bridges a real reload with the frame it drew before', () => {
     expect(
-      mobileNativeChatFrameToShow({ blank: true, showNativeChat: true, hasHeldFrame: true, hasTerminalUnderneath: true })
+      mobileNativeChatFrameToShow({ blank: true, showNativeChat: true, hasHeldFrame: true, hasTerminalUnderneath: true, ptyTab: true })
     ).toBe('hold')
   })
 
@@ -25,7 +25,8 @@ describe('what the chat overlay shows', () => {
         blank: true,
         showNativeChat: false,
         hasHeldFrame: false,
-        hasTerminalUnderneath: true
+        hasTerminalUnderneath: true,
+        ptyTab: true
       })
     ).toBe('terminal')
   })
@@ -39,23 +40,41 @@ describe('what the chat overlay shows', () => {
         blank: true,
         showNativeChat: false,
         hasHeldFrame: false,
-        hasTerminalUnderneath: false
+        hasTerminalUnderneath: false,
+        // An agent-session tab, not a PTY tab.
+        ptyTab: false
       })
     ).toBe('draw')
+  })
+
+  it('yields a terminal tab that is not a chat even before its pane has mounted', () => {
+    // 0.9.131 (2026-10-13), an Antigravity tab: the "nothing to yield to"
+    // rule drew an empty chat and its composer over a PTY tab whose pane had
+    // not mounted, above the terminal's own input bar. A PTY tab always has
+    // its terminal frame to yield to; the pane mounts into it.
+    expect(
+      mobileNativeChatFrameToShow({
+        blank: true,
+        showNativeChat: false,
+        hasHeldFrame: false,
+        hasTerminalUnderneath: false,
+        ptyTab: true
+      })
+    ).toBe('terminal')
   })
 
   it('prefers a held frame over the terminal while a chat tab is switching away', () => {
     // The blink guard: a view-mode read that has not settled must not show the
     // terminal for a frame and remount the whole list.
     expect(
-      mobileNativeChatFrameToShow({ blank: true, showNativeChat: false, hasHeldFrame: true, hasTerminalUnderneath: true })
+      mobileNativeChatFrameToShow({ blank: true, showNativeChat: false, hasHeldFrame: true, hasTerminalUnderneath: true, ptyTab: true })
     ).toBe('hold')
   })
 
   it('draws whenever the source has something to show', () => {
     for (const showNativeChat of [true, false]) {
       for (const hasHeldFrame of [true, false]) {
-        expect(mobileNativeChatFrameToShow({ blank: false, showNativeChat, hasHeldFrame, hasTerminalUnderneath: true })).toBe(
+        expect(mobileNativeChatFrameToShow({ blank: false, showNativeChat, hasHeldFrame, hasTerminalUnderneath: true, ptyTab: true })).toBe(
           'draw'
         )
       }

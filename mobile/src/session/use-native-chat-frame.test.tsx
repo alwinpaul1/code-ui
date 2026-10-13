@@ -29,6 +29,7 @@ function Overlay({ moment }: { moment: Moment }): React.JSX.Element | null {
     blink: moment.blink,
     showNativeChat: moment.showNativeChat,
     hasTerminalUnderneath: true,
+    ptyTab: true,
     surfaceId: 'tab-1'
   })
   if (frame === 'hold') {

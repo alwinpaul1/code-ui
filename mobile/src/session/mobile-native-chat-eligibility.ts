@@ -83,6 +83,21 @@ export function resolveMobileNativeChat(
   const transcriptAgent = nativeChatAgentFromTranscriptPath(
     tab.agentStatus?.providerSession?.transcriptPath
   )
+  // A live status naming an agent the phone cannot chat with (Antigravity,
+  // Gemini…) is the host saying who owns the pane NOW. The beacon and the
+  // transcript are evidence left by whoever ran there before: the beacon store
+  // keeps the last frame a PTY wrote for the life of the app, and the captured
+  // session can be an earlier one. A terminal that ran Claude Code and then
+  // `agy` opened as Claude's chat over Antigravity (0.9.131, 2026-10-13). A
+  // launch record still outranks the status, as it does for a supported agent.
+  const liveNamesOtherAgent = liveStatusNamesUnchattableAgent(tab)
+  const leftBehind: readonly [string | null, MobileNativeChatResolution['source']][] =
+    liveNamesOtherAgent
+      ? []
+      : [
+          [usableBeacon, 'beacon'],
+          [transcriptAgent, 'transcript']
+        ]
   // Identity comes from what the session actually reports: the agent Orca
   // launched, the live hook, the HUD beacon on this PTY, or the transcript the
   // agent's own hook disclosed. Tab titles are not used.
@@ -92,8 +107,7 @@ export function resolveMobileNativeChat(
       : [
           [usableLive, 'status'],
           [isNativeChatSupportedAgent(launchAgent) ? launchAgent : null, 'launch'],
-          [usableBeacon, 'beacon'],
-          [transcriptAgent, 'transcript']
+          ...leftBehind
         ]
   const resolved = named.find(
     (entry): entry is [string, MobileNativeChatResolution['source']] => entry[0] != null
@@ -111,6 +125,42 @@ export function resolveMobileNativeChat(
     sessionId: tab.agentStatus?.providerSession?.id ?? null,
     transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
   }
+}
+
+/** Agent types that are Orca wrappers around Claude Code itself: the child
+ *  process is the real `claude` binary (src/shared/agent-process-recognition.ts),
+ *  so its beacon and transcript are the pane owner's own, not leftovers. */
+const WRAPS_CLAUDE_CODE: ReadonlySet<string> = new Set(['claude-agent-teams'])
+
+/** The host's live status names the agent in this terminal, and it is one the
+ *  phone cannot chat with. Not a missing or `unknown` agent type: that says
+ *  nothing about who owns the pane. */
+export function liveStatusNamesUnchattableAgent(tab: MobileNativeChatTab | null): boolean {
+  const liveAgent = tab?.type === 'terminal' ? (tab.agentStatus?.agentType ?? null) : null
+  return isUnchattableAgentName(liveAgent)
+}
+
+/** The agent the host names for this terminal, by its live status or else by
+ *  the agent it launched there, is one the phone cannot chat with. An Orca
+ *  launch of `agy` has no status until the agent's first hook, and a chat view
+ *  kept for the tab must not draw an empty chat over it meanwhile. Null when
+ *  the named agent can chat, or none is named. */
+export function unchattablePaneAgent(tab: MobileNativeChatTab | null): string | null {
+  if (tab?.type !== 'terminal') {
+    return null
+  }
+  const liveAgent = tab.agentStatus?.agentType ?? null
+  const named = liveAgent != null && liveAgent !== 'unknown' ? liveAgent : (tab.launchAgent ?? null)
+  return named != null && isUnchattableAgentName(named) ? named : null
+}
+
+function isUnchattableAgentName(agent: string | null): boolean {
+  return (
+    agent != null &&
+    agent !== 'unknown' &&
+    !isNativeChatSupportedAgent(agent) &&
+    !WRAPS_CLAUDE_CODE.has(agent)
+  )
 }
 
 /** Whether the tab can toggle into native chat — gates the long-press item. */

@@ -313,6 +313,51 @@ describe('resolveMobileNativeChat', () => {
     ).toBe('openclaude')
   })
 
+  it('does not open a chat for a pane whose status names Antigravity, from a beacon or transcript Claude left behind', () => {
+    // 0.9.131 (2026-10-13): a terminal that had run Claude Code and now runs
+    // `agy` came up as a chat. The live status is the host saying who owns
+    // the pane NOW; a beacon heard earlier on the PTY, or the transcript of an
+    // earlier session, is evidence about an agent that has since exited.
+    const agy = {
+      type: 'terminal',
+      agentStatus: status({
+        agentType: 'antigravity',
+        providerSession: { key: 'conversation_id', id: '7f3c2a10-agy-conversation' }
+      })
+    } as const
+    expect(resolveMobileNativeChat(agy, true, 'claude')).toBeNull()
+    expect(
+      resolveMobileNativeChat(
+        {
+          ...agy,
+          agentStatus: status({
+            agentType: 'antigravity',
+            providerSession: {
+              key: 'session_id',
+              id: 'sess-old',
+              transcriptPath: '/Users/me/.claude/projects/-Users-me-codeui/0b6f4c1e-2a3d-4e5f-8a9b-0c1d2e3f4a5b.jsonl'
+            }
+          })
+        },
+        true
+      )
+    ).toBeNull()
+    // An agent type the host could not name says nothing about the owner, so
+    // the beacon still speaks for the pane.
+    expect(
+      resolveMobileNativeChat({ type: 'terminal', agentStatus: status({ agentType: 'unknown' }) }, true, 'claude')
+    ).toMatchObject({ agent: 'claude', source: 'beacon' })
+    // Claude Agent Teams is Orca's wrapper around the real `claude` binary:
+    // its beacon is the pane owner's own, so the chat it reached stays.
+    expect(
+      resolveMobileNativeChat(
+        { type: 'terminal', agentStatus: status({ agentType: 'claude-agent-teams' }) },
+        true,
+        'claude'
+      )
+    ).toMatchObject({ agent: 'claude', source: 'beacon' })
+  })
+
   it('canShowMobileNativeChat mirrors resolution', () => {
     expect(canShowMobileNativeChat({ type: 'terminal', launchAgent: 'claude' })).toBe(true)
     expect(canShowMobileNativeChat(null)).toBe(false)

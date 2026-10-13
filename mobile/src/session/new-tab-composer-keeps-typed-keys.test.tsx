@@ -99,6 +99,7 @@ function overlay(moment: Moment): ReturnType<typeof createElement> {
   return createElement(MobileNativeChatOverlay, {
     controller,
     hasTerminalUnderneath: true,
+    ptyTab: true,
     onOpenFile: vi.fn(),
     hostAllowsRewind: true,
     images: {} as never,

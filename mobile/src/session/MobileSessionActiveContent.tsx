@@ -341,6 +341,7 @@ export function MobileSessionActiveContent({
       <MobileNativeChatOverlay
         controller={nativeChatController}
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
+        ptyTab={controller.activeSessionTab?.type === 'terminal'}
         onOpenFile={handleNativeChatFileTap}
         onRevertHunk={handleNativeChatRevertHunk}
         createdFileCounts={createdFileCounts}

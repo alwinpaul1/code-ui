@@ -37,13 +37,15 @@ export function useNativeChatFrame<T = React.JSX.Element>(args: {
   blink: boolean
   showNativeChat: boolean
   hasTerminalUnderneath: boolean
+  /** The active tab is a PTY tab (mobile-native-chat-frame-decision.ts). */
+  ptyTab: boolean
   surfaceId: string
 }): {
   frame: MobileNativeChatFrame
   held: T | null
   remember: (drawn: T) => void
 } {
-  const { blank, blink, showNativeChat, hasTerminalUnderneath, surfaceId } = args
+  const { blank, blink, showNativeChat, hasTerminalUnderneath, ptyTab, surfaceId } = args
   const holding = blank && blink
   const lastRef = useRef<{ surfaceId: string; element: T } | null>(null)
   // The terminal has been on screen since the last chat frame was drawn.
@@ -66,7 +68,8 @@ export function useNativeChatFrame<T = React.JSX.Element>(args: {
     blank,
     showNativeChat,
     hasHeldFrame: held != null,
-    hasTerminalUnderneath
+    hasTerminalUnderneath,
+    ptyTab
   })
   if (frame === 'terminal') {
     yieldedRef.current = true

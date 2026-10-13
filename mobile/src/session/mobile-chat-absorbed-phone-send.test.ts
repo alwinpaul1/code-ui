@@ -208,6 +208,7 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     return createElement(MobileNativeChatOverlay, {
       controller,
       hasTerminalUnderneath: true,
+      ptyTab: true,
       hostAllowsRewind: true,
       images: {} as never,
       onMicPress: vi.fn(),

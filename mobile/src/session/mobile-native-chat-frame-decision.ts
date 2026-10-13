@@ -16,6 +16,9 @@ export function mobileNativeChatFrameToShow(args: {
   hasHeldFrame: boolean
   /** A terminal pane is mounted for the active tab, so yielding shows something. */
   hasTerminalUnderneath: boolean
+  /** The active tab is a PTY tab, so the terminal frame owns the screen when
+   *  this is not a chat, whether or not its pane has mounted yet. */
+  ptyTab: boolean
 }): MobileNativeChatFrame {
   if (!args.blank) {
     return 'draw'
@@ -31,10 +34,19 @@ export function mobileNativeChatFrameToShow(args: {
   //
   // Yielding is only an answer when there is something to yield TO. An
   // agent-session tab has no terminal pane at all, so returning nothing left
-  // the frame empty; that is the half 0.5.69 missed. Draw unless a terminal is
-  // actually mounted under us and this is not a chat tab.
+  // the frame empty; that is the half 0.5.69 missed. A chat tab draws; a PTY tab
+  // that is not a chat yields to its terminal frame; anything else draws unless
+  // a terminal is actually mounted under us.
   if (args.showNativeChat) {
     return 'draw'
+  }
+  // A PTY tab that is not a chat is the terminal's, mounted or not. Drawing
+  // here put an empty chat and a "Waiting for terminal…" composer over an
+  // Antigravity tab whose pane had not mounted, above the terminal's own input
+  // bar (0.9.131, 2026-10-13). The "nothing to yield to" fallback below is for
+  // agent-session tabs, which never have a pane.
+  if (args.ptyTab) {
+    return 'terminal'
   }
   return args.hasTerminalUnderneath ? 'terminal' : 'draw'
 }
