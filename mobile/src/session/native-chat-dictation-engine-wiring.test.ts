@@ -70,16 +70,14 @@ describe('chat dictation on the phone', () => {
       'useMobileLiveTranscription'
     )
     expect(sessionImports.get('../hooks/use-mobile-dictation')).toContain('useMobileDictation')
-    expect(sessionImports.get('../hooks/use-anthropic-dictation')).toContain('useAnthropicDictation')
     expect(callsTo(session, 'useMobileLiveTranscription')).toHaveLength(1)
     expect(callsTo(session, 'useMobileDictation')).toHaveLength(1)
-    expect(callsTo(session, 'useAnthropicDictation')).toHaveLength(1)
   })
 
   it('takes the phone recognizer whenever it is available', () => {
     expect(sessionImports.get('../dictation/dictation-engine')).toContain('chooseDictationEngine')
     expect(callsTo(session, 'chooseDictationEngine')).toEqual([
-      'chooseDictationEngine(liveTranscription.available, anthropicDictation.available)'
+      'chooseDictationEngine(liveTranscription.available)'
     ])
   })
 })
