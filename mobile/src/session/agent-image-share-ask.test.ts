@@ -7,13 +7,16 @@ import {
   lockedShareAskSend,
   SHARE_ASK_BUSY,
   shareAskText,
-  textNamesPathCleanly
+  textNamesPathCleanly,
+  withoutAskDraftRestore,
+  withoutAskRetry
 } from './agent-image-share-ask'
 import { AGENT_UNSAVED_SCREENSHOT_ALT, placeAgentImages } from './mobile-native-chat-agent-images'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 import {
   acquireMobileNativeChatTerminalWrite,
-  releaseMobileNativeChatTerminalWrite
+  releaseMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWriteForSend
 } from './mobile-native-chat-terminal-write-lock'
 import { CHIPS_PATH } from './fixtures/claude-agent-read-same-image-twice-2.1.296'
 
@@ -77,8 +80,48 @@ describe('the chat wiring of the ask', () => {
     expect(controller).toMatch(/^\s*chatImagePreviewsByMessageId, nativeChatImageShare,$/m)
   })
 
+  it('gives the composer text send the ask-aware draft restore and error report', () => {
+    const controller = code('use-mobile-native-chat-controller.ts')
+    const messageSend = controller.slice(controller.indexOf('useMobileNativeChatMessageSend({'), controller.indexOf('const structuredNativeChatSend'))
+    expect(messageSend).toMatch(/restoreRejectedDraft: askAwareRestore,/)
+    expect(messageSend).toMatch(/onSendError: askAwareSendError,/)
+    expect(controller).toMatch(/const askAwareRestore = useMemo\(\(\) => withoutAskDraftRestore\(restoreRejectedDraft\), \[restoreRejectedDraft\]\)/)
+    expect(controller).toMatch(/const askAwareSendError = useMemo\(\(\) => withoutAskRetry\(onSendError\), \[onSendError\]\)/)
+  })
+
   it('gives the chat rows the ask through the overlay box', () => {
     expect(code('MobileNativeChatOverlay.tsx')).toMatch(/<AgentImageShareView share=\{controller\.nativeChatImageShare \?\? null\}/)
+  })
+})
+
+// Opus review (2026-10-13): the composer send puts refused words back in the
+// box and offers Retry, which sends the box. For an ask that appended the
+// canned line to the user's own draft, and a Retry sent draft and ask glued
+// together (or, on a refusal before any write, the unrelated draft alone).
+describe('a refused ask and the composer', () => {
+  const origin = { draftKey: 'k' } as never
+  it('keeps the ask out of the composer and offers no Retry, while a typed send keeps both', async () => {
+    const restore = vi.fn()
+    const report = vi.fn()
+    const askRestore = withoutAskDraftRestore(restore)
+    const askReport = withoutAskRetry(report)
+    const text = shareAskText(CHIPS_PATH)
+    const ask = lockedShareAskSend({
+      handleRef: { current: null },
+      send: async (sent) => {
+        askRestore(origin, sent)
+        askReport('Message not sent', { retry: true })
+        return 'rejected'
+      },
+      onSendError: vi.fn()
+    })
+    expect(await ask(text)).toBe('rejected')
+    expect(restore).not.toHaveBeenCalled()
+    expect(report).toHaveBeenCalledWith('Message not sent', { retry: false })
+    askRestore(origin, 'typed words')
+    askReport('Message not sent', { retry: true })
+    expect(restore).toHaveBeenCalledWith(origin, 'typed words')
+    expect(report).toHaveBeenLastCalledWith('Message not sent', { retry: true })
   })
 })
 
@@ -93,6 +136,24 @@ describe('the ask while another input holds the terminal', () => {
     expect(await ask('words')).toBe('rejected')
     expect(send).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith(SHARE_ASK_BUSY)
+  })
+
+  // Opus review (2026-10-13): the composer's own send takes the lock FOR a send,
+  // which its write lets go once the body is in, so a permission tap during
+  // Claude's submit check is not refused. The ask took a plain lock.
+  it('lets go of the terminal once the ask is typed, as a composer send does', async () => {
+    let freedMidSend = false
+    const ask = lockedShareAskSend({
+      handleRef: { current: 'term' },
+      send: async () => {
+        releaseMobileNativeChatTerminalWriteForSend('term')
+        freedMidSend = acquireMobileNativeChatTerminalWrite('term')
+        return 'accepted'
+      },
+      onSendError: vi.fn()
+    })
+    expect(await ask('words')).toBe('accepted')
+    expect(freedMidSend).toBe(true)
   })
 
   it('lets the next input through once it is done, even when the send threw', async () => {

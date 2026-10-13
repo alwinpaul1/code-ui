@@ -20,30 +20,37 @@
 export const RETRY_MS = 5_000
 const MAX_RETRY_MS = 5 * 60_000
 
-type Failure = { until: number; named: boolean; tries: number }
+/** `named`: the agent's text named the path at all; `cleanly`: as the
+ *  desktop's rule 1 accepts it. A loose mention (a markdown link, parentheses)
+ *  is refused like none, so a clean one after it starts the count again too:
+ *  it is the reply the placeholder's ask waits for (agent-image-share-ask.ts). */
+type Failure = { until: number; named: boolean; cleanly: boolean; tries: number }
 const failures = new Map<string, Failure>()
 
 /** Whether `key` may be asked now, and whether the agent's text has named its
  *  path since it was last refused (which starts its count again). */
-export function hostImageAskState(key: string, named: boolean): { allowed: boolean; newlyNamed: boolean } {
+export function hostImageAskState(key: string, named: boolean, cleanly = false): { allowed: boolean; newlyNamed: boolean } {
   const failure = failures.get(key)
-  const newlyNamed = named && failure?.named === false
+  const newlyNamed = (named && failure?.named === false) || (cleanly && failure?.cleanly === false)
   return { allowed: !failure || failure.until <= Date.now() || newlyNamed, newlyNamed }
 }
 
-/** True when `key` last failed before the agent's text named its path. */
-export function refusedBeforeNamed(key: string): boolean {
-  return failures.get(key)?.named === false
+/** True when `key` last failed before the agent's text named its path (or,
+ *  with `cleanly`, before it named it the way the desktop accepts). */
+export function refusedBeforeNamed(key: string, cleanly = false): boolean {
+  const failure = failures.get(key)
+  return failure?.named === false || (cleanly && failure?.cleanly === false)
 }
 
 export function recordHostImageFailure(
   key: string,
-  args: { refused: boolean; named: boolean; newlyNamed: boolean }
+  args: { refused: boolean; named: boolean; cleanly?: boolean; newlyNamed: boolean }
 ): void {
   const tries = !args.refused || args.newlyNamed ? 1 : (failures.get(key)?.tries ?? 0) + 1
   failures.set(key, {
     until: Date.now() + Math.min(RETRY_MS * 2 ** (tries - 1), MAX_RETRY_MS),
     named: args.named,
+    cleanly: args.cleanly === true,
     tries
   })
 }

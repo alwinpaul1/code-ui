@@ -17,7 +17,7 @@ import { useMobileNativeChatSessionOptionController } from './use-mobile-native-
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
 import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
-import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend } from './agent-image-share-ask'
+import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend, withoutAskDraftRestore, withoutAskRetry } from './agent-image-share-ask'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
@@ -341,6 +341,8 @@ export function useMobileNativeChatController(
   // the options hook needs the seam's dispatcher; a ref breaks the cycle.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
+  // A refused picture's ask rides this send, but its words were never in the box: no restore, no Retry (agent-image-share-ask.ts).
+  const askAwareRestore = useMemo(() => withoutAskDraftRestore(restoreRejectedDraft), [restoreRejectedDraft]); const askAwareSendError = useMemo(() => withoutAskRetry(onSendError), [onSendError])
   const {
     send: _rawHandleNativeChatSend,
     sendWithOutcome: rawHandleNativeChatSendWithOutcome,
@@ -356,10 +358,10 @@ export function useMobileNativeChatController(
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
-    restoreRejectedDraft, showSendingEcho,
+    restoreRejectedDraft: askAwareRestore, showSendingEcho,
     acceptSend,
     holdUnconfirmedSend,
-    onSendError,
+    onSendError: askAwareSendError,
     beforeSend: settleDraftMirrorBeforeSend,
     onCommandDispatched: peekTerminalForDispatchedCommand, promptReceipts: tailPrompts, sendOnRecord
   })

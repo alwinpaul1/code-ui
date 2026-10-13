@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadHostImage, resetHostImagePreviewCacheForTests, useHostImagePreviews } from './use-host-image-previews'
+import { RETRY_MS } from './host-image-refusals'
 import { SEND_CALL_ID, SEND_FILE_PATH, SEND_FILE_TURN } from './fixtures/claude-send-user-file-2.1.296'
 
 // Thumbnails took a long time to appear (the user, 2026-10-11). For a
@@ -130,6 +131,27 @@ describe('a picture the desktop shares once the agent names it', () => {
     }
     const asks = client.sendRequest.mock.calls.filter((call) => call[0] === 'files.resolveTerminalPath').length
     expect(asks).toBeLessThanOrEqual(5)
+    vi.useRealTimers()
+  })
+
+  // Opus review of the ask (2026-10-13): an earlier mention the desktop's rule
+  // rejects (a markdown link, parentheses) counts as "named" loosely, so the
+  // refusals backed off as named ones, and the reply to the phone's ask that
+  // names the path in backticks waited minutes behind them.
+  it('is asked for again at once when a clean reply follows a loose mention the desktop refused', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let clean = false
+    const client = desktop(() => clean)
+    const args = { client, hostId: 'host', worktreeId: 'worktree', nativeChatContext: { tabId: 'tab', sessionId: 'session' }, terminalHandle: 'term', path: SEND_FILE_PATH, files: null, agentTextNamesPath: true }
+    for (let tries = 0; tries < 5; tries += 1) {
+      await vi.advanceTimersByTimeAsync(tries === 0 ? 0 : RETRY_MS * 2 ** (tries - 1))
+      await loadHostImage({ ...args, agentTextNamesPathCleanly: false })
+    }
+    // The fifth refusal holds the path for 80 s; the clean reply lands now.
+    await vi.advanceTimersByTimeAsync(1000)
+    clean = true
+    expect(await loadHostImage({ ...args, agentTextNamesPathCleanly: true })).toBe('data:image/png;base64,iVBORw0K')
     vi.useRealTimers()
   })
 

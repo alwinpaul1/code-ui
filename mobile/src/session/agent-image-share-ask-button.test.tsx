@@ -320,6 +320,35 @@ describe('asking the agent to share a picture the desktop refused', () => {
     expect(askButtons(chat.root()).map(textOf)).toEqual(["Asked — waiting for Claude's reply"])
   })
 
+  // Opus review (2026-10-13): Claude Code records most prompts taken mid-turn
+  // as `queued_command` attachments, which Orca's reader drops, so an ask sent
+  // while the agent works usually never becomes a user row.
+  it('brings the ask back once a busy agent finishes without naming the path, though its queued ask never became a row', async () => {
+    const send = vi.fn(async (): Promise<MobileNativeChatSendOutcome> => 'accepted')
+    const chat = await mount({ client: desktop(() => rows), send, working: true })
+    open(chat.root())
+    await act(async () => {
+      askButtons(chat.root())[0]!.props.onPress()
+      await settle()
+    })
+    await chat.update({ rows: [...RAW, reply('reply-1', 'The tablet build is installed.', 1)], working: true })
+    expect(askButtons(chat.root()).map(textOf)).toEqual(["Asked — waiting for Claude's reply"])
+    await chat.update({ working: false })
+    expect(askButtons(chat.root()).map(textOf)).toEqual(['Ask Claude to share it'])
+  })
+
+  it('stays asked while nothing has come back since the tap', async () => {
+    const send = vi.fn(async (): Promise<MobileNativeChatSendOutcome> => 'unknown')
+    const chat = await mount({ client: desktop(() => rows), send })
+    open(chat.root())
+    await act(async () => {
+      askButtons(chat.root())[0]!.props.onPress()
+      await settle()
+    })
+    await chat.update({ working: false })
+    expect(askButtons(chat.root()).map(textOf)).toEqual(["Asked — waiting for Claude's reply"])
+  })
+
   it('offers the ask again when the send is refused', async () => {
     const send = vi.fn(async (): Promise<MobileNativeChatSendOutcome> => 'rejected')
     const chat = await mount({ client: desktop(() => rows), send })

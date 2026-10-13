@@ -56,7 +56,8 @@ export function useAgentImageShareAsks(args: {
       return
     }
     const text = shareAskText(path)
-    setShareAskRecord(key, { asks: (before?.asks ?? 0) + 1, rowsBefore: askRowsIn(now.messages, text), sending: true })
+    const afterId = now.messages.length > 0 ? now.messages[now.messages.length - 1]!.id : null
+    setShareAskRecord(key, { asks: (before?.asks ?? 0) + 1, rowsBefore: askRowsIn(now.messages, text), afterId, sending: true })
     void now
       .send(text)
       .catch((): MobileNativeChatSendOutcome => 'rejected')

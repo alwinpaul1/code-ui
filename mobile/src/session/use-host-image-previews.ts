@@ -169,7 +169,8 @@ export async function loadHostImage(args: {
   // Its cache file was cleared, or now holds another picture: read it again.
   dataUriByPath.delete(key)
   const named = args.agentTextNamesPath === true
-  const { allowed, newlyNamed } = hostImageAskState(key, named)
+  const cleanly = args.agentTextNamesPathCleanly === true
+  const { allowed, newlyNamed } = hostImageAskState(key, named, cleanly)
   if (!allowed) {
     return null
   }
@@ -178,13 +179,13 @@ export async function loadHostImage(args: {
     // An ask sent before the agent's text named the path may come back
     // refused after it does: ask once more then, rather than at the next timer.
     return args.agentTextNamesPath === true
-      ? pending.then((uri) => uri ?? (refusedBeforeNamed(key) ? loadHostImage(args) : null))
+      ? pending.then((uri) => uri ?? (refusedBeforeNamed(key, cleanly) ? loadHostImage(args) : null))
       : pending
   }
   // Back-off rules: host-image-refusals.ts.
-  const gone = args.agentTextNamesPathCleanly === true && args.nativeChatContext != null
+  const gone = cleanly && args.nativeChatContext != null
   const fail = (refused = false) => {
-    recordHostImageFailure(key, { refused, named, newlyNamed })
+    recordHostImageFailure(key, { refused, named, cleanly, newlyNamed })
     recordHostImageMissing(args.path, refused && !gone ? 'not-shared' : 'failed')
   }
   const run = (async () => {
@@ -238,7 +239,7 @@ export async function loadHostImage(args: {
             : null
       if (!request) {
         fail(true)
-        explainMissing(key, args.path, gone ? 'the agent\'s text names it cleanly and the desktop still did not share it: the file is probably gone (moved or deleted), or older than the desktop\'s 2,000-message transcript tail' : notShared(args))
+        explainMissing(key, args.path, `${gone ? "the agent's text names it cleanly, so the file may be gone (moved or deleted), or Orca's rule 1 did not apply (another session or agent on the tab, a transcript it could not read, older than its 2,000-message tail); " : ''}${notShared(args)}`)
         return null
       }
       const read = await args.client.sendRequest(request.method, request.params, {

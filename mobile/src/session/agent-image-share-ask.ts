@@ -5,7 +5,7 @@ import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import type { HostImageMissing } from './host-image-refusals'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
-  acquireMobileNativeChatTerminalWrite,
+  acquireMobileNativeChatTerminalWriteForSend,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 
@@ -107,8 +107,11 @@ export function askRowsIn(messages: readonly NativeChatMessage[], text: string):
 
 /** One tab's asks for one picture. `rowsBefore` is how many rows with the
  *  same words the transcript held at the tap, so a second ask is told from
- *  the first by position. */
-export type ShareAskRecord = { asks: number; rowsBefore: number; sending: boolean }
+ *  the first by position. `afterId` is the transcript's last row at the tap:
+ *  an ask sent while the agent works is usually taken as a `queued_command`
+ *  attachment, which Orca's reader drops, so it may never get a row of its
+ *  own, and the reply is then whatever the agent wrote after the tap. */
+export type ShareAskRecord = { asks: number; rowsBefore: number; afterId: string | null; sending: boolean }
 
 export type ShareAskPhase = 'offer' | 'asked' | 'none'
 
@@ -151,12 +154,15 @@ export function shareAskPhase(args: {
       }
     }
   }
-  if (row === -1) {
-    // Queued behind the agent's turn, or still on its way.
+  // No row of its own: taken mid-turn (no record the phone receives), or still
+  // on its way. The reply is then what came after the tap, once the agent is
+  // idle; a tap whose row is gone from the loaded window keeps waiting.
+  const from = row !== -1 ? row : record.afterId === null ? -1 : messages.findIndex((message) => message.id === record.afterId)
+  if (row === -1 && record.afterId !== null && from === -1) {
     return 'asked'
   }
   const replies = messages
-    .slice(row + 1)
+    .slice(from + 1)
     .filter((message) => message.role === 'assistant' && Array.isArray(message.blocks))
     .flatMap((message) => message.blocks.filter(isTextBlock).map((block) => block.text))
   if (replies.length === 0 || args.working || replies.some((reply) => textNamesPathCleanly(reply, path))) {
@@ -200,8 +206,38 @@ export function resetShareAsksForTests(): void {
 
 export const SHARE_ASK_BUSY = 'Another input is still being sent. Try again.'
 
-/** The composer's text send, holding the terminal's write lock as a card
- *  answer does: an ask typed into the middle of a photo paste or a queued
+/** The words of asks on their way: the composer send treats a refusal of one
+ *  as the user's own typed words, which it is not. */
+const asksInFlight = new Set<string>()
+
+/** The composer send's draft restore, minus an ask's words: they were never
+ *  in the box, and appended to the user's draft they would ride its next send.
+ *  The ask's button comes back instead. */
+export function withoutAskDraftRestore<Origin>(restore: (origin: Origin, text: string) => void): (origin: Origin, text: string) => void {
+  return (origin, text) => {
+    if (!asksInFlight.has(text.trimEnd())) {
+      restore(origin, text)
+    }
+  }
+}
+
+/** The composer send's failure report, minus the Retry while an ask is on its
+ *  way: Retry sends the composer's words, which are not the ask. */
+export function withoutAskRetry<Details extends { retry?: boolean }>(
+  report: (message: string, details?: Details) => void
+): (message: string, details?: Details) => void {
+  return (message, details) => {
+    if (details === undefined) {
+      report(message)
+    } else {
+      report(message, asksInFlight.size > 0 && details.retry ? { ...details, retry: false } : details)
+    }
+  }
+}
+
+/** The composer's text send, holding the terminal's write lock as the
+ *  composer's own send does (taken FOR a send, so the write lets go of it once
+ *  the body is in): an ask typed into the middle of a photo paste or a queued
  *  send's Enter would be submitted as part of it. */
 export function lockedShareAskSend(args: {
   handleRef: MutableRefObject<string | null>
@@ -210,15 +246,19 @@ export function lockedShareAskSend(args: {
 }): (text: string) => Promise<MobileNativeChatSendOutcome> {
   return async (text) => {
     const terminal = args.handleRef.current
-    if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
+    const owner = terminal ? acquireMobileNativeChatTerminalWriteForSend(terminal) : null
+    if (terminal && !owner) {
       args.onSendError(SHARE_ASK_BUSY)
       return 'rejected'
     }
+    const words = text.trimEnd()
+    asksInFlight.add(words)
     try {
       return await args.send(text)
     } finally {
-      if (terminal) {
-        releaseMobileNativeChatTerminalWrite(terminal)
+      asksInFlight.delete(words)
+      if (terminal && owner) {
+        releaseMobileNativeChatTerminalWrite(terminal, owner)
       }
     }
   }
