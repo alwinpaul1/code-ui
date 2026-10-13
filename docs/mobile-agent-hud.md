@@ -2059,3 +2059,42 @@ sandbox and the ratchet.
 test-runner knowledge to a script that ships to users, a user with `VITEST` exported
 in a shell profile would silently lose the beacon, and it would not help the case that
 matters (a spawn with a hand-built environment has no `VITEST` either).
+
+## An effort pick is confirmed by the agent (2026-10-13)
+
+Reported on 0.9.131 with Claude Code 2.1.296. A High picked in the model sheet on a
+working Claude tab left the sheet reading "High" and the pill reading "Opus 5.5
+Medium". No transcript from that day has a `/effort` row written mid-turn or a
+queue-operation for one, so Claude never ran the command. A pick's write is not
+checked the way a chat send's is, so the desktop's ack counted as the change. The
+sheet drew that record, and nothing read the screen back.
+
+What is now true (`native-chat-effort-pick.ts`, `use-native-chat-effort-pick.ts`):
+
+- The sheet's Effort summary and checked row show the level the agent states (the
+  value the pill reads). With no statement, the record stands in under "Sent to the
+  agent — not confirmed".
+- A pick that went out is pending until the agent states it. The summary reads
+  "High…" and the Effort page reads "Changing to High…". The screen is read at once
+  and then every second.
+- If the agent still states another level after 10 s (two of the 5 s status-line
+  beats), the pick is given up. The record goes back to the agent's level, and the
+  sheet or the chat banner says so once.
+- Tapping the level the agent states does nothing. Tapping one it never took sends
+  it again.
+- Mid-turn: 2.1.296 declares `/effort` `immediate: true`, so it runs during a turn,
+  and an effort change re-runs the status line after 300 ms. On 2.1.206 a mid-turn
+  `/effort` was queued and ran at turn end. While Claude's queue box shows a queued
+  `/effort`, the pick stays pending under "High applies after Claude finishes", with
+  no time limit.
+- The pick is judged against the pair the pill reads: the beacon or badge, or on a
+  tab with neither, the transcript's `/effort` answer. A pick whose model the agent
+  no longer states (a model switch resets effort) is dropped without a message.
+  Coming back to a tab whose window has run out, the screen is read first and the
+  pick judged 2 s later, never on the reading held from before the user left.
+- Tapping the stated level while a pick waits sends it, so it overrides a queued
+  `/effort`, and the wait ends. Ultracode is not judged: Claude states `xhigh`
+  beside it, so nothing it says can confirm it.
+- Codex picks effort in its own picker, which already waits for its footer to name
+  the pair. The sheet shows the footer's level, and the pick follows the same rule,
+  including the 10 s give-up.

@@ -37,6 +37,8 @@ import {
   setTrackedSessionOption
 } from '../../../src/shared/native-chat-session-option-state'
 import { activeModels } from './mobile-chat-model-row-naming'
+import { clearEffortPicksForTests } from './native-chat-effort-pick'
+import { useNativeChatEffortPick, type PendingEffortPick } from './use-native-chat-effort-pick'
 import { mobileNativeChatSessionOptionCatalog } from './mobile-native-chat-session-option-catalog'
 
 export type MobileNativeChatSessionOptionsController = {
@@ -52,6 +54,9 @@ export type MobileNativeChatSessionOptionsController = {
   invokeAction: (id: string, report?: PickFailureReport) => Promise<boolean>
   /** Track a slash command the user typed themselves (e.g. `/model sonnet`). */
   recordCommand: (command: string) => void
+  /** An effort pick sent and not yet stated back by the agent, for the sheet to
+   *  say so (native-chat-effort-pick.ts). */
+  pendingEffort?: PendingEffortPick | null
 }
 
 type PendingOperation = { id: string; token: number }
@@ -66,6 +71,7 @@ export function clearMobileSessionOptionRecordsForTests(): void {
   clearSessionOptionScopeRecordsForTests()
   clearPendingModelPicksForTests()
   resetEffortReportGateForTests()
+  clearEffortPicksForTests()
 }
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
@@ -112,6 +118,14 @@ export function useMobileNativeChatSessionOptions(args: {
     value: SessionOptionValue,
     report?: PickFailureReport
   ) => Promise<boolean | null>
+  /** What the agent's queue box shows (Claude), where a queued `/effort` waits. */
+  queuedMessages?: readonly string[]
+  /** A fresh read of the screen, asked for while an effort pick waits. */
+  readBack?: () => unknown
+  /** The pair an effort pick is confirmed against: what the pill reads, which on
+   *  a Claude tab with no beacon or badge is the transcript's (default: the
+   *  reported pair). */
+  stated?: { model: string | null; effort: string | null }
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
   const reportedModelLabel = args.reportedModelLabel ?? null
@@ -151,6 +165,21 @@ export function useMobileNativeChatSessionOptions(args: {
   const activeIdentityRef = useRef(identity)
   const applyQueuesRef = useRef(new Map<string, Promise<void>>())
   const operationTokenRef = useRef(0)
+  // A pick the agent never stated is given up: the record goes back to what the
+  // agent states, so nothing (a pill with no live pair) keeps drawing the pick.
+  const effortPick = useNativeChatEffortPick({
+    scopeKey,
+    reportedEffort: args.stated ? args.stated.effort : reportedEffort,
+    reportedModel: args.stated ? args.stated.model : reportedModel,
+    queuedMessages: args.queuedMessages,
+    readBack: args.readBack,
+    onGivenUp: (pickScope, reported) => {
+      if (agent && reported && setTrackedSessionOption(getScopedRecord(pickScope, agent), 'effort', reported, 'reported')) {
+        bump()
+      }
+    }
+  })
+  const { note: noteEffortPick, forget: forgetEffortPick } = effortPick
 
   useLayoutEffect(() => {
     activeIdentityRef.current = identity
@@ -337,6 +366,18 @@ export function useMobileNativeChatSessionOptions(args: {
       if (!catalog || !scopeKey || !agent || !identity) {
         return Promise.resolve(false)
       }
+      const noteSentEffort = (): void => {
+        if (id !== 'effort' || typeof value !== 'string') {
+          return
+        }
+        // Ultracode is xhigh plus workflows, and Claude states only `xhigh`
+        // beside it: nothing the agent says can confirm it, so it is not judged.
+        if (value === 'ultracode') {
+          forgetEffortPick(scopeKey)
+        } else {
+          noteEffortPick(scopeKey, value, report)
+        }
+      }
       return runSerialized(identity, id, async () => {
         const record = getScopedRecord(scopeKey, agent)
         const previousModelId = typeof record.model?.value === 'string' ? record.model.value : null
@@ -355,6 +396,7 @@ export function useMobileNativeChatSessionOptions(args: {
               }
               setTrackedSessionOption(record, id, value, 'dispatched')
               bump()
+              noteSentEffort()
             }
             return handled
           }
@@ -395,6 +437,9 @@ export function useMobileNativeChatSessionOptions(args: {
         if (outcome === 'rejected') {
           return false
         }
+        // Sent, which is not applied: the agent has to state it (a write the
+        // desktop acked can still never reach Claude, 2026-10-13).
+        noteSentEffort()
         if (id !== 'model') {
           // Why (desktop parity): `setTrackedSessionOption` resolves the owning
           // model when it commits, not when the command was built. If the model
@@ -426,7 +471,7 @@ export function useMobileNativeChatSessionOptions(args: {
         return true
       })
     },
-    [agent, applyOverride, bump, catalog, dispatchCommand, identity, runSerialized, scopeKey]
+    [agent, applyOverride, bump, catalog, dispatchCommand, identity, forgetEffortPick, noteEffortPick, runSerialized, scopeKey]
   )
 
   const invokeAction = useCallback(
@@ -490,8 +535,9 @@ export function useMobileNativeChatSessionOptions(args: {
     [agent, bump, catalog, onAgentPicker, scopeKey]
   )
 
+  const pendingEffort = effortPick.pending
   return useMemo(
-    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),
-    [snapshot, pendingId, setOption, invokeAction, recordCommand]
+    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand, pendingEffort }),
+    [snapshot, pendingId, setOption, invokeAction, recordCommand, pendingEffort]
   )
 }

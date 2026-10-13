@@ -34,6 +34,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   reportedModelSource?: ModelReportSource
   /** The tab's terminal, so a new one forgets the old agent's statements. */
   terminalHandle?: string | null
+  /** What the screen reads out of Claude's queue box: a `/effort` an older
+   *  Claude Code queued mid-turn waits there (native-chat-effort-pick.ts). */
+  queuedMessages?: readonly string[]
   /** What stands in for the live pair on a Claude session that states no model
    *  (use-claude-transcript-model.ts): the model its transcript last recorded,
    *  or nothing. */
@@ -80,6 +83,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModelLabel,
     reportedModelSource,
     terminalHandle,
+    queuedMessages,
     transcriptModel,
     onModelSheetOpen,
     openRequest = 0,
@@ -161,7 +165,16 @@ export function useMobileNativeChatSessionOptionController(args: {
     // Codex's alone: its hook clears its list in an effect, so for one render
     // after a tab turns from Codex to Claude it still holds Codex's apply.
     discoveredModelApply: agent === 'codex' ? codex.discoveredModelApply : null,
-    applyOverride: codex.applyOverride
+    applyOverride: codex.applyOverride,
+    queuedMessages,
+    // Confirmed against the pair the pill reads (`liveModel` below).
+    stated:
+      !reportedModel && transcriptModel?.kind === 'transcript'
+        ? { model: transcriptModel.model.model, effort: transcriptModel.effort ?? null }
+        : { model: reportedModel, effort: reportedEffort ?? null },
+    // An effort pick is confirmed by the agent's own statement; the screen is
+    // read at once and then every second until it is, not at the next poll.
+    readBack: refreshHud
   })
   useLayoutEffect(() => {
     const model = sessionOptions.snapshot.find((descriptor) => descriptor.category === 'model')

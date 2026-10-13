@@ -439,7 +439,7 @@ export function useMobileNativeChatController(
       reportedModelSource: isCodexChat || isOmpChat ? 'live' : claudeReported.source,
       modelSwitchCommand: isOmpChat ? activeChatAgentStatus?.modelSwitchCommand : undefined,
       transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan,
-      terminalHandle: activeHandle,
+      terminalHandle: activeHandle, queuedMessages: visibleQueuedMessages,
       openRequest: modelSheetRequest,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,

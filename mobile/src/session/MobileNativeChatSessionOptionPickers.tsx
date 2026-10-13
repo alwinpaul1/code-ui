@@ -108,6 +108,46 @@ function withRunningModelSelected(
   return { ...descriptor, kind: { ...descriptor.kind, currentValue: row } }
 }
 
+/**
+ * The Effort row states the agent's effort, not the phone's pick.
+ *
+ * The descriptor's `currentValue` is the tracked record, and a pick is written
+ * there when it is sent. On 2026-10-13 the sheet read "High" over a pill reading
+ * "Opus 5.5 Medium", and Claude had never run the `/effort high` (no row for it
+ * in any transcript). So, like the model row, the level the agent states decides
+ * the summary and the checked row, and a pick still waiting for it is said as
+ * pending beside it (native-chat-effort-pick.ts). With no statement from the
+ * agent, or one no row carries, the record stands in as before, under its
+ * "not confirmed" caption.
+ */
+function withLiveEffort(
+  descriptor: SessionOptionDescriptor,
+  effort: string | null | undefined
+): SessionOptionDescriptor {
+  const stated = effort?.trim().toLowerCase()
+  if (descriptor.id !== EFFORT_OPTION_ID || descriptor.kind.type !== 'select' || !stated) {
+    return descriptor
+  }
+  // Claude states `xhigh` beside Ultracode (2.1.281's `/effort ultracode` is
+  // xhigh plus workflows), so that statement neither confirms nor denies it.
+  if (stated === 'xhigh' && descriptor.kind.currentValue === 'ultracode') {
+    return descriptor
+  }
+  const row = descriptor.kind.choices.find((choice) => choice.value.toLowerCase() === stated)
+  return row
+    ? { ...descriptor, valueSource: 'reported', kind: { ...descriptor.kind, currentValue: row.value } }
+    : descriptor
+}
+
+/** A level's row label, or the level itself. */
+function choiceLabel(descriptor: SessionOptionDescriptor | undefined, value: string): string {
+  const choice =
+    descriptor?.kind.type === 'select'
+      ? descriptor.kind.choices.find((candidate) => candidate.value === value)
+      : undefined
+  return choice?.label ?? value
+}
+
 /** The model descriptor showing one page of its rows; the checked value stays. */
 function withChoices(
   descriptor: SessionOptionDescriptor,
@@ -138,6 +178,8 @@ export function MobileNativeChatSessionOptionPickers({
     setOpenDescriptorId(controller.optionPickerRequest.id)
   }
   const { snapshot, pendingId } = controller
+  const pendingEffort = controller.pendingEffort ?? null
+  const liveEffort = liveModel?.effort ?? null
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const modelId = model?.id ?? null
   useEffect(() => {
@@ -164,7 +206,18 @@ export function MobileNativeChatSessionOptionPickers({
   // while the agent works. Only an in-flight change of ours, or a send in
   // progress, holds it.
   const disabled = pendingId !== null || sendInFlight
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
+  const openDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
+  const activeDescriptor = openDescriptor && withLiveEffort(openDescriptor, liveEffort)
+  const effortDescriptor = snapshot.find((descriptor) => descriptor.id === EFFORT_OPTION_ID)
+  const pendingLabel = pendingEffort ? choiceLabel(effortDescriptor, pendingEffort.value) : null
+  // Said on the Effort page while a pick waits for the agent: queued in
+  // Claude's box mid-turn, or on its way.
+  const pendingCaption =
+    activeDescriptor?.id === EFFORT_OPTION_ID && pendingEffort && pendingLabel
+      ? pendingEffort.queued
+        ? `${pendingLabel} applies after Claude finishes`
+        : `Changing to ${pendingLabel}…`
+      : null
   const modelView = activeDescriptor?.id === model.id
   // What is RUNNING outranks what was picked, for the label. The snapshot's
   // current value is the tracked record, and the pill read "Fable Medium" from
@@ -212,10 +265,15 @@ export function MobileNativeChatSessionOptionPickers({
     setOpenDescriptorId(descriptor.id === model.id ? EFFORT_OPTION_ID : null)
   }
 
-  const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
+  const applyOption = (picked: SessionOptionDescriptor, value: SessionOptionValue): void => {
     failure.clear()
-    // Re-picking the tracked value is a no-op — never re-dispatch it.
+    // Re-picking the value the agent states (or, with no statement, the tracked
+    // one) is a no-op. A pick it never took is not that value, and is sent again.
+    // While a pick waits, a tap on the stated level is the user taking it back:
+    // it is sent, so a `/effort` Claude queued is overridden, and the wait ends.
+    const descriptor = withLiveEffort(picked, liveEffort)
     if (
+      !(descriptor.id === EFFORT_OPTION_ID && pendingEffort) &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
@@ -276,7 +334,9 @@ export function MobileNativeChatSessionOptionPickers({
                 {failure.shown}
               </SheetFailureLine>
             ) : null}
-            {activeDescriptor.valueSource === 'dispatched' ? (
+            {pendingCaption ? (
+              <SessionOptionCaption>{pendingCaption}</SessionOptionCaption>
+            ) : activeDescriptor.valueSource === 'dispatched' ? (
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
@@ -323,7 +383,11 @@ export function MobileNativeChatSessionOptionPickers({
                   <SessionOptionSummaryRow
                     key={descriptor.id}
                     label={descriptor.label}
-                    value={mobileSessionOptionSummaryValue(descriptor)}
+                    value={
+                      descriptor.id === EFFORT_OPTION_ID && pendingLabel
+                        ? `${pendingLabel}…`
+                        : mobileSessionOptionSummaryValue(withLiveEffort(descriptor, liveEffort))
+                    }
                     disabled={disabled}
                     divided={false}
                     onPress={() => showView(descriptor.id)}
