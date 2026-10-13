@@ -128,6 +128,11 @@ function withLiveEffort(
   if (descriptor.id !== EFFORT_OPTION_ID || descriptor.kind.type !== 'select' || !stated) {
     return descriptor
   }
+  // Claude states `xhigh` beside Ultracode (2.1.281's `/effort ultracode` is
+  // xhigh plus workflows), so that statement neither confirms nor denies it.
+  if (stated === 'xhigh' && descriptor.kind.currentValue === 'ultracode') {
+    return descriptor
+  }
   const row = descriptor.kind.choices.find((choice) => choice.value.toLowerCase() === stated)
   return row
     ? { ...descriptor, valueSource: 'reported', kind: { ...descriptor.kind, currentValue: row.value } }
@@ -264,8 +269,11 @@ export function MobileNativeChatSessionOptionPickers({
     failure.clear()
     // Re-picking the value the agent states (or, with no statement, the tracked
     // one) is a no-op. A pick it never took is not that value, and is sent again.
+    // While a pick waits, a tap on the stated level is the user taking it back:
+    // it is sent, so a `/effort` Claude queued is overridden, and the wait ends.
     const descriptor = withLiveEffort(picked, liveEffort)
     if (
+      !(descriptor.id === EFFORT_OPTION_ID && pendingEffort) &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value

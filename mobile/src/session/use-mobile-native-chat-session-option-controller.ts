@@ -167,6 +167,11 @@ export function useMobileNativeChatSessionOptionController(args: {
     discoveredModelApply: agent === 'codex' ? codex.discoveredModelApply : null,
     applyOverride: codex.applyOverride,
     queuedMessages,
+    // Confirmed against the pair the pill reads (`liveModel` below).
+    stated:
+      !reportedModel && transcriptModel?.kind === 'transcript'
+        ? { model: transcriptModel.model.model, effort: transcriptModel.effort ?? null }
+        : { model: reportedModel, effort: reportedEffort ?? null },
     // An effort pick is confirmed by the agent's own statement; the screen is
     // read at once and then every second until it is, not at the next poll.
     readBack: refreshHud

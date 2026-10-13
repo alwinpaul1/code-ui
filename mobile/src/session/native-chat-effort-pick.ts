@@ -48,9 +48,19 @@ export const EFFORT_PICK_CONFIRM_MS = 10_000
 /** How often the screen is read while a pick waits for its confirmation. */
 export const EFFORT_PICK_READ_BACK_MS = 1_000
 
+/** Coming back to a tab whose pick has run out its window, the phone first
+ *  reads the screen again: what it holds is the reading from before the user
+ *  left, and a queued `/effort` may have run meanwhile. Two reads' worth. */
+export const EFFORT_PICK_RETURN_LOOK_MS = 2_000
+
 export type EffortPick = {
   /** The level asked for, as the catalog spells it (`high`). */
   value: string
+  /** The model the agent stated when the pick went out. A level is asked of a
+   *  model: once the agent states another one, the pick is no longer the
+   *  question (a switch resets effort to that model's own), so it is let go
+   *  without a word rather than called refused. */
+  model?: string | null
   /** When the confirmation window opened: the send, or the last moment the
    *  agent's queue box still showed the command. */
   at: number
@@ -60,6 +70,7 @@ export type EffortPick = {
 
 export type EffortPickVerdict =
   | { kind: 'pending'; value: string; queued: boolean; remainingMs: number }
+  | { kind: 'dropped'; value: string }
   | { kind: 'confirmed'; value: string }
   | { kind: 'given-up'; value: string; reported: string | null; message: string }
 
@@ -113,6 +124,8 @@ export function judgeEffortPick(
   pick: EffortPick,
   input: {
     reportedEffort: string | null
+    /** The model the agent states now, or null when it states none. */
+    reportedModel?: string | null
     queuedMessages: readonly string[]
     now: number
   }
@@ -120,6 +133,9 @@ export function judgeEffortPick(
   const { reportedEffort, now } = input
   if (sameLevel(reportedEffort, pick.value)) {
     return { kind: 'confirmed', value: pick.value }
+  }
+  if (pick.model && input.reportedModel && input.reportedModel !== pick.model) {
+    return { kind: 'dropped', value: pick.value }
   }
   const queued = queuedThere(pick.value, input.queuedMessages)
   if (queued) {

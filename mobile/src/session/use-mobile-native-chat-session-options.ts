@@ -122,6 +122,10 @@ export function useMobileNativeChatSessionOptions(args: {
   queuedMessages?: readonly string[]
   /** A fresh read of the screen, asked for while an effort pick waits. */
   readBack?: () => unknown
+  /** The pair an effort pick is confirmed against: what the pill reads, which on
+   *  a Claude tab with no beacon or badge is the transcript's (default: the
+   *  reported pair). */
+  stated?: { model: string | null; effort: string | null }
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
   const reportedModelLabel = args.reportedModelLabel ?? null
@@ -165,7 +169,8 @@ export function useMobileNativeChatSessionOptions(args: {
   // agent states, so nothing (a pill with no live pair) keeps drawing the pick.
   const effortPick = useNativeChatEffortPick({
     scopeKey,
-    reportedEffort,
+    reportedEffort: args.stated ? args.stated.effort : reportedEffort,
+    reportedModel: args.stated ? args.stated.model : reportedModel,
     queuedMessages: args.queuedMessages,
     readBack: args.readBack,
     onGivenUp: (pickScope, reported) => {
@@ -174,7 +179,7 @@ export function useMobileNativeChatSessionOptions(args: {
       }
     }
   })
-  const noteEffortPick = effortPick.note
+  const { note: noteEffortPick, forget: forgetEffortPick } = effortPick
 
   useLayoutEffect(() => {
     activeIdentityRef.current = identity
@@ -362,7 +367,14 @@ export function useMobileNativeChatSessionOptions(args: {
         return Promise.resolve(false)
       }
       const noteSentEffort = (): void => {
-        if (id === 'effort' && typeof value === 'string') {
+        if (id !== 'effort' || typeof value !== 'string') {
+          return
+        }
+        // Ultracode is xhigh plus workflows, and Claude states only `xhigh`
+        // beside it: nothing the agent says can confirm it, so it is not judged.
+        if (value === 'ultracode') {
+          forgetEffortPick(scopeKey)
+        } else {
           noteEffortPick(scopeKey, value, report)
         }
       }
@@ -459,7 +471,7 @@ export function useMobileNativeChatSessionOptions(args: {
         return true
       })
     },
-    [agent, applyOverride, bump, catalog, dispatchCommand, identity, noteEffortPick, runSerialized, scopeKey]
+    [agent, applyOverride, bump, catalog, dispatchCommand, identity, forgetEffortPick, noteEffortPick, runSerialized, scopeKey]
   )
 
   const invokeAction = useCallback(

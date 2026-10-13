@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  EFFORT_PICK_CONFIRM_MS,
   EFFORT_PICK_READ_BACK_MS,
+  EFFORT_PICK_RETURN_LOOK_MS,
   forgetEffortPick,
   getEffortPick,
   judgeEffortPick,
@@ -22,7 +24,9 @@ const NO_QUEUE: readonly string[] = []
  */
 export function useNativeChatEffortPick(args: {
   scopeKey: string | null
+  /** The effort and model the agent states: the pair the pill reads. */
   reportedEffort: string | null
+  reportedModel?: string | null
   queuedMessages?: readonly string[]
   /** A fresh read of the screen (the HUD's refresh). */
   readBack?: () => unknown
@@ -31,8 +35,15 @@ export function useNativeChatEffortPick(args: {
 }): {
   pending: PendingEffortPick | null
   note: (scopeKey: string, value: string, report?: PickFailureReport) => void
+  /** Stop waiting for a pick, saying nothing. */
+  forget: (scopeKey: string) => void
 } {
   const { scopeKey, reportedEffort, readBack, onGivenUp } = args
+  const reportedModel = args.reportedModel ?? null
+  const reportedModelRef = useRef(reportedModel)
+  reportedModelRef.current = reportedModel
+  // The scope last judged, so arriving on a tab can be told from staying on it.
+  const judgedScopeRef = useRef<string | null>(null)
   const queuedMessages = args.queuedMessages ?? NO_QUEUE
   const [pending, setPending] = useState<PendingEffortPick | null>(null)
   const [tick, setTick] = useState(0)
@@ -43,13 +54,22 @@ export function useNativeChatEffortPick(args: {
   const queuedKey = queuedMessages.join('\n')
 
   useEffect(() => {
+    const arrived = judgedScopeRef.current !== scopeKey
+    judgedScopeRef.current = scopeKey
     const pick = scopeKey ? getEffortPick(scopeKey) : null
     if (!scopeKey || !pick) {
       setPending(null)
       return
     }
-    const verdict = judgeEffortPick(pick, { reportedEffort, queuedMessages, now: Date.now() })
-    if (verdict.kind === 'confirmed') {
+    const now = Date.now()
+    if (arrived && pick.at + EFFORT_PICK_CONFIRM_MS - now < EFFORT_PICK_RETURN_LOOK_MS) {
+      // Back on the tab: read the screen before a verdict, never on the reading
+      // held from before the user left.
+      pick.at = now - EFFORT_PICK_CONFIRM_MS + EFFORT_PICK_RETURN_LOOK_MS
+      void readBackRef.current?.()
+    }
+    const verdict = judgeEffortPick(pick, { reportedEffort, reportedModel, queuedMessages, now })
+    if (verdict.kind === 'confirmed' || verdict.kind === 'dropped') {
       forgetEffortPick(scopeKey)
       setPending(null)
       return
@@ -77,11 +97,12 @@ export function useNativeChatEffortPick(args: {
       clearInterval(look)
     }
     // `queuedKey` stands for `queuedMessages`, whose array is new on every read.
-  }, [scopeKey, reportedEffort, queuedKey, tick])
+  }, [scopeKey, reportedEffort, reportedModel, queuedKey, tick])
 
   const note = useCallback((pickScope: string, value: string, report?: PickFailureReport) => {
     noteEffortPick(pickScope, {
       value,
+      model: reportedModelRef.current,
       at: Date.now(),
       ...(report ? { report } : {})
     })
@@ -89,5 +110,10 @@ export function useNativeChatEffortPick(args: {
     setTick((current) => current + 1)
   }, [])
 
-  return { pending, note }
+  const forget = useCallback((pickScope: string) => {
+    forgetEffortPick(pickScope)
+    setTick((current) => current + 1)
+  }, [])
+
+  return { pending, note, forget }
 }

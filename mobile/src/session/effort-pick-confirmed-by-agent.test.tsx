@@ -22,6 +22,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { ThemeProvider } from '../theme/theme-context'
 import { resetClaudeDiscoveryForTests } from './claude-model-discovery'
+import type { ClaudeModelFallback } from './claude-transcript-model'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { EFFORT_PICK_CONFIRM_MS } from './native-chat-effort-pick'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
@@ -75,7 +76,12 @@ const structured = {
   invokeAction: async () => false
 }
 
-let live: { effort: string | null } = { effort: 'medium' }
+let live: { model: string | null; label: string | null; effort: string | null } = {
+  model: 'claude-opus-5-5',
+  label: 'Opus 5.5',
+  effort: 'medium'
+}
+let transcriptModel: ClaudeModelFallback = { kind: 'none' }
 let tab = 'tab-1'
 let queued: string[] = []
 let working = true
@@ -92,10 +98,11 @@ function Chat(): ReactElement | null {
     hostId: 'host',
     isTabChatView: () => true,
     isWorking: working,
-    reportedModel: 'claude-opus-5-5',
-    reportedModelLabel: 'Opus 5.5',
+    reportedModel: live.model,
+    reportedModelLabel: live.label,
     reportedEffort: live.effort,
-    reportedModelSource: 'live',
+    reportedModelSource: live.model ? 'live' : 'launch',
+    transcriptModel,
     terminalHandle: `term-${tab}`,
     queuedMessages: queued,
     structured,
@@ -190,7 +197,8 @@ describe('the sheet states the effort the agent confirmed', () => {
     setSheetFailureClockForTests(() => (clock += 2_000))
     resetMobileNativeChatSessionOptionRecordsForTests()
     resetClaudeDiscoveryForTests()
-    live = { effort: 'medium' }
+    live = { model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'medium' }
+    transcriptModel = { kind: 'none' }
     tab = 'tab-1'
     queued = []
     working = true
@@ -236,7 +244,7 @@ describe('the sheet states the effort the agent confirmed', () => {
   it('shows High as soon as Claude states it, with nothing said', async () => {
     await mount()
     await pickEffort('High')
-    live = { effort: 'high' }
+    live = { ...live, effort: 'high' }
     await rerender()
 
     await press(pressable('Model, '))
@@ -292,7 +300,7 @@ describe('the sheet states the effort the agent confirmed', () => {
     // The turn ends, Claude runs its queue, and the status line says High.
     queued = []
     working = false
-    live = { effort: 'high' }
+    live = { ...live, effort: 'high' }
     await rerender()
     expect(effortRow('High').props.accessibilityState.checked).toBe(true)
     await advance(EFFORT_PICK_CONFIRM_MS * 2)
@@ -316,17 +324,75 @@ describe('the sheet states the effort the agent confirmed', () => {
     await pickEffort('High')
     // Another tab, whose agent states High already: no pick of its own there.
     tab = 'tab-2'
-    live = { effort: 'high' }
+    live = { ...live, effort: 'high' }
     await rerender()
     await advance(EFFORT_PICK_CONFIRM_MS + 100)
     expect(banner).not.toHaveBeenCalled()
 
     // Back on the first tab, still Medium: the pick is given up there, once.
     tab = 'tab-1'
-    live = { effort: 'medium' }
+    live = { ...live, effort: 'medium' }
+    refreshHud.mockClear()
     await rerender()
+    // Not on the held reading from before the user left: the screen is read
+    // first, and the pick judged once that look has had time to land.
+    expect(refreshHud).toHaveBeenCalled()
+    expect(banner).not.toHaveBeenCalled()
+    await advance(3_000)
     expect(banner).toHaveBeenCalledTimes(1)
     await press(pressable('Model, '))
     expect(pressable('Effort').props.accessibilityLabel).toBe('Effort, Medium')
+  })
+  it('drops a pending High when the user goes back to Medium, and says nothing about High', async () => {
+    await mount()
+    await pickEffort('High')
+    dispatchCommand.mockClear()
+    await pickEffort('Medium')
+
+    // Sent, so a /effort high Claude queued is overridden by the user's last word.
+    expect(dispatchCommand).toHaveBeenCalledWith('/effort medium')
+    await press(pressable('Model, '))
+    expect(pressable('Effort').props.accessibilityLabel).toBe('Effort, Medium')
+    await advance(EFFORT_PICK_CONFIRM_MS * 2)
+    expect(banner).not.toHaveBeenCalled()
+  })
+
+  it('does not call an Ultracode pick refused while Claude states Extra beside it', async () => {
+    live = { ...live, effort: 'xhigh' }
+    await mount()
+    await pickEffort('Ultracode')
+    expect(dispatchCommand).toHaveBeenCalledWith('/effort ultracode')
+    await advance(EFFORT_PICK_CONFIRM_MS * 2)
+    expect(banner).not.toHaveBeenCalled()
+  })
+
+  it('confirms a pick from the transcript on a Claude tab with no beacon or badge', async () => {
+    // A Windows host or a typed-in claude: the pill reads the transcript's pair.
+    live = { model: null, label: null, effort: null }
+    transcriptModel = { kind: 'transcript', model: { model: 'claude-opus-5-5', label: 'Opus 5.5' }, effort: 'medium' }
+    await mount()
+    // With no record of a model yet the sheet asks for one first, then steps
+    // into its effort rows.
+    await press(pressable('Model, '))
+    await press(effortRow('Opus'))
+    await press(effortRow('High'))
+    expect(dispatchCommand).toHaveBeenLastCalledWith('/effort high')
+    // `/effort high`'s own answer lands in the transcript.
+    transcriptModel = { ...transcriptModel, effort: 'high' }
+    await rerender()
+    expect(pressable('Model, ').props.accessibilityLabel).toBe('Model, Opus 5.5 High')
+    await advance(EFFORT_PICK_CONFIRM_MS * 2)
+    expect(banner).not.toHaveBeenCalled()
+  })
+
+  it('lets go of a pending effort, silently, when the model under it changes', async () => {
+    await mount()
+    await pickEffort('High')
+    // Switched to Fable meanwhile: Claude states Fable's own effort, and the High
+    // asked of Opus is no longer the question.
+    live = { model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' }
+    await rerender()
+    await advance(EFFORT_PICK_CONFIRM_MS * 2)
+    expect(banner).not.toHaveBeenCalled()
   })
 })

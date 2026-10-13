@@ -2087,6 +2087,14 @@ What is now true (`native-chat-effort-pick.ts`, `use-native-chat-effort-pick.ts`
   `/effort` was queued and ran at turn end. While Claude's queue box shows a queued
   `/effort`, the pick stays pending under "High applies after Claude finishes", with
   no time limit.
+- The pick is judged against the pair the pill reads: the beacon or badge, or on a
+  tab with neither, the transcript's `/effort` answer. A pick whose model the agent
+  no longer states (a model switch resets effort) is dropped without a message.
+  Coming back to a tab whose window has run out, the screen is read first and the
+  pick judged 2 s later, never on the reading held from before the user left.
+- Tapping the stated level while a pick waits sends it, so it overrides a queued
+  `/effort`, and the wait ends. Ultracode is not judged: Claude states `xhigh`
+  beside it, so nothing it says can confirm it.
 - Codex picks effort in its own picker, which already waits for its footer to name
-  the pair. The sheet still shows the footer's level, and the pick stays pending
-  until the HUD reads it.
+  the pair. The sheet shows the footer's level, and the pick follows the same rule,
+  including the 10 s give-up.
