@@ -163,7 +163,7 @@ describe('a running label with the Claude app shimmer', () => {
   it('darkens the glyphs under the band and leaves the rest at the label colour, in dark mode', () => {
     mocks.state.phase = centredOn(4)
     const { tree, palette } = draw({ scheme: 'dark' })
-    const band = shimmerBandColor(palette.textSecondary, palette.bg)
+    const band = shimmerBandColor(palette.textSecondary, palette.chatBg)
     const drawn = glyphs(tree)
     // Weight 1 at "i", 2/3 either side: the three glyphs nearest the centre.
     expect(drawn.slice(3, 6).map((glyph) => glyph.color)).toEqual([band, band, band])
@@ -175,12 +175,12 @@ describe('a running label with the Claude app shimmer', () => {
   it('draws the same band toward the page in light mode, from the light palette', () => {
     mocks.state.phase = centredOn(9)
     const { tree, palette } = draw({ scheme: 'light' })
-    const band = shimmerBandColor(palette.textSecondary, palette.bg)
+    const band = shimmerBandColor(palette.textSecondary, palette.chatBg)
     const drawn = glyphs(tree)
     expect(drawn[9]!.color).toBe(band)
     expect(drawn[0]!.color).toBe(lightColors.textSecondary)
     expect(drawn.map((glyph) => glyph.color)).not.toContain(darkColors.textSecondary)
-    expect(drawn.map((glyph) => glyph.color)).not.toContain(shimmerBandColor(darkColors.textSecondary, darkColors.bg))
+    expect(drawn.map((glyph) => glyph.color)).not.toContain(shimmerBandColor(darkColors.textSecondary, darkColors.chatBg))
   })
 
   // "Remove animations" on: the label stands still, whole, in its own colour.

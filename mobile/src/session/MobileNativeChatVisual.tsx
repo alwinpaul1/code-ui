@@ -197,7 +197,7 @@ function visualStyles({ colors }: Theme) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border
     },
-    sheet: { flex: 1, backgroundColor: colors.bg },
+    sheet: { flex: 1, backgroundColor: colors.chatBg },
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -13,16 +13,16 @@ describe('the rich Markdown editor document in the theme in use', () => {
   it('is drawn in the light theme when the app is light', () => {
     const style = richMarkdownEditorStyle(LIGHT)
     expect(style).toContain('color-scheme: light;')
-    expect(style).toContain(`--background: ${lightColors.bg};`)
+    expect(style).toContain(`--background: ${lightColors.chatBg};`)
     expect(style).toContain(`--foreground: ${lightColors.text};`)
-    expect(style).not.toContain(darkColors.bg)
+    expect(style).not.toContain(darkColors.chatBg)
   })
 
   it('is drawn in the dark theme when the app is dark', () => {
     const style = richMarkdownEditorStyle(DARK)
     expect(style).toContain('color-scheme: dark;')
-    expect(style).toContain(`--background: ${darkColors.bg};`)
-    expect(style).not.toContain(lightColors.bg)
+    expect(style).toContain(`--background: ${darkColors.chatBg};`)
+    expect(style).not.toContain(lightColors.chatBg)
   })
 
   it('writes every theme variable the live switch sets, and nothing the switch misses', () => {

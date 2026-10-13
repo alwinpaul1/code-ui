@@ -176,12 +176,12 @@ function createStyles({ colors }: Theme) {
     container: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     webView: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     }
   })
 }

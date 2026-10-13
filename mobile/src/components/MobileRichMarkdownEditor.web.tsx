@@ -237,7 +237,7 @@ export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditor
 // The native component's own frame, so the editor sits where the editor sat.
 function createStyles({ colors }: Theme) {
   return StyleSheet.create({
-    container: { flex: 1, minHeight: 0, backgroundColor: colors.bg },
-    host: { flex: 1, minHeight: 0, backgroundColor: colors.bg }
+    container: { flex: 1, minHeight: 0, backgroundColor: colors.chatBg },
+    host: { flex: 1, minHeight: 0, backgroundColor: colors.chatBg }
   })
 }

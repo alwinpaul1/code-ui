@@ -168,7 +168,7 @@ describe.each([
       mode,
       createElement(MobileSessionSurface, { controller: controllerFor({ showLoadingState: true }) })
     )
-    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.bg)
+    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.chatBg)
   })
 
   it('paints the frame an open file tab sits in, and the toast over it, from the theme', () => {
@@ -181,7 +181,7 @@ describe.each([
         })
       })
     )
-    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.bg)
+    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.chatBg)
     const toast = root.find(
       (node) => String(node.type) === 'Text' && node.props.children === 'Copied 3 lines'
     )
@@ -199,7 +199,7 @@ describe.each([
         controller: controllerFor({ activeBrowserTab: BROWSER_TAB as never })
       })
     )
-    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.bg)
+    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.chatBg)
   })
 
   it("paints the code viewer's page from the theme", () => {
@@ -212,6 +212,6 @@ describe.each([
         relativePath: 'docs/notes.txt'
       })
     )
-    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.bg)
+    expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.chatBg)
   })
 })

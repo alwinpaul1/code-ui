@@ -118,7 +118,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
       // No rule under the header: the Claude app draws none, and the one
       // here showed as a grey line under the tab pill once the chat scrolled
       // (2026-09-13).
-      style={{ backgroundColor: colors.bg }}
+      style={{ backgroundColor: colors.chatBg }}
       edges={['top']}
     >
       <View

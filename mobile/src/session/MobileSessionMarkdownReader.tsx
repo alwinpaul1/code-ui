@@ -245,7 +245,7 @@ function markdownModeStyles({ colors, radius, space, type }: Theme) {
     },
     previewScroll: {
       flex: 1,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     preview: {
       paddingHorizontal: space.md,

@@ -32,7 +32,10 @@ const DARK = { colors: darkColors, scheme: 'dark' as const }
 // own: on this fork's document before #21969 (1150a4e0's string modules, script region emptied)
 // and on this one, and the two agreed.
 // Re-pinned 2026-10-11: dark `text` went #ECE9E2 -> #F8F8F6 (same length, colour only).
-const DOCUMENT_SHELL_SHA256 = '4c177f2c87890fbd26800ed7b65d2eae153da10e2ec259b282247d318b36d660'
+// Re-pinned 2026-10-13: the editor's page and surface follow the session screen's `chatBg`, dark
+// #1A1917 -> #151515 (same length, colour only: with #151515 read back as #1A1917 the shell hashes
+// to the old 4c177f2c… exactly).
+const DOCUMENT_SHELL_SHA256 = 'be4a209f1ba7e976d83be26f1c9be76ec900a38f5b853a0af4d24a271b52778b'
 const DOCUMENT_SHELL_BYTES = 5621
 
 const SCRIPT_OPEN = '  <script>\n'

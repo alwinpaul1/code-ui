@@ -145,7 +145,7 @@ describe('a file the agent sent with SendUserFile', () => {
     const sent = tiles[1]!.findByType('Image' as never)
     expect(sent.props.resizeMode).toBe('cover')
     const style = Object.assign({}, ...[sent.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
-    expect(style).toMatchObject({ width: 96, height: 96, borderRadius: 12, backgroundColor: colorsForScheme('light').bg })
+    expect(style).toMatchObject({ width: 96, height: 96, borderRadius: 12, backgroundColor: colorsForScheme('light').chatBg })
     act(() => tiles[1]!.props.onPress())
     expect(peekImagePreview()).toMatchObject({ uri: SENT_URI })
   })
@@ -157,7 +157,7 @@ describe('a file the agent sent with SendUserFile', () => {
     const root = render(stepOf(SEND_FILE_TURN, { [READ_CALL_ID]: [READ_URI], [SEND_CALL_ID]: [SENT_URI] }))
     const image = imageButtons(root)[0]!.findByType('Image' as never)
     const style = Object.assign({}, ...[image.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
-    expect(style.backgroundColor).toBe(colorsForScheme('dark').bg)
+    expect(style.backgroundColor).toBe(colorsForScheme('dark').chatBg)
   })
 
   // Same app, a user message: 96 dp tiles, 12 dp corners, cropped, in one row

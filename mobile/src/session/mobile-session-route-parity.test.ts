@@ -479,7 +479,11 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 2026-10-04: the header's tab Pressable takes its fill from tabPillBackground (tab-pill-surface.ts),
 // the same three theme tokens it chose inline, so the contrast test can measure the dot on each.
 // Same host record COUNT (97); that one Pressable's captured style moved.
-const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a532210881e2f9e58404'
+// 2026-10-13: the session screen's canvas moved from `colors.bg` to `colors.chatBg` (the Claude
+// app's screen background). Same host record COUNT (96); only those style expressions moved.
+// Colour-only, checked: with `colors.chatBg` read back as `colors.bg` the records hash to the old
+// 8e496f53… exactly.
+const HEAD_HOST_JSX_SHA256 = 'ee3d1340f7a00a8f029e43b68a967ea48e11cfbdf0f5cc2e574c2512bfcd8f04'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.

@@ -57,7 +57,7 @@ describe('MobileNativeChatVisualFrame', () => {
     const document = visualDocument(webView(scheme))
     expect(document).toContain(`<html class="${scheme}">`)
     expect(document).toContain(`color-scheme:${scheme}`)
-    expect(document).toContain(`--background:${colors.bg}`)
+    expect(document).toContain(`--background:${colors.chatBg}`)
     expect(document).toContain(`--foreground:${colors.text}`)
     expect(document).toContain(`--border:${colors.border}`)
   })
