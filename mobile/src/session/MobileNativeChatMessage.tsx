@@ -9,7 +9,7 @@ import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { AgentControls, TurnActionsPlace, type TurnActionsAt } from './MobileNativeChatTurnActions'
 import { copyFailedNotice } from '../components/use-copy-to-clipboard'
-import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
+import { groupProseBlocks, imageFollowsImage, imageLeadsText } from './mobile-native-chat-prose-groups'
 import { useMobileNativeChatMessageCopy } from './use-mobile-native-chat-message-copy'
 import { renderProseGroup } from './mobile-native-chat-prose-group-view'
 import { useTheme } from '../theme/theme-context'
@@ -349,10 +349,14 @@ function MobileNativeChatMessageImpl({
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
                 {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
-                  // Air between a picture and the caption under it.
+                  // Air between a picture and the caption under it, and
+                  // between pictures that follow each other.
                   <View
                     key={index}
-                    style={imageLeadsText(groups, index) ? styles.imageLead : null}
+                    style={[
+                      imageLeadsText(groups, index) ? styles.imageLead : null,
+                      imageFollowsImage(groups, index) ? styles.imageAfterImage : null
+                    ]}
                   >
                     {renderProseGroup(group, {
                       isUser,

@@ -118,7 +118,8 @@ function imageRef(path: string, uri: string | undefined, alt: string): NativeCha
  *
  * `previews` holds the picture URIs in `agentImagePaths` order; an empty one
  * leaves that slot a placeholder (path, no URL). With no `previews` at all
- * (the host was never asked) no slot is drawn. A message with no image Read
+ * (the host was never asked) no slot is drawn. A file read twice in one run
+ * (between two blocks of text) has one slot. A message with no image Read
  * and no readable SendUserFile comes back as it was.
  */
 export function placeAgentImages(
@@ -166,6 +167,22 @@ export function placeAgentImages(
     out.push(...waiting)
     waiting = []
   }
+  // One slot per file in a run: the Claude app counts repeat reads of one
+  // file once, and the agent that read its screenshot, took a new one under
+  // the same name and read it again drew two identical chips (2026-10-13).
+  // The host is asked by path, so both previews are the same picture; the
+  // first one that came fills the slot.
+  const placeRead = (path: string, uri: string | undefined) => {
+    const index = waiting.findIndex((block) => block.type === 'image-ref' && block.path === path)
+    if (index === -1) {
+      waiting.push(...slot(path, uri, AGENT_READ_IMAGE_ALT))
+      return
+    }
+    const held = waiting[index] as NativeChatImageRefBlock
+    if (!held.url && uri) {
+      waiting[index] = imageRef(path, uri, AGENT_READ_IMAGE_ALT)
+    }
+  }
   for (const block of blocks) {
     if (sentResults.has(block)) {
       continue
@@ -200,7 +217,7 @@ export function placeAgentImages(
       if (read) {
         const uri = take()
         if (!failed.has(block)) {
-          waiting.push(...slot(read, uri, AGENT_READ_IMAGE_ALT))
+          placeRead(read, uri)
         }
       }
       continue

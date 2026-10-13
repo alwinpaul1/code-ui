@@ -133,8 +133,9 @@ describe('an image the agent read', () => {
 
   // Until 2026-10-11 the step stayed as it was, so a picture the host never
   // shared left no trace at all ("I don't see any images in my chat"). Now
-  // its slot names the file, with nothing to tap.
-  it('names the file in its place while the host has not sent the picture, with nothing to tap', () => {
+  // its slot names the file, with no picture to open (a tap says why:
+  // agent-image-placeholders.test.tsx).
+  it('names the file in its place while the host has not sent the picture, with no picture to open', () => {
     const step = stepOf([BEFORE, ...READ_IMAGE_ROWS, AFTER], { [READ_IMAGE_CALL_ID]: [''] }) // asked, no answer yet
     expect(step.blocks.filter((block) => block.type === 'image-ref')).toEqual([
       { type: 'image-ref', path: READ_IMAGE_PATH, alt: 'Image the agent read' }

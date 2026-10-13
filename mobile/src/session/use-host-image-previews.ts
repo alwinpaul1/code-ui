@@ -18,7 +18,7 @@ import {
 } from '../../../src/shared/native-chat-types'
 import { agentImagePaths } from './mobile-native-chat-agent-images'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
-import { hostImageAskState, recordHostImageFailure, refusedBeforeNamed, resetHostImageRefusals, RETRY_MS } from './host-image-refusals'
+import { hostImageAskState, recordHostImageFailure, recordHostImageMissing, refusedBeforeNamed, resetHostImageRefusals, RETRY_MS } from './host-image-refusals'
 import {
   hostImageStillThere,
   keepHostImageFile,
@@ -190,7 +190,10 @@ export async function loadHostImage(args: {
       : pending
   }
   // Back-off rules: host-image-refusals.ts.
-  const fail = (refused = false) => recordHostImageFailure(key, { refused, named, newlyNamed })
+  const fail = (refused = false) => {
+    recordHostImageFailure(key, { refused, named, newlyNamed })
+    recordHostImageMissing(args.path, refused ? 'not-shared' : 'failed')
+  }
   const run = (async () => {
     try {
       const worktree = `id:${args.worktreeId}`
@@ -260,6 +263,7 @@ export async function loadHostImage(args: {
       }
       const uri = keepHostImageFile(key, preview.dataUri, args.files)
       dataUriByPath.set(key, uri)
+      recordHostImageMissing(args.path, undefined)
       return uri
     } catch (error) {
       fail()

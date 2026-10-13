@@ -48,6 +48,47 @@ export function recordHostImageFailure(
   })
 }
 
+/** Why the last ask for a picture brought nothing: the desktop answered and
+ *  would not share it, or the ask failed (the connection, a file it could not
+ *  read, a file that is not an image). No entry: it came, or no answer is in
+ *  yet. */
+export type HostImageMissing = 'not-shared' | 'failed'
+const missingByPath = new Map<string, HostImageMissing>()
+const missingListeners = new Set<() => void>()
+
+/** Keyed by path alone, as the placeholder that reads it knows no host. Two
+ *  hosts holding one path share an entry, and the latest answer wins: the
+ *  chat on screen re-asks its own host while a picture is missing, so within
+ *  one ask the answer it reads is its own. */
+export function recordHostImageMissing(path: string, why: HostImageMissing | undefined): void {
+  if (missingByPath.get(path) === why) {
+    return
+  }
+  if (why) {
+    missingByPath.set(path, why)
+  } else {
+    missingByPath.delete(path)
+  }
+  for (const listener of missingListeners) {
+    listener()
+  }
+}
+
+/** What a picture's placeholder can say about it (MobileNativeChatProse.tsx). */
+export function hostImageMissing(path: string | undefined): HostImageMissing | undefined {
+  return path ? missingByPath.get(path) : undefined
+}
+
+/** For `useSyncExternalStore`: an open note follows an answer that comes in
+ *  after it opened. */
+export function subscribeHostImageMissing(listener: () => void): () => void {
+  missingListeners.add(listener)
+  return () => {
+    missingListeners.delete(listener)
+  }
+}
+
 export function resetHostImageRefusals(): void {
   failures.clear()
+  missingByPath.clear()
 }

@@ -183,7 +183,7 @@ describe('a file the agent sent with SendUserFile', () => {
     expect(tileStyle(row[1]!)).toMatchObject({ width: 96, height: 96, borderRadius: 12 })
   })
 
-  it('shows a placeholder naming the file, and nothing to tap, while the host has not shared the picture', () => {
+  it('shows a placeholder naming the file, and no picture to open, while the host has not shared the picture', () => {
     const step = stepOf(SEND_FILE_TURN, ASKED)
     const root = render(step)
     expect(imageButtons(root)).toHaveLength(0)
@@ -191,7 +191,9 @@ describe('a file the agent sent with SendUserFile', () => {
       (node) => typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('Image on Desktop: where.png')
     )
     // One for the Read's picture, one for the sent one; the caption still shows.
-    expect(placeholders.filter((node) => (node.type as unknown) === 'View')).toHaveLength(2)
+    // Its chip is a button now: a tap says why there is no picture
+    // (agent-image-placeholders.test.tsx).
+    expect(placeholders.filter((node) => (node.type as unknown) === 'Pressable')).toHaveLength(2)
     expect(json()).toContain(SEND_FILE_CAPTION)
     expect(json()).not.toContain('used a tool')
   })
@@ -200,9 +202,11 @@ describe('a file the agent sent with SendUserFile', () => {
     scheme = 'dark'
     const root = render(stepOf(SEND_FILE_TURN, ASKED))
     const [chip] = root.findAll(
-      (node) => (node.type as unknown) === 'View' && String(node.props.accessibilityLabel ?? '').startsWith('Image on Desktop: where.png')
+      (node) => (node.type as unknown) === 'Pressable' && String(node.props.accessibilityLabel ?? '').startsWith('Image on Desktop: where.png')
     )
-    const style = Object.assign({}, ...[chip!.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
+    const chipStyle: unknown = chip!.props.style
+    const resting = typeof chipStyle === 'function' ? chipStyle({ pressed: false }) : chipStyle
+    const style = Object.assign({}, ...[resting].flat(3).filter(Boolean)) as Record<string, unknown>
     expect(style.backgroundColor).toBe(colorsForScheme('dark').bgRaised)
     expect(style.backgroundColor).not.toBe(colorsForScheme('light').bgRaised)
   })

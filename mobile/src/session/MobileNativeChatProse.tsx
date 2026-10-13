@@ -1,3 +1,4 @@
+import { useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
@@ -10,6 +11,7 @@ import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatAgentImageTile, MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
 import { isAgentImageAlt } from './mobile-native-chat-agent-images'
+import { hostImageMissing, subscribeHostImageMissing, type HostImageMissing } from './host-image-refusals'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
 import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
 import {
@@ -89,26 +91,12 @@ export function Prose({
     const uri = block.url ?? block.path
     // A picture the agent read or sent: a square tile, as the Claude app
     // draws it, or, until the host sends it (or when it will not), a
-    // placeholder naming the file. Nothing to tap there: opening the path
-    // asks the same host the same question.
+    // placeholder naming the file.
     if (!invert && isAgentImageAlt(block.alt)) {
       if (isRenderableImageUri(block.url)) {
         return <MobileNativeChatAgentImageTile uri={block.url} label={block.alt ?? 'Image'} />
       }
-      const name = fileName(block.path)
-      return (
-        <View
-          accessible
-          accessibilityRole="image"
-          accessibilityLabel={`Image on Desktop: ${name}. Preview unavailable.`}
-          style={styles.imageChip}
-        >
-          <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
-          <Text numberOfLines={1} style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale, flexShrink: 1 }]}>
-            {name}
-          </Text>
-        </View>
-      )
+      return <AgentImagePlaceholder path={block.path} fontScale={fontScale} styles={styles} />
     }
     // A photo in the user's own bubble: the same 96 dp tile.
     if (invert && isRenderableImageUri(uri)) {
@@ -144,6 +132,64 @@ export function Prose({
     )
   }
   return null
+}
+
+/** What a placeholder says when tapped. */
+function missingPictureNote(why: HostImageMissing | undefined): string {
+  switch (why) {
+    case 'not-shared':
+      return "The desktop didn't share this picture. It shares a file outside the project only when the agent's reply names it or the terminal printed its path."
+    case 'failed':
+      return "The picture couldn't be fetched from the desktop."
+    case undefined:
+      return 'Waiting for the desktop to send this picture.'
+    default: {
+      const unhandled: never = why
+      return unhandled
+    }
+  }
+}
+
+/** A picture the host has not sent, or will not. A tap says which, under the
+ *  chip, and a second tap folds it away. Opening the path is no use: it asks
+ *  the same host the same question. An open note follows the host's latest
+ *  answer. */
+function AgentImagePlaceholder({
+  path,
+  fontScale,
+  styles
+}: {
+  path: string | undefined
+  fontScale: number
+  styles: ChatMessageStyles
+}) {
+  const [explained, setExplained] = useState(false)
+  const why = useSyncExternalStore(subscribeHostImageMissing, () => hostImageMissing(path))
+  const name = fileName(path)
+  const textStyle = [styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]
+  return (
+    <View style={styles.imagePlaceholder}>
+      <Pressable
+        onPress={() => setExplained((shown) => !shown)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Image on Desktop: ${name}. Preview unavailable.`}
+        accessibilityHint="Says why the picture is not shown"
+        accessibilityState={{ expanded: explained }}
+        style={({ pressed }) => [styles.imageChip, pressed && styles.controlPressed]}
+      >
+        <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
+        <Text numberOfLines={1} style={[textStyle, { flexShrink: 1 }]}>
+          {name}
+        </Text>
+      </Pressable>
+      {explained ? (
+        <Text accessibilityLiveRegion="polite" style={textStyle}>
+          {missingPictureNote(why)}
+        </Text>
+      ) : null}
+    </View>
+  )
 }
 
 function fileName(path: string | undefined): string {
