@@ -15,6 +15,11 @@ export type LocalNotificationData = {
   hostId: string
   worktreeId?: string
   notificationId?: string
+  /** The terminal pane (`<tabId>:<leafId>`) that raised it, so a tap opens that
+   *  tab and not whichever one the workspace last had active. */
+  paneKey?: string
+  /** The structured agent session that raised it, for the same reason. */
+  agentSessionId?: string
 }
 
 export type NotificationNavigationOptions = {
@@ -24,6 +29,49 @@ export type NotificationNavigationOptions = {
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
+}
+
+/** One URI-encoded part of a desktop notification id, or null when it does not decode. */
+function decodedIdPart(part: string | undefined): string | null {
+  if (!part) {
+    return null
+  }
+  try {
+    return readNonEmptyString(decodeURIComponent(part))
+  } catch {
+    return null
+  }
+}
+
+/** Which tab of the workspace raised a notification, read from the id the
+ *  desktop gave it. The desktop sends no pane field (checked against Orca
+ *  1.4.224's `dispatchMobileNotification`), but both of its agent lanes put the
+ *  subject in the id, each part URI-encoded so a split on `:` is exact:
+ *  - terminal: `agent:<worktreeId>:<paneKey>:<stateStartedAt>`
+ *    (`buildAgentNotificationId`, src/shared/agent-notification-id.ts)
+ *  - structured session: `agent-attention:<scope>:<sessionId>:…`
+ *  An id naming a different workspace from the event's names no tab here: the
+ *  tab would be looked for in the wrong workspace. */
+export function notificationTabSubject(
+  notificationId: string | null | undefined,
+  worktreeId: string | null | undefined
+): { paneKey: string } | { agentSessionId: string } | null {
+  if (!notificationId) {
+    return null
+  }
+  const parts = notificationId.split(':')
+  if (parts[0] === 'agent' && parts.length === 4) {
+    if (!worktreeId || decodedIdPart(parts[1]) !== worktreeId) {
+      return null
+    }
+    const paneKey = decodedIdPart(parts[2])
+    return paneKey ? { paneKey } : null
+  }
+  if (parts[0] === 'agent-attention' && parts.length >= 4) {
+    const agentSessionId = decodedIdPart(parts[2])
+    return agentSessionId ? { agentSessionId } : null
+  }
+  return null
 }
 
 export function buildLocalNotificationData(
@@ -40,7 +88,28 @@ export function buildLocalNotificationData(
   if (event.notificationId) {
     data.notificationId = event.notificationId
   }
+  const subject = notificationTabSubject(event.notificationId, event.worktreeId)
+  if (subject) {
+    Object.assign(data, subject)
+  }
   return data
+}
+
+/** The tab a tapped banner names: its stored field, else what its id says — a
+ *  banner posted before the field existed is still in the tray after an update. */
+function tappedTabSubject(
+  record: Record<string, unknown>,
+  worktreeId: string
+): { paneKey: string } | { agentSessionId: string } | null {
+  const paneKey = readNonEmptyString(record.paneKey)
+  if (paneKey) {
+    return { paneKey }
+  }
+  const agentSessionId = readNonEmptyString(record.agentSessionId)
+  if (agentSessionId) {
+    return { agentSessionId }
+  }
+  return notificationTabSubject(readNonEmptyString(record.notificationId), worktreeId)
 }
 
 /** Where a tap should land. `sessionTarget` is null for a host-only notification, whose
@@ -115,7 +184,13 @@ export function getNotificationNavigationTarget(
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {
     hostId,
-    sessionTarget: worktreeId ? mobileSessionRouteTarget({ hostId, worktreeId }) : null,
+    sessionTarget: worktreeId
+      ? mobileSessionRouteTarget({
+          hostId,
+          worktreeId,
+          tab: tappedTabSubject(record, worktreeId) ?? undefined
+        })
+      : null,
     ...(credentialStatus === 'missing'
       ? { credentialRecovery: 're-pair' as const }
       : credentialStatus === 'temporarily-unavailable'

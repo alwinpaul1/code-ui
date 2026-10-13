@@ -18,6 +18,7 @@ import { useMobileSessionKeyboardState } from './use-mobile-session-keyboard-sta
 import { useMobileSessionStartup } from './use-mobile-session-startup'
 import { useMobileSessionPreferenceFocus } from './use-mobile-session-preference-focus'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
+import { useMobileSessionNotificationTab } from './use-mobile-session-notification-tab'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useMobileSessionFileActions } from './use-mobile-session-file-actions'
@@ -84,6 +85,9 @@ export function useMobileSessionController() {
   useMobileSessionStartup(keyboardState)
   useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
+  // After the startup reset: its effects run first, so a notification's tab is
+  // selected on the workspace being opened, not wiped with the one being left.
+  useMobileSessionNotificationTab(tabSwitching)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(
     terminalWebview,

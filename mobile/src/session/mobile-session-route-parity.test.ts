@@ -119,7 +119,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // 310 since 2026-10-13: useTerminalFirstFrameReveal in the screen state, which keeps a pane
 // covered until its first kept frame (terminal-first-frame-reveal.ts). Its own state, refs,
 // callbacks and effects stay inside it, so only the hook pin moved.
-const HEAD_MAIN_HOOK_SHA256 = 'f79775db9a963e33246d0ea71b1997117b695378828d993c4f09c1d89124fcdb'
+// 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, the notification tap's
+// tab selection. Not expanded, so only the hook pins moved.
+const HEAD_MAIN_HOOK_SHA256 = '3896c5a91c6044c0795136534580a598a7d740802bbe43fdbf46b7661199de83'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -133,7 +135,8 @@ const HEAD_MAIN_HOOK_SHA256 = 'f79775db9a963e33246d0ea71b1997117b695378828d993c4
 // 2026-10-11: the foundation also takes `branch: worktreeBranch` out of useLiveWorktreeName, for
 // the header menu's Copy branch (parity gap G35).
 // 2026-10-13: terminalFirstFrameReveal binds in the screen state (the first-frame cover).
-const HEAD_HOOK_BINDING_SHA256 = 'cc12bc166ccbc15bc65c5e00bfbdf129f75ca666610f6fcd6ce7f39395f3e216'
+// 2026-10-13: the controller's useMobileSessionNotificationTab call (a bare call, bound to nothing).
+const HEAD_HOOK_BINDING_SHA256 = 'a8c6d407b49df903f019b3c443b55db2bad17d4628f4f2361423c8b8ddf5d035'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -1044,7 +1047,10 @@ describe('mobile session route extraction parity', () => {
     // 309 since 2026-10-10: the native-chat banner's useMemo (Orca #26544, sign-in guidance steps
     // aside once the transcript says it) and the hostRefusesOtherRuntime useState (Orca #27196).
     // 310 since 2026-10-13: useTerminalFirstFrameReveal (the first-frame cover).
-    expect(main.hooks).toHaveLength(310)
+    // 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, which selects the
+    // tab a notification tap named. Not expanded: its params read and effect stay inside it.
+    // 311 since 2026-10-13: both of the above landed together.
+    expect(main.hooks).toHaveLength(311)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
