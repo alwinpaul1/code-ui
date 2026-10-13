@@ -26,7 +26,7 @@ const DESKTOP_RELEASE = {
   assets: [{ name: 'Orca.dmg', browser_download_url: 'https://x/Orca.dmg' }]
 }
 
-function mobileApk(version: string, apkUrl: string, assetName = 'app-release.apk') {
+function mobileApk(version: string, apkUrl: string, assetName = `code-ui-android-v${version}-1.apk`) {
   return {
     tag_name: `mobile-android-v${version}`,
     prerelease: true,
