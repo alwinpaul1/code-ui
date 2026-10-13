@@ -56,9 +56,10 @@ const NO_SENT_PHOTOS: ScreenSentPhotos[] = []
 
 type Props = {
   controller: MobileNativeChatController
-  /** A terminal pane is mounted for the active tab. When none is, this overlay
-   *  is the only thing on screen, so it must never render nothing. */
+  /** A terminal pane is mounted for the active tab (an agent-session tab has none). */
   hasTerminalUnderneath: boolean
+  /** A PTY tab: not a chat, its terminal frame owns the screen, mounted or not. */
+  ptyTab: boolean
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
@@ -112,8 +113,7 @@ type Props = {
  *  the streaming gate: this component stays mounted across those toggles, while
  *  the chat list below it does not. */
 export function MobileNativeChatOverlay({
-  controller,
-  hasTerminalUnderneath,
+  controller, hasTerminalUnderneath, ptyTab,
   onOpenFile,
   onRevertHunk,
   createdFileCounts,
@@ -409,7 +409,7 @@ export function MobileNativeChatOverlay({
     blank,
     blink,
     showNativeChat: chatOn,
-    hasTerminalUnderneath,
+    hasTerminalUnderneath, ptyTab,
     surfaceId: sendSurfaceId
   })
   if (frame === 'terminal') {

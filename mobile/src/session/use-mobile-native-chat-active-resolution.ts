@@ -12,7 +12,11 @@ import {
   useNativeChatTabStatusReading
 } from './native-chat-kept-session-store'
 import { chatDefaultAgent } from './mobile-session-view-default'
-import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import {
+  unchattablePaneAgent,
+  resolveMobileNativeChat,
+  type MobileNativeChatTab
+} from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
 import { useTaskReaderStatus } from './agent-status-stand-in'
 
@@ -136,6 +140,25 @@ export function useMobileNativeChatActiveResolution(args: {
   const activeChatResolution =
     activeSessionTab && activeSessionTabId && tabWantsChat ? chatIdentity : null
   const showNativeChat = activeChatResolution != null
+  // The view the reader chose, as the chrome may honour it. A chat view kept
+  // for a terminal the host now says runs an agent the phone cannot chat with
+  // (Antigravity, after Claude Code ran there and the tab was left in Chat UI)
+  // is not a chat: honoured, it hid the terminal bar and drew an empty chat
+  // over the terminal for good (0.9.131, 2026-10-13). The same for an Orca
+  // launch of such an agent before its first status. An identity not known
+  // YET (nothing named, a Grok readability check pending) still holds the view.
+  const refusedAgent =
+    tabWantsChat && onTerminal && chatIdentity == null ? unchattablePaneAgent(activeSessionTab) : null
+  const chatViewSelected = tabWantsChat && refusedAgent === null
+  // One line when that happens, naming the agent, so a tab that "won't open
+  // in chat" says why instead of looking like a broken toggle.
+  useEffect(() => {
+    if (refusedAgent !== null) {
+      console.warn(
+        `[native-chat] tab ${activeSessionTabId ?? '?'} runs ${refusedAgent}, which has no Chat UI; showing its terminal`
+      )
+    }
+  }, [activeSessionTabId, refusedAgent])
   // True as soon as this tab is a chat, before its transcript id exists. The
   // terminal bar uses this so it does not flash under the chat field.
   const activeChatEligible = activeSessionTab != null && activeSessionTabId != null && chatIdentity != null
@@ -171,7 +194,7 @@ export function useMobileNativeChatActiveResolution(args: {
     viewResolved,
     activeChatEligible,
     showNativeChat,
-    chatViewSelected: tabWantsChat,
+    chatViewSelected,
     showNativeChatRef,
     activeChatAgent,
     activeChatAgentRef,

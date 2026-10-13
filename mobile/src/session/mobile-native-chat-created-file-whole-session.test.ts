@@ -74,6 +74,7 @@ function overlay(
   return createElement(MobileNativeChatOverlay, {
     controller,
     hasTerminalUnderneath: true,
+    ptyTab: true,
     hostAllowsRewind: true,
     images: {} as never,
     onMicPress: vi.fn(),

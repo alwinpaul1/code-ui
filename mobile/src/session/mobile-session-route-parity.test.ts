@@ -434,8 +434,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // video or music tab through MobileFileMediaPreview; no other literal moved.
 // 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
 // MobileSessionHeaderMenu.tsx, outside this family, taking handlePanelTap('pr')'s 'pr' with it.
+// 671 since 2026-10-13: MobileSessionActiveContent passes the overlay `ptyTab`, the active tab's
+// `type === 'terminal'`, so a PTY tab that is not a chat yields to its terminal; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '560c8ea86ab2cf932cf2521f7e3284ba75cc4dcae0210e2d2dd5d2a4d24d5937'
+  '79f8832f67d4acec4c590fa094cfe78c10463a4d7f0ca792a1508e4323adc916'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -583,7 +585,9 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // chat overlay in the session content.
 // 2026-10-12 (later): the diff pill is gone ("Remove this diff"); the overlay is no longer handed
 // `sessionDiff` and `onOpenDiff`.
-const HEAD_LEAF_JSX_SHA256 = '5706a4a1d8236ec869e140a5d6d82e7e7165cd4a19fb1c7b015e8eed8f736ab6'
+// 2026-10-13: the chat overlay is handed `ptyTab`, so a PTY tab that is not a chat yields to its
+// terminal before the pane mounts. Same records; only the overlay's moved.
+const HEAD_LEAF_JSX_SHA256 = '7a8accbf32223a0f0d116ece1107611db04526101d418e860ee1e9b1a02bb1e0'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1155,7 +1159,8 @@ describe('mobile session route extraction parity', () => {
     // asked for the model and effort to show only in the composer.
     // 670 later on 2026-10-11: the optimistic tab close's verdict literals ('closed', 'refused',
     // 'not connected', 'the desktop refused') and its 'terminal-handle' check.
-    expect(strings).toHaveLength(670)
+    // 671 since 2026-10-13: the chat overlay's `ptyTab` reads the active tab's 'terminal' type.
+    expect(strings).toHaveLength(671)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
