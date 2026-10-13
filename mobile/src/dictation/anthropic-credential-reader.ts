@@ -86,13 +86,13 @@ function parseCredentialFromLines(
   const endIdx = lines.findIndex(
     (l, i) => i > beginIdx && isMarkerLine(l, END_MARKER)
   )
-  if (beginIdx < 0 || endIdx < 0 || endIdx <= beginIdx) {
+  if (beginIdx === -1 || endIdx === -1 || endIdx <= beginIdx) {
     return null
   }
   const payload = lines.slice(beginIdx + 1, endIdx).join('')
   const jsonStart = payload.indexOf('{')
   const jsonEnd = payload.lastIndexOf('}')
-  if (jsonStart < 0 || jsonEnd <= jsonStart) {
+  if (jsonStart === -1 || jsonEnd <= jsonStart) {
     return null
   }
   try {

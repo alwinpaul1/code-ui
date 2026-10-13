@@ -247,7 +247,7 @@ export class AnthropicVoiceStream {
    * Interim promotion: if unreported text exists, deliver it as final.
    * This fires on any abnormal end (ws close, error, timeout).
    */
-  private promoteInterim(reason: string): void {
+  private promoteInterim(_reason: string): void {
     if (!this.latestText) {
       return
     }
