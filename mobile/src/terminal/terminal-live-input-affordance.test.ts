@@ -23,7 +23,7 @@ const sendCompletionGenerationSource = readFileSync(
 )
 
 function liveInputBarBlock(): string {
-  const start = commandDockSource.indexOf('{liveInputEnabled ? (')
+  const start = commandDockSource.indexOf('{liveBar ? (')
   expect(start).toBeGreaterThanOrEqual(0)
   const end = commandDockSource.indexOf(') : (', start)
   expect(end).toBeGreaterThan(start)

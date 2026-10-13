@@ -3,6 +3,7 @@
  *  forever — it broke gesture recognition and drained battery at ~25 cycles/s. */
 
 import type { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
+import type { TerminalFirstFrameRevealReason } from '../terminal/terminal-first-frame-reveal'
 
 export const MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS = 3
 
@@ -201,6 +202,10 @@ export type TerminalViewportFitPassArgs = {
   subscribeToTerminal: (handle: string) => void
   scheduleDelayedAction: (fn: () => void, ms: number) => void
   showToast: (message: string, durationMs?: number) => void
+  /** The pane may be shown: the frame it holds is the one it keeps, or none
+   *  better is coming. Not called while a re-subscribe for a phone-size
+   *  frame is on its way (terminal-first-frame-reveal.ts). */
+  revealFirstFrame?: (reason: TerminalFirstFrameRevealReason) => void
 }
 
 /** One bounded fit pass per scrollback frame: converge, hold, degrade visibly,
@@ -234,12 +239,15 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     viewport: args.viewportRef.current,
     attempts: budget.attempts(handle)
   })
+  const reveal = (reason: TerminalFirstFrameRevealReason): void => args.revealFirstFrame?.(reason)
   if (decision.kind === 'converged') {
     budget.markConverged(handle)
+    reveal('converged')
     return
   }
   if (decision.kind === 'hold') {
     diagnostics.streamResubscribeHeld(handle, seq)
+    reveal('held')
     return
   }
   if (decision.kind === 'exhausted') {
@@ -247,7 +255,13 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     if (budget.shouldAnnounceExhaustion(handle)) {
       args.showToast("Couldn't fit the terminal to this screen", 4000)
     }
+    reveal('exhausted')
     return
+  }
+  // Why: a backed-off retry keeps the live stream up for 750 ms or more; the
+  // host already answered at another size, so show what it sent meanwhile.
+  if (decision.delayMs > 0) {
+    reveal('fit-retrying')
   }
   const viewportWasMeasured = args.viewportMeasuredRef.current
   void (async () => {
@@ -269,7 +283,12 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
-    if (!args.getTerminalRef(handle) || !dims) {
+    if (!args.getTerminalRef(handle)) {
+      return
+    }
+    if (!dims) {
+      // No phone size to ask the host for, so this frame is the one there is.
+      reveal('measure-failed')
       return
     }
     args.viewportRef.current = dims
@@ -284,6 +303,7 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       // Why: the pre-measure mismatch was a stale cached viewport; the server already agrees.
       budget.markConverged(handle)
+      reveal('converged')
       return
     }
     const resubscribe = (): void => {
@@ -303,6 +323,9 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
       // Why: only a resubscribe that actually armed spends budget; one turned away by its own gates never reached the host.
       if (args.terminalUnsubsRef.current.has(handle)) {
         budget.chargeAttempt(handle)
+      } else {
+        // Turned away by its own gates: no phone-size frame is on its way.
+        reveal('resubscribe-refused')
       }
     }
     if (decision.delayMs > 0) {
@@ -311,5 +334,12 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     } else {
       resubscribe()
     }
-  })()
+  })().catch((error: unknown) => {
+    // Why: a WebView torn down mid-measure rejects; that must not keep the pane covered.
+    console.log('[fit][session] fit pass failed', {
+      handle: handle.slice(-8),
+      error: error instanceof Error ? error.message : String(error)
+    })
+    reveal('measure-failed')
+  })
 }

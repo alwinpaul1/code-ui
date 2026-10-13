@@ -9,6 +9,7 @@ import {
 import { MobileSessionAccessoryStrip } from './MobileSessionAccessoryStrip'
 import { getMobileTerminalLiveInputPlaceholder } from './mobile-terminal-live-input-placeholder'
 import { shouldShowTerminalCommandDock } from './mobile-session-command-dock-visibility'
+import { resolveTerminalDockPresentation } from './mobile-terminal-dock-presentation'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { useTheme } from '../theme/theme-context'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -45,9 +46,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift,
     nativeChatController,
-    showLoadingState
+    showLoadingState,
+    activeHandle,
+    terminalModes
   } = controller
   const { viewResolved, chatViewSelected } = nativeChatController
+  // Why: before the tab's PTY is named, draw the bar it opens with, not "no terminal".
+  const { liveBar } = resolveTerminalDockPresentation({ activeHandle, liveInputEnabled, terminalModes })
   // Tracks the live field's focus so the bar can highlight while the keyboard is open.
   const [liveFocused, setLiveFocused] = useState(false)
   useEffect(() => {
@@ -86,7 +91,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       <MobileSessionAccessoryStrip controller={controller} />
 
       {/* Input bar */}
-      {liveInputEnabled ? (
+      {liveBar ? (
         <View
           style={{
             flexDirection: 'row',

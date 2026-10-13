@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native'
 import { ChevronsRight, Keyboard as KeyboardIcon, Monitor, Plus, Smartphone } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { resolveTerminalDockPresentation } from './mobile-terminal-dock-presentation'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -64,7 +64,11 @@ export function MobileSessionAccessoryStrip({ controller }: { controller: Mobile
     fontSize: type.caption.size,
     color: disabled ? colors.textMuted : colors.textSecondary
   })
-  const phoneMode = isTerminalPhoneDisplayMode(activeHandle, terminalModes)
+  const { phoneMode, liveBar } = resolveTerminalDockPresentation({
+    activeHandle,
+    liveInputEnabled,
+    terminalModes
+  })
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -115,19 +119,19 @@ export function MobileSessionAccessoryStrip({ controller }: { controller: Mobile
         </Pressable>
         <Pressable
           style={({ pressed }) =>
-            keyStyle({ pressed, disabled: !canCompose, active: liveInputEnabled })
+            keyStyle({ pressed, disabled: !canCompose, active: liveBar })
           }
           // Why: offline, live mode is dead but the buffered box still composes — keep the escape hatch tappable (#6713).
           disabled={!canCompose}
           onPress={toggleLiveInput}
           accessibilityLabel={
-            liveInputEnabled ? 'Switch to buffered command input' : 'Switch to live terminal input'
+            liveBar ? 'Switch to buffered command input' : 'Switch to live terminal input'
           }
         >
           <ChevronsRight
             size={14}
             color={
-              liveInputEnabled
+              liveBar
                 ? colors.textInverse
                 : canCompose
                   ? colors.textSecondary

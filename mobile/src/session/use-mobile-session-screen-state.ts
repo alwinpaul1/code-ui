@@ -9,6 +9,7 @@ import {
 import type { CustomKey } from '../components/CustomKeyModal'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import { useTerminalLiveInputModePreference } from './use-terminal-live-input-mode-preference'
+import { useTerminalFirstFrameReveal } from '../terminal/terminal-first-frame-reveal'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -63,6 +64,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     toggleTerminalLiveInput
   } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
+  // Which panes have their first kept frame; until then a pane is covered.
+  const terminalFirstFrameReveal = useTerminalFirstFrameReveal(activeHandle)
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   // Why seeded: with a cached strip but no active tab the screen shows the
@@ -171,6 +174,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     toggleTerminalLiveInput,
     activeHandle,
     setActiveHandle,
+    ...terminalFirstFrameReveal,
     coveredStreamRevision,
     setCoveredStreamRevision,
     activeSessionTabId,

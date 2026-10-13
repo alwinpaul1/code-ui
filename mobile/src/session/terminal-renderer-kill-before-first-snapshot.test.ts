@@ -122,6 +122,8 @@ function harness(options: { viewportMeasured: boolean }) {
     markNativeChatInputLeaseReady: vi.fn(),
     showNativeChatRef: { current: false },
     signalTerminalInventoryRecovery: vi.fn(),
+    revealTerminalFirstFrame: vi.fn(),
+    armTerminalFirstFrameRevealTimeout: vi.fn(),
     markdownDocs: new Map(),
     fileDocs: new Map(),
     terminalGestureInputQueuesRef: { current: new Map() },

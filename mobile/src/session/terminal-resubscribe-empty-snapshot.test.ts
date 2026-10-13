@@ -176,7 +176,9 @@ function harness() {
     getTerminalRef: (handle: string | null) => (handle === HANDLE ? pane : undefined),
     unsubscribeTerminal,
     unsubscribeTerminalRef: { current: unsubscribeTerminal },
-    signalTerminalInventoryRecovery: vi.fn()
+    signalTerminalInventoryRecovery: vi.fn(),
+    revealTerminalFirstFrame: vi.fn(),
+    armTerminalFirstFrameRevealTimeout: vi.fn()
   }
   let subscribeToTerminal: (handle: string) => void = () => {}
   function Harness() {

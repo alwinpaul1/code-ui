@@ -116,7 +116,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // prompt-cancel one in the feedback capabilities, which the status probe sets.
 // 307 since 2026-10-06 (Orca #24759 ported): the feedback hook's mountedRef (useRef) and its
 // effect (useEffect) join the family.
-const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd345cdb28a61a7f31'
+// 310 since 2026-10-13: useTerminalFirstFrameReveal in the screen state, which keeps a pane
+// covered until its first kept frame (terminal-first-frame-reveal.ts). Its own state, refs,
+// callbacks and effects stay inside it, so only the hook pin moved.
+const HEAD_MAIN_HOOK_SHA256 = 'f79775db9a963e33246d0ea71b1997117b695378828d993c4f09c1d89124fcdb'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -129,13 +132,16 @@ const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd3
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
 // 2026-10-11: the foundation also takes `branch: worktreeBranch` out of useLiveWorktreeName, for
 // the header menu's Copy branch (parity gap G35).
-const HEAD_HOOK_BINDING_SHA256 = '61bb3427f8f29707e60787ccade3525549a55d36ad19fa2d298caca2f84e0d51'
+// 2026-10-13: terminalFirstFrameReveal binds in the screen state (the first-frame cover).
+const HEAD_HOOK_BINDING_SHA256 = 'cc12bc166ccbc15bc65c5e00bfbdf129f75ca666610f6fcd6ce7f39395f3e216'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
 // 84 since 2026-09-25: submitLiveInput (Orca #22300).
+// 2026-10-13: subscribeToTerminal's dependencies gain revealTerminalFirstFrame and
+// armTerminalFirstFrameRevealTimeout (the first-frame cover). Same 84 callbacks.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '7ee5572db983d42e91c565cfcb5650faeef08d166f0b1dacabf408f9fbbc58fe'
+  'c907f580fa7cd2d18ce732c42f12822091e1bee31ef8549e2145a10f281012cb'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -235,7 +241,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // The bodies of readMarkdownTab and handleCloseSessionTab moved. Same callbacks.
 // 2026-10-12 (Opus review of the optimistic tab close): applySessionTabs and the terminal list's
 // fetch hand the live closed-tab tombstones to reconcileSessionTabsWithTerminalList.
-const HEAD_CALLBACK_BODY_SHA256 = '0b23fa4fc950135edfd7afb520085d2aaa3e1b360d009317205068b32f8a4f5f'
+// 2026-10-13 (later): subscribeToTerminal arms the first-frame timeout and names when a pane's
+// first frame may be shown (stream ended, desktop mode, server resize, the fit pass's verdict);
+// revealTerminalAfterPaint waits on the WebView's awaitReady before it lifts the cover.
+const HEAD_CALLBACK_BODY_SHA256 = '26e8b2aedaed3f9ef47dc6939413154125c0ad8ace04bed626962fb9ce566d3a'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -436,8 +445,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // MobileSessionHeaderMenu.tsx, outside this family, taking handlePanelTap('pr')'s 'pr' with it.
 // 671 since 2026-10-13: MobileSessionActiveContent passes the overlay `ptyTab`, the active tab's
 // `type === 'terminal'`, so a PTY tab that is not a chat yields to its terminal; no other literal moved.
+// 677 since 2026-10-13 (later): the terminal subscription names why a pane's first frame is
+// shown — 'stream-ended' twice, 'desktop' and 'desktop-mode', 'resized' — and the session content
+// lifts a pane's cover on a WebView engine error ('engine-error'); no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '79f8832f67d4acec4c590fa094cfe78c10463a4d7f0ca792a1508e4323adc916'
+  'fd052a79130cc8e0c391b47995e8d61a2199d04950ffb5a861581a98ef7e5f0c'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -587,7 +599,10 @@ const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a53221
 // `sessionDiff` and `onOpenDiff`.
 // 2026-10-13: the chat overlay is handed `ptyTab`, so a PTY tab that is not a chat yields to its
 // terminal before the pane mounts. Same records; only the overlay's moved.
-const HEAD_LEAF_JSX_SHA256 = '7a8accbf32223a0f0d116ece1107611db04526101d418e860ee1e9b1a02bb1e0'
+// 2026-10-13 (later): <TerminalPaneView> is handed `revealed`, so a pane stays covered until its
+// first kept frame, and `onEngineError`, so the WebView's error and Reload are never covered.
+// Same records; only that record moved.
+const HEAD_LEAF_JSX_SHA256 = 'b1e0ab929c240f525d7e4f19a075769bd0dc3072474ec435a3fd5030f0cccc01'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1024,7 +1039,8 @@ describe('mobile session route extraction parity', () => {
     // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
     // 309 since 2026-10-10: the native-chat banner's useMemo (Orca #26544, sign-in guidance steps
     // aside once the transcript says it) and the hostRefusesOtherRuntime useState (Orca #27196).
-    expect(main.hooks).toHaveLength(309)
+    // 310 since 2026-10-13: useTerminalFirstFrameReveal (the first-frame cover).
+    expect(main.hooks).toHaveLength(310)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1160,7 +1176,7 @@ describe('mobile session route extraction parity', () => {
     // 670 later on 2026-10-11: the optimistic tab close's verdict literals ('closed', 'refused',
     // 'not connected', 'the desktop refused') and its 'terminal-handle' check.
     // 671 since 2026-10-13: the chat overlay's `ptyTab` reads the active tab's 'terminal' type.
-    expect(strings).toHaveLength(671)
+    expect(strings).toHaveLength(677)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
