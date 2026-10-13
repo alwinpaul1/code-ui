@@ -16,6 +16,14 @@ overrides:
   query-string: 9.5.1
   # GHSA for js-yaml < 3.15.2 (Dependabot alert #6); only @istanbuljs/load-nyc-config still asks for 3.x.
   'js-yaml@3': 3.15.2
+  # Dependabot alerts #12-#16 and #18 (2026-10-14): patched versions forced where the parent still pins
+  # a vulnerable range. katex 0.18 is past mermaid 11's ^0.16 pin; mermaid only calls
+  # renderToString, which 0.18 keeps.
+  'shell-quote@>=1.8.4 <1.11.0': 1.11.0
+  'katex@>=0.11.0 <0.18.2': 0.18.2
+  'source-map-js@>=1.0.0 <1.2.2': 1.2.2
+  'compression@<1.8.2': 1.8.2
+  'tinypool@<2.1.2': 2.1.2
 
 patchedDependencies:
   '@expo/plist@0.8.1': patches/@expo__plist@0.8.1.patch
