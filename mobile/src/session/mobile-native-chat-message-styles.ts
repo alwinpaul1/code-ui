@@ -226,7 +226,7 @@ export function makeChatMessageStyles(theme: Theme) {
       width: IMAGE_TILE_HEIGHT,
       height: IMAGE_TILE_HEIGHT,
       borderRadius: 12,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     imageThumb: {
       width: '100%',

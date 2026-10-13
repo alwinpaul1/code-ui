@@ -25,7 +25,7 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
     root: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     toolbar: {
       minHeight: 32,
@@ -42,7 +42,7 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
       flex: 1,
       minHeight: 0,
       overflow: 'hidden',
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     browserImageHost: {
       ...StyleSheet.absoluteFill,
@@ -64,7 +64,7 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
       overflow: 'hidden'
     },
     browserImage: {
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     overlay: {
       ...StyleSheet.absoluteFill,

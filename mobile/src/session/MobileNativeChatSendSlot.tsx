@@ -38,7 +38,7 @@ export function MobileNativeChatSendSlot({
         accessibilityState={{ busy: stopping }}
         style={({ pressed }) => [
           iconButton,
-          { marginLeft: space.xs, backgroundColor: pressed ? colors.borderStrong : colors.bgRaised }
+          { marginLeft: space.xs, backgroundColor: pressed ? colors.composerControlPressed : colors.composerControl }
         ]}
         onPress={onStop}
       >

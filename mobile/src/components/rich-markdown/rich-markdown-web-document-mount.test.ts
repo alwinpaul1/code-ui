@@ -60,9 +60,9 @@ describe('the editor document mounted in the page', () => {
   // host carries the theme in use itself, and follows a switch.
   it('draws in the theme in use, and follows a switch while open', () => {
     const { host } = mount()
-    expect(host.style.getPropertyValue('--background')).toBe(darkColors.bg)
+    expect(host.style.getPropertyValue('--background')).toBe(darkColors.chatBg)
     applyRichMarkdownWebDocumentTheme(host, { colors: lightColors, scheme: 'light' })
-    expect(host.style.getPropertyValue('--background')).toBe(lightColors.bg)
+    expect(host.style.getPropertyValue('--background')).toBe(lightColors.chatBg)
     expect(host.style.getPropertyValue('--foreground')).toBe(lightColors.text)
     expect(host.style.getPropertyValue('color-scheme')).toBe('light')
   })

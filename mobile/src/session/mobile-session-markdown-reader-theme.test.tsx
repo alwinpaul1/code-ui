@@ -83,7 +83,7 @@ describe('the .md tab’s reader, in light and in dark', () => {
   for (const [scheme, colors] of SCHEMES) {
     it(`paints its loading state on the ${scheme} page, with a spinner the page can show`, () => {
       const renderer = render(LOADING, scheme)
-      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.bg)
+      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.chatBg)
       const spinner = renderer.root.findByType('ActivityIndicator' as never)
       expect(spinner.props.color).toBe(colors.textSecondary)
       act(() => renderer.unmount())
@@ -91,7 +91,7 @@ describe('the .md tab’s reader, in light and in dark', () => {
 
     it(`paints its error state on the ${scheme} page, in the ${scheme} danger tone`, () => {
       const renderer = render(FAILED, scheme)
-      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.bg)
+      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.chatBg)
       const message = renderer.root
         .findAllByType('Text' as never)
         .find((node) => node.props.children === 'Could not read the file')!
@@ -101,7 +101,7 @@ describe('the .md tab’s reader, in light and in dark', () => {
 
     it(`paints the ${scheme} page behind the toggle bar and the preview`, () => {
       const renderer = render(READY, scheme)
-      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.bg)
+      expect(flatten(outermostView(renderer).props.style).backgroundColor).toBe(colors.chatBg)
       act(() => renderer.unmount())
     })
   }

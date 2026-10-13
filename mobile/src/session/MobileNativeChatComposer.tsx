@@ -356,11 +356,11 @@ export function MobileNativeChatComposer({
         <View
           style={{
             borderWidth: 1,
-            borderColor: focused ? colors.borderStrong : colors.border,
+            borderColor: focused ? colors.composerBorderFocused : colors.composerBorder,
             borderRadius: radius.xl,
-            // See-through like the dock it sits on; a shadow under glass
-            // reads as a smudge, so none.
-            backgroundColor: colors.bgPanelGlass,
+            // The Claude app's composer surface (tokens.ts, 2026-10-13); a
+            // shadow under it read as a smudge, so none.
+            backgroundColor: colors.composerFill,
             overflow: 'hidden'
           }}
           testID="native-chat-composer"
@@ -427,7 +427,7 @@ export function MobileNativeChatComposer({
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               placeholder={placeholder}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.composerPlaceholder}
               selectionColor={colors.accent}
               multiline
               // Why: never revoke `editable` — iOS resigns first responder on a focused
@@ -496,8 +496,8 @@ export function MobileNativeChatComposer({
                     backgroundColor: micActive
                       ? colors.dangerSoft
                       : pressed
-                        ? colors.borderStrong
-                        : colors.bgRaised
+                        ? colors.composerControlPressed
+                        : colors.composerControl
                   }
                 ]}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.

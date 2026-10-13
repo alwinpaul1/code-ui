@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 
-// The Claude app draws + and the mic each in a filled circle one step above the
-// composer's surface, and send as an accent circle (dimmed with nothing to
+// The Claude app draws + and the mic each in a filled circle in its control tone
+// (`pl7.x0`, 2026-10-13), and send as an accent circle (dimmed with nothing to
 // send); ours drew + and mic bare and send in a grey circle (two screenshots,
 // same phone, 2026-10-09). Both schemes are real states here: a literal colour
 // passes in one and ships the wrong tone in the other.
@@ -90,19 +90,19 @@ function button(label: string): ReactTestInstance {
 }
 
 describe('the composer’s round action buttons', () => {
-  it.each(['light', 'dark'] as const)('fills + and the mic in a circle one step above the composer in %s', async (scheme) => {
+  it.each(['light', 'dark'] as const)('fills + and the mic in a circle of the Claude app’s control tone in %s', async (scheme) => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     await render(scheme, '')
     const send = flat(button('Send message').props.style)
     for (const label of ['Attach image', 'Dictate']) {
       const style = flat(button(label).props.style)
-      expect(style.backgroundColor, `${scheme} ${label}`).toBe(colors.bgRaised)
-      expect(style.backgroundColor, `${scheme} ${label}`).not.toBe(colors.bgPanelGlass)
+      expect(style.backgroundColor, `${scheme} ${label}`).toBe(colors.composerControl)
+      expect(style.backgroundColor, `${scheme} ${label}`).not.toBe(colors.composerFill)
       // The send circle's size, so the three read as one row of circles.
       expect(style).toMatchObject({ width: send.width, height: send.height, borderRadius: send.borderRadius })
       // A press still shows, one tone past the resting circle.
       expect(flat(button(label).props.style, true).backgroundColor, `${scheme} ${label} pressed`).toBe(
-        colors.borderStrong
+        colors.composerControlPressed
       )
     }
   })

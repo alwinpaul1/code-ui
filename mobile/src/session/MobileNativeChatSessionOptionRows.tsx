@@ -57,7 +57,7 @@ export function Pill({
         height: 30,
         paddingHorizontal: space.sm + 2,
         borderRadius: radius.pill,
-        backgroundColor: pressed && !disabled ? colors.bgSunken : colors.bgRaised,
+        backgroundColor: pressed && !disabled ? colors.composerControlPressed : colors.composerPill,
         opacity: disabled ? 0.6 : 1
       })}
       onPress={onPress}
@@ -67,14 +67,14 @@ export function Pill({
       <Txt
         variant="caption"
         weight="semibold"
-        tone={disabled ? 'muted' : 'secondary'}
+        tone={disabled ? 'muted' : 'primary'}
         numberOfLines={1}
         ellipsizeMode="tail"
-        style={{ flexShrink: 1 }}
+        style={disabled ? { flexShrink: 1 } : { flexShrink: 1, color: colors.composerPillText }}
       >
         {label}
       </Txt>
-      <ChevronDown size={12} color={disabled ? colors.textMuted : colors.textSecondary} />
+      <ChevronDown size={12} color={disabled ? colors.textMuted : colors.composerPillText} />
     </Pressable>
   )
 }

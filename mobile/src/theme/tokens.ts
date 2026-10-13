@@ -75,6 +75,43 @@ export type ThemeColors = {
    *  the dim only has to set it off from the page. Drawers keep the heavier
    *  `bgOverlay`. */
   alertScrim: string
+  /** The session screen's canvas: the chat, the header and tab strip above it,
+   *  and the file tabs under that same header. The Claude app's screen
+   *  background `pl7.q` (Material `background`), decompiled from
+   *  com.anthropic.claude 1.261009.20 and sampled (21, 21, 21) from its dark
+   *  chat on 2026-10-13 ("the background is black"). Its own token, not `bg`:
+   *  `bg` also sits under the cream cards of every other screen, and
+   *  `bgPanel` (#FBFAF6) would all but vanish on Claude's light #F9F9F7. */
+  chatBg: string
+  /** The composer box: `pl7.p` (Material `surface`) at 96%, as `o530.b` draws
+   *  it (2026-10-13). Sampled (32, 32, 30) on the dark chat. */
+  composerFill: string
+  /** The composer's hairline: `pl7.x`, ink or bone at 15% (2026-10-13). */
+  composerBorder: string
+  /** The hairline while the field has focus. The Claude app draws no focus
+   *  ring; this is the next step of the same ramp, `pl7.w` at 30%, so the
+   *  focus Code UI already showed keeps a visible change (2026-10-13). */
+  composerBorderFocused: string
+  /** The composer's placeholder: `pl7.Q`, the app's muted text, as `ib8`
+   *  draws it (2026-10-13). */
+  composerPlaceholder: string
+  /** The round + / mic / stop buttons inside the composer: `pl7.x0`, which
+   *  the app uses for the Stop fill, the model chip and an icon button's
+   *  press (2026-10-13). Dark is white at 8%, composited (50, 50, 49) on the
+   *  composer; the user's screenshot sampled the mic circle at (51, 49, 52). */
+  composerControl: string
+  /** A pressed composer button or model pill: `pl7.K`, the ramp step above
+   *  the hairlines (2026-10-13). */
+  composerControlPressed: string
+  /** The model pill in the composer. Light is `pl7.x0`, as decompiled for the
+   *  model chip (`md6.a`). Dark is SAMPLED, not decompiled: the user's
+   *  screenshot of 2026-10-13 shows the pill at about (84, 84, 82), lighter
+   *  than the x0 white-at-8% the 1.261009.20 decompile names for it, so the
+   *  installed app draws it lighter than that build did. */
+  composerPill: string
+  /** The model pill's label and chevron. Primary text: `textSecondary` read
+   *  3.7:1 on the dark pill, under the 4.5:1 a 12 sp label needs. */
+  composerPillText: string
 }
 
 export const lightColors: ThemeColors = {
@@ -116,7 +153,18 @@ export const lightColors: ThemeColors = {
   diffDelText: '#A43227',
   terminalBg: '#1A1B26',
   shadow: 'rgba(30, 28, 25, 0.18)',
-  alertScrim: 'rgba(0, 0, 0, 0.28)'
+  alertScrim: 'rgba(0, 0, 0, 0.28)',
+  // The Claude app's chat and composer colours, light scheme (2026-10-13);
+  // the token docs above name each decompiled source.
+  chatBg: '#F9F9F7',
+  composerFill: 'rgba(255, 255, 255, 0.96)',
+  composerBorder: 'rgba(30, 30, 29, 0.15)',
+  composerBorderFocused: 'rgba(30, 30, 29, 0.3)',
+  composerPlaceholder: '#7B7974',
+  composerControl: '#F0EFEC',
+  composerControlPressed: '#E7E6E1',
+  composerPill: '#F0EFEC',
+  composerPillText: '#1E1C19'
 }
 
 export const darkColors: ThemeColors = {
@@ -162,7 +210,18 @@ export const darkColors: ThemeColors = {
   diffDelText: '#EE8B7B',
   terminalBg: '#1A1B26',
   shadow: 'rgba(0, 0, 0, 0.5)',
-  alertScrim: 'rgba(0, 0, 0, 0.28)'
+  alertScrim: 'rgba(0, 0, 0, 0.28)',
+  // The Claude app's chat and composer colours, dark scheme (2026-10-13).
+  chatBg: '#151515',
+  composerFill: 'rgba(32, 32, 31, 0.96)',
+  composerBorder: 'rgba(225, 224, 217, 0.15)',
+  composerBorderFocused: 'rgba(225, 224, 217, 0.3)',
+  composerPlaceholder: '#97958D',
+  composerControl: 'rgba(255, 255, 255, 0.08)',
+  composerControlPressed: '#454442',
+  // Sampled from the user's screenshot, see the token doc.
+  composerPill: '#545452',
+  composerPillText: '#F8F8F6'
 }
 
 /** The brand red, now the notification tint (the mark itself is black or

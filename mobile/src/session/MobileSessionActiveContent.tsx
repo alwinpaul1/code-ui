@@ -40,7 +40,7 @@ export function MobileSessionActiveContent({
     justifyContent: 'center' as const,
     padding: space.xl,
     gap: space.md,
-    backgroundColor: colors.bg
+    backgroundColor: colors.chatBg
   }
   const {
     hostId,

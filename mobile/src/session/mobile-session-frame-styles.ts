@@ -7,7 +7,7 @@ export function mobileSessionFrameStyles({ colors }: Theme) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     kavInner: {
       flex: 1
@@ -162,12 +162,12 @@ export function mobileSessionFrameStyles({ colors }: Theme) {
     markdownFrame: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     browserFrame: {
       flex: 1,
       minHeight: 0,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     markdownEditor: {
       flex: 1,
@@ -175,7 +175,7 @@ export function mobileSessionFrameStyles({ colors }: Theme) {
       // The reader's own opaque page, the same colour as the file tab's
       // frame around it (`markdownFrame`), so a reader never depends on
       // what the frame paints behind it.
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     markdownState: {
       flex: 1,
@@ -183,7 +183,7 @@ export function mobileSessionFrameStyles({ colors }: Theme) {
       justifyContent: 'center',
       padding: spacing.xl,
       gap: spacing.md,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     markdownError: {
       color: colors.danger,

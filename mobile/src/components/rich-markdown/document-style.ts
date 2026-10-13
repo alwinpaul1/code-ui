@@ -11,14 +11,16 @@ export type RichMarkdownEditorTheme = { colors: ThemeColors; scheme: ThemeScheme
 export function richMarkdownEditorThemeVariables({ colors, scheme }: RichMarkdownEditorTheme): [string, string][] {
   return [
     ['color-scheme', scheme],
-    ['--background', colors.bg],
-    ['--editor-surface', colors.bg],
+    // The session screen's canvas: the editor opens in a file tab under the
+    // chat's header (2026-10-13).
+    ['--background', colors.chatBg],
+    ['--editor-surface', colors.chatBg],
     ['--foreground', colors.text],
     ['--muted-foreground', colors.textSecondary],
     ['--muted', colors.bgRaised],
     ['--border', colors.border],
     ['--primary', colors.text],
-    ['--primary-foreground', colors.bg],
+    ['--primary-foreground', colors.chatBg],
     ['--accent-link', colors.accent]
   ]
 }

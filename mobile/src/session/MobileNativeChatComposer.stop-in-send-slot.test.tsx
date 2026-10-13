@@ -162,7 +162,7 @@ describe('Stop in the composer’s send slot', () => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     await render('', { canStop: true, onStop: vi.fn() }, scheme)
     const style = flat(trailing().props.style)
-    expect(style).toMatchObject({ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bgRaised })
+    expect(style).toMatchObject({ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.composerControl })
     const square = trailing().find((node) => (node.type as unknown) === 'Square')
     expect(square.props.fill).toBe(colors.danger)
     expect(square.props.color).toBe(colors.danger)

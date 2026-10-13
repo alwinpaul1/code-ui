@@ -93,7 +93,7 @@ export function ShimmerText({
     )
   }
   const glyphs = Array.from(text)
-  const band = shimmerBandColor(color, colors.bg)
+  const band = shimmerBandColor(color, colors.chatBg)
   const face = namedFace(style)
   return (
     <Text style={[style, { color }]} numberOfLines={numberOfLines} testID={testID}>

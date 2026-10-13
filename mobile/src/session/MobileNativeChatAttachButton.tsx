@@ -69,9 +69,9 @@ export function MobileNativeChatAttachButton({
         accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
         style={({ pressed }) => [
           iconButtonStyle,
-          // A filled circle one step above the composer's surface, as the Claude app
-          // draws it; a press goes one tone further (bgRaised is the resting fill).
-          { backgroundColor: pressed ? colors.borderStrong : colors.bgRaised }
+          // A filled circle in the Claude app's control tone, a press one step
+          // further (tokens.ts, 2026-10-13).
+          { backgroundColor: pressed ? colors.composerControlPressed : colors.composerControl }
         ]}
         onPressIn={opensSheet ? openSheet : undefined}
         onPress={opensSheet ? openSheet : onAttachImage}

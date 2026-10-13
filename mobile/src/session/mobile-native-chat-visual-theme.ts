@@ -18,7 +18,7 @@ export function mobileNativeChatVisualTheme(
   return {
     colorScheme: scheme,
     tokens: {
-      '--background': colors.bg,
+      '--background': colors.chatBg,
       '--foreground': colors.text,
       '--card': colors.bgPanel,
       '--card-foreground': colors.text,
@@ -26,7 +26,7 @@ export function mobileNativeChatVisualTheme(
       '--popover-foreground': colors.text,
       // Desktop's primary is the neutral ink on the page, inverted for its label.
       '--primary': colors.text,
-      '--primary-foreground': colors.bg,
+      '--primary-foreground': colors.chatBg,
       '--secondary': colors.bgRaised,
       '--secondary-foreground': colors.text,
       '--muted': colors.bgRaised,

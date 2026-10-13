@@ -13,7 +13,8 @@ export function ScreenHeader({
   onBack,
   backLabel = 'Back',
   trailing,
-  large = false
+  large = false,
+  background
 }: {
   title: string
   subtitle?: string
@@ -22,11 +23,14 @@ export function ScreenHeader({
   trailing?: ReactNode
   /** Large title row below the bar, Claude-app style. */
   large?: boolean
+  /** The bar's fill when the screen under it is not on `bg`: the subagent
+   *  transcript sits on the chat's `chatBg` (2026-10-13). */
+  background?: string
 }) {
   const insets = useSafeAreaInsets()
   const { colors, space } = useTheme()
   return (
-    <View style={{ paddingTop: insets.top, backgroundColor: colors.bg }}>
+    <View style={{ paddingTop: insets.top, backgroundColor: background ?? colors.bg }}>
       <View
         style={{
           height: 52,

@@ -80,7 +80,7 @@ export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; la
           width: AGENT_IMAGE_TILE_SIZE,
           height: AGENT_IMAGE_TILE_SIZE,
           borderRadius: AGENT_IMAGE_TILE_RADIUS,
-          backgroundColor: colors.bg
+          backgroundColor: colors.chatBg
         }}
         resizeMode="cover"
         accessibilityLabel={label}

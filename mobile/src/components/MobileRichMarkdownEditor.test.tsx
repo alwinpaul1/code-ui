@@ -94,20 +94,20 @@ describe('MobileRichMarkdownEditor', () => {
         .map((node) => ([node.props.style].flat(Infinity) as { backgroundColor?: string }[]).find((entry) => entry?.backgroundColor)?.backgroundColor)
         .filter(Boolean)
     const html = String(webView().props.source.html)
-    expect(html).toContain(`--background: ${lightColors.bg};`)
+    expect(html).toContain(`--background: ${lightColors.chatBg};`)
     expect(html).toContain('color-scheme: light;')
-    expect(surfaces()).toContain(lightColors.bg)
-    expect(surfaces()).not.toContain(darkColors.bg)
+    expect(surfaces()).toContain(lightColors.chatBg)
+    expect(surfaces()).not.toContain(darkColors.chatBg)
 
     mocks.injectJavaScript.mockClear()
     act(() => theme!.setPreference('dark'))
 
     expect(String(webView().props.source.html)).toBe(html)
     const injected = mocks.injectJavaScript.mock.calls.map((call) => String(call[0])).join('\n')
-    expect(injected).toContain(darkColors.bg)
+    expect(injected).toContain(darkColors.chatBg)
     expect(injected).toContain('color-scheme')
-    expect(surfaces()).toContain(darkColors.bg)
-    expect(surfaces()).not.toContain(lightColors.bg)
+    expect(surfaces()).toContain(darkColors.chatBg)
+    expect(surfaces()).not.toContain(lightColors.chatBg)
   })
 
   it('exposes WebView keyboard dismissal to its native parent', () => {

@@ -7,7 +7,7 @@ export function makeChatViewStyles(theme: Theme) {
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: colors.bg
+      backgroundColor: colors.chatBg
     },
     chromeRow: {
       flexDirection: 'row',

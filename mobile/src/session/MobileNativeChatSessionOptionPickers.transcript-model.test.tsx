@@ -166,9 +166,9 @@ describe('the composer model pill on a Claude chat that states no model', () => 
       expect(modelPill().props.accessibilityLabel).toBe('Model, Opus 5.5')
       expect(pillText().props.children).toBe('Opus 5.5')
       // Drawn in the theme's own tokens, not a fixed colour.
-      expect(lastColour(pillText().props.style)).toBe(palette.textSecondary)
+      expect(lastColour(pillText().props.style)).toBe(palette.composerPillText)
       const surface = modelPill().props.style as (state: { pressed: boolean }) => unknown
-      expect(lastColour(surface({ pressed: false }))).toBe(palette.bgRaised)
+      expect(lastColour(surface({ pressed: false }))).toBe(palette.composerPill)
     }
   )
 

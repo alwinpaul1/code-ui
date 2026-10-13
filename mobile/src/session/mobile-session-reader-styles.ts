@@ -9,7 +9,7 @@ export function mobileSessionReaderStyles({ colors }: Theme) {
       flex: 1,
       minHeight: 0,
       color: colors.text,
-      backgroundColor: colors.bg,
+      backgroundColor: colors.chatBg,
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
       paddingBottom: spacing.xl * 3,
