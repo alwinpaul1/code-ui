@@ -73,6 +73,7 @@ vi.mock('lucide-react-native', () => ({
   ImagePlus: 'ImagePlus',
   Mic: 'Mic',
   Paperclip: 'Paperclip',
+  FileUp: 'FileUp',
   Plus: 'Plus',
   ScrollText: 'ScrollText',
   ShieldOff: 'ShieldOff',

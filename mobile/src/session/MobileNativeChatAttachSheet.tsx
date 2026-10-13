@@ -1,4 +1,4 @@
-import { Camera, Image as ImageIcon, Paperclip, Zap, ChevronRight } from 'lucide-react-native'
+import { Camera, FileUp, Image as ImageIcon, Zap, ChevronRight } from 'lucide-react-native'
 import { useEffect, useRef } from 'react'
 import { Pressable, View } from 'react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -70,10 +70,12 @@ export function MobileNativeChatAttachSheet({
   const { colors, radius, space } = useTheme()
   const modeRow = modeRowText(agentMode, permissionMode ?? null)
   const full = attachmentCount >= NATIVE_CHAT_ATTACHMENT_LIMIT
+  // The Claude app's tile icons (the user's screenshot, 2026-10-13): a camera,
+  // a picture, and a document with an up arrow, not a paperclip.
   const cards: { key: string; label: string; icon: LucideIcon; onPress?: () => void }[] = [
     { key: 'camera', label: 'Camera', icon: Camera, onPress: onCaptureImage },
     { key: 'photos', label: 'Photos', icon: ImageIcon, onPress: onAttachImage },
-    { key: 'files', label: 'Files', icon: Paperclip, onPress: onAttachFile }
+    { key: 'files', label: 'Files', icon: FileUp, onPress: onAttachFile }
   ]
   // A source card's work starts once the sheet has gone, never while it closes.
   // Each card launches a system picker, which is an Activity: it pauses this
