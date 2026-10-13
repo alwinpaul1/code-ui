@@ -26,6 +26,10 @@ export type UseMobileLiveTranscriptionResult = UseMobileDictationResult & {
 /** No result or speech event for this long means the speaker paused. */
 const SPEECH_IDLE_MS = 900
 
+/** After the recognizer stops, deliver whatever text exists if the `end`
+ *  event does not fire within this window. Claude mobile waits 2.5 s. */
+const FINAL_TEXT_TIMEOUT_MS = 2500
+
 const QUIET_STOP_ERRORS = new Set(['interrupted', 'audio-capture'])
 
 /** Level above the learned ambient level, stretched back to 0..1. A small
@@ -78,10 +82,17 @@ export function useMobileLiveTranscription(
   // Which engine each take listens with: Google's when the phone has it.
   const engine = useMemo(() => createEngineTake(recognizer), [recognizer])
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const finalTextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearSilence = useCallback(() => {
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = null
+    }
+  }, [])
+  const clearFinalText = useCallback(() => {
+    if (finalTextTimerRef.current) {
+      clearTimeout(finalTextTimerRef.current)
+      finalTextTimerRef.current = null
     }
   }, [])
   const publish = useCallback((final: boolean) => {
@@ -174,6 +185,7 @@ export function useMobileLiveTranscription(
       publish(false)
     })
     const ended = recognizer.addListener('end', () => {
+      clearFinalText()
       if (!activeRef.current || engine.swallowsStaleEnd()) {
         return
       }
@@ -235,11 +247,12 @@ export function useMobileLiveTranscription(
         clearTimeout(speechIdleTimerRef.current)
       }
       clearSilence()
+      clearFinalText()
       result.remove()
       ended.remove()
       failed.remove()
     }
-  }, [armSilence, clearSilence, engine, markSilent, markSpeaking, publish, recognizer])
+  }, [armSilence, clearFinalText, clearSilence, engine, markSilent, markSpeaking, publish, recognizer])
 
   const start = useCallback(async () => {
     if (activeRef.current) {
@@ -267,13 +280,28 @@ export function useMobileLiveTranscription(
     engine.ending()
     setStatus('processing')
     recognizer.stop()
-  }, [clearSilence, engine, recognizer])
+    // Claude mobile: if the recognizer's `end` event does not fire within
+    // 2.5 s, deliver whatever text exists rather than hang on "processing".
+    finalTextTimerRef.current = setTimeout(() => {
+      finalTextTimerRef.current = null
+      if (!activeRef.current) {
+        return
+      }
+      const spoken = composeLiveTranscript(segmentsRef.current, interimRef.current)
+      interimRef.current = ''
+      activeRef.current = false
+      setStatus('idle')
+      markSilent()
+      onTranscriptRef.current(spoken, true, '')
+    }, FINAL_TEXT_TIMEOUT_MS)
+  }, [clearSilence, engine, markSilent, recognizer])
 
   const cancel = useCallback(async () => {
     if (!activeRef.current) {
       return
     }
     clearSilence()
+    clearFinalText()
     activeRef.current = false
     engine.ending()
     segmentsRef.current = []
@@ -281,7 +309,7 @@ export function useMobileLiveTranscription(
     setStatus('idle')
     markSilent()
     recognizer.abort()
-  }, [clearSilence, engine, markSilent, recognizer])
+  }, [clearFinalText, clearSilence, engine, markSilent, recognizer])
 
   const prime = useCallback(async () => {
     try {
