@@ -34,6 +34,9 @@ export type MobileChatQuestion = {
   freeTextToken?: string
   /** A provider editor's input shape (Orca #25851): empty allowed, multiline, prefill, placeholder. */
   freeTextInput?: AgentJournalFreeTextInput
+  /** A grouped question's step with more after it: its button says Next, and
+   *  its answer only joins the draft; the last step's Submit sends the group. */
+  nextStep?: boolean
 }
 
 export function mobileChatQuestionKey(question: MobileChatQuestion): string {

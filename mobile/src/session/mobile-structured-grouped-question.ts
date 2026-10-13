@@ -122,6 +122,7 @@ export function projectGroupedQuestion(
     options: question.options.map((option) => option.label),
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: question.multiSelect,
+    ...(answered + 1 < questions.length ? { nextStep: true } : {}),
     allowOther: Boolean(question.freeTextQuestionId),
     ...(question.freeTextInput ? { freeTextInput: question.freeTextInput } : {}),
     optionTokens: question.options.map((option) =>

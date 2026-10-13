@@ -20,10 +20,13 @@ type Props = {
   onCancel?: (prompt?: NonNullable<MobileChatQuestion['prompt']>) => Promise<boolean>
 }
 
-/** Renders an agent's choice prompt as a tappable card. Single-select answers
- *  on tap; multi-select toggles then Submits; an always-present text entry lets
- *  the user answer freely (the escape hatch) when the heuristic misreads the
- *  options or none apply. */
+/** Renders an agent's choice prompt as a tappable card. A tap only chooses
+ *  (single-select is a radio, multi-select toggles) and Submit sends; a grouped
+ *  question's earlier steps say Next and send nothing to the agent. An
+ *  always-present text entry lets the user answer freely (the escape hatch) when
+ *  the heuristic misreads the options or none apply. Single-select used to
+ *  answer on the tap itself, which left no way to change one's mind
+ *  (2026-10-13). */
 export function MobileNativeChatQuestion({
   question,
   onAnswer,
@@ -51,16 +54,27 @@ export function MobileNativeChatQuestion({
   const answerText = question.freeTextInput?.allowEmpty ? freeText : freeText.trim()
 
   // Keyed by position, not by label: an agent may repeat a label inside one
-  // question, and label-keyed selection makes both rows toggle as one.
+  // question, and label-keyed selection makes both rows toggle as one. A tap
+  // never sends: single-select makes the row the choice (tapping it again keeps
+  // it), multi-select toggles it. On single-select a row and typed words are
+  // two different answers, so choosing one clears the other (as the Claude app
+  // keeps one answer per page); otherwise each button would silently drop what
+  // the other holds.
   const toggle = (optionIndex: number): void => {
-    if (locked) {
+    if (locked || sendingRef.current) {
       return
     }
-    setSelectedOptionIndexes((prev) =>
-      prev.includes(optionIndex)
+    if (!question.multiSelect && !question.freeTextInput) {
+      setFreeText('')
+    }
+    setSelectedOptionIndexes((prev) => {
+      if (!question.multiSelect) {
+        return [optionIndex]
+      }
+      return prev.includes(optionIndex)
         ? prev.filter((index) => index !== optionIndex)
         : [...prev, optionIndex]
-    )
+    })
   }
 
   const sendAnswer = async (text: string): Promise<boolean> => {
@@ -85,15 +99,19 @@ export function MobileNativeChatQuestion({
     }
   }
 
-  const answerSingle = async (optionIndex: number): Promise<void> => {
+  const submitSingle = async (optionIndex: number): Promise<void> => {
     const token = question.optionTokens[optionIndex]
     await sendAnswer(
       token && token.length > 0 ? token : formatQuestionAnswerByIndexes(question, [optionIndex])
     )
   }
 
-  const submitMulti = async (): Promise<void> => {
+  const submitChoice = async (): Promise<void> => {
     if (selectedOptionIndexes.length === 0) {
+      return
+    }
+    if (!question.multiSelect) {
+      await submitSingle(selectedOptionIndexes[0]!)
       return
     }
     const answer =
@@ -118,7 +136,7 @@ export function MobileNativeChatQuestion({
     }
   }
 
-  const canSubmitMulti = selectedOptionIndexes.length > 0 && !locked
+  const canSubmitChoice = selectedOptionIndexes.length > 0 && !locked
   const canSendFreeText =
     allowOther && (answerText.length > 0 || question.freeTextInput?.allowEmpty === true) && !locked
 
@@ -188,8 +206,8 @@ export function MobileNativeChatQuestion({
             return (
               <Pressable
                 key={key}
-                accessibilityRole={question.multiSelect ? 'checkbox' : 'button'}
-                accessibilityState={question.multiSelect ? { checked: isSelected } : undefined}
+                accessibilityRole={question.multiSelect ? 'checkbox' : 'radio'}
+                accessibilityState={{ checked: isSelected, disabled: locked }}
                 style={({ pressed }) => ({
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -202,25 +220,24 @@ export function MobileNativeChatQuestion({
                   borderWidth: 1,
                   borderColor: isSelected ? colors.accent : colors.border
                 })}
-                onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
+                onPress={() => toggle(optIndex)}
                 disabled={locked}
               >
-                {question.multiSelect ? (
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 6,
-                      borderWidth: 1.5,
-                      borderColor: isSelected ? colors.accent : colors.textMuted,
-                      backgroundColor: isSelected ? colors.accent : 'transparent',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}
-                  >
-                    {isSelected ? <Check size={13} color={colors.onAccent} strokeWidth={3} /> : null}
-                  </View>
-                ) : null}
+                {/* A square for multi-select, a circle for single: the ask card's marks. */}
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: question.multiSelect ? 6 : 10,
+                    borderWidth: 1.5,
+                    borderColor: isSelected ? colors.accent : colors.textMuted,
+                    backgroundColor: isSelected ? colors.accent : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {isSelected ? <Check size={13} color={colors.onAccent} strokeWidth={3} /> : null}
+                </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Txt variant="body">{notificationPlainText(label)}</Txt>
                   {description ? (
@@ -235,14 +252,19 @@ export function MobileNativeChatQuestion({
         </ScrollView>
       ) : null}
 
-      {question.multiSelect && hasOptions ? (
+      {hasOptions ? (
         <Button
-          label={`Submit${selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}`}
-          accessibilityLabel="Submit selected options"
+          label={
+            question.nextStep
+              ? 'Next'
+              : `Submit${question.multiSelect && selectedOptionIndexes.length > 0 ? ` (${selectedOptionIndexes.length})` : ''}`
+          }
+          // A grouped step's button only turns the page; say so to a screen reader too.
+          accessibilityLabel={question.nextStep ? 'Next question' : 'Submit selected options'}
           variant="accent"
           block
-          disabled={!canSubmitMulti}
-          onPress={() => void submitMulti()}
+          disabled={!canSubmitChoice}
+          onPress={() => void submitChoice()}
         />
       ) : null}
 
@@ -265,7 +287,12 @@ export function MobileNativeChatQuestion({
               paddingBottom: space.sm + 2
             }}
             value={freeText}
-            onChangeText={setFreeText}
+            onChangeText={(text) => {
+              setFreeText(text)
+              if (!question.multiSelect && text.trim().length > 0) {
+                setSelectedOptionIndexes([])
+              }
+            }}
             editable={!locked}
             placeholder={
               question.freeTextInput?.placeholder ??
