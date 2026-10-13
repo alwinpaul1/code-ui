@@ -28,12 +28,12 @@ describe('fetchLatestAndroidRelease', () => {
         {
           tag_name: 'mobile-android-v0.0.37',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.37.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.37-1.apk', browser_download_url: 'https://x/v0.0.37.apk' }]
         },
         {
           tag_name: 'mobile-android-v0.0.42',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.42.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.42-1.apk', browser_download_url: 'https://x/v0.0.42.apk' }]
         }
       ])
 
@@ -54,17 +54,18 @@ describe('fetchLatestAndroidRelease', () => {
           tag_name: 'mobile-android-v0.0.20',
           body: 'Fixes',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.20-1.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
         },
         {
           tag_name: 'mobile-android-v0.0.19',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.19.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.19-1.apk', browser_download_url: 'https://x/v0.0.19.apk' }]
         }
       ])
 
     await expect(fetchLatestAndroidRelease({ fetchImpl })).resolves.toEqual({
       version: '0.0.20',
+      versionCode: 1,
       apkUrl: 'https://x/v0.0.20.apk',
       releaseNotes: 'Fixes'
     })
@@ -128,7 +129,7 @@ describe('fetchLatestAndroidRelease', () => {
         {
           tag_name: 'mobile-android-v0.0.20',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.20-1.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
         }
       ])
 
@@ -157,7 +158,7 @@ describe('fetchLatestAndroidRelease', () => {
             tag_name: 'mobile-android-v0.0.20',
             body: 'Android fixes',
             prerelease: true,
-            assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
+            assets: [{ name: 'code-ui-android-v0.0.20-1.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
           }
         ],
         false
@@ -166,6 +167,7 @@ describe('fetchLatestAndroidRelease', () => {
 
     await expect(fetchLatestAndroidRelease({ fetchImpl })).resolves.toEqual({
       version: '0.0.20',
+      versionCode: 1,
       apkUrl: 'https://x/v0.0.20.apk',
       releaseNotes: 'Android fixes'
     })
@@ -184,7 +186,7 @@ describe('fetchLatestAndroidRelease', () => {
               tag_name: 'mobile-android-v0.0.20',
               body: 'Android fixes',
               prerelease: true,
-              assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
+              assets: [{ name: 'code-ui-android-v0.0.20-1.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
             }
           ],
           true
@@ -195,9 +197,52 @@ describe('fetchLatestAndroidRelease', () => {
 
     await expect(fetchLatestAndroidRelease({ fetchImpl })).resolves.toEqual({
       version: '0.0.20',
+      versionCode: 1,
       apkUrl: 'https://x/v0.0.20.apk',
       releaseNotes: 'Android fixes'
     })
+  })
+
+  it('does not offer a release whose APK the release workflow did not build, so a hand-uploaded build cannot loop the update card', async () => {
+    // 0.9.134 (2026-10-14) was published by hand: an `app-release.apk` built
+    // from a commit whose app.json still said 0.9.133. Installed, it reported
+    // 0.9.133, so the card offered 0.9.134 again after every install. Only the
+    // workflow names an asset `-<versionCode>.apk`, and it refuses a tag that
+    // disagrees with app.json.
+    const fetchImpl = async () =>
+      jsonResponse([
+        {
+          tag_name: 'mobile-android-v0.9.134',
+          prerelease: false,
+          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/app-release.apk' }]
+        },
+        {
+          tag_name: 'mobile-android-v0.9.133',
+          prerelease: false,
+          assets: [
+            {
+              name: 'code-ui-android-v0.9.133-296.apk',
+              browser_download_url: 'https://x/code-ui-android-v0.9.133-296.apk'
+            }
+          ]
+        }
+      ])
+
+    const result = await fetchLatestAndroidRelease({ fetchImpl })
+    expect(result?.version).toBe('0.9.133')
+    expect(result?.versionCode).toBe(296)
+  })
+
+  it('returns null when the only mobile release carries a hand-uploaded APK', async () => {
+    const fetchImpl = async () =>
+      jsonResponse([
+        {
+          tag_name: 'mobile-android-v0.9.134',
+          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/app-release.apk' }]
+        }
+      ])
+
+    await expect(fetchLatestAndroidRelease({ fetchImpl })).resolves.toBeNull()
   })
 
   it('skips mobile tags that have no apk asset', async () => {
@@ -211,7 +256,7 @@ describe('fetchLatestAndroidRelease', () => {
         {
           tag_name: 'mobile-android-v0.0.20',
           prerelease: true,
-          assets: [{ name: 'app-release.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
+          assets: [{ name: 'code-ui-android-v0.0.20-1.apk', browser_download_url: 'https://x/v0.0.20.apk' }]
         }
       ])
 

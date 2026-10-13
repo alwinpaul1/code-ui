@@ -3,7 +3,6 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
-import { useAnthropicDictation } from '../hooks/use-anthropic-dictation'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { chooseDictationEngine } from '../dictation/dictation-engine'
 import {
@@ -25,13 +24,6 @@ import { useMobileNativeChatSendError, mobileNativeChatSendErrorMessage } from '
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
-
-/** Claude mobile (e5.java:226): 500 ms post-release grace before the
- *  recognizer stops. */
-const RELEASE_GRACE_MS = 500
-/** Claude mobile (pm0.java): if on-device produces no text within this
- *  window, switch to Anthropic's server path ("latching to server path"). */
-const EFFICACY_LATCH_MS = 3000
 
 export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
@@ -142,31 +134,7 @@ export function useMobileSessionNativeChatDictation(
   const chatInsertRef = useRef({ prefix: '', suffix: '' })
   const [dictationPaint, setDictationPaint] = useState<DictationPaint | null>(null)
   const liveTargetRef = useRef<LiveDictationTarget>({ kind: 'chat' })
-
-  // Claude mobile: grace period on hold-release and efficacy latch.
-  const graceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const efficacyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** True once the on-device recognizer has produced any text this take. */
-  const liveProducedTextRef = useRef(false)
-  /** Review fix #10: ref so the efficacy latch reads current state, not a
-   *  stale closure value. Updated after each engine choice render. */
-  const liveIsRecordingRef = useRef(false)
-
-  const clearGraceTimer = useCallback(() => {
-    if (graceTimerRef.current) {
-      clearTimeout(graceTimerRef.current)
-      graceTimerRef.current = null
-    }
-  }, [])
-  const clearEfficacyTimer = useCallback(() => {
-    if (efficacyTimerRef.current) {
-      clearTimeout(efficacyTimerRef.current)
-      efficacyTimerRef.current = null
-    }
-  }, [])
-
   const onSpoken = (text: string, _final?: boolean, interim = '') => {
-    liveProducedTextRef.current = true
     const { prefix, suffix } = chatInsertRef.current
     setDictationPaint(placeSpokenText(
       text,
@@ -206,29 +174,11 @@ export function useMobileSessionNativeChatDictation(
     }
   })
 
-  const anthropicDictation = useAnthropicDictation({
-    client,
-    worktreeId,
-    enabled: canSend,
-    onTranscript: onSpoken,
-    onError: onSpokenError,
-    lang: 'en'
-  })
-
-  const engineChoice = chooseDictationEngine(liveTranscription.available, anthropicDictation.available)
-  const usesLivePartials = engineChoice === 'live' || engineChoice === 'anthropic'
-  const dictation = engineChoice === 'anthropic'
-    ? anthropicDictation
-    : engineChoice === 'live'
-      ? liveTranscription
-      : desktopDictation
-
-  // Review fix #10: keep a ref so the efficacy latch timer reads current
-  // recording state instead of a stale closure capture.
-  liveIsRecordingRef.current = liveTranscription.isRecording
+  const useLiveTranscription = chooseDictationEngine(liveTranscription.available) === 'live'
+  const dictation = useLiveTranscription ? liveTranscription : desktopDictation
 
   const startDictation = useCallback(() => {
-    if (usesLivePartials) {
+    if (useLiveTranscription) {
       if (showNativeChatRef.current) {
         const draft = nativeChatController.chatComposerText
         const cursor = Math.max(0, Math.min(composerCursorRef.current, draft.length))
@@ -245,29 +195,10 @@ export function useMobileSessionNativeChatDictation(
           return current
         })
       }
-      const startFn = engineChoice === 'anthropic' ? anthropicDictation.start : liveTranscription.start
-      liveProducedTextRef.current = false
-      clearEfficacyTimer()
-      void startFn().catch((err) => {
-        clearEfficacyTimer()
+      void liveTranscription.start().catch((err) => {
         triggerError()
         showToast(err instanceof Error ? err.message : String(err))
       })
-      // Claude mobile efficacy latch: if the on-device recognizer produces no
-      // text within 3 s, cancel it and switch to Anthropic's server path.
-      if (engineChoice === 'live' && anthropicDictation.available) {
-        efficacyTimerRef.current = setTimeout(() => {
-          efficacyTimerRef.current = null
-          if (!liveProducedTextRef.current && liveIsRecordingRef.current) {
-            console.log('[dictation] no text from on-device recognizer, latching to server path')
-            void liveTranscription.cancel()
-            void anthropicDictation.start().catch((err) => {
-              triggerError()
-              showToast(err instanceof Error ? err.message : String(err))
-            })
-          }
-        }, EFFICACY_LATCH_MS)
-      }
       return
     }
     const routeContext = activeHandle
@@ -282,10 +213,7 @@ export function useMobileSessionNativeChatDictation(
     })
   }, [
     activeHandle,
-    anthropicDictation,
-    clearEfficacyTimer,
     dictation,
-    engineChoice,
     liveInputTerminalHandles,
     liveTranscription,
     nativeChatController,
@@ -294,19 +222,17 @@ export function useMobileSessionNativeChatDictation(
     showNativeChatRef,
     triggerError,
     showToast,
-    usesLivePartials
+    useLiveTranscription
   ])
 
   const cancelDictation = useCallback((forSend = false) => {
-    clearGraceTimer()
-    clearEfficacyTimer()
     // Either route: gated on live transcription, the mic kept running on a
     // phone without one and wrote the spoken words back in (2026-09-13).
     if (forSend && !(liveTargetRef.current.kind === 'chat' && (dictation.isStarting || dictation.isRecording || dictation.isProcessing))) {
       return
     }
     dictationRouteContextRef.current = null
-    if (usesLivePartials) {
+    if (useLiveTranscription) {
       const base = liveBaseTextRef.current
       const target = liveTargetRef.current
       // For a send the spoken words leave with the message: nothing is put back.
@@ -320,7 +246,7 @@ export function useMobileSessionNativeChatDictation(
       }
     }
     void dictation.cancel()
-  }, [clearEfficacyTimer, clearGraceTimer, dictation, nativeChatController, sendLiveTerminalInput, setInput, usesLivePartials])
+  }, [dictation, nativeChatController, sendLiveTerminalInput, setInput, useLiveTranscription])
 
   // Send while the mic is on: the words spoken so far go with the message, so
   // the recogniser is dropped without putting the base text back — a stop
@@ -340,39 +266,20 @@ export function useMobileSessionNativeChatDictation(
   }, [cancelDictation, dictation, startDictation])
 
   // Hold mode: press starts, release stops — like a walkie-talkie.
-  // Claude mobile: on-device path keeps listening 500 ms after the finger
-  // lifts, then waits up to 2.5 s for the final text. The server path sends
-  // CloseStream immediately on release.
   const handleDictationPressIn = useCallback(() => {
-    // User pressed again during the grace period — continue recording.
-    if (graceTimerRef.current) {
-      clearGraceTimer()
-      return
-    }
     if (!dictation.isStarting && !dictation.isRecording && !dictation.isProcessing) {
       startDictation()
     }
-  }, [clearGraceTimer, dictation, startDictation])
+  }, [dictation, startDictation])
 
   const handleDictationPressOut = useCallback(() => {
     if (dictation.isRecording) {
-      if (engineChoice === 'live') {
-        // On-device: keep listening 500 ms more (Claude mobile behaviour).
-        clearEfficacyTimer()
-        graceTimerRef.current = setTimeout(() => {
-          graceTimerRef.current = null
-          void dictation.stop()
-        }, RELEASE_GRACE_MS)
-      } else {
-        // Server path (Anthropic / desktop): stop immediately.
-        clearEfficacyTimer()
-        void dictation.stop()
-      }
+      void dictation.stop()
     } else if (dictation.isStarting) {
       // Released before recording began: cancel so we don't leave a live mic.
       cancelDictation()
     }
-  }, [cancelDictation, clearEfficacyTimer, dictation, engineChoice])
+  }, [cancelDictation, dictation])
 
   const refreshDictationMode = useCallback(async () => {
     if (!client) {

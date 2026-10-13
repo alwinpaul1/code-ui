@@ -98,7 +98,15 @@ function pickApkAsset(
     if (!asset.name.toLowerCase().endsWith('.apk')) {
       continue
     }
-    const versionCode = parseVersionCodeFromAssetName(asset.name) ?? undefined
+    const versionCode = parseVersionCodeFromAssetName(asset.name)
+    if (versionCode === null) {
+      // Why: only the release workflow names an APK `-<versionCode>.apk`, and it
+      // refuses a tag that disagrees with app.json. A hand-uploaded
+      // `app-release.apk` (0.9.134, 2026-10-14) can report an older version
+      // once installed, and the card then offers the same update forever.
+      console.log('[app-update] skipping APK without a build number', { name: asset.name })
+      continue
+    }
     const candidate = { apkUrl: asset.browser_download_url, versionCode }
     if (!best || compareVersionCodes(candidate.versionCode, best.versionCode) > 0) {
       best = candidate
