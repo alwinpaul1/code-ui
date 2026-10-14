@@ -27,7 +27,7 @@ import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
 import { MobileNativeChatSendSlot } from './MobileNativeChatSendSlot'
 import { MobileNativeChatDictationLayer } from './MobileNativeChatDictationRow'
-import { MobileNativeChatDictationCaption } from './MobileNativeChatDictationCaption'
+import { MobileNativeChatDictationCaption, MobileNativeChatDictationScrim } from './MobileNativeChatDictationCaption'
 import { useComposerDictationRow } from './use-composer-dictation-row'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
@@ -376,6 +376,7 @@ export function MobileNativeChatComposer({
 
   return (
     <View>
+      {dictationRow.available ? <MobileNativeChatDictationScrim fadeStyle={dictationRow.layerStyle} /> : null}
       {suggestions.length > 0 ? (
         <MobileNativeChatComposerSuggestions
           suggestions={suggestions}

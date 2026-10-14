@@ -46,6 +46,8 @@ export function DictationWaveform({ level, levelSource }: Props): React.JSX.Elem
   const history = useSharedValue<LevelSample[]>([])
   const lastSampleAt = useSharedValue(-1)
   const clock = useSharedValue(0)
+  /** The first frame's timestamp, -1 until it comes. Per mount, so a new take starts empty. */
+  const takeStart = useSharedValue(-1)
   const widthValue = useSharedValue(0)
   // A shared value, not a captured boolean: the frame callback is registered once.
   const stepOnly = useSharedValue(reducedMotion)
@@ -69,7 +71,15 @@ export function DictationWaveform({ level, levelSource }: Props): React.JSX.Elem
 
   useFrameCallback((frame) => {
     'worklet'
-    const now = frame.timeSinceFirstFrame
+    // The take's own clock, from the frame's timestamp and a start kept in a shared value. Not
+    // `timeSinceFirstFrame`: Reanimated re-registers this callback on every render (its effect is
+    // keyed on the callback), which restarts that at 0, and each caption word re-renders the
+    // composer, so the history kept starting again (device, 0.9.143). Claude's is the system
+    // clock (w330.a, `SystemClock.elapsedRealtime`).
+    if (takeStart.value < 0) {
+      takeStart.value = frame.timestamp
+    }
+    const now = frame.timestamp - takeStart.value
     const due = levelSampleDue(lastSampleAt.value < 0 ? null : lastSampleAt.value, now)
     if (due !== null) {
       history.value = appendLevelSample(history.value, levelValue.value, due)
