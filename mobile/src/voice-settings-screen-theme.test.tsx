@@ -55,6 +55,16 @@ vi.mock('./transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: () => 1000
 }))
 
+// The Anthropic sign-in row reads its token from the keychain (expo-secure-store), whose native
+// module does not exist under vitest; signed out is the state these tests draw.
+vi.mock('./dictation/anthropic-auth-store', () => ({
+  startLogin: vi.fn(),
+  exchangeCode: vi.fn(),
+  getSavedVerifier: async () => null,
+  clearCredential: async () => {},
+  isLoggedIn: async () => false
+}))
+
 import VoiceSettingsScreen from '../app/voice-settings'
 import { ThemeProvider } from './theme/theme-context'
 import { darkColors, lightColors } from './theme/tokens'

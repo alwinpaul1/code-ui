@@ -121,7 +121,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // callbacks and effects stay inside it, so only the hook pin moved.
 // 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, the notification tap's
 // tab selection. Not expanded, so only the hook pins moved.
-const HEAD_MAIN_HOOK_SHA256 = '3896c5a91c6044c0795136534580a598a7d740802bbe43fdbf46b7661199de83'
+// 308 since 2026-10-14: the Anthropic voice_stream dictation adds useAnthropicDictation to the
+// dictation hook and moves its five hold-mode useCallbacks into useDictationHoldMode
+// (use-dictation-hold-mode.ts), which is not expanded.
+const HEAD_MAIN_HOOK_SHA256 = '215ec61bda891e9cbb8874e97794b58023f68a81f8356cba5efd5b9b6d8aa11c'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -136,15 +139,19 @@ const HEAD_MAIN_HOOK_SHA256 = '3896c5a91c6044c0795136534580a598a7d740802bbe43fdb
 // the header menu's Copy branch (parity gap G35).
 // 2026-10-13: terminalFirstFrameReveal binds in the screen state (the first-frame cover).
 // 2026-10-13: the controller's useMobileSessionNotificationTab call (a bare call, bound to nothing).
-const HEAD_HOOK_BINDING_SHA256 = 'a8c6d407b49df903f019b3c443b55db2bad17d4628f4f2361423c8b8ddf5d035'
+// 2026-10-14: the dictation hook binds anthropicDictation and hold (useDictationHoldMode) where the
+// five hold-mode useCallbacks were bound; useMobileNativeChatInputLease's argument was rewrapped.
+const HEAD_HOOK_BINDING_SHA256 = '1e042d5654732c074309c4219206e0396ada58771becd01bf693f279342ec1cd'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
 // 84 since 2026-09-25: submitLiveInput (Orca #22300).
 // 2026-10-13: subscribeToTerminal's dependencies gain revealTerminalFirstFrame and
 // armTerminalFirstFrameRevealTimeout (the first-frame cover). Same 84 callbacks.
+// 79 since 2026-10-14: startDictation, cancelDictation, handleDictationToggle,
+// handleDictationPressIn and handleDictationPressOut moved into useDictationHoldMode.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'c907f580fa7cd2d18ce732c42f12822091e1bee31ef8549e2145a10f281012cb'
+  '1074687d14bfcfbbeb1ab558068ebca7578e2e4ca0b21d3ede4b96c28d5ad212'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -247,7 +254,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-13 (later): subscribeToTerminal arms the first-frame timeout and names when a pane's
 // first frame may be shown (stream ended, desktop mode, server resize, the fit pass's verdict);
 // revealTerminalAfterPaint waits on the WebView's awaitReady before it lifts the cover.
-const HEAD_CALLBACK_BODY_SHA256 = '26e8b2aedaed3f9ef47dc6939413154125c0ad8ace04bed626962fb9ce566d3a'
+// 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
+const HEAD_CALLBACK_BODY_SHA256 = '3799e8ea810753e1442513d0e6b6dfb51400fa9785389d13048fc0193cc8662e'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -451,8 +459,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 677 since 2026-10-13 (later): the terminal subscription names why a pane's first frame is
 // shown — 'stream-ended' twice, 'desktop' and 'desktop-mode', 'resized' — and the session content
 // lifts a pane's cover on a WebView engine error ('engine-error'); no other literal moved.
+// 681 since 2026-10-14: the Anthropic voice_stream dictation's engine checks ('anthropic' twice),
+// its 'en' language and 'live' mode join. The send gate's 'chat' stays in the dictation hook
+// (targetIsChat), so a send ends only a chat take.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'fd052a79130cc8e0c391b47995e8d61a2199d04950ffb5a861581a98ef7e5f0c'
+  '00d82ea213d0f6131e3896317420bb6878103be4b03e95da44c65aac9102932e'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1050,13 +1061,18 @@ describe('mobile session route extraction parity', () => {
     // 310 since 2026-10-13: useMobileSessionNotificationTab in the controller, which selects the
     // tab a notification tap named. Not expanded: its params read and effect stay inside it.
     // 311 since 2026-10-13: both of the above landed together.
-    expect(main.hooks).toHaveLength(311)
+    // 308 since 2026-10-14: the Anthropic voice_stream dictation. useAnthropicDictation joins the
+    // dictation hook, and its five hold-mode useCallbacks moved into useDictationHoldMode, which
+    // is not expanded.
+    expect(main.hooks).toHaveLength(308)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
     // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
     // 84 since 2026-09-25: submitLiveInput, the live field's one send seam (Orca #22300).
-    expect(main.callbacks).toHaveLength(84)
+    // 79 since 2026-10-14: the dictation start, cancel and press handlers moved into
+    // useDictationHoldMode.
+    expect(main.callbacks).toHaveLength(79)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.
@@ -1186,7 +1202,9 @@ describe('mobile session route extraction parity', () => {
     // 670 later on 2026-10-11: the optimistic tab close's verdict literals ('closed', 'refused',
     // 'not connected', 'the desktop refused') and its 'terminal-handle' check.
     // 671 since 2026-10-13: the chat overlay's `ptyTab` reads the active tab's 'terminal' type.
-    expect(strings).toHaveLength(677)
+    // 681 since 2026-10-14: the Anthropic voice_stream dictation's engine checks ('anthropic'
+    // twice), its 'en' language and 'live' mode.
+    expect(strings).toHaveLength(681)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

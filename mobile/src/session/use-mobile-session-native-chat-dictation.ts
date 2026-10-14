@@ -128,11 +128,17 @@ export function useMobileSessionNativeChatDictation(
         setInput((current) => { liveBaseTextRef.current = current; return current })
       }
     },
+    targetIsChat: () => liveTargetRef.current.kind === 'chat',
     prepareDesktopStart: () => {
       const ctx = activeHandle
         ? { handle: activeHandle, liveInputEnabled: liveInputTerminalHandles.has(activeHandle) }
         : null
       dictationRouteContextRef.current = ctx
+      return () => {
+        if (dictationRouteContextRef.current === ctx) {
+          dictationRouteContextRef.current = null
+        }
+      }
     },
     restoreLiveCancel: (forSend) => {
       dictationRouteContextRef.current = null

@@ -24,8 +24,11 @@ export function useDictationHoldMode(opts: {
   usesLivePartials: boolean
   liveTranscription: UseMobileLiveTranscriptionResult
   anthropicDictation: UseAnthropicDictationResult
+  /** Whether the take's words go into the chat composer (a send ends only that kind of take). */
+  targetIsChat: () => boolean
   prepareLiveStart: () => void
-  prepareDesktopStart: () => void
+  /** Claims the desktop route context; returns the release a failed start calls. */
+  prepareDesktopStart: () => () => void
   restoreLiveCancel: (forSend: boolean) => void
   triggerError: () => void
   showToast: (msg: string) => void
@@ -33,7 +36,7 @@ export function useDictationHoldMode(opts: {
 }): DictationHoldModeActions {
   const {
     dictation, engineChoice, usesLivePartials,
-    liveTranscription, anthropicDictation,
+    liveTranscription, anthropicDictation, targetIsChat,
     prepareLiveStart, prepareDesktopStart, restoreLiveCancel,
     triggerError, showToast, reportDictationFailure
   } = opts
@@ -79,8 +82,11 @@ export function useDictationHoldMode(opts: {
       }
       return
     }
-    prepareDesktopStart()
-    void dictation.start().catch((err: unknown) => reportDictationFailure(err))
+    const releaseRouteContext = prepareDesktopStart()
+    void dictation.start().catch((err: unknown) => {
+      releaseRouteContext()
+      reportDictationFailure(err)
+    })
   }, [
     anthropicDictation, clearEfficacy, dictation, engineChoice,
     liveTranscription, prepareDesktopStart, prepareLiveStart,
@@ -90,12 +96,15 @@ export function useDictationHoldMode(opts: {
   const cancelDictation = useCallback((forSend = false) => {
     clearGrace()
     clearEfficacy()
-    if (forSend && !(dictation.isStarting || dictation.isRecording || dictation.isProcessing)) {
+    // Either route: gated on live transcription, the mic kept running on a phone without one and
+    // wrote the spoken words back in (2026-09-13). Only a chat take ends with the send; a terminal
+    // take keeps its live transcript.
+    if (forSend && !(targetIsChat() && (dictation.isStarting || dictation.isRecording || dictation.isProcessing))) {
       return
     }
     restoreLiveCancel(forSend)
     void dictation.cancel()
-  }, [clearEfficacy, clearGrace, dictation, restoreLiveCancel])
+  }, [clearEfficacy, clearGrace, dictation, restoreLiveCancel, targetIsChat])
 
   const handlePressIn = useCallback(() => {
     if (graceTimerRef.current) { clearGrace(); return }

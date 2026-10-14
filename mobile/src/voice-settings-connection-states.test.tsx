@@ -54,6 +54,16 @@ vi.mock('./transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: (hostId: string | undefined) => (hostId ? fakes.lastConnectedAt : null)
 }))
 
+// The Anthropic sign-in row reads its token from the keychain (expo-secure-store), whose native
+// module does not exist under vitest; signed out is the state these tests draw.
+vi.mock('./dictation/anthropic-auth-store', () => ({
+  startLogin: vi.fn(),
+  exchangeCode: vi.fn(),
+  getSavedVerifier: async () => null,
+  clearCredential: async () => {},
+  isLoggedIn: async () => false
+}))
+
 import VoiceSettingsScreen from '../app/voice-settings'
 import { ThemeProvider } from './theme/theme-context'
 import { darkColors, lightColors } from './theme/tokens'
@@ -146,7 +156,6 @@ function retryButton(tree: ReactTestRenderer) {
 
 /** What the old screen drew over a setup it never had. */
 function expectNoInventedSettings(tree: ReactTestRenderer): void {
-  expect(texts(tree)).not.toContain('None selected')
   expect(texts(tree)).not.toContain('Enable Voice Dictation')
   expect(tree.root.findAll((node) => String(node.type) === 'Switch')).toHaveLength(0)
 }
@@ -167,11 +176,11 @@ describe('Voice settings without settings to show', () => {
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)(
-    'asks for a connected desktop instead of drawing an off switch and "None selected" (%s)',
+    'asks for a connected desktop instead of drawing an off switch (%s)',
     async (scheme, palette) => {
       const tree = await mount(scheme)
 
-      const line = lines(tree).find(({ text }) => text === 'Connect to a desktop to change voice settings')
+      const line = lines(tree).find(({ text }) => text === 'Connect to a desktop to change dictation settings')
       expect(line?.color).toBe(palette.textSecondary)
       expectNoInventedSettings(tree)
     }
@@ -198,7 +207,7 @@ describe('Voice settings without settings to show', () => {
       fakes.entries = [{ hostId: 'host-1', client, state: 'connected' }]
       const tree = await mount(scheme)
 
-      expect(lines(tree).find(({ text }) => text === "Couldn't read voice settings")?.color).toBe(
+      expect(lines(tree).find(({ text }) => text === 'Could not read dictation settings')?.color).toBe(
         palette.text
       )
       expect(lines(tree).find(({ text }) => text === 'Connection interrupted')?.color).toBe(
@@ -213,7 +222,7 @@ describe('Voice settings without settings to show', () => {
     const { client, sendRequest } = desktop([interrupted, listed(SETUP)])
     fakes.entries = [{ hostId: 'host-1', client, state: 'connected' }]
     const tree = await mount()
-    expect(texts(tree)).toContain("Couldn't read voice settings")
+    expect(texts(tree)).toContain('Could not read dictation settings')
 
     await act(async () => {
       retryButton(tree)!.props.onPress()
@@ -221,8 +230,8 @@ describe('Voice settings without settings to show', () => {
     await flush()
 
     expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(texts(tree)).not.toContain("Couldn't read voice settings")
-    expect(texts(tree)).toContain('Whisper Small')
+    expect(texts(tree)).not.toContain('Could not read dictation settings')
+    expect(texts(tree)).toContain('Enable Voice Dictation')
     expect(tree.root.findByType('Switch' as never).props.value).toBe(true)
   })
 
@@ -235,34 +244,34 @@ describe('Voice settings without settings to show', () => {
     await rerender()
     await rerender()
     expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(texts(tree)).toContain("Couldn't read voice settings")
+    expect(texts(tree)).toContain('Could not read dictation settings')
 
     fakes.lastConnectedAt = 2000
     await rerender()
     expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(texts(tree)).toContain('Whisper Small')
+    expect(texts(tree)).toContain('Enable Voice Dictation')
   })
 
-  it('shows "None selected" only once the desktop has said no model is selected', async () => {
-    const { client } = desktop([listed({ ...SETUP, enabled: false, selectedModelId: '' })])
+  it('draws the switch off only once the desktop has said dictation is off', async () => {
+    const { client } = desktop([listed({ ...SETUP, enabled: false })])
     fakes.entries = [{ hostId: 'host-1', client, state: 'connected' }]
     const tree = await mount()
 
-    expect(texts(tree)).toContain('None selected')
+    expect(texts(tree)).toContain('Enable Voice Dictation')
     expect(tree.root.findByType('Switch' as never).props.value).toBe(false)
   })
 })
 
 /**
  * No desktop in the list the screen can connect to. useLoadedHosts reports that as an empty list
- * for four different reasons, and the screen drew "Connect to a desktop to change voice settings"
+ * for four different reasons, and the screen drew "Connect to a desktop to change dictation settings"
  * for all of them: over a catalog it could not read, over a desktop whose Keychain entry was locked
  * for the moment, and over one whose credential is gone, it told someone with a paired desktop that
  * the fix was to connect one (review, 2026-09-30). Terminal settings already words these through
  * emptyHostsNoticeCopy; this screen now does too.
  */
 describe('Voice settings with no desktop it can connect to', () => {
-  const CONNECT_COPY = 'Connect to a desktop to change voice settings'
+  const CONNECT_COPY = 'Connect to a desktop to change dictation settings'
 
   function listedDesktop(credentialStatus: string): unknown {
     return { id: 'host-1', name: 'Studio Mac', credentialStatus, profile: null }
@@ -316,7 +325,7 @@ describe('Voice settings with no desktop it can connect to', () => {
     fakes.catalog = async () => []
     const tree = await mount()
 
-    expect(texts(tree)).toContain('No paired desktops yet. Pair one to change voice settings.')
+    expect(texts(tree)).toContain('No paired desktops yet. Pair one to change dictation settings.')
     expect(texts(tree)).not.toContain(CONNECT_COPY)
     expect(tree.root.findAll((node) => String(node.type) === 'ActivityIndicator')).toHaveLength(0)
     expectNoInventedSettings(tree)

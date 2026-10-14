@@ -92,6 +92,13 @@ vi.mock('./use-mobile-send-completion-generation', () => ({
   useMobileSendCompletionGeneration: () => () => 0
 }))
 
+// The Anthropic engine's token store reads the keychain (expo-secure-store), whose native module
+// does not exist under vitest. No phone sign-in is the state these routing tests run in.
+vi.mock('../dictation/anthropic-auth-store', () => ({
+  readCredential: async () => null,
+  refreshAccessToken: async () => null
+}))
+
 import { useMobileSessionNativeChatDictation } from './use-mobile-session-native-chat-dictation'
 
 type Mounted = {
