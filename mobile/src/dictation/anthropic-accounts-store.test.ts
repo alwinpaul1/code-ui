@@ -348,6 +348,13 @@ describe('a saved list that cannot be read is never written over (review of 2026
     expect(fake.store.get('anthropic-accounts-v1')).toBe(corrupt)
     await expect(listAccounts()).rejects.toThrow('could not be read')
   })
+
+  it('lets a sign-in land after the unreadable sign-ins are cleared', async () => {
+    fake.store.set('anthropic-accounts-v1', '{"accounts":[{"id":"')
+    await clearCredential()
+    await signIn('w2', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+    expect((await listAccounts()).map((account) => account.id)).toEqual([WORK_ACCOUNT])
+  })
 })
 
 describe('one account signed in twice, the first time unidentified (review of 2026-10-14)', () => {

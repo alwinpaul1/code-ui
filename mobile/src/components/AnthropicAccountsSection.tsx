@@ -5,6 +5,7 @@ import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import {
   accountLabel,
+  clearCredential,
   exchangeCode,
   getSavedVerifier,
   listAccounts,
@@ -34,6 +35,9 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   const [readAt, setReadAt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The saved sign-ins could not be read. The store refuses every write then, sign-in included,
+   *  so the screen offers the one way out: clearing them. */
+  const [unreadable, setUnreadable] = useState(false)
   const [authCode, setAuthCode] = useState('')
   const [showCodeInput, setShowCodeInput] = useState(false)
 
@@ -42,9 +46,11 @@ export function AnthropicAccountsSection(): React.JSX.Element {
       const listed = await listAccounts()
       setReadAt(Date.now())
       setAccounts(listed)
+      setUnreadable(false)
     } catch (err) {
       // An unreadable store reads as signed out, and says why instead of leaving a bare button.
       setAccounts([])
+      setUnreadable(true)
       setError(`Could not read the saved sign-ins: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [])
@@ -104,6 +110,19 @@ export function AnthropicAccountsSection(): React.JSX.Element {
     },
     [reload]
   )
+
+  const handleClear = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await clearCredential()
+      await reload()
+    } catch (err) {
+      setError(`Could not clear the saved sign-ins: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [reload])
 
   const signedIn = accounts !== null && accounts.length > 0
   // Voice uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
@@ -199,6 +218,11 @@ export function AnthropicAccountsSection(): React.JSX.Element {
         {error ? (
           <View style={{ paddingHorizontal: spacing.md + 2, paddingBottom: spacing.sm }}>
             <Text style={styles.error}>{error}</Text>
+          </View>
+        ) : null}
+        {unreadable ? (
+          <View style={{ paddingHorizontal: spacing.md + 2, paddingBottom: spacing.sm }}>
+            <Button label="Clear saved sign-ins" variant="secondary" align="center" onPress={() => void handleClear()} disabled={busy} />
           </View>
         ) : null}
       </View>

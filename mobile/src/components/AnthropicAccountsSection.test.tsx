@@ -29,7 +29,8 @@ const store = vi.hoisted(() => ({
   removed: [] as string[],
   startLogin: vi.fn(async () => 'verifier'),
   exchangeCode: vi.fn(async () => ({ accessToken: 'a', refreshToken: 'r', expiresAt: 0 })),
-  getSavedVerifier: vi.fn(async (): Promise<string | null> => 'verifier')
+  getSavedVerifier: vi.fn(async (): Promise<string | null> => 'verifier'),
+  cleared: 0
 }))
 
 vi.mock('../dictation/anthropic-auth-store', () => ({
@@ -49,7 +50,12 @@ vi.mock('../dictation/anthropic-auth-store', () => ({
   accountLabel: (account: { organizationName: string | null }, index: number) => account.organizationName ?? `Account ${index + 1}`,
   startLogin: store.startLogin,
   exchangeCode: store.exchangeCode,
-  getSavedVerifier: store.getSavedVerifier
+  getSavedVerifier: store.getSavedVerifier,
+  clearCredential: async () => {
+    store.cleared += 1
+    store.listFails = null
+    store.accounts = []
+  }
 }))
 
 import { AnthropicAccountsSection, ADD_ACCOUNT_HINT } from './AnthropicAccountsSection'
@@ -114,6 +120,7 @@ const settle = () =>
 
 beforeEach(() => {
   store.accounts = []
+  store.cleared = 0
   store.listFails = null
   store.removeFails = null
   store.removed = []
@@ -307,5 +314,26 @@ describe('when the saved sign-ins cannot be read', () => {
     const root = await draw()
     expect(texts(root)).toContain('Could not read the saved sign-ins: keystore locked')
     expect(texts(root)).toContain('Sign in to Anthropic')
+  })
+
+  // An unreadable store is never written over (review of 2026-10-14), so a sign-in on it is
+  // refused too. Without a way to start over, a corrupt store locked the user out for good.
+  it('offers to clear the saved sign-ins, and after that the screen reads signed out', async () => {
+    store.listFails = new Error('The saved sign-ins could not be parsed')
+    const root = await draw()
+    await act(async () => {
+      button(root, 'Clear saved sign-ins')!.props.onPress()
+    })
+    await settle()
+    expect(store.cleared).toBe(1)
+    expect(texts(root).some((text) => text.startsWith('Could not read the saved sign-ins'))).toBe(false)
+    expect(button(root, 'Clear saved sign-ins')).toBeUndefined()
+    expect(texts(root)).toContain('Sign in to Anthropic')
+  })
+
+  it('does not offer to clear anything when the sign-ins read fine', async () => {
+    store.accounts = [PERSONAL]
+    const root = await draw()
+    expect(button(root, 'Clear saved sign-ins')).toBeUndefined()
   })
 })
