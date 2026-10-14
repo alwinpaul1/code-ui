@@ -75,11 +75,13 @@ vi.mock('./src/platform/haptics', () => ({
 // under Node. lucide-react-native's ESM entry fails ("./context.mjs does not
 // provide an export named 'LucideProvider'"), and expo-clipboard reaches
 // expo-modules-core's EventEmitter, which is the reason every test that
-// draws an icon or copies text mocks them. These stand in for the two icons
-// the Markdown tree draws, as host tags a test can find by type, and for a
-// pasteboard that takes every write. A test that asserts what was copied, or
-// draws other icons, mocks the module locally, which takes priority.
-vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
+// draws an icon or copies text mocks them. These stand in for the icons
+// the Markdown tree draws (Copy and Expand on a code block's header, the check
+// Copy turns into, and the cross on the Expand sheet's title row), as host
+// tags a test can find by type, and for a pasteboard that takes every write.
+// A test that asserts what was copied, or draws other icons, mocks the module
+// locally, which takes priority.
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy', Maximize2: 'Maximize2', X: 'X' }))
 vi.mock('expo-clipboard', () => ({
   setStringAsync: async () => true,
   getStringAsync: async () => '',

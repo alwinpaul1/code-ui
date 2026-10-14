@@ -51,6 +51,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   Copy: 'Copy',
   Image: 'ImageIcon',
+  Maximize2: 'Maximize2',
   Sparkles: 'Sparkles',
   SquareChevronRight: 'SquareChevronRight',
   SquareCode: 'SquareCode',

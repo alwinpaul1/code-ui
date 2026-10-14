@@ -17,9 +17,11 @@ export type CopyToClipboard = {
  * Copying from the code viewer or a chat code block, with its outcome. A
  * refusal is kept and shown (MobileCodeView's notice line, the line under a
  * code block's header): a copy that fails without a word looks exactly like
- * one that worked, and the paste finds the old text.
+ * one that worked, and the paste finds the old text. `copiedMs` is how long
+ * the button shows "copied": 1.5 s here, and the Claude app's 2 s on its code
+ * block (code-block-spec.ts).
  */
-export function useCopyToClipboard(): CopyToClipboard {
+export function useCopyToClipboard(copiedMs: number = COPIED_MS): CopyToClipboard {
   const clipboard = useClipboardWriter()
   const [state, setState] = useState<{ copied: boolean; error: string | null }>({ copied: false, error: null })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -57,11 +59,11 @@ export function useCopyToClipboard(): CopyToClipboard {
           timer.current = null
           setState({ copied: false, error: null })
         },
-        next.copied ? COPIED_MS : FAILED_MS
+        next.copied ? copiedMs : FAILED_MS
       )
       return next.copied
     },
-    [clipboard]
+    [clipboard, copiedMs]
   )
   return { copied: state.copied, error: state.error, copy }
 }

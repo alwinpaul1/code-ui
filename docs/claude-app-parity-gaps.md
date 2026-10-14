@@ -400,7 +400,7 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Subagent hand-back | nothing drawn | nothing drawn | Match |
 | Init / resume card | cloud container steps | n/a | **Impossible** (cloud only) |
 | Next-prompt suggestion | ghost text in the empty composer plus a caret pill; a tap fills | none | **Missing** (G28). Readable only if Claude Code paints it in the TUI input |
-| Code block | 12 dp clip; 40 dp header in `pl7.s`, language in mono 13, Copy ("Copied"), **Expand**; wrap per setting (default off) | `MobileMarkdownCodeBlock.tsx`: language, Copy, line gutter, always scrolls | **Differs** (G18) |
+| Code block | 12 dp clip; header at least 40 sp in `pl7.s`, label (fence language, first letter capital, else "Code") in mono, Copy then Expand (36 sp buttons, 20 sp glyphs, 40 dp targets); body `pl7.r`, 16 dp, one line per source line, no numbers; Expand opens a sheet (close cross, "Code" / "Python code", Copy; the code full width); wrap per setting (default off) | `MobileMarkdownCodeBlock.tsx`, `MobileMarkdownCodeHeader.tsx`, `MobileMarkdownCodeSheet.tsx`, numbers in `code-block-spec.ts` | **Match** (2026-10-14), except wrap has no setting yet (G8) |
 | Inline file links | file-path code becomes a link; long-press: Open / Copy file name / Copy relative path | none found | **Missing** (G20) |
 | Artifacts | cards and chips | n/a | **Impossible** (claude.ai artifacts) |
 | Pending row | 50% alpha + "Sending" until the ack | full opacity, no label | **Differs** (S2) |
@@ -542,7 +542,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G15 | P2 | Error rows: API error and "Session interrupted" result rows styled in the danger colour, not as prose | Missing | S | B | |
 | G16 | P3 | Rate-limit banner in the chat ("Approaching limit", "Resets at …"), from beacon rate limits | Missing | S | D | |
 | G17 | P2 | Compacted marker wording "Compacted conversation · saved N tokens" when the figure is known | Differs | S | B | |
-| G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Differs | S | E | |
+| G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Done except wrap | S | E | done 2026-10-14: the card, its Copy (check for 2 s, glyph tint 300 ms) and Expand, and the sheet (spec and sources in `code-block-spec.ts`). Left: wrap that follows a setting, which waits for G8. The line-number gutter on the card is gone (the app draws none); the file reader keeps its own |
 | G19 | P2 | Read sheet: line-numbered viewer, "Showing N of M lines (truncated)", **Load full file** via `files.read`, Render for .md | Differs | M | F | |
 | G20 | P2 | Inline file links: tap opens the file viewer; long-press Open / Copy file name / Copy relative path | Missing | M | E | |
 | G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Missing | M | G | |

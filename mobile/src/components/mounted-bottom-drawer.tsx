@@ -71,6 +71,9 @@ export type MountedBottomDrawerProps = {
   zIndex?: number
   /** Sends the keyboard away as the sheet opens (BottomDrawer's prop). */
   dismissKeyboardOnOpen?: boolean
+  /** Drops the drawer's 12 dp side padding, so content can fill the sheet's
+   *  width (BottomDrawer's prop). */
+  edgeToEdge?: boolean
 }
 
 export function MountedBottomDrawer({
@@ -86,7 +89,8 @@ export function MountedBottomDrawer({
   openingShare,
   header,
   zIndex = 1000,
-  dismissKeyboardOnOpen = false
+  dismissKeyboardOnOpen = false,
+  edgeToEdge = false
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
@@ -400,7 +404,10 @@ export function MountedBottomDrawer({
   const body = !contentScrollable ? (
     <>
       {handle}
-      <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
+      {/* An expandable sheet's box is a fixed full height, so its static content
+          fills it without asking for `fillAvailable`, which would also lift the
+          box by the keyboard (the code sheet opens with it still up). */}
+      <View style={[styles.staticContent, (fillAvailable || expandable) && styles.staticContentFill]}>
         {children}
       </View>
     </>
@@ -474,6 +481,7 @@ export function MountedBottomDrawer({
             style={[
               styles.drawer,
               fillAvailable || expandable ? styles.drawerFill : null,
+              edgeToEdge ? styles.drawerFlush : null,
               {
                 width: '100%',
                 maxWidth: isWideLayout ? modalMaxWidth : undefined,
