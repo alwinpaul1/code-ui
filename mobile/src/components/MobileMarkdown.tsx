@@ -26,7 +26,7 @@ import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
 import { EMPHASIS_NONE, emphasisStyle, nestedEmphasis, type EmphasisAround } from './mobile-markdown-emphasis'
 import { listMarker } from './mobile-markdown-list-marker'
-import { useChatTextSelectable } from './chat-text-selectable-context'
+import { useChatTextHoldSelects, useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
@@ -300,8 +300,13 @@ function MobileMarkdownInner({
   // root guards holds (Android), the Texts stay selectable and only the root hears it: switching
   // a Text's `selectable` off ends the selection in it, and the user lost a held selection to a
   // drag of the transcript (2026-10-14, 0.9.139).
-  const holdSelects = useChatTextSelectable()
-  const selectable = MARKDOWN_ROOT_GUARDS_HOLDS || holdSelects
+  const selectableNow = useChatTextSelectable()
+  // The root's guard is the scroll's own flag, not the one held open by a live selection: that
+  // let a scrolling finger start a new selection over the copied one (2026-10-15, 0.9.147). A
+  // document that never takes a hold (the user's own bubble) says so through `selectableNow`.
+  const holdsSelect = useChatTextHoldSelects()
+  const holdSelects = selectableNow && holdsSelect
+  const selectable = MARKDOWN_ROOT_GUARDS_HOLDS || selectableNow
   const styles = useMarkdownStyles(typography)
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).

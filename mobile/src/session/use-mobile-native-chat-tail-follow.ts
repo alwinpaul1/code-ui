@@ -53,6 +53,9 @@ export type MobileNativeChatTailFollow<TItem> = {
    *  long-press under the moving rows, unless a reply holds a selection: off
    *  would end it (2026-10-14). */
   textSelectable: boolean
+  /** Off while a scroll is in flight, with or without a selection open: whether a hold may START
+   *  a selection (ChatTextHoldSelectsContext). */
+  holdSelects: boolean
   /** A document's selection opened or closed (ChatTextSelectionReportContext). */
   reportSelection: (owner: object, live: boolean) => void
   touchStart: () => void
@@ -140,6 +143,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     touchEnd,
     followGate,
     textSelectable,
+    holdSelects,
     reportSelection,
     detached,
     setFollowing,
@@ -427,6 +431,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     detachedFromTail: detached,
     showJumpToLatest: detached && contentBelow,
     textSelectable,
+    holdSelects,
     reportSelection,
     touchStart,
     touchEnd,

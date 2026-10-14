@@ -220,6 +220,11 @@ export function useMobileChatFollowing() {
     scrollSample,
     followGate,
     textSelectable: textSelectable || selectionLive,
+    // The scroll's own gate, a live selection or not: the Android selection root stops a hold
+    // starting one while this is false. Taken from `textSelectable || selectionLive`, the guard
+    // was off for every reply from the first hold on, and a finger scrolling the list started a
+    // selection that took the copied words' place (2026-10-15, 0.9.147).
+    holdSelects: textSelectable,
     reportSelection,
     detached,
     setFollowing,

@@ -181,7 +181,7 @@ export function MobileNativeChatView({
     listRef,
     showJumpToLatest,
     detachedFromTail,
-    textSelectable,
+    textSelectable, holdSelects,
     reportSelection,
     touchStart,
     touchEnd,
@@ -324,7 +324,7 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <ChatTextSelectionProvider selectable={textSelectable} report={reportSelection} held={held}>
+          <ChatTextSelectionProvider selectable={textSelectable} holdSelects={holdSelects} report={reportSelection} held={held}>
           {/* Inline `::orca-visual` lines of a structured chat's replies (Orca #26071). */}
           <MobileNativeChatVisualProvider source={visualSource}>
           <FlashList
