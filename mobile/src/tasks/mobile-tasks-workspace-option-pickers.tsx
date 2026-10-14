@@ -41,6 +41,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
         </View>
         <View style={styles.detailGroup}>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.input}
             value={workspaceBaseBranchQuery}
             onChangeText={setWorkspaceBaseBranchQuery}

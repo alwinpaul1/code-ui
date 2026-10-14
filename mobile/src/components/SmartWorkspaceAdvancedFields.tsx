@@ -24,6 +24,7 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
         <View style={styles.field}>
           <Text style={styles.label}>Name</Text>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.input}
             value={composer.name}
             onChangeText={composer.setName}
@@ -39,6 +40,7 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
         <View style={styles.field}>
           <Text style={styles.label}>Branch name</Text>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.input}
             value={composer.branchNameOverride ?? ''}
             onChangeText={composer.handleBranchNameOverrideChange}

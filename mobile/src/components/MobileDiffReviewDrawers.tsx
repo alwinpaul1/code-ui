@@ -205,6 +205,7 @@ function NoteComposerDrawer({ controller }: Props) {
           </Pressable>
         </View>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.composerInput}
           value={controller.composerBody}
           onChangeText={controller.setComposerBody}

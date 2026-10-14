@@ -271,6 +271,7 @@ export function MobileNativeChatQuestion({
       {allowOther ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm }}>
           <TextInput
+            cursorColor={colors.caret}
             style={{
               flex: 1,
               minHeight: 42,

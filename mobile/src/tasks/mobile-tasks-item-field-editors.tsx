@@ -47,6 +47,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
       <View style={styles.detailSection}>
         <Text style={styles.detailSectionTitle}>Title</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={itemTitleDraft}
           onChangeText={setItemTitleDraft}
@@ -127,6 +128,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         ) : (
           <>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.input}
               value={itemAddLabelsDraft}
               onChangeText={setItemAddLabelsDraft}
@@ -135,6 +137,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               autoCapitalize="none"
             />
             <TextInput
+              cursorColor={colors.caret}
               style={[styles.input, styles.stackedInput]}
               value={itemRemoveLabelsDraft}
               onChangeText={setItemRemoveLabelsDraft}
@@ -218,6 +221,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         ) : actionItem.source.type === 'issue' ? (
           <>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.input}
               value={itemAddAssigneesDraft}
               onChangeText={setItemAddAssigneesDraft}
@@ -226,6 +230,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               autoCapitalize="none"
             />
             <TextInput
+              cursorColor={colors.caret}
               style={[styles.input, styles.stackedInput]}
               value={itemRemoveAssigneesDraft}
               onChangeText={setItemRemoveAssigneesDraft}

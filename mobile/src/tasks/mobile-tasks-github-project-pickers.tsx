@@ -55,6 +55,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
 
       <View style={styles.projectPickerControls}>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={githubProjectPickerSearch}
           onChangeText={setGithubProjectPickerSearch}
@@ -65,6 +66,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
         />
         <View style={styles.projectPasteRow}>
           <TextInput
+            cursorColor={colors.caret}
             style={[styles.input, styles.projectPasteInput]}
             value={githubProjectPasteInput}
             onChangeText={(next) => {

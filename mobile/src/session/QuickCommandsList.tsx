@@ -60,6 +60,7 @@ export function QuickCommandsList({
         <View style={styles.search}>
           <Search size={16} color={colors.textMuted} />
           <TextInput
+            cursorColor={colors.caret}
             style={styles.searchInput}
             value={query}
             onChangeText={onQueryChange}

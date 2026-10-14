@@ -317,6 +317,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         />
         <View style={styles.inputRow}>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.keyboardInput}
             value={keyboardValue}
             onChangeText={setKeyboardValue}

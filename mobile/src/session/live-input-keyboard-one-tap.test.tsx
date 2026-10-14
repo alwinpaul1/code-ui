@@ -82,7 +82,10 @@ function renderDock(keyboardLift: number) {
     activeBrowserTab: null,
     keyboardLift,
     nativeChatController: { viewResolved: true, chatViewSelected: false },
-    showLoadingState: false
+    showLoadingState: false,
+    armLiveInputKeyboardClaim: () => undefined,
+    handleLiveInputBlur: () => undefined,
+    handleLiveInputFocus: () => undefined
   } as unknown as MobileSessionController
   act(() => {
     renderer = create(

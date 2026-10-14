@@ -48,6 +48,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     return (
       <View style={styles.commentComposer}>
         <TextInput
+          cursorColor={colors.caret}
           style={[styles.input, styles.commentInput, styles.commentComposerInput]}
           value={args.value}
           onChangeText={args.onChangeText}
@@ -119,6 +120,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
                 </TasksButton>
               ) : null}
               <TextInput
+                cursorColor={colors.caret}
                 style={[styles.input, styles.replyInput]}
                 value={itemReplyDrafts[String(comment.id)] ?? ''}
                 onChangeText={(next) =>

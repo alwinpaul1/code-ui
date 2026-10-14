@@ -41,6 +41,7 @@ export function MacUnlockPasswordSheet({
         </Txt>
         <View style={{ justifyContent: 'center' }}>
           <TextInput
+            cursorColor={colors.caret}
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!visible}

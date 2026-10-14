@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
+import { anyTextFieldFocused } from './text-field-focus'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
@@ -133,10 +134,20 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
-  const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
+  const {
+    armLiveInputKeyboardClaim,
+    focusLiveInput,
+    handleLiveInputBlur,
+    handleLiveInputFocus,
+    handleTerminalTap,
+    releaseLiveInputKeyboard,
+    reportLiveInputScreenFocus,
+    resetLiveInputFocus
+  } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
     inputRef: liveInputRef,
+    isAnyTextFieldFocused: anyTextFieldFocused,
     keyboardHeight,
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
@@ -145,9 +156,13 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   })
   useFocusEffect(
     useCallback(() => {
+      reportLiveInputScreenFocus(true)
       // Expo retains this route while pushed screens are visible.
-      return resetLiveInputFocus
-    }, [resetLiveInputFocus])
+      return () => {
+        reportLiveInputScreenFocus(false)
+        resetLiveInputFocus()
+      }
+    }, [reportLiveInputScreenFocus, resetLiveInputFocus])
   )
   return {
     ptyModesRef,
@@ -206,7 +221,11 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     canSend,
     liveInputEnabled,
     focusLiveInput,
+    armLiveInputKeyboardClaim,
+    handleLiveInputBlur,
+    handleLiveInputFocus,
     handleTerminalTap,
+    releaseLiveInputKeyboard,
     resetLiveInputFocus,
     terminalInventoryRecoveryScope,
     registerTerminalInventoryRecoveryAction,

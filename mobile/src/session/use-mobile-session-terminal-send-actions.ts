@@ -50,11 +50,13 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
-    showToast
+    showToast,
+    releaseLiveInputKeyboard
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
   const dismissSoftwareKeyboard = useCallback(() => {
+    releaseLiveInputKeyboard()
     dismissTerminalKeyboard({
       clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
       commandInput: commandInputRef.current,
@@ -231,6 +233,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
 
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      releaseLiveInputKeyboard()
 
       if (keyboardHeight <= 0) {
         liveInputRef.current?.blur()

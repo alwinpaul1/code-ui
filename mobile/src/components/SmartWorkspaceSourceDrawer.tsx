@@ -302,6 +302,7 @@ export function SmartWorkspaceSourceDrawer({
           </View>
 
           <TextInput
+            cursorColor={colors.caret}
             ref={inputRef}
             style={styles.search}
             value={composer.name}

@@ -48,7 +48,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     nativeChatController,
     showLoadingState,
     activeHandle,
-    terminalModes
+    terminalModes,
+    armLiveInputKeyboardClaim,
+    handleLiveInputBlur,
+    handleLiveInputFocus
   } = controller
   const { viewResolved, chatViewSelected } = nativeChatController
   // Why: before the tab's PTY is named, draw the bar it opens with, not "no terminal".
@@ -64,16 +67,23 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   // tab that is about to open as chat — the flash the user sees as a glitch.
   // Same for the tab list itself: no tab yet means no terminal to type into,
   // and the tab about to arrive may open as chat.
-  if (
-    !shouldShowTerminalCommandDock({
-      blockedByOtherPanel: Boolean(activeMarkdownTab || activeFileTab || activeBrowserTab),
-      showNativeChat,
-      chatViewSelected,
-      agentSession: activeSessionTab?.type === 'agent-session',
-      viewResolved,
-      loading: showLoadingState
-    })
-  ) {
+  const shown = shouldShowTerminalCommandDock({
+    blockedByOtherPanel: Boolean(activeMarkdownTab || activeFileTab || activeBrowserTab),
+    showNativeChat,
+    chatViewSelected,
+    agentSession: activeSessionTab?.type === 'agent-session',
+    viewResolved,
+    loading: showLoadingState
+  })
+  // A live field coming on screen under a keyboard no field holds takes it
+  // (use-terminal-live-input-focus.ts, claimOrphanedKeyboard).
+  const liveFieldShown = shown && liveBar
+  useEffect(() => {
+    if (liveFieldShown) {
+      armLiveInputKeyboardClaim()
+    }
+  }, [armLiveInputKeyboardClaim, liveFieldShown, activeHandle])
+  if (!shown) {
     return null
   }
 
@@ -106,6 +116,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               here instantly while each keystroke streams to the PTY; the terminal
               echo arrives one relay round trip later. Enter clears the field. */}
           <TextInput
+            cursorColor={colors.caret}
             ref={bindLiveInputField}
             style={{
               flex: 1,
@@ -122,8 +133,16 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               opacity: canSend ? 1 : 0.45
             }}
             value={liveInputCapture}
-            onFocus={() => setLiveFocused(true)}
-            onBlur={() => setLiveFocused(false)}
+            onFocus={() => {
+              setLiveFocused(true)
+              handleLiveInputFocus()
+            }}
+            onBlur={() => {
+              setLiveFocused(false)
+              // A touch on the terminal WebView takes view focus and leaves
+              // the keyboard up; this gives it back to the field.
+              handleLiveInputBlur()
+            }}
             onChange={handleLiveInputChange}
             onKeyPress={handleLiveInputKeyPress}
             onSubmitEditing={submitLiveInput}
@@ -170,6 +189,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           }}
         >
           <TextInput
+            cursorColor={colors.caret}
             ref={bindCommandField}
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={

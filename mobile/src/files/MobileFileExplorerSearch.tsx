@@ -18,6 +18,7 @@ export function MobileFileExplorerSearchBar({
     <View style={styles.searchRow}>
       <Search size={16} color={colors.textSecondary} strokeWidth={2} />
       <TextInput
+        cursorColor={colors.caret}
         style={styles.searchInput}
         value={query}
         onChangeText={onChangeQuery}

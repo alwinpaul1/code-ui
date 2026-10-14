@@ -115,6 +115,7 @@ export function MobileSearchField({
         strokeWidth={2.2}
       />
       <TextInput
+        cursorColor={colors.caret}
         ref={inputRef}
         style={{
           flex: 1,

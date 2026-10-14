@@ -109,6 +109,7 @@ export function MobileDiffCommentLineRow({
       {isCommenting ? (
         <View style={styles.diffCommentComposer}>
           <TextInput
+            cursorColor={colors.caret}
             style={[styles.textInput, styles.diffCommentInput]}
             value={commentDraft}
             onChangeText={onDraftChange}

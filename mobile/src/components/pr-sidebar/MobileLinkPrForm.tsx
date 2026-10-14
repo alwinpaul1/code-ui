@@ -64,6 +64,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
       </View>
       <Text style={styles.label}>PR number or GitHub URL</Text>
       <TextInput
+        cursorColor={colors.caret}
         style={styles.input}
         value={input}
         onChangeText={setInput}

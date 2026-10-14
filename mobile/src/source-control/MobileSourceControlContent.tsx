@@ -259,6 +259,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             </View>
           ) : (
             <TextInput
+              cursorColor={colors.caret}
               style={styles.commitInput}
               value={commitMessage}
               onChangeText={setCommitMessage}

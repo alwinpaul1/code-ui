@@ -105,6 +105,7 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
             keyboardShouldPersistTaps="handled"
           >
             <TextInput
+              cursorColor={colors.caret}
               ref={inputRef}
               accessibilityLabel="Queued message text"
               multiline

@@ -42,6 +42,7 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr'))) ? (
     <>
       <TextInput
+        cursorColor={colors.caret}
         style={[styles.input, styles.bodyInput]}
         value={itemBodyDraft}
         onChangeText={setItemBodyDraft}
@@ -172,6 +173,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
         </View>
       )}
       <TextInput
+        cursorColor={colors.caret}
         style={styles.input}
         value={itemReviewersDraft}
         onChangeText={setItemReviewersDraft}

@@ -125,6 +125,7 @@ export function ReviewerPickerDrawer({
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss={false}>
       <Text style={styles.pickerTitle}>Reviewers</Text>
       <TextInput
+        cursorColor={colors.caret}
         style={styles.pickerSearch}
         value={query}
         onChangeText={setQuery}

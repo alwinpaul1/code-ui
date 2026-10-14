@@ -108,7 +108,10 @@ function controllerFor(w: World): MobileSessionController {
     activeBrowserTab: null,
     keyboardLift: 0,
     nativeChatController: { viewResolved: true, chatViewSelected: false },
-    showLoadingState: false
+    showLoadingState: false,
+    armLiveInputKeyboardClaim: () => undefined,
+    handleLiveInputBlur: () => undefined,
+    handleLiveInputFocus: () => undefined
   } as unknown as MobileSessionController
 }
 

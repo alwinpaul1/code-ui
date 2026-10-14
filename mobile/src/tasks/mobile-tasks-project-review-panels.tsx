@@ -112,6 +112,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           </View>
         )}
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={projectReviewersDraft}
           onChangeText={setProjectReviewersDraft}

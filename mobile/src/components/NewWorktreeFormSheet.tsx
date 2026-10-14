@@ -140,6 +140,7 @@ export function NewWorktreeFormSheet(props: {
               <View style={styles.field}>
                 <Text style={styles.label}>Note</Text>
                 <TextInput
+                  cursorColor={colors.caret}
                   style={styles.input}
                   value={props.note}
                   onChangeText={props.onNoteChange}

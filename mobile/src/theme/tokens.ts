@@ -112,6 +112,12 @@ export type ThemeColors = {
   /** The model pill's label and chevron. Primary text: `textSecondary` read
    *  3.7:1 on the dark pill, under the 4.5:1 a 12 sp label needs. */
   composerPillText: string
+  /** The text caret in every field (`cursorColor`). The Claude app's
+   *  composer passes `pl7.Q` as its TextFieldColors cursorColor
+   *  (colorScheme.onSurfaceVariant, `g96` via `krz.k`), the same muted tone as
+   *  its placeholder (2026-10-14). Without the prop Android draws AppCompat's
+   *  default teal (`colorAccent`, #008577 / #80CBC4), whatever the theme. */
+  caret: string
 }
 
 export const lightColors: ThemeColors = {
@@ -164,7 +170,8 @@ export const lightColors: ThemeColors = {
   composerControl: '#F0EFEC',
   composerControlPressed: '#E7E6E1',
   composerPill: '#F0EFEC',
-  composerPillText: '#1E1C19'
+  composerPillText: '#1E1C19',
+  caret: '#7B7974'
 }
 
 export const darkColors: ThemeColors = {
@@ -221,7 +228,8 @@ export const darkColors: ThemeColors = {
   composerControlPressed: '#454442',
   // Sampled from the user's screenshot, see the token doc.
   composerPill: '#545452',
-  composerPillText: '#F8F8F6'
+  composerPillText: '#F8F8F6',
+  caret: '#97958D'
 }
 
 /** The brand red, now the notification tint (the mark itself is black or

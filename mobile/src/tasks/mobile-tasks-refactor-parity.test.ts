@@ -206,7 +206,9 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // 2026-09-30 (fix round 1, F12): 434 -> 435 (note above the hooks pin).
 // 2026-10-01 (fix round 2, finding 4): two statements changed, 435 still (note above the hooks pin).
 // 2026-10-01 (edge cases, Linear post after a switch): 435 -> 440 (note above the hooks pin).
-const PROVIDER_RPC_STATEMENTS = '1bd17f8b0ced2e1a2857de05c9fb5bd9f3485fe735f72a9456ac7844da8e9e22'
+// 2026-10-14 (caret sweep): every Tasks TextInput gains cursorColor={colors.caret} (22 in this family),
+// which changes statements that render a field. 440 still.
+const PROVIDER_RPC_STATEMENTS = '6417bc212c48dad4ea869df9ba97c807dc571eb41c57a5880c6dd4e904ed3057'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -222,7 +224,9 @@ const PROVIDER_RPC_STATEMENTS = '1bd17f8b0ced2e1a2857de05c9fb5bd9f3485fe735f72a9
 // upstream's own change to this declaration and the only one. 200 declarations still.
 // 2026-09-30 (fix round 3, finding 2): `DetailPayload`'s Linear arm gains `commentsFailed?: true`.
 // 200 declarations still.
-const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb0bd5bc6a15cbe43f900ab'
+// 2026-10-14 (caret sweep): the cursorColor attribute in each declaration that draws a TextInput.
+// 200 declarations still.
+const PRESS_FEEDBACK_DECLARATIONS = '898bd6a94cd72be946883ad57cb49c671f0d73af2fd0c0d71009be0fb92d3f2d'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -241,7 +245,8 @@ const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb
 // 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292, then 3,289 (notes above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 3,289 -> 3,291, then 3,293 (notes above the hooks pin).
 // 2026-10-01 (edge cases, Linear post after a switch): 3,293 -> 3,294 (note above the hooks pin).
-const A11Y_BACK_SEMANTICS = '437380337dfbc39a0954f174f21c4d2671d099de47ce949db190c1593d7e9cea'
+// 2026-10-14 (caret sweep): each `jsx:TextInput:` host signature gains `cursorColor`. Line count unchanged.
+const A11Y_BACK_SEMANTICS = '9a72572424423d68ee3b29fea9a9fae2e80cecb726a4389fa1858045b16ce439'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
@@ -249,7 +254,9 @@ const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647
 // 2026-09-30 (b8 finding 6): 35,306 -> 35,399 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 2): 35,399 -> 35,514 (note above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 35,514 -> 35,543 (note above the hooks pin).
-const A11Y_BACK_RENDER_TREE = 'a90cdedea3327b69bf1aea640e4abc321f81c0288c9a6ff161ff2dc668febf9e'
+// 2026-10-14 (caret sweep): 35,543 -> 35,697, +154 = SEVEN tokens (`cursorColor`, `=`, `{`, `colors`,
+// `.`, `caret`, `}`) on each of the 22 TextInputs this family reads (src/tasks has 25; `grep -c` over its .tsx files).
+const A11Y_BACK_RENDER_TREE = '1823e3a7e0f40c0e5c4cd83283a8780857aad81d1bcad43735c01d81a97f52dc'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -294,7 +301,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_543)
+    expect(tokens).toHaveLength(35_697)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 
