@@ -12,6 +12,7 @@ import { DictationWaveform } from '../components/DictationWaveform'
 import { WAVEFORM_HEIGHT } from '../components/dictation-waveform-geometry'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
+import type { LevelSource } from '../dictation/pcm-level'
 import { springFromAppleParams } from '../ui/alert/alert-motion'
 
 /** Where a dictation take is, as the composer draws it. */
@@ -53,6 +54,7 @@ export function MobileNativeChatDictationRow({
   ending,
   sendBlocked = false,
   level,
+  levelSource,
   onCancel,
   onStop,
   onSend,
@@ -64,6 +66,8 @@ export function MobileNativeChatDictationRow({
    *  stop the take and drop the send without a word. Stop and Cancel stay. */
   sendBlocked?: boolean
   level: number
+  /** The engine's per-chunk level, when it has one (DictationWaveform). */
+  levelSource?: LevelSource
   onCancel: () => void
   onStop: () => void
   onSend: () => void
@@ -110,7 +114,7 @@ export function MobileNativeChatDictationRow({
       <View style={{ flex: 1, minWidth: 0, height: WAVEFORM_HEIGHT, justifyContent: 'center' }}>
         {phase === 'off' ? null : (
           <Animated.View style={[{ flex: 1, flexDirection: 'row' }, waveformStyle]} testID="dictation-waveform-fade">
-            <DictationWaveform level={transcribing ? 0 : level} />
+            <DictationWaveform level={transcribing ? 0 : level} levelSource={transcribing ? undefined : levelSource} />
           </Animated.View>
         )}
         <Animated.View
@@ -185,6 +189,7 @@ export function MobileNativeChatDictationRow({
 export function MobileNativeChatDictationLayer({
   row,
   level,
+  levelSource,
   padding,
   iconButton
 }: {
@@ -199,6 +204,7 @@ export function MobileNativeChatDictationLayer({
     send: () => void
   }
   level: number
+  levelSource?: LevelSource
   padding: number
   iconButton: ViewStyle
 }): React.JSX.Element {
@@ -229,6 +235,7 @@ export function MobileNativeChatDictationLayer({
         ending={row.ending}
         sendBlocked={row.sendBlocked}
         level={level}
+        levelSource={levelSource}
         onCancel={row.cancel}
         onStop={row.stop}
         onSend={row.send}

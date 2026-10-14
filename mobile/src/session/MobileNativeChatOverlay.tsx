@@ -1,3 +1,4 @@
+import type { LevelSource } from '../dictation/pcm-level'
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
@@ -80,6 +81,7 @@ type Props = {
   onBeforeSend?: () => void
   micActive: boolean
   micLevel?: number
+  micLevelSource?: LevelSource
   micTranscribing?: boolean
   onCancelDictation?: () => void
   onStopDictation?: () => void
@@ -126,6 +128,7 @@ export function MobileNativeChatOverlay({
   onBeforeSend,
   micActive,
   micLevel,
+  micLevelSource,
   micTranscribing,
   onCancelDictation,
   onStopDictation,
@@ -493,6 +496,7 @@ export function MobileNativeChatOverlay({
         onBeforeSend={onBeforeSend}
         micActive={micActive}
         micLevel={micLevel}
+        micLevelSource={micLevelSource}
         micTranscribing={micTranscribing}
         onCancelDictation={onCancelDictation}
         onStopDictation={onStopDictation}

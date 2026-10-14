@@ -7,6 +7,7 @@ import type {
   UseMobileDictationResult
 } from './mobile-dictation-session-state'
 import type { DictationCaptureSubscription } from '../platform/dictation-capture-contract'
+import { createLevelSource, pcm16Level, type LevelSource } from '../dictation/pcm-level'
 
 export type UseAnthropicDictationOptions = {
   enabled: boolean
@@ -24,6 +25,9 @@ export type UseAnthropicDictationResult = UseMobileDictationResult & {
   /** Reads the phone's store again (after a sign-in on Voice settings) and says whether anyone
    *  is signed in now. */
   refreshAvailable: () => Promise<boolean>
+  /** The microphone level 0..1 from the streamed PCM, for the recording row's waveform. Held
+   *  outside React: it changes per chunk, about 31 times a second. */
+  levelSource: LevelSource
 }
 
 /**
@@ -44,6 +48,7 @@ export function useAnthropicDictation(
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [available, setAvailable] = useState(false)
+  const [levelSource] = useState(createLevelSource)
 
   const activeRef = useRef(false)
   const streamRef = useRef<AnthropicVoiceStream | null>(null)
@@ -71,13 +76,14 @@ export function useAnthropicDictation(
 
   const teardown = useCallback(() => {
     activeRef.current = false
+    levelSource.set(0)
     chunkSubRef.current?.remove()
     chunkSubRef.current = null
     streamRef.current?.destroy()
     streamRef.current = null
     void capture.end()
     capture.release()
-  }, [capture])
+  }, [capture, levelSource])
 
   const start = useCallback(async () => {
     if (!enabled || activeRef.current) {
@@ -164,6 +170,10 @@ export function useAnthropicDictation(
     // Wire microphone chunks to the stream.
     const sub = capture.onChunk((chunk) => {
       stream.sendAudio(chunk.data)
+      const level = pcm16Level(chunk.data)
+      if (level !== null) {
+        levelSource.set(level)
+      }
     })
     chunkSubRef.current = sub
 
@@ -177,7 +187,7 @@ export function useAnthropicDictation(
     }
 
     setStatus('recording')
-  }, [capture, enabled, lang, teardown])
+  }, [capture, enabled, lang, levelSource, teardown])
 
   const stop = useCallback(async () => {
     if (!activeRef.current) {
@@ -185,11 +195,13 @@ export function useAnthropicDictation(
     }
     setStatus('processing')
     await capture.end()
+    // Listening is over: the waveform gives way to "Transcribing…" with no stale bar.
+    levelSource.set(0)
     // Claude Code CLI: finalize() sends CloseStream, starts the two timers,
     // and resolves when the final transcript is delivered or a timeout fires.
     // The stream's onTranscript(text, true) callback handles the rest.
     streamRef.current?.finalize().catch(() => undefined)
-  }, [capture])
+  }, [capture, levelSource])
 
   const cancel = useCallback(async () => {
     if (!activeRef.current) {
@@ -223,6 +235,7 @@ export function useAnthropicDictation(
     error,
     available,
     refreshAvailable,
+    levelSource,
     start,
     stop,
     cancel

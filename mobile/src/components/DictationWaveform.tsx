@@ -7,6 +7,7 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { useTheme } from '../theme/theme-context'
+import type { LevelSource } from '../dictation/pcm-level'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import {
   appendLevelSample,
@@ -21,6 +22,9 @@ import {
 type Props = {
   /** Microphone level 0..1, as the dictation engine reports it. */
   level: number
+  /** A level that changes per audio chunk, held outside React (the Anthropic engine's). When
+   *  given it wins over `level`, and its changes reach the UI thread without a render. */
+  levelSource?: LevelSource
 }
 
 /**
@@ -34,7 +38,7 @@ type Props = {
  *
  * Reduced motion: the bars step one pitch per sample instead of gliding between them.
  */
-export function DictationWaveform({ level }: Props): React.JSX.Element {
+export function DictationWaveform({ level, levelSource }: Props): React.JSX.Element {
   const { colors } = useTheme()
   const reducedMotion = useReducedMotion() === true
   const [width, setWidth] = useState(0)
@@ -46,8 +50,19 @@ export function DictationWaveform({ level }: Props): React.JSX.Element {
   // A shared value, not a captured boolean: the frame callback is registered once.
   const stepOnly = useSharedValue(reducedMotion)
   useEffect(() => {
-    levelValue.value = level
-  }, [level, levelValue])
+    if (!levelSource) {
+      levelValue.value = level
+    }
+  }, [level, levelSource, levelValue])
+  useEffect(() => {
+    if (!levelSource) {
+      return undefined
+    }
+    levelValue.value = levelSource.current
+    return levelSource.subscribe((next) => {
+      levelValue.value = next
+    })
+  }, [levelSource, levelValue])
   useEffect(() => {
     stepOnly.value = reducedMotion
   }, [reducedMotion, stepOnly])
