@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Image, Platform, Pressable, ScrollView, View } from 'react-native'
 import { Pencil } from 'lucide-react-native'
 import { Txt } from '../ui/Txt'
@@ -38,6 +38,17 @@ export function MobileNativeChatQueue({
   const { colors, space, radius } = useTheme()
   const scrollRef = useRef<ScrollView>(null)
   const startedAtTopRef = useRef(false)
+  // The tap can wait seconds over the relay (a message still being typed, a
+  // look at the screen, the key's own round trip), and a button that looked
+  // untouched all that time was tapped again and again (2026-10-14).
+  const [sendingNow, setSendingNow] = useState(false)
+  const pressSendNow = () => {
+    if (!onSendNow || sendingNow) {
+      return
+    }
+    setSendingNow(true)
+    void onSendNow().finally(() => setSendingNow(false))
+  }
   // Claude can select any entry natively; Codex only recalls its latest one.
   // Claude builds without the selector report that through the editor's own
   // error, which names the flag that turns it on — silence would just repeat
@@ -104,8 +115,10 @@ export function MobileNativeChatQueue({
             accessibilityRole="button"
             accessibilityLabel="Send queued messages now"
             accessibilityHint="Interrupts the current turn and sends everything queued"
+            accessibilityState={{ busy: sendingNow, disabled: sendingNow }}
+            disabled={sendingNow}
             hitSlop={tapTargetHitSlop({ height: 32 })}
-            onPress={() => void onSendNow()}
+            onPress={pressSendNow}
             style={({ pressed }) => ({
               minHeight: 32,
               justifyContent: 'center',
@@ -114,8 +127,8 @@ export function MobileNativeChatQueue({
               opacity: pressed ? 0.7 : 1
             })}
           >
-            <Txt variant="label" weight="medium" tone="accent">
-              Send now
+            <Txt variant="label" weight="medium" tone={sendingNow ? 'secondary' : 'accent'}>
+              {sendingNow ? 'Sending…' : 'Send now'}
             </Txt>
           </Pressable>
         ) : null}
