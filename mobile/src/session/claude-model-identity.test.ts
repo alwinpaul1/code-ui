@@ -38,7 +38,7 @@ describe('the host row a Claude session stands on', () => {
     expect(matchClaudeCatalogModelId(BEDROCK, 'claude-opus-5-5[1m]', null)).toBe('eu.anthropic.claude-opus-5-5[1m]')
   })
 
-  it('keeps an exact id, even an alias whose label names another model', () => {
+  it('keeps an exact id, even an alias whose label names another model, when no row is that model', () => {
     expect(matchClaudeCatalogModelId(BEDROCK, 'opus', 'Opus 4.6')).toBe('opus')
     expect(matchClaudeCatalogModelId(BEDROCK, 'eu.anthropic.claude-opus-4-8[1m]', null)).toBe('eu.anthropic.claude-opus-4-8[1m]')
   })

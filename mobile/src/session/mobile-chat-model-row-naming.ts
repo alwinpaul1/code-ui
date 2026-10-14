@@ -4,6 +4,7 @@ import type {
 } from '../../../src/shared/agent-session-option-catalog-types'
 import { withTrackedNativeChatModel } from '../../../src/shared/native-chat-session-option-snapshot'
 import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
+import { claudeCanonicalModel, matchClaudeCatalogModelId, namesAnotherModel } from './claude-model-identity'
 
 /**
  * Name the running model the way the AGENT names it.
@@ -23,6 +24,14 @@ import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-c
  * Only the row the agent is actually reporting is renamed: every other row is a
  * choice the user might make, and those keep the catalog's own wording.
  * `src/shared` is Orca's, so this happens here rather than in the snapshot.
+ *
+ * A row whose own label already names a different model is never renamed. On
+ * a Claude fallback (2.1.300, Opus 5.5 → Opus 4.8) the screen reports the
+ * family word `opus` with the name "Opus 4.8", and renaming the listed `opus`
+ * row ("Opus 5.5") drew "Opus 4.8" on the row that switches to 5.5. The name
+ * goes to the row the matcher says is running (the listed `claude-opus-4-8`);
+ * when the matcher folds the report onto that alias for want of one, no row
+ * is renamed and the pill alone states the name.
  */
 export function nameModelRowsFromAgent(
   models: readonly CatalogModel[],
@@ -30,11 +39,17 @@ export function nameModelRowsFromAgent(
   reportedLabel: string | null
 ): CatalogModel[] {
   const name = reportedLabel?.trim()
-  if (!reportedModelId || !name) {
+  if (!reportedModelId || !name || !models.some((model) => model.id === reportedModelId)) {
     return [...models]
   }
+  // With the reported id listed, the matcher keeps that row unless it is an
+  // alias naming another model, so Codex and every other agent are unchanged.
+  const running = matchClaudeCatalogModelId({ models: [...models], modelApply: {} }, reportedModelId, name)
+  const canonical = claudeCanonicalModel(reportedModelId, name)
   return models.map((model) =>
-    model.id === reportedModelId && model.label !== name ? { ...model, label: name } : model
+    model.id === running && model.label !== name && !namesAnotherModel(model, canonical)
+      ? { ...model, label: name }
+      : model
   )
 }
 

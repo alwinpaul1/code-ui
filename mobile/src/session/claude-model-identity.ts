@@ -76,8 +76,15 @@ function isOneMillion(id: string, label: string | null): boolean {
  * "Sonnet", which is exactly the badge id `sonnet`. So when the report names a
  * model Claude Code knows and the matcher found no row for that same model, the
  * one row that is that model (same canonical id, same 1M window) is taken
- * instead. An exact id always stands. A seed row names no model, so on the seed
- * this is Orca's matcher unchanged.
+ * instead. An exact id stands, with one exception: a family alias whose own
+ * label names a different version. Claude Code 2.1.300 can move a session onto
+ * a fallback model (`model_refusal_fallback`, Opus 5.5 → Opus 4.8); the screen
+ * then reports the family word `opus` beside the name "Opus 4.8", while the
+ * listed `opus` row says "Opus 5.5". That row is what a tap on "Opus" gives,
+ * not what is running, so the one row that IS Opus 4.8 is taken. With no such
+ * row the report folds onto the alias, as a full id with no row of its own
+ * does (the effort table then cuts the alias to the running model's levels).
+ * A seed row names no model, so on the seed this is Orca's matcher unchanged.
  */
 export function matchClaudeCatalogModelId(
   catalog: AgentSessionOptionCatalog,
@@ -89,7 +96,9 @@ export function matchClaudeCatalogModelId(
   const matched = matchNativeChatCatalogModelId(catalog, reportedModel)
   const row = catalog.models.find((model) => model.id === matched) ?? null
   const canonical = claudeCanonicalModel(reportedModel, reportedLabel)
-  if (!canonical || row?.id.toLowerCase() === reportedModel.trim().toLowerCase()) {
+  const exact = row?.id.toLowerCase() === reportedModel.trim().toLowerCase()
+  const aliasNamesAnother = exact && namesAnotherModel(row!, canonical)
+  if (!canonical || (exact && !aliasNamesAnother)) {
     return row?.id ?? null
   }
   const oneMillion = isOneMillion(reportedModel, reportedLabel)
@@ -101,4 +110,11 @@ export function matchClaudeCatalogModelId(
   }
   const same = catalog.models.filter(isReported)
   return same.length === 1 ? same[0]!.id : (row?.id ?? null)
+}
+
+/** True when a row's own id and label name a model Claude Code knows, and it
+ *  is not `canonical`. A version-less row ("Opus") names none. */
+export function namesAnotherModel(model: CatalogModel, canonical: string | null): boolean {
+  const own = claudeCanonicalModel(model.id, model.label)
+  return canonical !== null && own !== null && own !== canonical
 }
