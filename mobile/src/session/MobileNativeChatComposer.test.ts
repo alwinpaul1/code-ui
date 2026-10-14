@@ -159,7 +159,10 @@ describe('MobileNativeChatComposer', () => {
     const inset = renderer!.root.findByProps({ testID: 'native-chat-composer-inset' })
     const actions = renderer!.root.findByProps({ testID: 'native-chat-composer-actions' })
     expect(composer.findAllByType('TextInput')).toHaveLength(1)
-    expect(composer.children[composer.children.length - 1]).toBe(actions)
+    // The action row and the recording row share the last slot (MobileNativeChatDictationRow.tsx).
+    const actionArea = renderer!.root.findByProps({ testID: 'native-chat-composer-action-area' })
+    expect(composer.children[composer.children.length - 1]).toBe(actionArea)
+    expect(actionArea.findByProps({ testID: 'native-chat-composer-actions' })).toBe(actions)
     expect(inset.props.style).toMatchObject({
       paddingHorizontal: space.md,
       paddingTop: space.xs,

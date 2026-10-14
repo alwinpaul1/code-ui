@@ -16,6 +16,8 @@ export type DictationHoldModeActions = {
   markTextProduced: () => void
   startDictation: () => void
   cancelDictation: (forSend?: boolean) => void
+  /** The recording row's Stop dictation: ends the take and keeps its words (Cancel discards). */
+  stopDictation: () => void
 }
 
 export function useDictationHoldMode(opts: {
@@ -134,6 +136,13 @@ export function useDictationHoldMode(opts: {
     }
   }, [cancelDictation, clearEfficacy, dictation, engineChoice])
 
+  const stopDictation = useCallback(() => {
+    clearGrace()
+    clearEfficacy()
+    if (dictation.isRecording) { void dictation.stop() }
+    else if (dictation.isStarting) { cancelDictation() }
+  }, [cancelDictation, clearEfficacy, clearGrace, dictation])
+
   const handleToggle = useCallback(() => {
     if (dictation.isProcessing) { cancelDictation() }
     else if (dictation.isStarting) { /* settling */ }
@@ -143,6 +152,6 @@ export function useDictationHoldMode(opts: {
 
   return {
     handlePressIn, handlePressOut, handleToggle,
-    markTextProduced, startDictation, cancelDictation
+    markTextProduced, startDictation, cancelDictation, stopDictation
   }
 }

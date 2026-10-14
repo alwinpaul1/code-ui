@@ -42,6 +42,9 @@ const LIVE_COMPOSER_INPUT = [
   'onMicPressOut',
   'micActive',
   'micLevel',
+  'micTranscribing',
+  'onCancelDictation',
+  'onStopDictation',
   'dictationPaint',
   'onComposerCursor',
   // Not sendErrorMessage: its wording is chosen against the rows (a row that

@@ -20,11 +20,16 @@ export function applyLiveTranscript(base: string, transcript: string): string {
 /** No speech for this long ends the take. The words stay in the composer. */
 export const DICTATION_SILENCE_STOP_MS = 4000
 
+/** Characters that close up against the word before them. The Claude app (1.261009.20, `ox20.e`)
+ *  adds a space after dictated words only when the next character is not whitespace and not one of
+ *  these. */
+const CLOSES_UP = /^[,.;:!?)\]}]/
+
 function withWordGap(left: string, right: string): string {
   if (!left || !right) {
     return left + right
   }
-  if (/\s$/.test(left) || /^\s/.test(right)) {
+  if (/\s$/.test(left) || /^\s/.test(right) || CLOSES_UP.test(right)) {
     return left + right
   }
   return `${left} ${right}`

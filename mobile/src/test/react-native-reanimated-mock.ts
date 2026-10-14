@@ -24,6 +24,8 @@ export const useAnimatedScrollHandler = () => () => undefined
 export const useAnimatedRef = <T,>() => ({ current: null as T | null })
 export const scrollTo = () => undefined
 export const useAnimatedReaction = () => undefined
+// No frames run under the mock: a frame-driven surface renders its first frame only.
+export const useFrameCallback = () => ({ setActive: () => undefined, isActive: false, callbackId: -1 })
 export const useDerivedValue = <T,>(factory: () => T) => ({ value: factory() })
 export const withSpring = <T,>(value: T) => value
 export const withTiming = <T,>(value: T) => value
