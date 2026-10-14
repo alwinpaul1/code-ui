@@ -25,6 +25,11 @@ class OrcaSelectionCopyModule : Module() {
         view.setSelectionHandleColor(colorIntOf(color))
       }
 
+      // False while the chat scrolls: a hold below starts no selection, an open one stays.
+      Prop("holdSelects") { view: SelectionCopyRootView, holds: Boolean? ->
+        view.setHoldSelects(holds != false)
+      }
+
       Prop("selectionHighlightColor") { view: SelectionCopyRootView, color: Double? ->
         view.setSelectionHighlightColor(colorIntOf(color))
       }

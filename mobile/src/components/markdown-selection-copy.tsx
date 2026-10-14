@@ -8,7 +8,10 @@ import type { ReactNode } from 'react'
  * has pills that say what they are. Everywhere else, the web page included, the document is drawn
  * as it was and a pill carries nothing: a DOM id per pill would only be noise.
  */
-export function MarkdownSelectionRoot({ children }: { children: ReactNode }): ReactNode {
+/** Only Android's native root can stop a hold without switching `selectable` off. */
+export const MARKDOWN_ROOT_GUARDS_HOLDS = false
+
+export function MarkdownSelectionRoot({ children }: { children: ReactNode; holdSelects?: boolean }): ReactNode {
   return children
 }
 

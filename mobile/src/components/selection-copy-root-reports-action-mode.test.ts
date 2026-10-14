@@ -46,14 +46,14 @@ describe('the reply document root tells the chat when a selection is open', () =
     expect(root).toMatch(/val onSelectionChange by EventDispatcher\(\)/)
     expect(body(root, 'selectionChanged')).toMatch(/onSelectionChange\(mapOf\("active" to active\)\)/)
     // The menu wrapper: a created mode is a selection open, a destroyed one a selection gone.
-    expect(body(root, 'onCreateActionMode')).toMatch(/if \(created\) \{\s*changed\(true\)/)
+    expect(body(root, 'onCreateActionMode')).toMatch(/if \(created\) \{[\s\S]*changed\(true\)/)
     expect(body(root, 'onDestroyActionMode')).toMatch(/changed\(false\)/)
   })
 
   it('wraps the menu of every Text it is asked for, the fallback menu included', () => {
     const start = body(code('SelectionCopyRootView.kt'), 'startActionModeForChild')
     expect(start).toMatch(
-      /super\.startActionModeForChild\(originalView, SelectionLifeCallback\(menu\) \{ active -> selectionChanged\(active\) \}/
+      /super\.startActionModeForChild\(originalView, SelectionLifeCallback\(menu, originalView\) \{ active -> selectionChanged\(active\) \}/
     )
   })
 

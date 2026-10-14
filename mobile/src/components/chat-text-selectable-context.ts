@@ -14,8 +14,12 @@ import { createContext, useContext } from 'react'
  * Except while a reply holds a selection: turning `selectable` off is what
  * ends a selection on Android (setTextIsSelectable(false) re-sets the text
  * with none), so the first scroll after a hold wiped what the reader was
- * copying (reported 2026-10-14; the Claude app keeps it). While any document
- * reports one open (ChatTextSelectionReportContext), a scroll leaves this on.
+ * copying (reported 2026-10-14; the Claude app keeps it). On Android, with the
+ * document's native root in the tree, the Texts therefore stay selectable and
+ * this flag only tells the root to stop a hold starting a selection
+ * (MobileMarkdown.tsx, SelectionCopyRootView.kt). Elsewhere it still switches
+ * `selectable`, and while any document reports a selection open
+ * (ChatTextSelectionReportContext) a scroll leaves it on.
  */
 export const ChatTextSelectableContext = createContext(true)
 

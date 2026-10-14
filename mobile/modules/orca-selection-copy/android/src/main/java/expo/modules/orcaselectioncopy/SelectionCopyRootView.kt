@@ -8,6 +8,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.TextView
 import com.facebook.react.views.view.ReactViewGroup
 import expo.modules.kotlin.viewevent.EventDispatcher
@@ -39,10 +40,40 @@ import expo.modules.kotlin.viewevent.EventDispatcher
  * (setTextIsSelectable(false) re-sets the text with none), so the first scroll after a hold
  * wiped what the reader was copying (the user, 2026-10-14). Knowing one is open, the chat leaves
  * it alone (chat-text-selectable-context.ts).
+ *
+ * That still raced the JavaScript: on 0.9.139 the user's selection was gone after one drag. So the
+ * scroll's guard is now this view's, and it never touches selectability: while [holdSelects] is
+ * false the Texts below are not long-clickable, which is how a hold starts a selection (and plays
+ * its haptic), while an open selection, its highlight and its handles do not need the flag. The
+ * JavaScript keeps every Text selectable once this view is in the tree (MobileMarkdown.tsx).
+ * Each way a selection ends here is logged under OrcaSelectionCopy (rule 9).
  */
 class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private val colors = ChatSelectionColors()
   private val onSelectionChange by EventDispatcher()
+  private var holdSelects = true
+
+  /** False while the chat scrolls: a hold below starts no selection (see the class note). */
+  fun setHoldSelects(holds: Boolean) {
+    if (holdSelects == holds) {
+      return
+    }
+    holdSelects = holds
+    applyHoldSelects(this)
+  }
+
+  /** Every selectable TextView at or under [view] long-clickable exactly when a hold may select.
+   *  Only selectable ones: a code pill's Text is neither, so a touch falls through it to the prose. */
+  private fun applyHoldSelects(view: View) {
+    if (view is TextView && view.isTextSelectable && view.isLongClickable != holdSelects) {
+      view.isLongClickable = holdSelects
+    }
+    if (view is ViewGroup) {
+      for (index in 0 until view.childCount) {
+        applyHoldSelects(view.getChildAt(index))
+      }
+    }
+  }
 
   fun setSelectionHandleColor(color: Int?) {
     if (colors.set(color, colors.highlight)) {
@@ -59,6 +90,8 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
     if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
       colors.applyBelow(this)
+      // A Text mounted since the flag last changed starts long-clickable; the down comes here first.
+      applyHoldSelects(this)
     }
     return super.onInterceptTouchEvent(ev)
   }
@@ -88,7 +121,7 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
     if (originalView !is TextView || menu == null) {
       return super.startActionModeForChild(originalView, menu, type)
     }
-    return super.startActionModeForChild(originalView, SelectionLifeCallback(menu) { active -> selectionChanged(active) }, type)
+    return super.startActionModeForChild(originalView, SelectionLifeCallback(menu, originalView) { active -> selectionChanged(active) }, type)
   }
 
   private fun selectionChanged(active: Boolean) {
@@ -108,11 +141,13 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
  */
 internal class SelectionLifeCallback(
   private val inner: ActionMode.Callback,
+  private val text: TextView,
   private val changed: (Boolean) -> Unit
 ) : ActionMode.Callback2() {
   override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
     val created = inner.onCreateActionMode(mode, menu)
     if (created) {
+      Log.i("OrcaSelectionCopy", "Selection opened in ${text.javaClass.simpleName} (${text.selectionEnd - text.selectionStart} chars)")
       changed(true)
     }
     return created
@@ -124,6 +159,9 @@ internal class SelectionLifeCallback(
 
   override fun onDestroyActionMode(mode: ActionMode) {
     inner.onDestroyActionMode(mode)
+    // Whether the words are still selected says who ended it: a tap away or a Copy clears them,
+    // the platform closing only its menu (a scroll on some builds) leaves them.
+    Log.i("OrcaSelectionCopy", "Selection menu closed in ${text.javaClass.simpleName}: hasSelection=${text.hasSelection()} attached=${text.isAttachedToWindow}")
     changed(false)
   }
 

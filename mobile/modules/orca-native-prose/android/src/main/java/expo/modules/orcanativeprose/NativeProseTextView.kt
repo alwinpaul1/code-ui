@@ -32,8 +32,9 @@ import kotlin.math.min
  * narrower than [layoutWidth] cannot be widened here; the mismatch is logged (onLayout).
  *
  * Selection is the JavaScript's to switch: off while the chat list scrolls, so a finger that stops
- * a fling and stays down does not start one (chat-text-selectable-context.ts, 2026-09-12), but
- * left on while a selection is open, because switching it off here ends that selection (2026-10-14).
+ * a fling and stays down does not start one (chat-text-selectable-context.ts, 2026-09-12). Inside
+ * the chat's selection root it now stays on throughout (switching it off ends a selection, the
+ * user's 2026-10-14 report), and the root stops a stray hold by long-click instead.
  */
 class NativeProseTextView(context: Context) : TextView(context) {
   private val onLinkPress by EventDispatcher()
@@ -87,6 +88,10 @@ class NativeProseTextView(context: Context) : TextView(context) {
   fun applyProps() {
     val json = specJson
     if (json != null && json != appliedSpec) {
+      if (hasSelection()) {
+        // A new text replaces the spannable the selection lived in (rule 9: name the cause).
+        Log.w(TAG, "Selection dropped: the text was replaced (a ${json.length}-character spec)")
+      }
       appliedSpec = json
       val next =
         try {
@@ -109,6 +114,9 @@ class NativeProseTextView(context: Context) : TextView(context) {
       }
     }
     if (isTextSelectable != wantsSelectable) {
+      if (!wantsSelectable && hasSelection()) {
+        Log.w(TAG, "Selection dropped: selectable switched off while the words were selected")
+      }
       setTextIsSelectable(wantsSelectable)
     }
     fitTextToLayoutWidth()
@@ -122,6 +130,14 @@ class NativeProseTextView(context: Context) : TextView(context) {
     if (paddingRight != spare) {
       setPadding(0, 0, spare, 0)
     }
+  }
+
+  override fun onDetachedFromWindow() {
+    if (hasSelection()) {
+      // FlashList unmounting the row, or the screen going: the selection goes with the view.
+      Log.w(TAG, "Selection dropped: the view left the window")
+    }
+    super.onDetachedFromWindow()
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

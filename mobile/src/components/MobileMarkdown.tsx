@@ -31,7 +31,7 @@ import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-s
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { MarkdownSelectionRoot } from './markdown-selection-copy'
+import { MARKDOWN_ROOT_GUARDS_HOLDS, MarkdownSelectionRoot } from './markdown-selection-copy'
 import {
   DEFAULT_MARKDOWN_TYPOGRAPHY,
   markdownProseScale,
@@ -293,7 +293,12 @@ function MobileMarkdownInner({
   widthKey,
   renderVisual
 }: Props) {
-  const selectable = useChatTextSelectable()
+  // `false` while the chat scrolls (chat-text-selectable-context.ts). Where the document's native
+  // root guards holds (Android), the Texts stay selectable and only the root hears it: switching
+  // a Text's `selectable` off ends the selection in it, and the user lost a held selection to a
+  // drag of the transcript (2026-10-14, 0.9.139).
+  const holdSelects = useChatTextSelectable()
+  const selectable = MARKDOWN_ROOT_GUARDS_HOLDS || holdSelects
   const styles = useMarkdownStyles(typography)
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
@@ -593,7 +598,7 @@ function MobileMarkdownInner({
       })}
     </View>
   )
-  return <MarkdownSelectionRoot>{drawn}</MarkdownSelectionRoot>
+  return <MarkdownSelectionRoot holdSelects={holdSelects}>{drawn}</MarkdownSelectionRoot>
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)
