@@ -7,6 +7,8 @@ import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileSessionPillRow } from './MobileSessionPillRow'
+import { MobileNativeChatConnectionRow } from './MobileNativeChatConnectionRow'
+import { MobileNativeChatRateLimitBanner } from './MobileNativeChatRateLimitBanner'
 import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
 import { MobileSubagentActivityFeeds } from './MobileSubagentActivityFeeds'
 import { useHostMobileCapability } from '../transport/host-mobile-capabilities'
@@ -384,6 +386,12 @@ export function MobileSessionActiveContent({
         onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
         onSelectAgentMode={(mode) => void selectAgentMode(mode)}
         sessionPills={<MobileSessionPillRow controller={controller} />}
+        notices={
+          <>
+            <MobileNativeChatConnectionRow controller={controller} />
+            <MobileNativeChatRateLimitBanner controller={controller} />
+          </>
+        }
       />
       </NativeChatFileReadProvider>
       {/* Opened from a subagent row in the background-tasks sheet, through its

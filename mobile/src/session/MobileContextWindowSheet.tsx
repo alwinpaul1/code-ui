@@ -6,6 +6,7 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
 import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
+import { ContextCategoriesView } from './MobileContextCategories'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
 /** "5-hour", "Weekly", "Monthly" — named from the window the agent reported
@@ -61,7 +62,12 @@ export function formatContextWindowFigure(context: TerminalHudContextWindow): st
  *
  *  With no stated window there is no figure, only the tokens the host counted
  *  (`usedTokensLabel`): the sheet shows those, no bar and no percentage, and
- *  says the window is unknown rather than guessing one (CLAUDE.md). */
+ *  says the window is unknown rather than guessing one (CLAUDE.md).
+ *
+ *  Under the live figure, the usage windows the agent or the host states, and,
+ *  once the user has run `/context` in a Claude Code session, the category card
+ *  that table gives (`context.breakdown`, MobileContextCategories.tsx) with how
+ *  old it is. Codex prints no table, so its sheet stays the totals and windows. */
 export function MobileContextWindowSheet({
   visible,
   context,
@@ -121,37 +127,85 @@ function ContextWindowSheetBody({
           The session did not state its window size, so no percentage is shown.
         </Txt>
       )}
-      {limits?.length ? (
-        <View style={{ gap: space.sm, paddingTop: space.sm }}>
-          {planType ? (
-            <Txt variant="caption" tone="muted">
-              Plan: {planType}
-            </Txt>
-          ) : null}
-          {limits.map((window, index) => {
-            const used = Math.max(0, Math.min(100, window.usedPercent))
-            const reset = formatLimitReset(window.resetsAt, now)
-            const name = window.name ?? formatLimitWindowName(window.windowMinutes)
-            // Not the window length alone: Weekly and Fable are both 10,080
-            // minutes, and two rows with one key can be swapped or dropped on
-            // the next update (review, 2026-09-30). The rows keep a fixed
-            // order (hudLimitsFromRateLimits), so the position is stable.
-            return (
-              <View key={`${index}:${name}`} style={{ gap: space.xs }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-                  <Txt variant="caption" style={{ flex: 1 }}>
-                    {name}
-                  </Txt>
-                  <Txt variant="caption" tone="secondary">
-                    {Math.round(used)}%{reset ? ` · ${reset}` : ''}
-                  </Txt>
-                </View>
-                <UsageBar percent={used} height={6} />
-              </View>
-            )
-          })}
-        </View>
+      {limits?.length ? <UsageWindowsList limits={limits} planType={planType} now={now} /> : null}
+      {context?.breakdown ? <ContextCategoriesView breakdown={context.breakdown} now={now} /> : null}
+    </Surface>
+  )
+}
+
+/** The usage windows, one bar each, as the context sheet and the usage sheet both draw them. */
+function UsageWindowsList({
+  limits,
+  planType,
+  now
+}: {
+  limits: NonNullable<TerminalHudContextWindow['limits']>
+  planType?: string | null
+  now: number
+}) {
+  const { space } = useTheme()
+  return (
+    <View style={{ gap: space.sm, paddingTop: space.sm }}>
+      {planType ? (
+        <Txt variant="caption" tone="muted">
+          Plan: {planType}
+        </Txt>
       ) : null}
+      {limits.map((window, index) => {
+        const used = Math.max(0, Math.min(100, window.usedPercent))
+        const reset = formatLimitReset(window.resetsAt, now)
+        const name = window.name ?? formatLimitWindowName(window.windowMinutes)
+        // Not the window length alone: Weekly and Fable are both 10,080
+        // minutes, and two rows with one key can be swapped or dropped on
+        // the next update (review, 2026-09-30). The rows keep a fixed
+        // order (hudLimitsFromRateLimits), so the position is stable.
+        return (
+          <View key={`${index}:${name}`} style={{ gap: space.xs }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <Txt variant="caption" style={{ flex: 1 }}>
+                {name}
+              </Txt>
+              <Txt variant="caption" tone="secondary">
+                {Math.round(used)}%{reset ? ` · ${reset}` : ''}
+              </Txt>
+            </View>
+            <UsageBar percent={used} height={6} />
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+/** The usage windows alone, from the rate-limit banner's "View usage". The Claude app's own opens its
+ *  usage card; Code UI has the windows the agent or the host states, and nothing of cost or time,
+ *  which neither the beacon nor the host's feed carries (the writer sends no `cost` field). */
+export function MobileUsageSheet({
+  visible,
+  limits,
+  onClose
+}: {
+  visible: boolean
+  limits: NonNullable<TerminalHudContextWindow['limits']>
+  onClose: () => void
+}) {
+  return (
+    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss dismissKeyboardOnOpen>
+      <UsageSheetBody limits={limits} />
+    </BottomDrawer>
+  )
+}
+
+function UsageSheetBody({ limits }: { limits: NonNullable<TerminalHudContextWindow['limits']> }) {
+  const { space } = useTheme()
+  // Read once per opening, as the context sheet's body does.
+  const [now] = useState(() => Date.now())
+  return (
+    <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.sm }}>
+      <Txt variant="body" weight="medium">
+        Usage
+      </Txt>
+      <UsageWindowsList limits={limits} now={now} />
     </Surface>
   )
 }

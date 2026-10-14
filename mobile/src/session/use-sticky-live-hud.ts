@@ -51,6 +51,25 @@ export type StickyLiveHud = {
   context: TerminalHudContextWindow | null
 }
 
+/** The key a tab, its terminal and its session are held under: a null handle or session is "not
+ *  known yet", never a different one (see `lastHandleByTab` and `lastSessionByScope`). Shared with
+ *  `use-held-context-report.ts`, so what is held about a session ends with the same changes. */
+export function stickyScopeKey(tabId: string | null, handle: string | null, sessionId: string | null): string {
+  const tab = tabId ?? ''
+  if (handle) {
+    lastHandleByTab.set(tab, handle)
+  }
+  // A null handle is "not known yet", never "a different terminal".
+  const known = handle ?? lastHandleByTab.get(tab) ?? ''
+  const scope = `${tab}\u0000${known}`
+  if (sessionId) {
+    lastSessionByScope.set(scope, sessionId)
+  }
+  // Likewise a null session id; see `lastSessionByScope`.
+  const session = sessionId ?? lastSessionByScope.get(scope) ?? ''
+  return `${scope}\u0000${session}`
+}
+
 /**
  * The last model, effort and context the SCREEN stated, held per tab, terminal
  * and session across screen reads that come back empty.
@@ -101,19 +120,7 @@ export function useStickyLiveHud(
   handle: string | null,
   sessionId: string | null
 ): StickyLiveHud {
-  const tab = tabId ?? ''
-  if (handle) {
-    lastHandleByTab.set(tab, handle)
-  }
-  // A null handle is "not known yet", never "a different terminal".
-  const known = handle ?? lastHandleByTab.get(tab) ?? ''
-  const scope = `${tab}\u0000${known}`
-  if (sessionId) {
-    lastSessionByScope.set(scope, sessionId)
-  }
-  // Likewise a null session id; see `lastSessionByScope`.
-  const session = sessionId ?? lastSessionByScope.get(scope) ?? ''
-  const key = `${scope}\u0000${session}`
+  const key = stickyScopeKey(tabId, handle, sessionId)
   const held = heldByScope.get(key) ?? { model: null, label: null, effort: null, context: null }
   // Delete-then-set on every READ, so the scope being looked at becomes the
   // most recent and eviction only ever sheds the oldest UNTOUCHED one. Setting

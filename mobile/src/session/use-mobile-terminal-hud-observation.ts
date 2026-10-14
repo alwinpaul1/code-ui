@@ -8,6 +8,7 @@ import {
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { readClaudeContextReport, type ContextReportRead } from './claude-context-report'
 import { readClaudeStartupFrame, type StartupFrameRead } from './claude-startup-frame'
 import { readClaudeScreenModelStatement, type ClaudeScreenModelStatement } from './claude-screen-model-statement'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
@@ -91,6 +92,10 @@ export function useMobileTerminalHudObservation(args: {
    *  model toast (claude-screen-model-statement.ts). Null until this terminal's
    *  first read since the chat began watching it, and for any agent but Claude. */
   modelStatement: ClaudeScreenModelStatement | null
+  /** The `/context` table the latest screen read shows (claude-context-report.ts), or null when it
+   *  shows none: the table scrolls away, and the hold that keeps it for the sheet is
+   *  use-held-context-report.ts. Claude tabs only. */
+  contextReport: ContextReportRead | null
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -125,6 +130,7 @@ export function useMobileTerminalHudObservation(args: {
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [startupFrame, setStartupFrame] = useState<{ handleKey: string; read: StartupFrameRead } | null>(null)
   const [modelStatement, setModelStatement] = useState<{ handleKey: string; read: ClaudeScreenModelStatement } | null>(null)
+  const [contextReport, setContextReport] = useState<{ handleKey: string; read: ContextReportRead } | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
@@ -145,6 +151,7 @@ export function useMobileTerminalHudObservation(args: {
     setSpinner(null)
     setStartupFrame(null)
     setModelStatement(null)
+    setContextReport(null)
     setDialogOptions(null)
     setDialogKind(null)
     setDialogBeforeAnswer(false)
@@ -195,6 +202,9 @@ export function useMobileTerminalHudObservation(args: {
         if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
           return null
         }
+        // A table already on the screen at the watch's first read was painted before the phone
+        // looked, at a time it cannot name (use-held-context-report.ts).
+        const firstOfWatch = !landed
         landed = true
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw)
@@ -252,6 +262,16 @@ export function useMobileTerminalHudObservation(args: {
               : { handleKey, read: statement }
           )
         }
+        // Codex prints no category table (its /status has a context figure and windows only).
+        const table = agent === 'claude' || agent === 'openclaude' ? readClaudeContextReport(lines) : null
+        setContextReport((current) => {
+          if (table === null) {
+            return current === null ? current : null
+          }
+          return current?.handleKey === handleKey && JSON.stringify(current.read.report) === JSON.stringify(table)
+            ? current
+            : { handleKey, read: { report: table, firstRead: firstOfWatch } }
+        })
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
         setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
@@ -365,6 +385,7 @@ export function useMobileTerminalHudObservation(args: {
     spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,
     startupFrame: enabled && startupFrame?.handleKey === handleKey ? startupFrame.read : null,
     modelStatement: enabled && modelStatement?.handleKey === handleKey ? modelStatement.read : null,
+    contextReport: enabled && contextReport?.handleKey === handleKey ? contextReport.read : null,
     permissionDismissed
   }
 }

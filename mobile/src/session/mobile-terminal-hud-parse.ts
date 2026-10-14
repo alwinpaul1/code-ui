@@ -5,6 +5,7 @@ import {
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
+import type { ContextBreakdown } from './claude-context-report'
 import {
   CODEX_AGENT_MODES,
   CODEX_PLAN_HINT,
@@ -151,6 +152,11 @@ export type TerminalHudContextWindow = {
     name?: string
   }[]
   planType?: string | null
+  /** The `/context` table this session last had on its screen, held after it scrolled away
+   *  (use-held-context-report.ts), with when the phone saw it painted. Claude Code only: it is the
+   *  only agent that prints one. Rides here like `limits`, to reach the sheet through the layers that
+   *  already pass this object. */
+  breakdown?: ContextBreakdown
   /** Human labels as printed, e.g. "537.2k" and "1M"; null when only a percent is shown. */
   usedLabel: string | null
   windowLabel: string | null

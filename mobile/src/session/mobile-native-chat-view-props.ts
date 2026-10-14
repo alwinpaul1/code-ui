@@ -230,6 +230,10 @@ export type MobileNativeChatViewProps = {
   /** The session pills (pull request, Create PR, Local changes), drawn in the dock right above the
    *  session bar. The route builds them and decides when there is nothing to say. */
   sessionPills?: ReactNode
+  /** What the chat has to say about its own connection and the account's limits, drawn in the dock
+   *  above the session pills (which stay directly above the session bar): the connection row and the
+   *  rate-limit banner. The route builds them and decides when there is nothing to say. */
+  notices?: ReactNode
   /** The worktree's uncommitted +/- for the session bar's diff pill; null leaves it out. */
   sessionDiff?: SessionDiffTotals | null
   /** Opens the changes, from the diff pill. */

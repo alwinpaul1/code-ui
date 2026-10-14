@@ -2098,3 +2098,41 @@ What is now true (`native-chat-effort-pick.ts`, `use-native-chat-effort-pick.ts`
 - Codex picks effort in its own picker, which already waits for its footer to name
   the pair. The sheet shows the footer's level, and the pick follows the same rule,
   including the 10 s give-up.
+
+## Usage windows and the `/context` table (2026-10-14)
+
+Read from what the agents already write. Nothing is added to the beacon, so its frame and splice rules
+are untouched, and the phone never runs a command in the user's terminal to get either.
+
+**The rate-limit banner** (`MobileNativeChatRateLimitBanner.tsx`, rules in `hud-rate-limit-notice.ts`).
+The windows are the beacon's `h5=<pct>:<epoch>` and `d7=` (Claude Code's `rate_limits.five_hour` and
+`.seven_day`, in the payload above since the HUD began), else the host's `accounts.subscribe` rows, which
+are the only source for Codex. The recorded 2.1.296 payload is
+`fixtures/claude-busy-lead-tasks-2.1.296/beacon-payloads.txt` (`h5=20:1791678000 d7=73:1791997200`).
+"Approaching" is each agent's own rule, read from its code and not guessed:
+
+- Claude Code 2.1.296 (binary, `Zw` and `Mm`): a tier fires when use passes it while at most its share
+  of the window is gone: 5 hours (18,000 s) 90% by 72%; 7 days (604,800 s) 75% by 60%, 50% by 35%,
+  25% by 15%. It then shows only a warning at 70% or more (`Sm`), so the two lower weekly tiers never
+  draw. A window with no stated reset cannot be timed and is not called approaching.
+- Codex 0.153.4 (`codex-rs/tui/src/chatwidget/rate_limits.rs`, tag `rust-v0.153.4`): warning tiers
+  `[50, 75, 90, 95]` percent used, the 50 for a Plus or Team 5-hour window only. The first tier for every
+  plan, 75, is the line used here.
+
+"Reached" is 100% for both (Codex tests `percent == 100.0`). A window whose reset has passed is not read,
+and the Fable window is left out. "Now using usage credits" needs `isUsingOverage` from the sessions
+API's `rate_limit_event` (Batch 8) and has no live source; the notice is built and never drawn until one
+states it. Not on the beacon either: cost and duration (`cost.total_cost_usd`, `total_duration_ms` are in
+Claude Code's status-line JSON, but the launch script does not send them, and adding a field changes the
+flag every launched tab runs and the history the desktop sync cleans up).
+
+**The `/context` table** (`claude-context-report.ts`). Claude Code 2.1.300 prints it as a grid, a legend
+("⛁ System tools: 23.8k tokens (2.4%)") and one summary line per section ("MCP tools · /mcp …", "└ 147
+tools · 631 tokens"). It wraps with the pane: at 80 columns the percent of a row goes to the next line, at
+48 nearly every row does. Real captures at 130, 110, 80 and 48 columns and with `/context all` are in
+`fixtures/claude-context-2.1.300/`. A table is read only with its heading, its totals and a Free space row
+on screen and its rows adding up to the window; a table scrolled half off, or with a row lost to a wrapped
+name, reads nothing. Memory files is a category row only: no per-file section was printed with a 2.5 KB
+CLAUDE.md and a CLAUDE.local.md in the project. The table is held per tab, terminal and session
+(`use-held-context-report.ts`, under the sticky HUD's key) after it scrolls away, stamped with when the
+phone saw it printed, or unstamped when it was already on the screen as the phone began to look.
