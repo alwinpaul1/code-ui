@@ -88,15 +88,19 @@ const lineStyles = StyleSheet.create({
 
 export function MobileSyntaxSegments({
   segments,
-  palette
+  palette,
+  family = fontFamily.mono
 }: {
   segments: MobileSyntaxSegment[]
   /** The code colours: the live theme's `useTheme().syntax`. Required: a
    *  Dark+ default drew every diff row's code in dark-scheme colours on a
    *  light surface (2026-09-27). */
   palette: SyntaxPalette
+  /** The code face. The bundled one unless the reader chose another for the transcript's code
+   *  blocks (MarkdownCodeText), which every span has to be told: a span names its own. */
+  family?: string
 }) {
-  const styles = syntaxSpanStyles(palette)
+  const styles = syntaxSpanStyles(palette, family)
   return (
     <>
       {segments.map((segment, index) => (
@@ -108,7 +112,7 @@ export function MobileSyntaxSegments({
   )
 }
 
-const spanStylesByPalette = new WeakMap<SyntaxPalette, Record<MobileSyntaxTokenKind, TextStyle>>()
+const spanStylesByPalette = new WeakMap<SyntaxPalette, Map<string, Record<MobileSyntaxTokenKind, TextStyle>>>()
 
 /** One style per role, each naming the code face. Why the face on every span:
  *  the React Native patch gives any Text that names no face Instrument Sans
@@ -116,16 +120,21 @@ const spanStylesByPalette = new WeakMap<SyntaxPalette, Record<MobileSyntaxTokenK
  *  a colour drew the UI face inside a monospace line. That was the
  *  proportional code in the 2026-09-19 and 2026-09-26 screenshots, not the
  *  Samsung font swap. */
-export function syntaxSpanStyles(palette: SyntaxPalette): Record<MobileSyntaxTokenKind, TextStyle> {
-  const cached = spanStylesByPalette.get(palette)
+export function syntaxSpanStyles(
+  palette: SyntaxPalette,
+  family: string = fontFamily.mono
+): Record<MobileSyntaxTokenKind, TextStyle> {
+  const byFamily = spanStylesByPalette.get(palette) ?? new Map<string, Record<MobileSyntaxTokenKind, TextStyle>>()
+  spanStylesByPalette.set(palette, byFamily)
+  const cached = byFamily.get(family)
   if (cached) {
     return cached
   }
   const styles = StyleSheet.create(
     Object.fromEntries(
-      SYNTAX_TOKEN_ROLES.map((role) => [role, { color: palette[role], fontFamily: fontFamily.mono }])
+      SYNTAX_TOKEN_ROLES.map((role) => [role, { color: palette[role], fontFamily: family }])
     ) as Record<MobileSyntaxTokenKind, TextStyle>
   )
-  spanStylesByPalette.set(palette, styles)
+  byFamily.set(family, styles)
   return styles
 }

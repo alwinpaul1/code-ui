@@ -24,11 +24,14 @@ export function MarkdownCodeText({
 }) {
   const { syntax } = useTheme()
   const runs = useMemo(() => codeTextRuns(lines), [lines])
+  // The line's own face, which is the reader's code font in the transcript: each span names a face
+  // of its own and would otherwise keep the bundled one.
+  const family = lineStyle.fontFamily
   return (
     <View>
       {runs.map((run, index) => (
         <Text key={index} selectable={selectable} style={lineStyle}>
-          <MobileSyntaxSegments segments={run} palette={syntax} />
+          <MobileSyntaxSegments segments={run} palette={syntax} family={family} />
         </Text>
       ))}
     </View>

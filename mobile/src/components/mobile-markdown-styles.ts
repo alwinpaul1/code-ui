@@ -3,6 +3,8 @@ import { PixelRatio, StyleSheet } from 'react-native'
 import { systemSpScale } from './system-font-scale'
 import { CODE_BLOCK_LABEL_LINE_HEIGHT, CODE_BLOCK_LABEL_SIZE, CODE_BLOCK_SPEC } from './code-block-spec'
 import { useTheme, type Theme } from '../theme/theme-context'
+import type { ChatFontFaces } from '../settings/chat-reading-settings'
+import { useMarkdownFonts } from './use-markdown-fonts'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
 import {
@@ -46,8 +48,13 @@ export function markdownScreenDensity(): number {
   }
 }
 
-export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY) {
-  const { colors, fonts, radius, space } = theme
+export function makeMarkdownStyles(
+  theme: Theme,
+  typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY,
+  /** The faces to set it in: the theme's own, or the reader's choice for the transcript. */
+  fonts: ChatFontFaces = theme.fonts
+) {
+  const { colors, radius, space } = theme
   const { prose, chip } = typography
   const spScale = systemSpScale()
   const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, spScale.toDp, typography)
@@ -350,5 +357,6 @@ export type MarkdownStyles = ReturnType<typeof makeMarkdownStyles>
 
 export function useMarkdownStyles(typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY): MarkdownStyles {
   const theme = useTheme()
-  return useMemo(() => makeMarkdownStyles(theme, typography), [theme, typography])
+  const fonts = useMarkdownFonts(typography)
+  return useMemo(() => makeMarkdownStyles(theme, typography, fonts), [theme, typography, fonts])
 }

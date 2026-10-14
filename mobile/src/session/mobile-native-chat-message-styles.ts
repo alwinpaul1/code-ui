@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
+import { chatTranscriptFonts, useChatReadingSettings, type ChatFontFaces } from '../settings/chat-reading-settings'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
 /** The Claude app's 96 dp chat tile (MobileNativeChatImageStrip.tsx). */
@@ -14,7 +15,12 @@ export const MONO_SIZE = 12
 export const USER_TEXT_SIZE = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize
 export const USER_TEXT_LINE_HEIGHT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.lineHeight
 
-export function makeChatMessageStyles(theme: Theme) {
+export function makeChatMessageStyles(
+  theme: Theme,
+  /** The reader's transcript font, for a sent prompt's words: the one thing here that is the
+   *  transcript and not the chat's own chrome. */
+  transcriptFonts: ChatFontFaces = theme.fonts
+) {
   const { colors, fonts, radius, space } = theme
   return StyleSheet.create({
     row: {
@@ -40,7 +46,7 @@ export function makeChatMessageStyles(theme: Theme) {
       paddingVertical: space.sm + 5
     },
     userText: {
-      fontFamily: fonts.regular,
+      fontFamily: transcriptFonts.regular,
       color: colors.userBubbleText,
       fontSize: USER_TEXT_SIZE,
       lineHeight: USER_TEXT_LINE_HEIGHT,
@@ -313,5 +319,9 @@ export type ChatMessageStyles = ReturnType<typeof makeChatMessageStyles>
 
 export function useChatMessageStyles(): ChatMessageStyles {
   const theme = useTheme()
-  return useMemo(() => makeChatMessageStyles(theme), [theme])
+  const { transcriptFont } = useChatReadingSettings()
+  return useMemo(
+    () => makeChatMessageStyles(theme, chatTranscriptFonts(transcriptFont)),
+    [theme, transcriptFont]
+  )
 }
