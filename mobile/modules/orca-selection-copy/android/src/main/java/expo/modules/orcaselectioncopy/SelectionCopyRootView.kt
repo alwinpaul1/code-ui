@@ -2,6 +2,8 @@ package expo.modules.orcaselectioncopy
 
 import android.content.Context
 import android.graphics.Rect
+import android.text.Selection
+import android.text.Spannable
 import android.util.Log
 import android.view.ActionMode
 import android.view.Menu
@@ -9,6 +11,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.TextView
 import com.facebook.react.views.view.ReactViewGroup
 import expo.modules.kotlin.viewevent.EventDispatcher
@@ -138,19 +141,43 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
  * A Text's selection menu, unchanged, that says when it opens and closes: a created action mode
  * is a selection on screen, a destroyed one a selection gone (a tap away, a Copy, the Text leaving
  * the window). Everything else is the wrapped menu's.
+ *
+ * While it is open it also watches the words it was made on. A list that hands this Text to
+ * another message (FlashList did, 2026-10-14 13:30: the highlight came back on other words) gives
+ * it new text, and a selection must not survive onto words nobody selected: before the next frame
+ * the selection is removed and the menu closed, with a line in the log.
  */
 internal class SelectionLifeCallback(
   private val inner: ActionMode.Callback,
   private val text: TextView,
   private val changed: (Boolean) -> Unit
-) : ActionMode.Callback2() {
+) : ActionMode.Callback2(), ViewTreeObserver.OnPreDrawListener {
+  // The words, not the object: a re-render that sets the same words again is not another message.
+  private var heldText: String? = null
+  private var liveMode: ActionMode? = null
+  private var observer: ViewTreeObserver? = null
+
   override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
     val created = inner.onCreateActionMode(mode, menu)
     if (created) {
       Log.i("OrcaSelectionCopy", "Selection opened in ${text.javaClass.simpleName} (${text.selectionEnd - text.selectionStart} chars)")
+      heldText = text.text.toString()
+      liveMode = mode
+      observer = text.viewTreeObserver.also { it.addOnPreDrawListener(this) }
       changed(true)
     }
     return created
+  }
+
+  override fun onPreDraw(): Boolean {
+    val mode = liveMode ?: return true
+    if (text.text.toString() != heldText) {
+      Log.w("OrcaSelectionCopy", "Selection dropped: the Text was given other words (${text.javaClass.simpleName})")
+      (text.text as? Spannable)?.let { Selection.removeSelection(it) }
+      liveMode = null
+      mode.finish()
+    }
+    return true
   }
 
   override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = inner.onPrepareActionMode(mode, menu)
@@ -162,6 +189,12 @@ internal class SelectionLifeCallback(
     // Whether the words are still selected says who ended it: a tap away or a Copy clears them,
     // the platform closing only its menu (a scroll on some builds) leaves them.
     Log.i("OrcaSelectionCopy", "Selection menu closed in ${text.javaClass.simpleName}: hasSelection=${text.hasSelection()} attached=${text.isAttachedToWindow}")
+    liveMode = null
+    heldText = null
+    // The observer it was added to, if still alive; a re-attached view has a new one.
+    val added = observer?.takeIf { it.isAlive } ?: text.viewTreeObserver
+    observer = null
+    added.removeOnPreDrawListener(this)
     changed(false)
   }
 
