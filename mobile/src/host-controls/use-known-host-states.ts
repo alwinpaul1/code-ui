@@ -7,6 +7,7 @@ import {
   expectedHostStateForRender,
   expectedStateAfterAction,
   expireHostExpectations,
+  hostStateToDraw,
   knownAfterProbe,
   nextHostExpectationExpiry,
   type KnownHostState
@@ -21,7 +22,7 @@ export function connectedAtOf(client: RpcClient | undefined): number | null {
 /**
  * What the phone knows about each host between opens of its menu: the last answer,
  * and after an action that finished OK, the state that action left behind. The next
- * open draws either at once instead of "Checking" (mac-host-expected-state.ts).
+ * open draws either at once, while it asks again (mac-host-expected-state.ts).
  *
  * Per host, and tied to one connection: a host whose link drops forgets it, and so
  * does a host that reconnected without the drop ever being rendered (the connection
@@ -121,5 +122,31 @@ export function useKnownHostStates(clients: { hostId: string; client: RpcClient;
   const cachedFor = (hostId: string | null): MacHostState | null =>
     hostId ? cachedHostStateForRender(known[hostId], connectedAtFor(hostId)) : null
 
-  return { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, cachedFor }
+  /** What the open menu draws for `hostId`, given this open's own answer, if any
+   *  (hostStateToDraw). `settling` holds the hosts whose action runs or settles. */
+  const drawFor = (hostId: string | null, probed: MacHostState | null, settling: ReadonlySet<string>) =>
+    hostStateToDraw(expectedFor(hostId), probed, cachedFor(hostId), hostId !== null && settling.has(hostId))
+
+  return { recordProbe, recordAction, actionStarted, actionFailed, drawFor }
+}
+
+/**
+ * The first state the open menu drew for `hostId`, kept until the menu closes or
+ * turns to another host; null before one is drawn. The sheet keeps that state's rows,
+ * dimmed where the answer since says they would do nothing, so an answer arriving
+ * while the menu is up never changes its height (the user, 2026-10-14).
+ */
+export function useFirstDrawnHostState(
+  hostId: string | null,
+  drawn: MacHostState | 'checking'
+): MacHostState | null {
+  const [first, setFirst] = useState<{ hostId: string; state: MacHostState } | null>(null)
+  useEffect(() => {
+    if (!hostId) {
+      setFirst(null)
+    } else if (drawn !== 'checking' && first?.hostId !== hostId) {
+      setFirst({ hostId, state: drawn })
+    }
+  }, [hostId, drawn, first])
+  return first && first.hostId === hostId ? first.state : null
 }

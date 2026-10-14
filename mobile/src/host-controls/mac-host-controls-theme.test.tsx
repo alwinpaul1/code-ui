@@ -97,6 +97,34 @@ describe('the Mac controls in both themes', () => {
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
+  // 2026-10-14: the first open keeps every row drawn when the Mac answers, and dims
+  // the ones that would do nothing, so the sheet holds its height. Dimmed in both
+  // schemes, with the label's colour from the live theme.
+  it('dims the rows the answer ruled out, from the live theme in both schemes', () => {
+    const keptRows = () =>
+      createElement(ActionSheetContent, {
+        actions: getMacHostSheetActions({
+          hostPlatform: 'darwin',
+          worktreeId: 'wt-1',
+          state: { lock: 'unlocked', display: 'off', mute: 'muted' },
+          keep: { lock: 'unknown', display: 'unknown', mute: 'unknown' },
+          onAction: vi.fn()
+        })
+      })
+    const light = renderInScheme('light', keptRows())
+    const dark = renderInScheme('dark', keptRows())
+    const sleepLabelStyle = (renderer: ReactTestRenderer) =>
+      JSON.stringify(
+        renderer.root.find((node) => String(node.type) === 'Text' && node.children.includes('Sleep display')).props.style
+      )
+    for (const renderer of [light, dark]) {
+      const rows = renderer.root.findAll((node) => String(node.type) === 'Pressable')
+      expect(rows).toHaveLength(5)
+      expect(rows.map((row) => row.props.disabled === true)).toEqual([false, true, false, true, false])
+    }
+    expect(sleepLabelStyle(dark)).not.toEqual(sleepLabelStyle(light))
+  })
+
   // 2026-09-26: a PC's sheet shows no lock status; its lock half is one Lock PC row.
   // 2026-10-10: and no display row, Sleep display having been removed from Windows.
   it("draws a PC's rows from the live theme in both schemes, with Lock PC and no lock status", () => {
