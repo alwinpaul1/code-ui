@@ -1,5 +1,8 @@
 import type { ClipboardWriter } from '../platform/clipboard'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+import { resolveMobileTerminalTabAgentId } from './mobile-terminal-tab-agent'
+import type { MobileSessionTab } from './mobile-session-route-types'
 import { sessionWorkspaceRename } from './mobile-session-write-operations'
 
 /**
@@ -11,10 +14,21 @@ import { sessionWorkspaceRename } from './mobile-session-write-operations'
  * - Rename: the workspace display name, which is the header's title, through `worktree.set`.
  * - Copy session ID: the agent's own session id, as the agent stated it (an internal entry in the
  *   app; here it is the id `claude --resume` takes).
+ * - Change model: opens the composer's own model sheet. The app's string (`session_menu_change_model`)
+ *   is in 1.261009.20, but its entry class (`qou`) is abstract with no subclass, so the app's menu
+ *   never lists it; it is here because the user asked for it. It sits where Share sits in the app.
+ * - Archive: closes the active agent tab, the one end a tab has here. The app's own Archive moves a
+ *   session to its archived list; Orca has no such list, so the dialog says what happens instead.
  *
  * Continue in cloud, Share and Feedback have no Orca path and are not offered.
  */
-export type SessionHeaderMenuEntry = 'copy-branch' | 'background-tasks' | 'rename' | 'copy-session-id'
+export type SessionHeaderMenuEntry =
+  | 'copy-branch'
+  | 'background-tasks'
+  | 'change-model'
+  | 'rename'
+  | 'archive'
+  | 'copy-session-id'
 
 export function sessionHeaderMenuEntries(input: {
   /** Display branch name, null on a detached HEAD, a folder workspace or before the host answers. */
@@ -22,7 +36,11 @@ export function sessionHeaderMenuEntries(input: {
   runningTasks: number
   /** The chat's tasks provider is mounted and can open its sheet. */
   canOpenTasks: boolean
+  /** The chat is showing and its composer has a model sheet to open. */
+  canChangeModel: boolean
   canRename: boolean
+  /** The active tab is an agent session this phone can close. */
+  canArchive: boolean
   sessionId: string | null
 }): SessionHeaderMenuEntry[] {
   const entries: SessionHeaderMenuEntry[] = []
@@ -32,13 +50,71 @@ export function sessionHeaderMenuEntries(input: {
   if (input.canOpenTasks && input.runningTasks > 0) {
     entries.push('background-tasks')
   }
+  if (input.canChangeModel) {
+    entries.push('change-model')
+  }
   if (input.canRename) {
     entries.push('rename')
+  }
+  if (input.canArchive) {
+    entries.push('archive')
   }
   if (input.sessionId?.trim()) {
     entries.push('copy-session-id')
   }
   return entries
+}
+
+/** The tab Archive closes: the active tab, when an agent runs in it. A plain shell, a browser, a
+ *  file or a document is not a session, and no active tab means nothing to archive. */
+export function archivableSessionTab(
+  tabs: readonly MobileSessionTab[],
+  activeTabId: string | null
+): MobileSessionTab | null {
+  const tab = activeTabId === null ? undefined : tabs.find((candidate) => candidate.id === activeTabId)
+  if (!tab) {
+    return null
+  }
+  if (tab.type === 'agent-session') {
+    return tab
+  }
+  return tab.type === 'terminal' && resolveMobileTerminalTabAgentId(tab) !== null ? tab : null
+}
+
+export type SessionConnectionLine = { text: string; connected: boolean }
+
+/**
+ * The menu's connection line, in the app's words (`na20` ~L1003-1058): "Connected", "Disconnected",
+ * and "Reconnect from <host>" after it.
+ *
+ * The app names a host to reconnect from when its computer dropped off; here that is the phone
+ * having given up on the desktop (`unreachable`), and only when the desktop's name is known: a name
+ * is never made up. While the phone is still dialling the line says Connecting…, as the app's
+ * status line does (`et20` ~L449), not Disconnected.
+ */
+export function sessionConnectionLine(input: {
+  connState: ConnectionState
+  /** The phone has retried long enough that its verdict is "can't reach the desktop". */
+  unreachable: boolean
+  hostName: string | null
+}): SessionConnectionLine {
+  if (input.connState === 'connected') {
+    return { text: 'Connected', connected: true }
+  }
+  const dialling =
+    !input.unreachable &&
+    (input.connState === 'connecting' ||
+      input.connState === 'handshaking' ||
+      input.connState === 'reconnecting')
+  if (dialling) {
+    return { text: 'Connecting…', connected: false }
+  }
+  const host = input.hostName?.trim()
+  // A revoked pairing is not fixed by reconnecting from anywhere: it needs a new pairing.
+  if (input.unreachable && host && input.connState !== 'auth-failed') {
+    return { text: `Disconnected • Reconnect from ${host}`, connected: false }
+  }
+  return { text: 'Disconnected', connected: false }
 }
 
 export type SessionRenameOutcome = 'renamed' | 'refused' | 'failed'

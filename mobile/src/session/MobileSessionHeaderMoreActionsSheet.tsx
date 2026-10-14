@@ -1,6 +1,8 @@
 import {
   Activity,
+  Archive,
   Copy,
+  Cpu,
   FileText,
   GitBranch,
   ImageIcon,
@@ -12,7 +14,7 @@ import {
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { useTheme } from '../theme/theme-context'
-import type { SessionHeaderMenuEntry } from './session-header-menu'
+import type { SessionConnectionLine, SessionHeaderMenuEntry } from './session-header-menu'
 
 type Props = {
   visible: boolean
@@ -28,9 +30,14 @@ type Props = {
    *  (sessionHeaderMenuEntries). Copy session ID is drawn last, where the app
    *  keeps it in its own group. */
   sessionEntries: readonly SessionHeaderMenuEntry[]
+  /** "Connected" or "Disconnected • Reconnect from <host>", drawn above the entries
+   *  (sessionConnectionLine). */
+  connection?: SessionConnectionLine
   onCopyBranch: () => void
   onOpenBackgroundTasks: () => void
+  onChangeModel: () => void
   onRename: () => void
+  onArchive: () => void
   onCopySessionId: () => void
   /** The one-tap check of the Anthropic path for the chat's pictures and model (MobileCcrImagesSelfTest). */
   onCheckSessionImages: () => void
@@ -48,9 +55,12 @@ export function MobileSessionHeaderMoreActionsSheet({
   onOpenPermissionRules,
   onOpenProjectMemory,
   sessionEntries,
+  connection,
   onCopyBranch,
   onOpenBackgroundTasks,
+  onChangeModel,
   onRename,
+  onArchive,
   onCopySessionId,
   onCheckSessionImages,
   onClose
@@ -61,7 +71,7 @@ export function MobileSessionHeaderMoreActionsSheet({
     ...(has('copy-branch')
       ? [{ label: 'Copy branch', icon: GitBranch, onPress: onCopyBranch }]
       : []),
-    // Both open a sheet or a dialog, so they wait for this one to leave
+    // Each of these opens a sheet or a dialog, so they wait for this one to leave
     // (the dual-Modal race, #10331).
     ...(has('background-tasks')
       ? [
@@ -73,13 +83,30 @@ export function MobileSessionHeaderMoreActionsSheet({
           }
         ]
       : []),
+    ...(has('change-model')
+      ? [{ label: 'Change model', icon: Cpu, closeBeforePress: true, onPress: onChangeModel }]
+      : []),
     ...(has('rename')
       ? [{ label: 'Rename', icon: Pencil, closeBeforePress: true, onPress: onRename }]
+      : []),
+    // Ends the session's tab, so it is the one red row; its dialog asks first.
+    ...(has('archive')
+      ? [
+          {
+            label: 'Archive',
+            icon: Archive,
+            destructive: true,
+            closeBeforePress: true,
+            onPress: onArchive
+          }
+        ]
       : [])
   ]
   return (
     <ActionSheetModal
       visible={visible}
+      message={connection?.text}
+      messageTone={connection?.connected ? 'success' : 'muted'}
       actions={[
         ...sessionActions,
         ...(showAgentSessionHistory

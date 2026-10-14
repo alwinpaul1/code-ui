@@ -1,14 +1,47 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { renameSessionWorkspace, sessionHeaderMenuActions, sessionHeaderMenuEntries } from './session-header-menu'
+import type { MobileSessionTab } from './mobile-session-route-types'
+import {
+  archivableSessionTab,
+  renameSessionWorkspace,
+  sessionConnectionLine,
+  sessionHeaderMenuActions,
+  sessionHeaderMenuEntries
+} from './session-header-menu'
 
 // The header menu's session entries (parity gap G35) and what each does.
 
 describe('which session entries the header menu offers', () => {
-  const all = { branch: 'feature/header', runningTasks: 2, canOpenTasks: true, canRename: true, sessionId: 'a1b2c3d4-0000-4000-8000-000000000000' }
+  const all = {
+    branch: 'feature/header',
+    runningTasks: 2,
+    canOpenTasks: true,
+    canChangeModel: true,
+    canRename: true,
+    canArchive: true,
+    sessionId: 'a1b2c3d4-0000-4000-8000-000000000000'
+  }
 
-  it("offers all four, in the Claude app's order, when the session has each", () => {
-    expect(sessionHeaderMenuEntries(all)).toEqual(['copy-branch', 'background-tasks', 'rename', 'copy-session-id'])
+  // The app builds its list in `us8` ~L318-357: Copy branch, Background tasks, Share, Rename,
+  // the project entries, Archive, and its Debug group (with Copy session ID) last. Change model
+  // takes the slot Share holds there (Orca has no share path), the one the user asked for.
+  it("offers all six, in the Claude app's order, when the session has each", () => {
+    expect(sessionHeaderMenuEntries(all)).toEqual([
+      'copy-branch',
+      'background-tasks',
+      'change-model',
+      'rename',
+      'archive',
+      'copy-session-id'
+    ])
+  })
+
+  it('offers Change model only where a model sheet can open (the chat is showing and has a model)', () => {
+    expect(sessionHeaderMenuEntries({ ...all, canChangeModel: false })).not.toContain('change-model')
+  })
+
+  it('offers Archive only for a tab that is an agent session', () => {
+    expect(sessionHeaderMenuEntries({ ...all, canArchive: false })).not.toContain('archive')
   })
 
   it('offers Copy branch only with a branch (none on a detached HEAD or a folder)', () => {
@@ -27,7 +60,17 @@ describe('which session entries the header menu offers', () => {
   })
 
   it('offers nothing when the session has none of them', () => {
-    expect(sessionHeaderMenuEntries({ branch: null, runningTasks: 0, canOpenTasks: false, canRename: false, sessionId: null })).toEqual([])
+    expect(
+      sessionHeaderMenuEntries({
+        branch: null,
+        runningTasks: 0,
+        canOpenTasks: false,
+        canChangeModel: false,
+        canRename: false,
+        canArchive: false,
+        sessionId: null
+      })
+    ).toEqual([])
   })
 })
 
@@ -110,5 +153,73 @@ describe('the menu actions say what happened', () => {
     const d = deps()
     await sessionHeaderMenuActions(d).renameSession('New')
     expect(d.showToast).not.toHaveBeenCalled()
+  })
+})
+
+describe('which tab Archive closes', () => {
+  const terminal = (over: Partial<Extract<MobileSessionTab, { type: 'terminal' }>> = {}): MobileSessionTab => ({
+    type: 'terminal',
+    id: 't1',
+    title: 'claude',
+    terminal: 'h1',
+    isActive: true,
+    launchAgent: 'claude',
+    ...over
+  })
+  const browser: MobileSessionTab = {
+    type: 'browser',
+    id: 'b1',
+    title: 'Docs',
+    browserWorkspaceId: 'w1',
+    browserPageId: 'p1',
+    url: 'https://x.test',
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    isActive: false
+  }
+
+  it('is the active tab when an agent runs in it', () => {
+    expect(archivableSessionTab([terminal(), browser], 't1')?.id).toBe('t1')
+  })
+
+  it('is no tab for a plain shell, a browser, or no active tab (one tab, none, or a stale id)', () => {
+    expect(archivableSessionTab([terminal({ launchAgent: undefined, title: 'zsh' })], 't1')).toBeNull()
+    expect(archivableSessionTab([terminal(), browser], 'b1')).toBeNull()
+    expect(archivableSessionTab([], 't1')).toBeNull()
+    expect(archivableSessionTab([terminal()], null)).toBeNull()
+    expect(archivableSessionTab([terminal()], 'gone')).toBeNull()
+  })
+})
+
+describe("the menu's connection line, in the Claude app's words (na20 ~L1003-1058)", () => {
+  const line = (over: Partial<Parameters<typeof sessionConnectionLine>[0]> = {}) =>
+    sessionConnectionLine({ connState: 'connected', unreachable: false, hostName: null, ...over })
+
+  it('says Connected over a live link, and flags it as connected for the green tint', () => {
+    expect(line()).toEqual({ text: 'Connected', connected: true })
+    expect(line({ hostName: 'Alwin’s Mac' })).toEqual({ text: 'Connected', connected: true })
+  })
+
+  it('says Disconnected for a closed link, a revoked pairing, or a host the phone gave up on', () => {
+    expect(line({ connState: 'disconnected' })).toEqual({ text: 'Disconnected', connected: false })
+    expect(line({ connState: 'auth-failed' })).toEqual({ text: 'Disconnected', connected: false })
+    expect(line({ connState: 'reconnecting', unreachable: true })).toEqual({ text: 'Disconnected', connected: false })
+  })
+
+  it('says Connecting… while the phone is still dialling, not Disconnected', () => {
+    for (const connState of ['connecting', 'handshaking', 'reconnecting'] as const) {
+      expect(line({ connState })).toEqual({ text: 'Connecting…', connected: false })
+    }
+  })
+
+  it('names the host to reconnect from only when the phone has given up and knows its name', () => {
+    expect(line({ connState: 'reconnecting', unreachable: true, hostName: 'Alwin’s Mac' })).toEqual({
+      text: 'Disconnected • Reconnect from Alwin’s Mac',
+      connected: false
+    })
+    expect(line({ connState: 'disconnected', hostName: 'Alwin’s Mac' })).toEqual({ text: 'Disconnected', connected: false })
+    expect(line({ connState: 'reconnecting', unreachable: true, hostName: '  ' })).toEqual({ text: 'Disconnected', connected: false })
+    expect(line({ connState: 'auth-failed', unreachable: false, hostName: 'Alwin’s Mac' }).text).toBe('Disconnected')
   })
 })

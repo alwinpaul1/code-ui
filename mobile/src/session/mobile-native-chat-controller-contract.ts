@@ -78,6 +78,9 @@ export type MobileNativeChatController = {
    *  field on every increase (mirrors the model sheet's openRequest). */
   composerFocusRequest: number
   requestComposerFocus: () => void
+  /** Opens the composer's model sheet (the header menu's Change model). Counted beside the
+   *  Codex `/model` interception's own request, so neither can swallow the other's. */
+  requestModelSheet: () => void
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
   /** Each outbox bubble's state, by row id: on its way (drawn as a plain sent bubble, no label)

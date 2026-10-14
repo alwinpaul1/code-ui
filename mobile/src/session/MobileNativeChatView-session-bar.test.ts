@@ -163,6 +163,24 @@ describe('MobileNativeChatView, the session bar above the composer', () => {
     expect(bar.props.working).toBe(true)
   })
 
+  // Batch 3: the session pills (PR, Create PR, Local changes) mount through the chat's own slot.
+  // The slot's owner decides what is in it; the dock only gives it the row above the bar.
+  it('draws the session pills the route hands it in the dock, directly above the session bar', async () => {
+    await render({ sessionPills: createElement('SessionPills') })
+    const dock = renderer!.root.find((node) => node.props.testID === 'native-chat-dock' && String(node.type) === 'View')
+    const types = dock.children
+      .filter((child): child is ReturnType<typeof dock.find> => typeof child !== 'string')
+      .map((child) => String(child.type))
+    const pills = types.indexOf('SessionPills')
+    expect(pills).toBeGreaterThanOrEqual(0)
+    expect(types[pills + 1]).toBe('SessionBar')
+  })
+
+  it('draws no slot when the route hands it no pills', async () => {
+    await render({})
+    expect(renderer!.root.findAll((node) => String(node.type) === 'SessionPills')).toHaveLength(0)
+  })
+
   it('sits in the dock directly above the composer', async () => {
     await render({})
     const dock = renderer!.root.find((node) => node.props.testID === 'native-chat-dock' && String(node.type) === 'View')

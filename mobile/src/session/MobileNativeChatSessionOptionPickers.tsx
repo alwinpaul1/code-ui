@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Keyboard, View } from 'react-native'
 import { ArrowLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -182,8 +182,14 @@ export function MobileNativeChatSessionOptionPickers({
   const liveEffort = liveModel?.effort ?? null
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const modelId = model?.id ?? null
+  // The count the chat controller held when this picker mounted was answered by an earlier one:
+  // the controller outlives the chat view, so "above zero" would open the sheet on every return
+  // from the terminal. Only a request that rises while mounted opens it, as soon as a model
+  // option is there to open.
+  const answeredRequest = useRef(openRequest)
   useEffect(() => {
-    if (openRequest > 0 && modelId) {
+    if (openRequest > answeredRequest.current && modelId) {
+      answeredRequest.current = openRequest
       Keyboard.dismiss()
       setOpenDescriptorId(modelId)
     }

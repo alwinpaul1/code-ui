@@ -406,7 +406,7 @@ export function useMobileNativeChatController(
   // never on every render. Both declared on one line with modelSheetRequest,
   // and requestComposerFocus is an inline arrow in the return below rather
   // than its own useCallback, to fit this file's line budget.
-  const [modelSheetRequest, setModelSheetRequestState] = useState(0); const [composerFocusRequest, setComposerFocusRequest] = useState(0)
+  const [modelSheetRequest, setModelSheetRequestState] = useState(0); const [composerFocusRequest, setComposerFocusRequest] = useState(0); const [headerModelRequests, setHeaderModelRequests] = useState(0)
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
@@ -444,7 +444,7 @@ export function useMobileNativeChatController(
       modelSwitchCommand: isOmpChat ? activeChatAgentStatus?.modelSwitchCommand : undefined,
       transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan,
       terminalHandle: activeHandle, queuedMessages: visibleQueuedMessages,
-      openRequest: modelSheetRequest,
+      openRequest: modelSheetRequest + headerModelRequests,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         conversationCommands: structuredNativeChat.conversationCommands,
@@ -555,7 +555,7 @@ export function useMobileNativeChatController(
     showNativeChat, chatViewSelected, showNativeChatRef,
     nativeChatAgent: activeChatResolution?.agent ?? null,
     chatComposerText,
-    setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
+    setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1), requestModelSheet: () => setHeaderModelRequests((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable,
