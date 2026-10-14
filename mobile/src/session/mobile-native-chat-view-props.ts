@@ -144,6 +144,8 @@ export type MobileNativeChatViewProps = {
   micLevel?: number
   /** The engine's per-chunk microphone level, held outside React (the waveform reads it). */
   micLevelSource?: LevelSource
+  /** The take's words so far, for the caption above the recording row. */
+  dictationCaption?: string
   /** The take stopped listening and its words are being finished ("Transcribing…"). */
   micTranscribing?: boolean
   /** The recording row's Cancel: ends the take and discards its words. */

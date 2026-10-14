@@ -80,10 +80,15 @@ export function useMobileSessionNativeChatDictation(
   const composerCursorRef = useRef(0)
   const chatInsertRef = useRef({ prefix: '', suffix: '' })
   const [dictationPaint, setDictationPaint] = useState<DictationPaint | null>(null)
+  // The take's words for the caption above the recording row (MobileNativeChatDictationCaption).
+  const [dictationCaption, setDictationCaption] = useState('')
   const liveTargetRef = useRef<LiveDictationTarget>({ kind: 'chat' })
 
   const onSpoken = (text: string, _final?: boolean, interim = '') => {
     hold.markTextProduced()
+    if (liveTargetRef.current.kind === 'chat') {
+      setDictationCaption(text)
+    }
     const { prefix, suffix } = chatInsertRef.current
     setDictationPaint(placeSpokenText(
       text, interim, liveTargetRef.current, prefix, suffix,
@@ -138,6 +143,7 @@ export function useMobileSessionNativeChatDictation(
         liveTargetRef.current = { kind: 'chat' }
         liveBaseTextRef.current = draft
         setDictationPaint(null)
+        setDictationCaption('')
       } else if (activeHandle && liveInputTerminalHandles.has(activeHandle)) {
         liveTargetRef.current = ptyDictationTarget(activeHandle, liveTargetRef.current)
       } else {
@@ -210,7 +216,7 @@ export function useMobileSessionNativeChatDictation(
     markNativeChatInputLeaseReady, clearNativeChatInputLease,
     nativeChatController, getSendCompletionGeneration,
     toggleTabChatView, showNativeChat, showNativeChatRef,
-    dictation, dictationPaint, composerCursorRef,
+    dictation, dictationPaint, dictationCaption, composerCursorRef,
     startDictation: hold.startDictation,
     cancelDictation: hold.cancelDictation,
     stopDictation: hold.stopDictation,

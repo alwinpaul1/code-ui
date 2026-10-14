@@ -125,7 +125,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // dictation hook and moves its five hold-mode useCallbacks into useDictationHoldMode
 // (use-dictation-hold-mode.ts), which is not expanded.
 // 309 since 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
-const HEAD_MAIN_HOOK_SHA256 = '5411ef899e4a27184d6607502a9f8ccd6821ec71341e8349ec72ffda79c1c059'
+// 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
+// recording row (`dictationCaption`, reset per take), and the overlay is handed them.
+const HEAD_MAIN_HOOK_SHA256 = '7c162208bbfe71b95dd66e564e87a716d70f015352ad8f2fed3a78db39cb6889'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -146,7 +148,9 @@ const HEAD_MAIN_HOOK_SHA256 = '5411ef899e4a27184d6607502a9f8ccd6821ec71341e8349e
 // 2026-10-14: the terminal runtime binds armLiveInputKeyboardClaim, handleLiveInputBlur,
 // handleLiveInputFocus, releaseLiveInputKeyboard and reportLiveInputScreenFocus from
 // useTerminalLiveInputFocus (the live field takes back a keyboard no field holds).
-const HEAD_HOOK_BINDING_SHA256 = '8c67cf77fdbc6a1e809e6d3049c08e4a641624cc740d4516c4a5f7a1c6a66400'
+// 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
+// recording row (`dictationCaption`, reset per take), and the overlay is handed them.
+const HEAD_HOOK_BINDING_SHA256 = 'dd8ca1f518af5a888f61aec5cf97968f039b24fcb88a87779a15de23abd48bf5'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -475,8 +479,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // (targetIsChat), so a send ends only a chat take.
 // 683 since 2026-10-14 (later): '/voice-settings' and 'Sign in to Anthropic to dictate', the
 // mic's sign-in gate.
+// 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
+// recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'af7c92bb380b1f6a5f86778656191cb5e02aac04804ad20a5fe558ffc7572ea6'
+  '4131cad4a556bd708a0611b1c8ce16b49992ddbc324ff84edd9cc00f847d9d7c'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -640,7 +646,9 @@ const HEAD_HOST_JSX_SHA256 = 'aa75133a961d99b340038d28b533e354b1b74ed6341e198446
 // records; only the overlay's moved.
 // 2026-10-14 (later): the chat overlay is handed `micLevelSource`, the Anthropic engine's per-chunk
 // microphone level for the waveform. Same records; only the overlay's moved.
-const HEAD_LEAF_JSX_SHA256 = '26625116e4966176887aad197165bc33180e9d9a8afeefe6bf837e25d4199f69'
+// 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
+// recording row (`dictationCaption`, reset per take), and the overlay is handed them.
+const HEAD_LEAF_JSX_SHA256 = '76d4644be2bed694b2ee1d63a3b0e40d8c9845dd6691e022021a203e4de15b18'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1088,7 +1096,9 @@ describe('mobile session route extraction parity', () => {
     // 309 since 2026-10-14 (later): requireAnthropicSignIn, the mic's sign-in gate.
     // 311 since 2026-10-14: the subscription's useRef for the deferred subscribe, and the
     // foundation's two phone-mode refs (terminal-phone-mode-before-subscribe.ts).
-    expect(main.hooks).toHaveLength(312)
+    // 313 since 2026-10-14 (caption): the dictation hook's useState for the live caption above
+    // the recording row (MobileNativeChatDictationCaption.tsx).
+    expect(main.hooks).toHaveLength(313)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1239,7 +1249,9 @@ describe('mobile session route extraction parity', () => {
     // 685 since 2026-10-14 (resume from Home): the stream's server-resize reveal takes its reason
     // from serverResizeRevealReason (terminal-first-frame-reveal.ts, outside this family), so its
     // 'resized' literal left. 686 - 1 = 685.
-    expect(strings).toHaveLength(685)
+    // 688 since 2026-10-14 (caption): the live caption's state, its '' start and reset, and the
+    // 'chat' target check that feeds it.
+    expect(strings).toHaveLength(688)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

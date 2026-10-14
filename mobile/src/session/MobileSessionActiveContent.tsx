@@ -74,6 +74,7 @@ export function MobileSessionActiveContent({
     handleAccessoryKey,
     dictation,
     dictationPaint,
+    dictationCaption,
     composerCursorRef,
     handleDictationToggle,
     finishDictationForSend,
@@ -360,6 +361,7 @@ export function MobileSessionActiveContent({
         // microphone is a take, and Cancel or Stop ends it.
         micActive={dictation.isStarting || dictation.isRecording}
         micLevel={(dictation as { level?: number }).level ?? 0}
+        dictationCaption={dictationCaption}
         micLevelSource={(dictation as { levelSource?: LevelSource }).levelSource}
         micTranscribing={dictation.isProcessing}
         onCancelDictation={() => cancelDictation()}

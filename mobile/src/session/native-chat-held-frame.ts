@@ -43,6 +43,7 @@ const LIVE_COMPOSER_INPUT = [
   'micActive',
   'micLevel',
   'micLevelSource',
+  'dictationCaption',
   'micTranscribing',
   'onCancelDictation',
   'onStopDictation',

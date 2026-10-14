@@ -25,6 +25,7 @@ import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
 import { MobileNativeChatSendSlot } from './MobileNativeChatSendSlot'
 import { MobileNativeChatDictationLayer } from './MobileNativeChatDictationRow'
+import { MobileNativeChatDictationCaption } from './MobileNativeChatDictationCaption'
 import { useComposerDictationRow } from './use-composer-dictation-row'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
@@ -94,6 +95,8 @@ type Props = {
   micLevel?: number
   /** The engine's per-chunk level, held outside React; the waveform prefers it to `micLevel`. */
   micLevelSource?: LevelSource
+  /** The take's words so far, for the live caption above the recording row. */
+  dictationCaption?: string
   /** The take has stopped listening and its words are being finished. */
   micTranscribing?: boolean
   /** With `onStopDictation`, turns on the recording row while dictating: the field and the
@@ -195,6 +198,7 @@ export function MobileNativeChatComposer({
   micActive = false,
   micLevel = 0,
   micLevelSource,
+  dictationCaption = '',
   micTranscribing = false,
   onCancelDictation,
   onStopDictation,
@@ -377,6 +381,9 @@ export function MobileNativeChatComposer({
           maxHeight={popoverMaxHeight}
           onLayout={onPopoverLayout}
         />
+      ) : null}
+      {dictationRow.available ? (
+        <MobileNativeChatDictationCaption spoken={dictationCaption} shown={dictationRow.up} textStyle={composerType} />
       ) : null}
       <View
         // 16 dp from the screen's sides and 16 dp above the keyboard (or the navigation bar), as

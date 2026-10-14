@@ -97,7 +97,7 @@ export function MobileNativeChatView({
   isAttaching,
   onMicPress,
   onBeforeSend,
-  micActive, micLevel, micLevelSource, micTranscribing, onCancelDictation, onStopDictation,
+  micActive, micLevel, micLevelSource, micTranscribing, dictationCaption, onCancelDictation, onStopDictation,
   dictationPaint, onComposerCursor,
   contextWindow,
   permissionMode,
@@ -469,6 +469,7 @@ export function MobileNativeChatView({
         onMicPress={onMicPress}
         onBeforeSend={onBeforeSend}
         micActive={micActive} micLevel={micLevel} micLevelSource={micLevelSource}
+        dictationCaption={dictationCaption}
         micTranscribing={micTranscribing}
         onCancelDictation={onCancelDictation} onStopDictation={onStopDictation}
         dictationPaint={dictationPaint} onComposerCursor={onComposerCursor}

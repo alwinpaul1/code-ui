@@ -27,7 +27,14 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light',
   useWindowDimensions: () => ({ width: 384, height: 823 })
 }))
-vi.mock('react-native-svg', () => ({ default: () => null, Circle: () => null }))
+vi.mock('react-native-svg', () => ({
+  default: () => null,
+  Circle: () => null,
+  Defs: () => null,
+  LinearGradient: () => null,
+  Rect: () => null,
+  Stop: () => null
+}))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',

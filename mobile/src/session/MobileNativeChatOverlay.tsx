@@ -82,6 +82,7 @@ type Props = {
   micActive: boolean
   micLevel?: number
   micLevelSource?: LevelSource
+  dictationCaption?: string
   micTranscribing?: boolean
   onCancelDictation?: () => void
   onStopDictation?: () => void
@@ -129,6 +130,7 @@ export function MobileNativeChatOverlay({
   micActive,
   micLevel,
   micLevelSource,
+  dictationCaption,
   micTranscribing,
   onCancelDictation,
   onStopDictation,
@@ -497,6 +499,7 @@ export function MobileNativeChatOverlay({
         micActive={micActive}
         micLevel={micLevel}
         micLevelSource={micLevelSource}
+        dictationCaption={dictationCaption}
         micTranscribing={micTranscribing}
         onCancelDictation={onCancelDictation}
         onStopDictation={onStopDictation}

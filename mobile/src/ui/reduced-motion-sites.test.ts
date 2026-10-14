@@ -30,7 +30,9 @@ const MOTION_SITES = [
   // row's centre crossfade run when a take changes state, not under a finger.
   'components/DictationWaveform.tsx',
   'session/MobileNativeChatDictationRow.tsx',
-  'session/use-composer-dictation-row.ts'
+  'session/use-composer-dictation-row.ts',
+  // The live caption above the recording row comes and goes as words arrive.
+  'session/MobileNativeChatDictationCaption.tsx'
 ]
 
 const HOOK_IMPORT = /import \{[^}]*\buseReducedMotion\b[^}]*\} from '[^']*use-reduced-motion'/
