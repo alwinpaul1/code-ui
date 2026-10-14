@@ -1,5 +1,6 @@
-import { fetchCcrProfile, listCcrSessionEvents, listCcrSessions, CcrApiError, type CcrEvent, type CcrSessionRow } from './ccr-session-api'
-import { clearCcrFailure, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
+import { listCcrSessionEvents, listCcrSessions, CcrApiError, type CcrEvent, type CcrSessionRow } from './ccr-session-api'
+import { clearCcrFailure, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
+import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
 import { emptyCcrExtracted, extractCcrImages, type CcrExtracted } from './ccr-session-images'
 import { matchCcrSession } from './ccr-session-match'
 import { noteModel } from './ccr-session-model-refresh'
@@ -41,9 +42,9 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  * app shows it, read through Anthropic's API with the phone's sign-in.
  *
  * Stages, each leaving one log line that names success or the reason:
- *   sign-in  → the phone's Anthropic sign-in (Voice settings);
- *   org      → the organization it acts for, cached per account;
- *   sessions → the account's Remote Control (`bridge`) sessions, newest first;
+ *   sign-in  → the phone's Anthropic sign-ins (Voice settings), one per account;
+ *   org      → the organization each acts for, kept per account;
+ *   sessions → every account's Remote Control (`bridge`) sessions, newest first;
  *   match    → the one whose recent events share message uuids with the tab
  *              (ccr-session-match.ts), cached per tab until the relay
  *              reconnects;
@@ -98,35 +99,22 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     return { stages, sessionId: null, found: 0, wanted: wantedCount }
   }
 
-  // sign-in
-  let token: string | null
-  try {
-    token = await deps.readToken()
-  } catch (error) {
-    return fail('sign-in', `the sign-in could not be read: ${reasonOf(error)}`)
-  }
-  if (!token) {
-    return fail('sign-in', 'not signed in to Anthropic on this phone (Voice settings → Sign in)')
-  }
-  report('sign-in', true, 'signed in')
-
-  // org
-  let organizationUuid: string
-  try {
-    const cached = await deps.org.read()
-    if (cached) {
-      organizationUuid = cached.organizationUuid
-      report('org', true, `organization ${maskId(organizationUuid)} (cached)`)
-    } else {
-      const profile = await fetchCcrProfile(deps.fetch, token)
-      await deps.org.write(profile).catch(() => undefined)
-      organizationUuid = profile.organizationUuid
-      report('org', true, `organization ${maskId(organizationUuid)} (from /api/oauth/profile)`)
+  // sign-in and org, account by account
+  const resolved = await resolveCcrAuths(deps, report)
+  const reportFailures = (failures: readonly { stage: CcrStage; detail: string }[]) => {
+    for (const failure of failures) {
+      report(failure.stage, false, failure.detail)
     }
-  } catch (error) {
-    return fail('org', reasonOf(error))
   }
-  const auth = { token, organizationUuid }
+  if (resolved.auths.length === 0) {
+    // The last failure goes through fail(), which also starts the tab's back-off.
+    reportFailures(resolved.failures.slice(0, -1))
+    const last = resolved.failures[resolved.failures.length - 1]!
+    return fail(last.stage, last.detail)
+  }
+  reportFailures(resolved.failures)
+  const auths = resolved.auths
+  const accountCount = auths.length + resolved.failures.filter((failure) => failure.accountId !== null).length
 
   const wanted = {
     toolUseIds: new Set(input.wanted.toolUseIds),
@@ -134,46 +122,70 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   }
   const extracted: CcrExtracted = emptyCcrExtracted()
   let sessionId = ccrSessionForTab(input.tabId, input.epoch)
+  let auth: CcrAuth | undefined
+  if (sessionId) {
+    // The account the tab matched under is read again; if it is gone (signed out, or its token no
+    // longer works) the tab is matched afresh across the accounts that remain.
+    auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch))
+    if (!auth) {
+      forgetCcrMapping(input.tabId)
+      sessionId = null
+    }
+  }
   let cursor: string | null = null
   let pagesRead = 0
 
-  if (sessionId) {
+  if (sessionId && auth) {
     report('sessions', true, 'skipped: the tab is already matched on this connection')
     report('match', true, `session ${maskId(sessionId)} (cached for this tab)`)
   } else {
-    // sessions
-    let candidates: CcrSessionRow[]
-    try {
-      const rows: CcrSessionRow[] = []
-      let listCursor: string | null = null
-      let malformed = 0
-      for (let page = 0; page < CCR_MAX_LIST_PAGES; page += 1) {
-        const listed = await listCcrSessions(deps.fetch, auth, { cursor: listCursor, limit: CCR_LIST_PAGE_SIZE })
-        rows.push(...listed.sessions)
-        malformed += listed.malformedRows
-        if (!listed.nextCursor || listed.nextCursor === listCursor) {
-          break
+    // sessions: every account's list, so a work account's session is found beside the default's
+    const candidates: { row: CcrSessionRow; auth: CcrAuth }[] = []
+    const listFailures: string[] = []
+    let listed = 0
+    let malformed = 0
+    for (const account of auths) {
+      const prefix = accountPrefix(account.label, accountCount)
+      try {
+        const rows: CcrSessionRow[] = []
+        let listCursor: string | null = null
+        for (let page = 0; page < CCR_MAX_LIST_PAGES; page += 1) {
+          const result = await listCcrSessions(deps.fetch, account, { cursor: listCursor, limit: CCR_LIST_PAGE_SIZE })
+          rows.push(...result.sessions)
+          malformed += result.malformedRows
+          if (!result.nextCursor || result.nextCursor === listCursor) {
+            break
+          }
+          listCursor = result.nextCursor
         }
-        listCursor = listed.nextCursor
-      }
-      candidates = rows
-        .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
-        .sort((a, b) => b.activeAt - a.activeAt)
-        .slice(0, CCR_MAX_CANDIDATES)
-      if (candidates.length === 0) {
-        return fail(
-          'sessions',
-          `no Remote Control session on this account (${rows.length} session${rows.length === 1 ? '' : 's'} listed${malformed ? `, ${malformed} unreadable` : ''}); Claude Code publishes a session only with Remote Control on`
+        listed += rows.length
+        candidates.push(
+          ...rows
+            .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
+            .sort((a, b) => b.activeAt - a.activeAt)
+            .slice(0, CCR_MAX_CANDIDATES)
+            .map((row) => ({ row, auth: account }))
         )
+      } catch (error) {
+        if (error instanceof CcrApiError && (error.reason === 'unauthorized' || error.reason === 'forbidden')) {
+          // The org may be stale for this sign-in: ask the profile again next time.
+          await deps.accounts.forgetOrganization(account.accountId).catch(() => undefined)
+        }
+        listFailures.push(`${prefix}${reasonOf(error)}`)
       }
-      report('sessions', true, `${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} to compare (${rows.length} listed)`)
-    } catch (error) {
-      if (error instanceof CcrApiError && (error.reason === 'unauthorized' || error.reason === 'forbidden')) {
-        // The org may be stale for this sign-in: ask the profile again next time.
-        await deps.org.clear().catch(() => undefined)
-      }
-      return fail('sessions', reasonOf(error))
     }
+    if (candidates.length === 0) {
+      if (listFailures.length > 0) {
+        reportFailures(listFailures.slice(0, -1).map((detail) => ({ stage: 'sessions', detail })))
+        return fail('sessions', listFailures[listFailures.length - 1]!)
+      }
+      return fail(
+        'sessions',
+        `no Remote Control session on ${auths.length === 1 ? 'this account' : `these ${auths.length} accounts`} (${listed} session${listed === 1 ? '' : 's'} listed${malformed ? `, ${malformed} unreadable` : ''}); Claude Code publishes a session only with Remote Control on`
+      )
+    }
+    reportFailures(listFailures.map((detail) => ({ stage: 'sessions', detail })))
+    report('sessions', true, `${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} to compare (${listed} listed)`)
 
     // match
     const tabIds = new Set(input.messageIds)
@@ -181,14 +193,16 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       return fail('match', 'the tab has no transcript messages to compare yet')
     }
     const pages = new Map<string, { events: CcrEvent[]; uuids: Set<string>; cursor: string | null }>()
-    try {
-      for (let round = 0; round < CCR_MATCH_PAGES; round += 1) {
-        for (const candidate of candidates) {
-          const held = pages.get(candidate.id)
-          if (round > 0 && !held?.cursor) {
-            continue
-          }
-          const page = await listCcrSessionEvents(deps.fetch, auth, candidate.id, { cursor: held?.cursor ?? null, limit: CCR_EVENT_PAGE_SIZE })
+    /** Candidates whose events could not be read: left out, so the other accounts still answer. */
+    const unreadable = new Map<string, string>()
+    for (let round = 0; round < CCR_MATCH_PAGES && !sessionId; round += 1) {
+      for (const candidate of candidates) {
+        const held = pages.get(candidate.row.id)
+        if (unreadable.has(candidate.row.id) || (round > 0 && !held?.cursor)) {
+          continue
+        }
+        try {
+          const page = await listCcrSessionEvents(deps.fetch, candidate.auth, candidate.row.id, { cursor: held?.cursor ?? null, limit: CCR_EVENT_PAGE_SIZE })
           const uuids = held?.uuids ?? new Set<string>()
           for (const event of page.events) {
             const uuid = event.payload.uuid
@@ -196,31 +210,38 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
               uuids.add(uuid)
             }
           }
-          pages.set(candidate.id, { events: [...(held?.events ?? []), ...page.events], uuids, cursor: page.nextCursor })
-        }
-        const match = matchCcrSession(tabIds, candidates.map((candidate) => ({ sessionId: candidate.id, uuids: pages.get(candidate.id)?.uuids ?? new Set() })))
-        if (match.kind === 'ambiguous') {
-          return fail('match', `${match.sessionIds.length} sessions share messages with this tab (${match.sessionIds.map(maskId).join(', ')}); not guessing`)
-        }
-        if (match.kind === 'matched') {
-          sessionId = match.sessionId
-          const held = pages.get(sessionId)!
-          extractCcrImages(held.events, wanted, deps.maxBytes, extracted)
-          cursor = held.cursor
-          pagesRead = round + 1
-          setCcrMapping(input.tabId, sessionId, input.epoch)
-          report('match', true, `session ${maskId(sessionId)} shares ${match.overlap} message${match.overlap === 1 ? '' : 's'} with this tab`)
-          const row = candidates.find((candidate) => candidate.id === sessionId)
-          if (row) {
-            noteModel(input.tabId, input.epoch, row, report)
-          }
-          break
+          pages.set(candidate.row.id, { events: [...(held?.events ?? []), ...page.events], uuids, cursor: page.nextCursor })
+        } catch (error) {
+          const detail = `${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(error)}`
+          unreadable.set(candidate.row.id, detail)
         }
       }
-    } catch (error) {
-      return fail('match', reasonOf(error))
+      const readable = candidates.filter((candidate) => !unreadable.has(candidate.row.id))
+      if (readable.length === 0) {
+        const details = [...unreadable.values()]
+        reportFailures(details.slice(0, -1).map((detail) => ({ stage: 'match', detail })))
+        return fail('match', details[details.length - 1]!)
+      }
+      const match = matchCcrSession(tabIds, readable.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(candidate.row.id)?.uuids ?? new Set() })))
+      if (match.kind === 'ambiguous') {
+        return fail('match', `${match.sessionIds.length} sessions share messages with this tab (${match.sessionIds.map(maskId).join(', ')}); not guessing`)
+      }
+      if (match.kind === 'matched') {
+        sessionId = match.sessionId
+        const matched = candidates.find((candidate) => candidate.row.id === sessionId)!
+        auth = matched.auth
+        const held = pages.get(sessionId)!
+        extractCcrImages(held.events, wanted, deps.maxBytes, extracted)
+        cursor = held.cursor
+        pagesRead = round + 1
+        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId)
+        reportFailures([...unreadable.values()].map((detail) => ({ stage: 'match', detail })))
+        report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${match.overlap} message${match.overlap === 1 ? '' : 's'} with this tab`)
+        noteModel(input.tabId, input.epoch, matched.row, report)
+      }
     }
-    if (!sessionId) {
+    if (!sessionId || !auth) {
+      reportFailures([...unreadable.values()].map((detail) => ({ stage: 'match', detail })))
       return fail(
         'match',
         `none of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} shares a message with this tab in its latest ${CCR_MATCH_PAGES * CCR_EVENT_PAGE_SIZE} events`
@@ -234,7 +255,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     [...wanted.userMessageIds].some((id) => !extracted.byUserMessageId.has(id))
   try {
     while (missing() && pagesRead < CCR_MAX_EVENT_PAGES && (pagesRead === 0 || cursor)) {
-      const page = await listCcrSessionEvents(deps.fetch, auth, sessionId, { cursor, limit: CCR_EVENT_PAGE_SIZE })
+      const page = await listCcrSessionEvents(deps.fetch, auth!, sessionId, { cursor, limit: CCR_EVENT_PAGE_SIZE })
       extractCcrImages(page.events, wanted, deps.maxBytes, extracted)
       pagesRead += 1
       if (!page.nextCursor || page.nextCursor === cursor) {

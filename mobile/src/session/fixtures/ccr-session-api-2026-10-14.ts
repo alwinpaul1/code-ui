@@ -1,4 +1,5 @@
 import type { CcrFetch, CcrFetchResponse } from '../ccr-session-api'
+import type { CcrAccountsSource } from '../ccr-session-shared'
 
 // ─── Anthropic's Claude Code session API, in the shapes it answers with ─────
 //
@@ -188,4 +189,43 @@ export function apiRoutes(args: {
       return page ? page(url.searchParams.get('cursor')) : null
     }
   ]
+}
+
+// ─── The phone's signed-in accounts, as the pipeline reads them ─────────────
+
+export type FakeAccount = { id: string; label: string; token: string | null; organizationUuid: string | null; error?: string }
+
+/** The one account most tests sign in: the shapes of `profileReply()`. */
+export function defaultAccount(overrides: Partial<FakeAccount> = {}): FakeAccount {
+  return { id: ACCOUNT_UUID, label: 'Example org', token: TOKEN, organizationUuid: null, ...overrides }
+}
+
+/** An in-memory accounts source that keeps what the pipeline tells it, for assertions. */
+export function fakeAccounts(initial: FakeAccount[]): { source: CcrAccountsSource; accounts: FakeAccount[]; forgotten: string[] } {
+  const accounts = initial.map((account) => ({ ...account }))
+  const forgotten: string[] = []
+  const source: CcrAccountsSource = {
+    list: async () => accounts.map((account) => ({ id: account.id, label: account.label, accessToken: account.token, organizationUuid: account.organizationUuid, error: account.error })),
+    rememberProfile: async (id, profile) => {
+      const account = accounts.find((candidate) => candidate.id === id)
+      if (account) {
+        account.id = profile.accountUuid
+        account.organizationUuid = profile.organizationUuid
+      }
+      return profile.accountUuid
+    },
+    forgetOrganization: async (id) => {
+      forgotten.push(id)
+      const account = accounts.find((candidate) => candidate.id === id)
+      if (account) {
+        account.organizationUuid = null
+      }
+    }
+  }
+  return { source, accounts, forgotten }
+}
+
+/** One signed-in account with its organization already kept, or nobody when `token` is null. */
+export function singleAccountSource(token: string | null = TOKEN, organizationUuid: string | null = ORG_UUID): CcrAccountsSource {
+  return fakeAccounts(token === null ? [] : [defaultAccount({ token, organizationUuid })]).source
 }

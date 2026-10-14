@@ -25,6 +25,9 @@ import {
   SESSION_CLOUD,
   TOKEN,
   apiRoutes,
+  defaultAccount,
+  fakeAccounts,
+  singleAccountSource,
   assistantEvent,
   eventsReply,
   fakeFetch,
@@ -45,25 +48,17 @@ const TAB_MESSAGES = ['fae82585-cd65-43d6-9e29-8d60e172685b', '4df636b3-e768-4db
 function harness(routes: Route[], options: { token?: string | null; org?: { accountUuid: string; organizationUuid: string } | null } = {}) {
   const { fetch, requests } = fakeFetch(routes)
   const lines: { line: string; ok: boolean }[] = []
-  let org = options.org === undefined ? null : options.org
-  const orgStore = {
-    read: vi.fn(async () => org),
-    write: vi.fn(async (value: { accountUuid: string; organizationUuid: string }) => {
-      org = value
-    }),
-    clear: vi.fn(async () => {
-      org = null
-    })
-  }
+  const token = options.token === undefined ? TOKEN : options.token
+  const kept = fakeAccounts(token === null ? [] : [defaultAccount({ token, organizationUuid: options.org?.organizationUuid ?? null })])
   const deps: CcrPipelineDeps = {
     fetch,
-    readToken: async () => (options.token === undefined ? TOKEN : options.token),
-    org: orgStore,
+    accounts: kept.source,
     keep: (key, uri) => `kept:${key.replace(/\0/g, '|')}:${uri.slice(0, 22)}`,
     maxBytes: 8 * 1024 * 1024,
     log: (line, ok) => lines.push({ line, ok })
   }
-  return { deps, requests, lines, orgStore, org: () => org }
+  const org = () => (kept.accounts[0]?.organizationUuid ? { accountUuid: kept.accounts[0].id, organizationUuid: kept.accounts[0].organizationUuid } : null)
+  return { deps, requests, lines, forgotten: kept.forgotten, accounts: kept.accounts, org }
 }
 
 const input = (overrides: Partial<CcrPipelineInput> = {}): CcrPipelineInput => ({
@@ -376,7 +371,7 @@ describe('every failure leaves the chips and one line saying why', () => {
 
   it('says so when the sign-in cannot be read at all', async () => {
     const h = harness(twoSessions())
-    h.deps.readToken = async () => {
+    h.deps.accounts.list = async () => {
       throw new Error('keystore locked')
     }
     const result = await runCcrImagePipeline(input(), h.deps)
@@ -386,7 +381,7 @@ describe('every failure leaves the chips and one line saying why', () => {
   it('forgets the cached organization when the list refuses it', async () => {
     const h = harness(apiRoutes({ sessions: () => reply(403, {}) }), { org: { accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID } })
     await runCcrImagePipeline(input(), h.deps)
-    expect(h.orgStore.clear).toHaveBeenCalledTimes(1)
+    expect(h.forgotten).toEqual([ACCOUNT_UUID])
   })
 
   it('waits before trying again, longer each time, and not after a new connection', async () => {
@@ -404,7 +399,7 @@ describe('every failure leaves the chips and one line saying why', () => {
   it('clears the wait once a run succeeds', async () => {
     const h = harness(twoSessions(), { token: null })
     await runCcrImagePipeline(input(), h.deps)
-    h.deps.readToken = async () => TOKEN
+    h.deps.accounts = singleAccountSource()
     await runCcrImagePipeline(input(), h.deps)
     expect(ccrMayRun('tab-1', 1)).toBe(true)
   })

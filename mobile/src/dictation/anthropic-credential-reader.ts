@@ -1,6 +1,9 @@
 import {
+  accountLabel,
+  listAccounts,
   readCredential as readPhoneCredential,
-  refreshAccessToken
+  refreshAccessToken,
+  type StoredCredential
 } from './anthropic-auth-store'
 
 export type AnthropicCredential = {
@@ -24,7 +27,11 @@ const TOKEN_MARGIN_MS = 60_000
  */
 export async function fetchAnthropicCredential(): Promise<AnthropicCredential | null> {
   const phoneCred = await readPhoneCredential()
-  if (!phoneCred?.accessToken) {
+  return phoneCred ? liveCredential(phoneCred) : null
+}
+
+async function liveCredential(phoneCred: StoredCredential): Promise<StoredCredential | null> {
+  if (!phoneCred.accessToken) {
     return null
   }
   if (phoneCred.expiresAt - Date.now() >= TOKEN_MARGIN_MS) {
@@ -35,4 +42,34 @@ export async function fetchAnthropicCredential(): Promise<AnthropicCredential | 
   } catch {
     return phoneCred.expiresAt > Date.now() ? phoneCred : null
   }
+}
+
+/** One signed-in account as the sessions path reads it: a live token, or the reason there is none. */
+export type AccountCredential = {
+  readonly id: string
+  readonly label: string
+  readonly accessToken: string | null
+  readonly organizationUuid: string | null
+  /** Why `accessToken` is null: the refresh was refused or could not be made. */
+  readonly error?: string
+}
+
+/**
+ * Every signed-in account with its token refreshed when near expiry, each on its own: one
+ * account's refresh failing leaves it without a token and the others untouched. The sessions path
+ * (session/ccr-session-default-deps.ts) reads this; dictation reads only the first account, through
+ * fetchAnthropicCredential. An empty list means nobody is signed in.
+ */
+export async function fetchAccountCredentials(): Promise<AccountCredential[]> {
+  const accounts = await listAccounts()
+  return Promise.all(
+    accounts.map(async (account, index): Promise<AccountCredential> => {
+      const label = accountLabel(account, index)
+      const base = { id: account.id, label, organizationUuid: account.organizationUuid }
+      const live = await liveCredential(account.credential)
+      return live
+        ? { ...base, accessToken: live.accessToken }
+        : { ...base, accessToken: null, error: 'the sign-in expired and could not be refreshed; sign in to this account again in Voice settings' }
+    })
+  )
 }

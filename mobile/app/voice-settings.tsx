@@ -6,13 +6,12 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { spacing, radii } from '../src/theme/mobile-theme'
+import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
@@ -30,13 +29,7 @@ import {
   setDictationConfig,
   type MobileSpeechSetup
 } from '../src/dictation/mobile-dictation-setup'
-import {
-  startLogin,
-  exchangeCode,
-  getSavedVerifier,
-  clearCredential,
-  isLoggedIn as checkAnthropicLoggedIn
-} from '../src/dictation/anthropic-auth-store'
+import { AnthropicAccountsSection } from '../src/components/AnthropicAccountsSection'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -131,66 +124,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     [client, refreshSetup]
   )
 
-  // ── Anthropic account ──────────────────────────────────────────────
-  const [anthLoggedIn, setAnthLoggedIn] = useState<boolean | null>(null)
-  const [anthBusy, setAnthBusy] = useState(false)
-  const [anthError, setAnthError] = useState<string | null>(null)
-  const [authCode, setAuthCode] = useState('')
-  const [showCodeInput, setShowCodeInput] = useState(false)
-
-  useEffect(() => {
-    void checkAnthropicLoggedIn().then(setAnthLoggedIn)
-  }, [])
-
-  const handleAnthLogin = useCallback(async () => {
-    setAnthBusy(true)
-    setAnthError(null)
-    try {
-      await startLogin()
-      setShowCodeInput(true)
-    } catch (err) {
-      setAnthError(err instanceof Error ? err.message : 'Could not open the login page')
-    } finally {
-      setAnthBusy(false)
-    }
-  }, [])
-
-  const handleAnthSubmitCode = useCallback(async () => {
-    if (!authCode.trim()) {
-      return
-    }
-    setAnthBusy(true)
-    setAnthError(null)
-    try {
-      const verifier = await getSavedVerifier()
-      if (!verifier) {
-        setAnthError('No login in progress. Tap "Log in" first.')
-        return
-      }
-      await exchangeCode(authCode.trim(), verifier)
-      setAnthLoggedIn(true)
-      setAuthCode('')
-      setShowCodeInput(false)
-    } catch (err) {
-      setAnthError(err instanceof Error ? err.message : 'Could not exchange code')
-    } finally {
-      setAnthBusy(false)
-    }
-  }, [authCode])
-
-  const handleAnthLogout = useCallback(async () => {
-    setAnthBusy(true)
-    try {
-      await clearCredential()
-      setAnthLoggedIn(false)
-      setAnthError(null)
-      setAuthCode('')
-      setShowCodeInput(false)
-    } finally {
-      setAnthBusy(false)
-    }
-  }, [])
-
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
@@ -209,100 +142,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Anthropic account ──────────────────────────────────── */}
-        <Text style={styles.groupHeading}>ANTHROPIC ACCOUNT</Text>
-        <View style={[styles.section, styles.sectionTopGap]}>
-          {anthLoggedIn === null ? (
-            <View style={styles.row}>
-              <ActivityIndicator size="small" color={colors.textSecondary} />
-            </View>
-          ) : anthLoggedIn ? (
-            <View style={styles.row}>
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Signed in</Text>
-                <Text style={styles.rowSublabel}>
-                  Voice transcription uses Anthropic.
-                </Text>
-              </View>
-              <Button
-                label="Sign out"
-                variant="secondary"
-                align="center"
-                onPress={() => void handleAnthLogout()}
-                disabled={anthBusy}
-              />
-            </View>
-          ) : !showCodeInput ? (
-            <Pressable
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-              onPress={() => void handleAnthLogin()}
-              disabled={anthBusy}
-            >
-              <View style={styles.rowContent}>
-                <Text style={styles.rowLabel}>Sign in to Anthropic</Text>
-                <Text style={styles.rowSublabel}>
-                  Required for voice dictation.
-                </Text>
-              </View>
-              {anthBusy ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-              ) : null}
-            </Pressable>
-          ) : (
-            <View style={styles.row}>
-              <View style={{ flex: 1, gap: spacing.sm }}>
-                <Text style={styles.rowSublabel}>
-                  Paste the code from the browser.
-                </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.sm
-                  }}
-                >
-                  <TextInput
-                    cursorColor={colors.caret}
-                    style={{
-                      flex: 1,
-                      height: 40,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: radii.button,
-                      paddingHorizontal: spacing.sm,
-                      fontFamily: 'monospace',
-                      fontSize: 14,
-                      color: colors.text,
-                      backgroundColor: colors.bg
-                    }}
-                    placeholder="Auth code"
-                    placeholderTextColor={colors.textMuted}
-                    value={authCode}
-                    onChangeText={setAuthCode}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoFocus
-                    secureTextEntry
-                    onSubmitEditing={() => void handleAnthSubmitCode()}
-                    returnKeyType="done"
-                  />
-                  <Button
-                    label={anthBusy ? '…' : 'Done'}
-                    variant="primary"
-                    align="center"
-                    onPress={() => void handleAnthSubmitCode()}
-                    disabled={anthBusy || !authCode.trim()}
-                  />
-                </View>
-              </View>
-            </View>
-          )}
-          {anthError ? (
-            <View style={{ paddingHorizontal: spacing.md + 2, paddingBottom: spacing.sm }}>
-              <Text style={styles.error}>{anthError}</Text>
-            </View>
-          ) : null}
-        </View>
+        <AnthropicAccountsSection />
 
         {/* ── Dictation (requires desktop) ───────────────────────── */}
         {!client ? (

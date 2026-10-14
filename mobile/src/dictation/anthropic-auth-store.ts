@@ -1,19 +1,22 @@
 import * as SecureStore from 'expo-secure-store'
 import * as Crypto from 'expo-crypto'
 import * as Linking from 'expo-linking'
+import { fetchCcrProfile } from '../session/ccr-session-api'
+import { clearAccounts, readCredential, replaceCredentialOf, upsertAccount, type StoredCredential } from './anthropic-accounts-store'
 
-/** v2 since 2026-10-14: tokens carry Claude Code's six login scopes. A sign-in stored under the
- *  old key holds the three-scope token the voice server refused, so it no longer counts and is
- *  deleted on the next read; the mic then asks for a new sign-in. */
-const STORE_KEY = 'anthropic-dictation-oauth-v2'
-const PRE_SCOPES_STORE_KEY = 'anthropic-dictation-oauth'
+export {
+  accountLabel,
+  forgetAccountOrganization,
+  listAccounts,
+  readCredential,
+  rememberAccountProfile,
+  removeAccount,
+  type StoredAccount,
+  type StoredCredential
+} from './anthropic-accounts-store'
+
 const VERIFIER_KEY = 'anthropic-dictation-pkce-verifier'
 const STATE_KEY = 'anthropic-dictation-oauth-state'
-/** The organization the sign-in acts for, read once from the profile endpoint
- *  (session/ccr-session-pipeline.ts). It belongs to the account that signed in,
- *  so a sign-out or a new sign-in deletes it. */
-const ORG_STORE_KEY = 'anthropic-ccr-org-v1'
-
 // Production OAuth endpoints (from Claude Code 2.1.296).
 const AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize'
 const TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'
@@ -30,12 +33,6 @@ const REFRESH_SCOPES = [
   'user:file_upload'
 ]
 const LOGIN_SCOPES = ['org:create_api_key', ...REFRESH_SCOPES]
-
-export type StoredCredential = {
-  readonly accessToken: string
-  readonly refreshToken: string
-  readonly expiresAt: number
-}
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -195,9 +192,17 @@ export async function exchangeCode(
     )
   }
   const credential = parseTokenResponse(await res.json())
-  await storeCredential(credential)
-  // A new sign-in may be another account: its organization is asked again.
-  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
+  // Which account this is decides whether it replaces one already signed in. The profile is best
+  // effort: dictation only needs the token, so a profile that cannot be read leaves the account
+  // unidentified until the sessions path asks again (rememberAccountProfile).
+  const profile = await fetchCcrProfile(
+    (url, init) => fetch(url, init),
+    credential.accessToken
+  ).catch((error: unknown) => {
+    console.warn(`[anthropic-auth] signed in, but the profile could not be read: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  })
+  await upsertAccount(credential, profile)
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
   return credential
@@ -231,7 +236,7 @@ export async function refreshAccessToken(
     ...raw,
     refreshToken: raw.refreshToken || credential.refreshToken
   }
-  await storeCredential(refreshed)
+  await replaceCredentialOf(credential, refreshed)
   return refreshed
 }
 
@@ -239,65 +244,11 @@ export async function refreshAccessToken(
 // Secure storage
 // ---------------------------------------------------------------------------
 
-export async function storeCredential(
-  credential: StoredCredential
-): Promise<void> {
-  await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(credential))
-}
-
-export async function readCredential(): Promise<StoredCredential | null> {
-  await SecureStore.deleteItemAsync(PRE_SCOPES_STORE_KEY).catch(() => undefined)
-  const raw = await SecureStore.getItemAsync(STORE_KEY)
-  if (!raw) {
-    return null
-  }
-  try {
-    const data = JSON.parse(raw)
-    if (typeof data.accessToken !== 'string' || !data.accessToken) {
-      return null
-    }
-    return {
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken ?? '',
-      expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : 0
-    }
-  } catch {
-    return null
-  }
-}
-
+/** Signs every account out. */
 export async function clearCredential(): Promise<void> {
-  await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined)
+  await clearAccounts()
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
-  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
-}
-
-export type StoredOrganization = { readonly accountUuid: string; readonly organizationUuid: string }
-
-/** The cached organization of the signed-in account, or null when none is
- *  kept or what is kept is not that shape. */
-export async function readStoredOrganization(): Promise<StoredOrganization | null> {
-  const raw = await SecureStore.getItemAsync(ORG_STORE_KEY).catch(() => null)
-  if (!raw) {
-    return null
-  }
-  try {
-    const data = JSON.parse(raw) as Partial<StoredOrganization>
-    return typeof data.accountUuid === 'string' && data.accountUuid && typeof data.organizationUuid === 'string' && data.organizationUuid
-      ? { accountUuid: data.accountUuid, organizationUuid: data.organizationUuid }
-      : null
-  } catch {
-    return null
-  }
-}
-
-export async function storeOrganization(organization: StoredOrganization): Promise<void> {
-  await SecureStore.setItemAsync(ORG_STORE_KEY, JSON.stringify(organization))
-}
-
-export async function clearStoredOrganization(): Promise<void> {
-  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
 }
 
 /**

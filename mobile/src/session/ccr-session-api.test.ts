@@ -37,7 +37,7 @@ async function failure(promise: Promise<unknown>): Promise<CcrApiError> {
 describe('the requests the phone sends to the session API', () => {
   it('reads the organization from /api/oauth/profile with the headers Claude Code sends', async () => {
     const { fetch, requests } = fakeFetch([() => reply(200, profileReply())])
-    await expect(fetchCcrProfile(fetch, TOKEN)).resolves.toEqual({ accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID })
+    await expect(fetchCcrProfile(fetch, TOKEN)).resolves.toEqual({ accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID, organizationName: 'Example org' })
     expect(requests).toEqual([
       {
         url: 'https://api.anthropic.com/api/oauth/profile',

@@ -7,7 +7,7 @@ import type { CcrPipelineInput, CcrWanted } from './ccr-session-shared'
  * one-tap check.
  */
 
-const mappingByTab = new Map<string, { sessionId: string; epoch: number | null }>()
+const mappingByTab = new Map<string, { sessionId: string; epoch: number | null; accountId: string }>()
 /** `tool:<toolu id>` → URI, `user:<uuid>` → URIs. Both ids are unique across sessions. */
 const toolImages = new Map<string, string>()
 const userImages = new Map<string, string[]>()
@@ -40,8 +40,9 @@ export function ccrUserImages(messageId: string): string[] | undefined {
   return userImages.get(messageId)
 }
 
-export function setCcrMapping(tabId: string, sessionId: string, epoch: number | null): void {
-  mappingByTab.set(tabId, { sessionId, epoch })
+/** Remembers which account the tab's session was found under, so later reads use that account's token and organization. */
+export function setCcrMapping(tabId: string, sessionId: string, epoch: number | null, accountId: string): void {
+  mappingByTab.set(tabId, { sessionId, epoch, accountId })
 }
 
 /** Keeps found pictures under their ids (a Read's `toolu_…`, a prompt's uuid) and tells the hooks. */
@@ -65,6 +66,12 @@ export function forgetCcrMapping(tabId: string): void {
 export function ccrSessionForTab(tabId: string, epoch: number | null): string | null {
   const mapped = mappingByTab.get(tabId)
   return mapped && mapped.epoch === epoch ? mapped.sessionId : null
+}
+
+/** The account the tab's session was matched under, for the connection it was matched on. */
+export function ccrAccountForTab(tabId: string, epoch: number | null): string | null {
+  const mapped = mappingByTab.get(tabId)
+  return mapped && mapped.epoch === epoch ? mapped.accountId : null
 }
 
 // ─── Back-off ─────────────────────────────────────────────────────────────

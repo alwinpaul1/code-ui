@@ -1,5 +1,5 @@
 import { listCcrSessions, type CcrSessionRow } from './ccr-session-api'
-import { ccrSessionForTab } from './ccr-session-cache'
+import { ccrAccountForTab, ccrSessionForTab } from './ccr-session-cache'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
 import {
   CCR_LIST_PAGE_SIZE,
@@ -50,16 +50,30 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
     log(stageLine(tabId, stage, ok, detail), ok)
   }
   try {
-    const token = await deps.readToken()
-    const org = token ? await deps.org.read() : null
+    // The account the tab matched under answers: its token and its organization, not another's.
+    const accountId = ccrAccountForTab(tabId, epoch)
+    const accounts = await deps.accounts.list()
+    const account = accounts.find((entry) => entry.id === accountId)
+    const token = account?.accessToken ?? null
+    const org = account?.organizationUuid ?? null
     if (!token || !org) {
       forgetCcrModel(tabId)
-      report('model', false, token ? 'no organization cached' : 'not signed in to Anthropic on this phone')
+      report(
+        'model',
+        false,
+        !account
+          ? accounts.length === 0
+            ? 'not signed in to Anthropic on this phone'
+            : 'the account this tab matched under is no longer signed in'
+          : !token
+            ? `${account.label}: ${account.error ?? 'no usable token'}`
+            : 'no organization cached'
+      )
       return result
     }
     let cursor: string | null = null
     for (let page = 0; page < CCR_MAX_LIST_PAGES; page += 1) {
-      const listed = await listCcrSessions(deps.fetch, { token, organizationUuid: org.organizationUuid }, { cursor, limit: CCR_LIST_PAGE_SIZE })
+      const listed = await listCcrSessions(deps.fetch, { token, organizationUuid: org }, { cursor, limit: CCR_LIST_PAGE_SIZE })
       const row = listed.sessions.find((candidate) => candidate.id === sessionId)
       if (row) {
         noteModel(tabId, epoch, row, report)

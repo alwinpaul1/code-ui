@@ -111,7 +111,8 @@ describe('pasting the code the callback page shows', () => {
     const posted = stubTokenEndpoint()
     await exchangeCode(`the-code#${state}`, (await getSavedVerifier())!)
 
-    expect(posted).toHaveLength(1)
+    // The profile is asked for after the exchange, to know which account this is.
+    expect(posted.map((request) => request.url)).toEqual(['https://platform.claude.com/v1/oauth/token', 'https://api.anthropic.com/api/oauth/profile'])
     expect(posted[0]!.headers['Content-Type']).toBe('application/json')
     expect(JSON.parse(posted[0]!.body)).toMatchObject({
       grant_type: 'authorization_code',

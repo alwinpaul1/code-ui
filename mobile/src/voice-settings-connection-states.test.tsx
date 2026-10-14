@@ -60,8 +60,9 @@ vi.mock('./dictation/anthropic-auth-store', () => ({
   startLogin: vi.fn(),
   exchangeCode: vi.fn(),
   getSavedVerifier: async () => null,
-  clearCredential: async () => {},
-  isLoggedIn: async () => false
+  listAccounts: async () => [],
+  removeAccount: async () => {},
+  accountLabel: () => 'Account',
 }))
 
 import VoiceSettingsScreen from '../app/voice-settings'

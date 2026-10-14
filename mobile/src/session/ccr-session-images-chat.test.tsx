@@ -68,11 +68,10 @@ import { ThemeProvider } from '../theme/theme-context'
 import { READ_IMAGE_CALL_ID, READ_IMAGE_PATH, READ_IMAGE_RESULT_ID, READ_IMAGE_ROWS } from './fixtures/claude-agent-message-read-image-2.1.283'
 import {
   JPEG_HEAD,
-  ORG_UUID,
-  ACCOUNT_UUID,
   PNG_1PX,
   SESSION_A,
   TOKEN,
+  singleAccountSource,
   apiRoutes,
   assistantEvent,
   eventsReply,
@@ -122,8 +121,7 @@ function depsFor(routes: Route[], token: string | null = TOKEN) {
   const lines: string[] = []
   const deps: CcrPipelineDeps = {
     fetch,
-    readToken: async () => token,
-    org: { read: async () => ({ accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID }), write: async () => undefined, clear: async () => undefined },
+    accounts: singleAccountSource(token),
     keep: (_key, uri) => uri,
     maxBytes: 8 * 1024 * 1024,
     log: (line) => lines.push(line)

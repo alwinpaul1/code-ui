@@ -32,11 +32,10 @@ import { resetCcrModelForTests } from './ccr-session-model'
 import { ThemeProvider } from '../theme/theme-context'
 import { colorsForScheme } from '../theme/tokens'
 import {
-  ACCOUNT_UUID,
-  ORG_UUID,
   PNG_1PX,
   SESSION_A,
   TOKEN,
+  singleAccountSource,
   apiRoutes,
   assistantEvent,
   eventsReply,
@@ -58,8 +57,7 @@ const routes = (): Route[] =>
 function deps(token: string | null = TOKEN, list: Route[] = routes()): CcrPipelineDeps {
   return {
     fetch: fakeFetch(list).fetch,
-    readToken: async () => token,
-    org: { read: async () => ({ accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID }), write: async () => undefined, clear: async () => undefined },
+    accounts: singleAccountSource(token),
     keep: (_key, uri) => uri,
     maxBytes: 8 * 1024 * 1024,
     log: () => undefined

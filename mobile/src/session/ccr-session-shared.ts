@@ -1,4 +1,4 @@
-import { CcrApiError, type CcrFetch } from './ccr-session-api'
+import { CcrApiError, type CcrFetch, type CcrProfile } from './ccr-session-api'
 
 /** Types, bounds and wording shared by the session-API path's modules
  *  (ccr-session-pipeline.ts says what the path does). */
@@ -27,17 +27,30 @@ export type CcrPipelineInput = {
   wanted: CcrWanted
 }
 
-export type CcrOrgStore = {
-  read: () => Promise<{ accountUuid: string; organizationUuid: string } | null>
-  write: (organization: { accountUuid: string; organizationUuid: string }) => Promise<void>
-  clear: () => Promise<void>
+/** One signed-in account as the path reads it (dictation/anthropic-credential-reader.ts). */
+export type CcrAccountEntry = {
+  id: string
+  label: string
+  /** A live access token, or null with `error` saying why. */
+  accessToken: string | null
+  /** The organization kept for the account, or null when its profile has not been read. */
+  organizationUuid: string | null
+  error?: string
+}
+
+export type CcrAccountsSource = {
+  /** Every signed-in account, tokens refreshed account by account; empty when nobody is signed in. */
+  list: () => Promise<CcrAccountEntry[]>
+  /** Keeps the profile read for an account. Resolves to the account's id afterwards (a uuid). */
+  rememberProfile: (id: string, profile: CcrProfile) => Promise<string>
+  /** Drops the account's kept organization, so the profile is asked again. */
+  forgetOrganization: (id: string) => Promise<void>
 }
 
 export type CcrPipelineDeps = {
   fetch: CcrFetch
-  /** A live access token of the phone's sign-in, or null when not signed in. */
-  readToken: () => Promise<string | null>
-  org: CcrOrgStore
+  /** The phone's Anthropic sign-ins, one per account. */
+  accounts: CcrAccountsSource
   /** Where a picture is kept: the cache-file writer the host's pictures use. */
   keep: (key: string, dataUri: string) => string
   maxBytes: number

@@ -13,10 +13,9 @@ import { useCcrSessionModel } from './use-ccr-session-model'
 import { CCR_MODEL_FRESH_MS, CCR_MODEL_REFRESH_MS, preferCcrModelPair, resetCcrModelForTests, type CcrModelReading } from './ccr-session-model'
 import { resetCcrPipelineForTests, type CcrPipelineDeps } from './ccr-session-pipeline'
 import {
-  ACCOUNT_UUID,
-  ORG_UUID,
   SESSION_A,
   TOKEN,
+  singleAccountSource,
   apiRoutes,
   assistantEvent,
   eventsReply,
@@ -44,8 +43,7 @@ function deps(token: string | null = TOKEN): { deps: CcrPipelineDeps; requests: 
   return {
     deps: {
       fetch,
-      readToken: async () => token,
-      org: { read: async () => ({ accountUuid: ACCOUNT_UUID, organizationUuid: ORG_UUID }), write: async () => undefined, clear: async () => undefined },
+      accounts: singleAccountSource(token),
       keep: (_key, uri) => uri,
       maxBytes: 1,
       log: () => undefined

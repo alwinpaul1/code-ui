@@ -145,7 +145,7 @@ function cursorOf(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-export type CcrProfile = { accountUuid: string; organizationUuid: string }
+export type CcrProfile = { accountUuid: string; organizationUuid: string; organizationName: string | null }
 
 export async function fetchCcrProfile(fetchImpl: CcrFetch, token: string): Promise<CcrProfile> {
   const body = record(await getJson(fetchImpl, 'org', `${CCR_API_BASE_URL}/api/oauth/profile`, ccrProfileHeaders(token)))
@@ -154,7 +154,7 @@ export async function fetchCcrProfile(fetchImpl: CcrFetch, token: string): Promi
   if (typeof organizationUuid !== 'string' || !organizationUuid || typeof accountUuid !== 'string' || !accountUuid) {
     throw new CcrApiError('org', 'malformed')
   }
-  return { accountUuid, organizationUuid }
+  return { accountUuid, organizationUuid, organizationName: stringOrNull(record(body?.organization)?.name) || null }
 }
 
 export type CcrSessionRow = {
