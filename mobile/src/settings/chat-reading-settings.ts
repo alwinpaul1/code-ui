@@ -125,6 +125,8 @@ export function parseChatReadingSettings(raw: string | null): ChatReadingSetting
 // as Focus view and Expand tool calls, session-view-preferences.ts).
 let memory: ChatReadingSettings | null = null
 let writeBarrier: Promise<void> | null = null
+/** The read in flight, shared: a chat opens with dozens of readers before the first answer. */
+let loading: Promise<ChatReadingSettings> | null = null
 /** Counts saves, so a read that began before one does not put back what it overtook. */
 let saveGeneration = 0
 const listeners = new Set<() => void>()
@@ -159,7 +161,14 @@ export function subscribeChatReadingSettings(listener: () => void): () => void {
 
 /** Reads the stored settings into memory. Storage that cannot be read reads as the defaults: a
  *  transcript that cannot know how it is read is the transcript as it was. */
-export async function loadChatReadingSettings(): Promise<ChatReadingSettings> {
+export function loadChatReadingSettings(): Promise<ChatReadingSettings> {
+  loading ??= readChatReadingSettings().finally(() => {
+    loading = null
+  })
+  return loading
+}
+
+async function readChatReadingSettings(): Promise<ChatReadingSettings> {
   await writeBarrier
   const generation = saveGeneration
   let raw: string | null = null
@@ -206,6 +215,7 @@ export async function saveChatReadingSettings(patch: Partial<ChatReadingSettings
 export function resetChatReadingSettingsForTests(): void {
   memory = null
   writeBarrier = null
+  loading = null
   saveGeneration = 0
   listeners.clear()
 }

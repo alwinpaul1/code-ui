@@ -102,8 +102,10 @@ function route(target: Target, tab: TerminalTab): NativeChatOutboxRoute {
     terminal: tab.terminal,
     transcriptPath: status?.providerSession?.transcriptPath ?? null,
     // What the tab's hooks last reported, so only a prompt that CHANGED to these words is read as
-    // their receipt (native-chat-outbox-headless.ts, promptIsReceiptOf).
-    promptBefore: status?.prompt ?? null
+    // their receipt (native-chat-outbox-headless.ts, promptIsReceiptOf). Left out when the status
+    // carries none, as the chat leaves it out: "no prompt known" must not become "the tab had none",
+    // or any prompt that matches would be trusted as the receipt.
+    ...(typeof status?.prompt === 'string' ? { promptBefore: status.prompt } : {})
   }
 }
 

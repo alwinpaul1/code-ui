@@ -124,8 +124,15 @@ export async function notificationCategoriesForBanner(): Promise<NotificationCat
     return remembered
   }
   const read = remember()
-  const waited = new Promise<null>((resolve) => setTimeout(() => resolve(null), FIRST_READ_WAIT_MS))
-  return (await Promise.race([read, waited])) ?? DEFAULT_NOTIFICATION_CATEGORIES
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const waited = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), FIRST_READ_WAIT_MS)
+  })
+  try {
+    return (await Promise.race([read, waited])) ?? DEFAULT_NOTIFICATION_CATEGORIES
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 let writes: Promise<unknown> = Promise.resolve()
@@ -137,7 +144,13 @@ export function saveNotificationCategories(patch: Partial<NotificationCategoryPr
   const write = writes.then(async () => {
     const next = { ...(await loadNotificationCategories()), ...patch }
     remembered = next
-    await AsyncStorage.setItem(NOTIFICATION_CATEGORIES_STORAGE_KEY, JSON.stringify(next))
+    try {
+      await AsyncStorage.setItem(NOTIFICATION_CATEGORIES_STORAGE_KEY, JSON.stringify(next))
+    } catch (error) {
+      // Refused: the Settings screen goes back to what storage holds, and so must a banner's copy.
+      remembered = null
+      throw error
+    }
   })
   writes = write.catch(() => undefined)
   return write
