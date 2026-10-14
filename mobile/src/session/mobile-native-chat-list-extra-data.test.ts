@@ -69,8 +69,10 @@ describe('the chat list declares what its header depends on', () => {
 
   it('hands FlashList the marker', () => {
     // The dock's height rides along: the spacer at the list's end lives in the header.
+    // 2026-10-14: the held selection's message ids ride along too, so a row's item type (its
+    // own while it holds a selection, chat-held-selection.ts) is re-read when that flips.
     expect(source).toContain('extraData={listExtraData}')
-    expect(source).toContain('[headerExtraData, dockHeight]')
+    expect(source).toContain('[headerExtraData, dockHeight, heldIds]')
     expect(source).toContain('useChatListRenderStability({')
   })
 
