@@ -14,7 +14,8 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 import { useMobileChatExpandTools } from './use-mobile-chat-expand-tools'
 import { useMobileChatFocusView } from './use-mobile-chat-focus-view'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
-import { chatListDrawDistanceDp, chatRowItemType, useChatListRenderStability } from './mobile-native-chat-list-extra-data'
+import { chatListDrawDistanceDp, useChatListRenderStability } from './mobile-native-chat-list-extra-data'
+import { useChatHeldSelectionList } from './use-chat-held-selection-list'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { useMobileNativeChatTaskProgress } from './mobile-native-chat-composer-tasks'
 import { MobileNativeChatSessionBar } from './MobileNativeChatSessionBar'
@@ -244,7 +245,8 @@ export function MobileNativeChatView({
 
   // The dock spacer lives in the header; the header only re-renders when
   // this changes, so the dock's height has to be part of it.
-  const listExtraData = useMemo(() => [headerExtraData, dockHeight], [headerExtraData, dockHeight])
+  const { held, heldIds, getItemType } = useChatHeldSelectionList()
+  const listExtraData = useMemo(() => [headerExtraData, dockHeight, heldIds], [headerExtraData, dockHeight, heldIds])
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
@@ -322,7 +324,7 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <ChatTextSelectionProvider selectable={textSelectable} report={reportSelection}>
+          <ChatTextSelectionProvider selectable={textSelectable} report={reportSelection} held={held}>
           {/* Inline `::orca-visual` lines of a structured chat's replies (Orca #26071). */}
           <MobileNativeChatVisualProvider source={visualSource}>
           <FlashList
@@ -362,12 +364,11 @@ export function MobileNativeChatView({
             // list's tail at offset 0 by itself, so this only re-asserts it,
             // and only while the reader is still following.
             onLayout={pinToTail}
-            // Message descendants hold disclosure, copy and selection
-            // state: a row draws one message only (chatRowItemType).
-            getItemType={chatRowItemType}
-            maxItemsInRecyclePool={0}
-            // Why: with recycling off, every newly exposed message is a fresh
-            // mount — markdown, code blocks and all — on the JS thread. The
+            // Rows recycle, except the one holding a selection (chatRowItemType),
+            // and no pool cap: a cap is what unmounts a selected row off screen.
+            getItemType={getItemType}
+            // Why: every newly exposed message is drawn fresh — markdown,
+            // code blocks and all — on the JS thread. The
             // 250dp default is under one viewport of runway, and with the
             // keyboard up the viewport is halved, so a scroll outran what was
             // prepared and the content landed late. Measured on a 120 Hz S23:
