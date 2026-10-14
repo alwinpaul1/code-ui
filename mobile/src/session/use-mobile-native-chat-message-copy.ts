@@ -4,6 +4,9 @@ import { triggerError, triggerSuccess } from '../platform/haptics'
 
 /** How long a sent prompt stays tinted once its copy landed. */
 export const MESSAGE_COPIED_MS = 700
+/** The longest text one Copy puts on the clipboard: the Claude app clips at 100000 characters
+ *  (`qv7.a`, `eek.d0(100000, str)`). A longer reply passed whole can be refused by the system. */
+export const MESSAGE_COPY_MAX_CHARS = 100_000
 /** How long a refused copy's notice stays under the message. */
 const MESSAGE_COPY_FAILED_MS = 5_000
 
@@ -50,7 +53,8 @@ export function useMobileNativeChatMessageCopy(
     }
   }, [])
   const copy = useCallback(
-    (text: string) => {
+    (full: string) => {
+      const text = clippedForClipboard(full)
       const write = async (): Promise<void> => {
         let next: { copied: boolean; error: string | null }
         try {
@@ -85,4 +89,14 @@ export function useMobileNativeChatMessageCopy(
     [clipboard, copiedMs]
   )
   return { copied: state.copied, error: state.error, copy }
+}
+
+/** `text` cut to the clipboard's limit, never between the two halves of a surrogate pair (`eek.d0`). */
+function clippedForClipboard(text: string): string {
+  if (text.length <= MESSAGE_COPY_MAX_CHARS) {
+    return text
+  }
+  const last = text.charCodeAt(MESSAGE_COPY_MAX_CHARS - 1)
+  const end = last >= 0xd800 && last <= 0xdbff ? MESSAGE_COPY_MAX_CHARS - 1 : MESSAGE_COPY_MAX_CHARS
+  return text.slice(0, end)
 }

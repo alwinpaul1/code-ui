@@ -7,7 +7,16 @@ import { CODE_BLOCK_SPEC } from './code-block-spec'
 import { systemSpScale } from './system-font-scale'
 
 /** What a lucide icon takes, as far as these buttons use it. */
-export type CodeGlyph = ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+export type CodeGlyph = ComponentType<{
+  size?: number
+  color?: string
+  strokeWidth?: number
+  style?: { transform: { rotate: string }[] }
+}>
+
+/** Lucide's Copy turned half a turn: the front square upper left, the back one lower right, as
+ *  the Claude app draws it (anthropicon "copy"). */
+const COPY_GLYPH_TURN = { transform: [{ rotate: '180deg' }] }
 
 /**
  * One of the Claude app's icon buttons on a code block: a square, its glyph
@@ -92,15 +101,17 @@ export function CodeCopyGlyph({
     progress.value = reduced === false ? withTiming(target, { duration: CODE_BLOCK_SPEC.copy.tintMs }) : target
   }, [copied, reduced, progress])
   const tintStyle = useAnimatedStyle(() => ({ opacity: progress.value }), [progress])
+  // The Claude app's copy glyph has its front square upper left; lucide's has it lower right.
+  const turn = copied ? undefined : COPY_GLYPH_TURN
   return (
     <View style={{ width: size, height: size }}>
-      <Glyph size={size} color={color} strokeWidth={2} />
+      <Glyph size={size} color={color} strokeWidth={2} style={turn} />
       <Animated.View
         testID="markdown-code-copy-tint"
         pointerEvents="none"
         style={[{ position: 'absolute', top: 0, left: 0, width: size, height: size }, tintStyle]}
       >
-        <Glyph size={size} color={copiedColor} strokeWidth={2} />
+        <Glyph size={size} color={copiedColor} strokeWidth={2} style={turn} />
       </Animated.View>
     </View>
   )

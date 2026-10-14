@@ -104,10 +104,17 @@ const copyButton = (root: ReactTestInstance): ReactTestInstance =>
   )
 
 /** The glyphs inside the Copy button: the resting one and the tint laid over it. */
-const glyphs = (root: ReactTestInstance): { type: string; color: unknown; size: unknown }[] =>
+const glyphs = (
+  root: ReactTestInstance
+): { type: string; color: unknown; size: unknown; style: unknown }[] =>
   copyButton(root)
     .findAll((node) => ['Copy', 'Check'].includes(String(node.type)))
-    .map((node) => ({ type: String(node.type), color: node.props.color, size: node.props.size }))
+    .map((node) => ({
+      type: String(node.type),
+      color: node.props.color,
+      size: node.props.size,
+      style: node.props.style
+    }))
 
 beforeEach(() => {
   system.fontScale = 1
@@ -129,6 +136,26 @@ describe.each([
     const [resting] = glyphs(render(scheme))
     expect(resting).toMatchObject({ type: 'Copy', color: palette.composerPlaceholder, size: 14 })
     expect(palette.composerPlaceholder).not.toBe(palette.textMuted)
+  })
+
+  // The Claude app's copy glyph (anthropicon "copy", U+E056 of anthropicon_symbols.ttf, drawn by
+  // fa20.a) has its FRONT square at the upper left and the back one peeking out at the lower
+  // right. Lucide's Copy has them the other way round, which read as a different icon beside
+  // Claude's (2026-10-15: "the copy ... isn't fixed yet"). Turned half a turn, it matches.
+  it('draws the copy glyph with its front square upper left, as the Claude app does', () => {
+    const resting = glyphs(render(scheme)).filter((glyph) => glyph.type === 'Copy')
+    expect(resting.length).toBeGreaterThan(0)
+    for (const glyph of resting) {
+      expect(flat(glyph.style).transform).toEqual([{ rotate: '180deg' }])
+    }
+  })
+
+  it('does not turn the check, which has no front or back', async () => {
+    const root = render(scheme)
+    await act(async () => copyButton(root).props.onPress())
+    for (const glyph of glyphs(root)) {
+      expect(flat(glyph.style).transform).toBeUndefined()
+    }
   })
 
   it('becomes a check tinted ad5.K() once the text is on the clipboard', async () => {
