@@ -1,13 +1,15 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useMemo, useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import {
   TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY,
   TRANSCRIPT_MARKDOWN_TYPOGRAPHY
 } from '../components/mobile-markdown-prose-scale'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
+import { userTextDrawsAsMarkdown } from './mobile-native-chat-user-markdown'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import {
   MobileNativeChatAgentImageLoadingTile,
@@ -28,7 +30,8 @@ import {
 } from './mobile-native-chat-message-styles'
 
 /** One text or image block of a message: a sent prompt as a plain bubble
- *  line, an answer as markdown, an image as a thumbnail or a chip. */
+ *  line, or as markdown when it is written in it (userTextDrawsAsMarkdown), an
+ *  answer as markdown, an image as a thumbnail or a chip. */
 export function Prose({
   block,
   invert,
@@ -42,7 +45,8 @@ export function Prose({
 }: {
   block: NativeChatBlock
   invert?: boolean
-  /** A prompt the lead agent wrote, not the user: Markdown, in the bubble. */
+  /** A prompt the lead agent wrote, not the user: Markdown, in the bubble. The
+   *  user's own is Markdown too when it is written in it (userTextDrawsAsMarkdown). */
   markdownPrompt?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
@@ -55,8 +59,11 @@ export function Prose({
   /** The reply may still be growing: a directive still being typed at its tail is held back. */
   holdPendingVisual?: boolean
 }) {
+  // The user's own words, Markdown or not: read once per text, not per render.
+  const ownText = invert && !markdownPrompt && isTextBlock(block) ? block.text : null
+  const ownMarkdown = useMemo(() => ownText !== null && userTextDrawsAsMarkdown(ownText), [ownText])
   if (isTextBlock(block)) {
-    if (invert && !markdownPrompt) {
+    if (invert && !markdownPrompt && !ownMarkdown) {
       // Not selectable, on purpose: a hold on a sent prompt copies the whole
       // prompt (MobileNativeChatMessage's Bubble, 2026-09-21), and a selectable
       // Text would take that hold for Android's own selection first. The
@@ -75,7 +82,7 @@ export function Prose({
     }
     // A bubble (a prompt the lead wrote) never draws visuals; only a reply does.
     const visuals = invert ? undefined : renderVisual
-    return (
+    const document = (
       <MobileMarkdown
         content={
           holdPendingVisual && visuals
@@ -88,7 +95,18 @@ export function Prose({
         identity={identity}
         typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
         widthKey={invert ? undefined : 'chat-reply'}
+        // A person's lines were each meant; a lead's prompt keeps filling the width.
+        keepLineBreaks={ownMarkdown}
       />
+    )
+    // The user's own bubble copies on a hold, as the plain line does: the
+    // document's Texts must not take that hold for a selection. False here
+    // turns selection off in them, and on Android makes the document's native
+    // root stop a hold from starting one (chat-text-selectable-context.ts).
+    return ownMarkdown ? (
+      <ChatTextSelectableContext.Provider value={false}>{document}</ChatTextSelectableContext.Provider>
+    ) : (
+      document
     )
   }
   if (isImageRefBlock(block)) {

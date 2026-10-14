@@ -129,10 +129,24 @@ describe('a code block in the chat', () => {
     expect(pasteboard.written).toEqual([CODE])
   })
 
-  // A typed prompt is plain text, not Markdown: there is no block to copy,
-  // and a hold on the bubble copies the whole prompt (2026-09-21).
-  it('adds nothing to a prompt the user typed', () => {
+  // A prompt the user wrote in Markdown draws the fence as the Claude app
+  // does, in the reply's card with its own Copy (recording, 2026-10-14); the
+  // hold on the bubble still copies the whole prompt as typed (2026-09-21).
+  it('has it on a prompt the user wrote in Markdown, and a hold on the bubble still copies the whole prompt', async () => {
     const tree = mount(createElement(MobileNativeChatMessage, { message: message('user', REPLY) }))
+    const [button, ...others] = codeButtons(tree)
+    expect(others).toHaveLength(0)
+    await press(button!)
+    expect(pasteboard.written).toEqual([CODE])
+    const bubble = tree.root.findByProps({ accessibilityLabel: 'Sent prompt' })
+    await act(async () => {
+      await bubble.props.onLongPress()
+    })
+    expect(pasteboard.written).toEqual([CODE, REPLY])
+  })
+
+  it('adds nothing to a prompt the user typed in plain words', () => {
+    const tree = mount(createElement(MobileNativeChatMessage, { message: message('user', 'run the gate, then push') }))
     expect(codeButtons(tree)).toHaveLength(0)
   })
 

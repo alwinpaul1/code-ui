@@ -111,7 +111,9 @@ function MobileNativeChatMessageImpl({
   mayStillGrow?: boolean
   toolsExpanded?: boolean
   /** A transcript whose user rows the lead agent wrote (a subagent's task),
-   *  drawn as Markdown; the user's own prompts stay the plain text they typed. */
+   *  drawn as Markdown, as a reply is. The user's own prompts are drawn as
+   *  Markdown only when written in it (userTextDrawsAsMarkdown), with their
+   *  line breaks kept. */
   promptsAsMarkdown?: boolean
   /** Present while this optimistic echo is still queued behind a running turn. */
   onCancelQueued?: () => void
@@ -274,8 +276,10 @@ function MobileNativeChatMessageImpl({
   const copiesTurn = isAgent && copyTurnText !== undefined
   const copyable = copiesTurn ? (turnHasProse ?? hasProse) : hasProse
   const handleCopy = (): void => {
-    // A prompt copies as typed, unless it is drawn as Markdown (the subagent
-    // transcript's task prompts); then it copies what it draws, like a reply.
+    // A prompt copies as typed, Markdown source and all, even where it is
+    // drawn formatted: the hold is the user's own words back. Only the
+    // subagent transcript's task prompts (promptsAsMarkdown) copy what they
+    // draw, like a reply.
     const text = copiesTurn
       ? copyTurnText(message.id)
       : isUser && !promptsAsMarkdown

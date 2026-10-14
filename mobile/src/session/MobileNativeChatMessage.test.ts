@@ -510,18 +510,29 @@ describe('MobileNativeChatMessage', () => {
 
   // 2026-09-25, device: a subagent's transcript showed the lead's task with
   // raw `**` and backticks. Those rows are written by the lead agent in
-  // Markdown, so the transcript draws them as Markdown; the user's own
-  // bubbles, in their own chat, stay the plain text they typed.
-  it('draws a prompt the lead wrote as Markdown in a transcript, and the user\'s own as typed', () => {
+  // Markdown, so the transcript draws them as Markdown. The user's own
+  // bubbles drew the plain text they typed until 2026-10-14, when the Claude
+  // app drew a pasted Markdown prompt formatted
+  // (MobileNativeChatMessage.user-markdown.test.tsx): now their own take the
+  // document too, but only when they are written in it, and keep their typed
+  // line breaks, which a lead's prompt does not.
+  it('draws a prompt the lead wrote as Markdown in a transcript, and the user\'s own as Markdown only when written in it', () => {
     const task = '1. **Duplicate after dequeue.** Code is under `mobile/`.'
     const asMarkdown = render(userMessage([{ type: 'text', text: task }]), { promptsAsMarkdown: true })
     const rendered = asMarkdown.root.findAllByType('MobileMarkdown' as never)
     expect(rendered.map((node) => node.props.content)).toEqual([task])
+    expect(rendered.map((node) => Boolean(node.props.keepLineBreaks))).toEqual([false])
     expect(textIn(asMarkdown.root)).not.toContain(task)
     act(() => renderer?.unmount())
-    const typed = render(userMessage([{ type: 'text', text: task }]))
+    const written = render(userMessage([{ type: 'text', text: task }]))
+    const own = written.root.findAllByType('MobileMarkdown' as never)
+    expect(own.map((node) => node.props.content)).toEqual([task])
+    expect(own.map((node) => node.props.keepLineBreaks)).toEqual([true])
+    expect(textIn(written.root)).not.toContain(task)
+    act(() => renderer?.unmount())
+    const typed = render(userMessage([{ type: 'text', text: 'ship it, then tell me what broke' }]))
     expect(typed.root.findAllByType('MobileMarkdown' as never)).toHaveLength(0)
-    expect(textIn(typed.root)).toContain(task)
+    expect(textIn(typed.root)).toContain('ship it, then tell me what broke')
   })
 
   // Review of f8c968a1, probe E1: the chat list recycles a row's cell for

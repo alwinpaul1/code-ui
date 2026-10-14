@@ -357,6 +357,9 @@ function outsideFences(source: string): string {
 export const MOBILE_MARKDOWN_PARSE_CACHE_CAP = 48
 
 const parsedBySource = new Map<string, MobileMarkdownBlock[]>()
+/** The same documents read with every newline kept (`keepLineBreaks`): the
+ *  same source parses to other blocks, so it is not the same entry. */
+const parsedKeepingBreaks = new Map<string, MobileMarkdownBlock[]>()
 
 /**
  * What the parser returns is CACHED BY SOURCE TEXT, and the returned array must
@@ -374,30 +377,31 @@ const parsedBySource = new Map<string, MobileMarkdownBlock[]>()
  * been in longest, which on a chat is the message being read right now; the
  * sticky HUD hold had exactly this defect the same day.
  */
-export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
-  const cached = parsedBySource.get(content)
+export function parseMobileMarkdown(content: string, keepLineBreaks = false): MobileMarkdownBlock[] {
+  const cache = keepLineBreaks ? parsedKeepingBreaks : parsedBySource
+  const cached = cache.get(content)
   if (cached) {
-    parsedBySource.delete(content)
-    parsedBySource.set(content, cached)
+    cache.delete(content)
+    cache.set(content, cached)
     return cached
   }
-  const blocks = readMobileMarkdown(content)
+  const blocks = readMobileMarkdown(content, keepLineBreaks ? breakProse : reflowProse)
   if (content) {
-    if (parsedBySource.size >= MOBILE_MARKDOWN_PARSE_CACHE_CAP) {
+    if (cache.size >= MOBILE_MARKDOWN_PARSE_CACHE_CAP) {
       // Map iterates in insertion order, so the first key is the least recently
       // read. A streamed reply is a fresh miss every tick and would otherwise
       // keep every intermediate draft of the session alive.
-      const oldest = parsedBySource.keys().next()
+      const oldest = cache.keys().next()
       if (!oldest.done) {
-        parsedBySource.delete(oldest.value)
+        cache.delete(oldest.value)
       }
     }
-    parsedBySource.set(content, blocks)
+    cache.set(content, blocks)
   }
   return blocks
 }
 
-function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
+function readMobileMarkdown(content: string, reflow: (text: string) => string): MobileMarkdownBlock[] {
   const source = content.replace(/\r\n?/g, '\n')
   let tokens: Token[]
   try {
@@ -415,5 +419,5 @@ function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
     // prose, with its lines intact.
     return source.trim() ? [{ type: 'paragraph', text: inlineBreaksAsNewlines(source.replace(/\n+$/, '')) }] : []
   }
-  return toBlocks(tokens)
+  return toBlocks(tokens, reflow)
 }

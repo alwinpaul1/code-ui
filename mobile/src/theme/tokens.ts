@@ -322,6 +322,19 @@ export const fontFamily = {
 
 export type FontWeight = Exclude<keyof typeof fontFamily, 'mono'>
 
+/** The italic file of each weight, named as @expo-google-fonts/instrument-sans
+ *  exports it. Android picks a face by the family's name and a custom family
+ *  has no italic sibling to switch to, so `fontStyle: 'italic'` on an upright
+ *  name drew upright (the dictation caption and Markdown italics, 2026-10-14).
+ *  `instrumentSansTextStyle` swaps a name for its italic one. There is no
+ *  italic code face: JetBrains Mono ships one weight here. */
+export const fontFamilyItalic = {
+  regular: 'InstrumentSans_400Regular_Italic',
+  medium: 'InstrumentSans_500Medium_Italic',
+  semibold: 'InstrumentSans_600SemiBold_Italic',
+  bold: 'InstrumentSans_700Bold_Italic'
+} as const satisfies Record<FontWeight, string>
+
 export const space = {
   xs: 4,
   sm: 8,
