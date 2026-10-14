@@ -28,6 +28,12 @@ export type VoiceStreamOptions = {
 }
 
 const BASE_URL = 'wss://api.anthropic.com'
+/** Claude Code 2.1.296's voice_stream identifies itself with `x-app: cli` and its CLI
+ *  User-Agent; the phone signs in with Claude Code's OAuth client, so it says the same. */
+const CLIENT_HEADERS = {
+  'x-app': 'cli',
+  'User-Agent': 'claude-cli/2.1.296 (external, cli)'
+} as const
 const PATH = '/api/ws/speech_to_text/voice_stream'
 const KEEPALIVE_JSON = '{"type":"KeepAlive"}'
 const CLOSESTREAM_JSON = '{"type":"CloseStream"}'
@@ -82,7 +88,7 @@ export class AnthropicVoiceStream {
     ].join('&')
     const url = `${BASE_URL}${PATH}?${params}`
 
-    const headers = { headers: { Authorization: `Bearer ${accessToken}` } }
+    const headers = { headers: { Authorization: `Bearer ${accessToken}`, ...CLIENT_HEADERS } }
     // @ts-expect-error — RN WebSocket supports 3 args; the DOM typedef does not.
     this.ws = new WebSocket(url, undefined, headers)
     this.ws.binaryType = 'arraybuffer'
@@ -118,8 +124,9 @@ export class AnthropicVoiceStream {
       this.resolveFinalize('ws_close')
       // Codes 1000 and 1005 are normal closes — do not fire onError.
       if (!this.done && event.code !== 1000 && event.code !== 1005) {
+        const reason = event.reason ? ` — ${event.reason}` : ''
         this.callbacks?.onError?.(
-          new Error(`Connection closed: code ${event.code}`)
+          new Error(`Connection closed: code ${event.code}${reason}`)
         )
       }
       this.callbacks?.onClose?.()
@@ -232,8 +239,11 @@ export class AnthropicVoiceStream {
         break
       }
       case 'error': {
+        // Claude Code logs the frame's keys when it has no message; "unstructured server error"
+        // alone said nothing about which frame it was (2026-10-14).
         const message =
-          (msg.message as string) ?? 'unstructured server error'
+          (msg.message as string) ??
+          `Voice server error (keys: ${Object.keys(msg).join(', ')})`
         this.promoteInterim('server error')
         if (!this.done) {
           this.callbacks?.onError?.(new Error(message))

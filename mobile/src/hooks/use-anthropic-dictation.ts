@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
-import {
-  fetchAnthropicCredential,
-  type AnthropicCredential
-} from '../dictation/anthropic-credential-reader'
+import { fetchAnthropicCredential } from '../dictation/anthropic-credential-reader'
 import { AnthropicVoiceStream } from '../dictation/anthropic-voice-stream'
-import type { RpcClient } from '../transport/rpc-client'
 import type {
   DictationStatus,
   UseMobileDictationResult
@@ -13,8 +9,6 @@ import type {
 import type { DictationCaptureSubscription } from '../platform/dictation-capture-contract'
 
 export type UseAnthropicDictationOptions = {
-  client: RpcClient | null
-  worktreeId: string
   enabled: boolean
   /** Called on every partial and on the final result.
    *  Matches the live engine signature: `(text, final, interim)`.
@@ -25,11 +19,12 @@ export type UseAnthropicDictationOptions = {
 }
 
 export type UseAnthropicDictationResult = UseMobileDictationResult & {
+  /** Someone is signed in to Anthropic on the phone, as of the last read of its store. */
   available: boolean
+  /** Reads the phone's store again (after a sign-in on Voice settings) and says whether anyone
+   *  is signed in now. */
+  refreshAvailable: () => Promise<boolean>
 }
-
-/** Token must have at least this much life left to start a dictation. */
-const TOKEN_MARGIN_MS = 60_000
 
 /**
  * Anthropic server dictation — matches Claude Code CLI 2.1.296.
@@ -44,8 +39,7 @@ const TOKEN_MARGIN_MS = 60_000
 export function useAnthropicDictation(
   options: UseAnthropicDictationOptions
 ): UseAnthropicDictationResult {
-  const { client, worktreeId, enabled, onTranscript, onError, lang = 'en' } =
-    options
+  const { enabled, onTranscript, onError, lang = 'en' } = options
   const capture = useDictationCapture()
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -53,32 +47,27 @@ export function useAnthropicDictation(
 
   const activeRef = useRef(false)
   const streamRef = useRef<AnthropicVoiceStream | null>(null)
-  const credentialRef = useRef<AnthropicCredential | null>(null)
   const chunkSubRef = useRef<DictationCaptureSubscription | null>(null)
   const onTranscriptRef = useRef(onTranscript)
   const onErrorRef = useRef(onError)
   onTranscriptRef.current = onTranscript
   onErrorRef.current = onError
 
-  // Background probe: phone store is instant, no desktop needed.
-  useEffect(() => {
-    let cancelled = false
-    fetchAnthropicCredential(client, worktreeId).then(
-      (cred) => {
-        if (cancelled) {
-          return
-        }
-        credentialRef.current = cred
-        setAvailable(cred !== null)
-      },
-      () => {
-        // Non-fatal.
-      }
-    )
-    return () => {
-      cancelled = true
+  const mountedRef = useRef(true)
+  const refreshAvailable = useCallback(async (): Promise<boolean> => {
+    const signedIn = await fetchAnthropicCredential().then((cred) => cred !== null, () => false)
+    if (mountedRef.current) {
+      setAvailable(signedIn)
     }
-  }, [client, worktreeId])
+    return signedIn
+  }, [])
+  useEffect(() => {
+    mountedRef.current = true
+    void refreshAvailable()
+    return () => {
+      mountedRef.current = false
+    }
+  }, [refreshAvailable])
 
   const teardown = useCallback(() => {
     activeRef.current = false
@@ -91,7 +80,7 @@ export function useAnthropicDictation(
   }, [capture])
 
   const start = useCallback(async () => {
-    if (!client || !enabled || activeRef.current) {
+    if (!enabled || activeRef.current) {
       return
     }
 
@@ -99,17 +88,14 @@ export function useAnthropicDictation(
     setError(null)
     activeRef.current = true
 
-    // Credential: phone store first, then desktop keychain.
-    let cred = credentialRef.current
-    if (!cred || cred.expiresAt - Date.now() < TOKEN_MARGIN_MS) {
-      cred = await fetchAnthropicCredential(client, worktreeId)
-      credentialRef.current = cred
-      setAvailable(cred !== null)
-    }
+    // Read fresh on every start, never a token held from an earlier read: a sign-in (or sign-out)
+    // on Voice settings takes effect on the next tap (2026-10-14).
+    const cred = await fetchAnthropicCredential().catch(() => null)
+    setAvailable(cred !== null)
     if (!cred) {
       activeRef.current = false
       setStatus('error')
-      const msg = 'Could not read Anthropic credentials'
+      const msg = 'Sign in to Anthropic in Voice settings to dictate'
       setError(msg)
       onErrorRef.current?.(new Error(msg))
       return
@@ -191,7 +177,7 @@ export function useAnthropicDictation(
     }
 
     setStatus('recording')
-  }, [capture, client, enabled, lang, teardown, worktreeId])
+  }, [capture, enabled, lang, teardown])
 
   const stop = useCallback(async () => {
     if (!activeRef.current) {
@@ -236,6 +222,7 @@ export function useAnthropicDictation(
     isProcessing: status === 'processing',
     error,
     available,
+    refreshAvailable,
     start,
     stop,
     cancel

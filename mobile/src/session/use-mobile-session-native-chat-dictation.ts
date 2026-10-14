@@ -37,7 +37,7 @@ export function useMobileSessionNativeChatDictation(
     setInput, liveInputTerminalHandles, activeHandle, activeSessionTabId,
     diffComments, diffCommentsRef, setShowDictationSetup, setDictationMode,
     deviceTokenRef, dictationRouteContextRef, activeHandleRef, activeSessionTab,
-    canSend, liveInputEnabled, showToast, resetLiveInputFocus
+    canSend, liveInputEnabled, showToast, resetLiveInputFocus, router
   } = scope
   const nativeChatScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
   const nativeChatSendError = useMobileNativeChatSendError({ scopeKey: nativeChatScopeKey, showToast })
@@ -104,8 +104,24 @@ export function useMobileSessionNativeChatDictation(
     onError: (err) => { dictationRouteContextRef.current = null; reportDictationFailure(err) }
   })
   const anthropicDictation = useAnthropicDictation({
-    client, worktreeId, enabled: canSend, onTranscript: onSpoken, onError: onSpokenError, lang: 'en'
+    enabled: canSend, onTranscript: onSpoken, onError: onSpokenError, lang: 'en'
   })
+  // Signing in on the phone is mandatory (the user, 2026-10-14). A mic tap while signed out reads
+  // the store once more (a sign-in may have just happened) and, if still nobody is signed in,
+  // says so and opens Voice settings instead of starting anything.
+  const { available: anthropicSignedIn, refreshAvailable: refreshAnthropicSignIn } = anthropicDictation
+  const requireAnthropicSignIn = useCallback((): boolean => {
+    if (anthropicSignedIn) {
+      return true
+    }
+    void refreshAnthropicSignIn().then((signedIn) => {
+      if (!signedIn) {
+        showToast('Sign in to Anthropic to dictate')
+        router.push('/voice-settings')
+      }
+    })
+    return false
+  }, [anthropicSignedIn, refreshAnthropicSignIn, router, showToast])
   const engineChoice = chooseDictationEngine(liveTranscription.available, anthropicDictation.available)
   const usesLivePartials = engineChoice === 'live' || engineChoice === 'anthropic'
   const dictation = engineChoice === 'anthropic' ? anthropicDictation
@@ -113,6 +129,7 @@ export function useMobileSessionNativeChatDictation(
 
   const hold = useDictationHoldMode({
     dictation, engineChoice, usesLivePartials, liveTranscription, anthropicDictation,
+    gateStart: requireAnthropicSignIn,
     prepareLiveStart: () => {
       if (showNativeChatRef.current) {
         const draft = nativeChatController.chatComposerText
@@ -178,9 +195,10 @@ export function useMobileSessionNativeChatDictation(
   }, [releaseRecognizer])
   useFocusEffect(useCallback(() => {
     void refreshDictationMode()
+    void refreshAnthropicSignIn()
     void primeRecognizer()
     return () => releaseRecognizer()
-  }, [primeRecognizer, refreshDictationMode, releaseRecognizer]))
+  }, [primeRecognizer, refreshAnthropicSignIn, refreshDictationMode, releaseRecognizer]))
   useEffect(() => { diffCommentsRef.current = diffComments }, [diffComments])
 
   return {

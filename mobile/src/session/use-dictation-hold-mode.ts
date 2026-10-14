@@ -24,6 +24,8 @@ export function useDictationHoldMode(opts: {
   usesLivePartials: boolean
   liveTranscription: UseMobileLiveTranscriptionResult
   anthropicDictation: UseAnthropicDictationResult
+  /** Asked before any start; false means the start was refused (it says why itself). */
+  gateStart?: () => boolean
   /** Whether the take's words go into the chat composer (a send ends only that kind of take). */
   targetIsChat: () => boolean
   prepareLiveStart: () => void
@@ -36,7 +38,7 @@ export function useDictationHoldMode(opts: {
 }): DictationHoldModeActions {
   const {
     dictation, engineChoice, usesLivePartials,
-    liveTranscription, anthropicDictation, targetIsChat,
+    liveTranscription, anthropicDictation, targetIsChat, gateStart,
     prepareLiveStart, prepareDesktopStart, restoreLiveCancel,
     triggerError, showToast, reportDictationFailure
   } = opts
@@ -57,6 +59,9 @@ export function useDictationHoldMode(opts: {
   const markTextProduced = useCallback(() => { liveProducedTextRef.current = true }, [])
 
   const startDictation = useCallback(() => {
+    if (gateStart && !gateStart()) {
+      return
+    }
     if (usesLivePartials) {
       prepareLiveStart()
       const startFn = engineChoice === 'anthropic' ? anthropicDictation.start : liveTranscription.start
@@ -88,7 +93,7 @@ export function useDictationHoldMode(opts: {
       reportDictationFailure(err)
     })
   }, [
-    anthropicDictation, clearEfficacy, dictation, engineChoice,
+    anthropicDictation, clearEfficacy, dictation, engineChoice, gateStart,
     liveTranscription, prepareDesktopStart, prepareLiveStart,
     reportDictationFailure, showToast, triggerError, usesLivePartials
   ])
