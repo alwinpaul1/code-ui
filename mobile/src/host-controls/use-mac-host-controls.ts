@@ -11,6 +11,7 @@ import {
 } from './mac-host-commands'
 import { readMacHostPlatformResult, selectMacHostWorktreeId } from './mac-host-platform'
 import { macHostSheetState, type MacHostSheetOptions } from './mac-host-sheet-actions'
+import { hostStateToDraw } from './mac-host-expected-state'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
@@ -58,7 +59,7 @@ export function useMacHostControls(args: {
   const [probed, setProbed] = useState<{ hostId: string; state: MacHostState } | null>(null)
   // Per host: the last answer, and after an action that finished OK, the state it
   // left behind, which the next open draws at once (use-known-host-states.ts).
-  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor } = useKnownHostStates(args.clients)
+  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, cachedFor } = useKnownHostStates(args.clients)
   const [toast, setToast] = useState<string | null>(null)
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
   // Hosts whose action is running or settling; their menu waits before asking.
@@ -203,11 +204,11 @@ export function useMacHostControls(args: {
     : false
 
   // Why on every open and never persisted: the Mac may have been locked or woken from
-  // its own keyboard since last time, and a remembered answer would offer Lock to an
-  // already-locked Mac. An action that finished OK in the last two minutes, on this
-  // connection, is the one exception to drawing: its menu shows the state that action
-  // left behind at once, instead of "Checking", and this probe still runs behind it
-  // and replaces it (mac-host-expected-state.ts, 2026-10-10).
+  // its own keyboard since last time. What the last probe or action on this
+  // connection learnt is drawn at once meanwhile, its lock unasserted, and this probe
+  // replaces it when it answers (cachedHostStateForRender, 2026-10-14). Hiding it
+  // behind "Checking" on every open was the bug: the rows vanished for as long as the
+  // host took to open a shell and answer, and the sheet changed height twice.
   //
   // Why keyed on these values and not on the home screen's objects: the home
   // screen replaces its worktree info whenever it fetches a host's workspaces
@@ -361,14 +362,20 @@ export function useMacHostControls(args: {
     [platforms, run, showToast]
   )
 
-  const openExpected = expectedFor(openHostId, args.clients.find((entry) => entry.hostId === openHostId)?.client)
+  const openDrawn = hostStateToDraw(
+    expectedFor(openHostId),
+    probed?.hostId === openHostId ? probed.state : null,
+    // Not while an action of this host runs or settles: "Checking" (a disabled row)
+    // is what keeps a second run from starting over it, and these rows predate it.
+    openHostId && !settlingHostIds.has(openHostId) ? cachedFor(openHostId) : null
+  )
 
   const macOptions: MacHostSheetOptions | undefined = openHostId
     ? {
         hostPlatform: platforms[openHostId] ?? null,
         worktreeId: worktreeIdForHost(openHostId),
         // An expectation already holds the probe's answer laid over it.
-        state: macHostSheetState(openHostConnection, openExpected ?? (probed?.hostId === openHostId ? probed.state : 'checking')),
+        state: macHostSheetState(openHostConnection, openDrawn),
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)
