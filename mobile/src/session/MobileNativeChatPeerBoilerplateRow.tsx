@@ -27,6 +27,9 @@ export function MobileNativeChatPeerBoilerplateRow({
     <View style={[styles.row, styles.rowUser]}>
       <View
         style={[styles.content, styles.userBubble]}
+        // Its own native view, so the words are drawn in the bubble and not
+        // mounted beside an empty filled box (MobileNativeChatMessage's Bubble).
+        collapsable={false}
         accessibilityLabel="Injected by Claude Code"
         testID="native-chat-peer-boilerplate"
       >
