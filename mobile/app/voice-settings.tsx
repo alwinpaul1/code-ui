@@ -205,6 +205,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       </View>
 
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >

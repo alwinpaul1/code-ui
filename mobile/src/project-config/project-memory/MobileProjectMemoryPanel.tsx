@@ -76,7 +76,7 @@ export function MobileProjectMemoryPanel({
       <Txt variant="caption" tone="muted" style={styles.outOfReach}>
         {OUT_OF_REACH_NOTE}
       </Txt>
-      <ScrollView contentContainerStyle={styles.list}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.list}>
         {PROJECT_MEMORY_RELATIVE_PATHS.map((relativePath) => {
           const summary = summarizeProjectMemoryFile(relativePath, files[relativePath].state)
           return (

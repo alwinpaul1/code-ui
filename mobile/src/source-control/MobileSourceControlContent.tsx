@@ -188,6 +188,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
         // a clean tree had no way to be refreshed at all, so a change made on
         // the desktop could never reach the phone (2026-09-13).
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           style={hubStyles.tabBody}
           contentContainerStyle={styles.stateScrollContent}
           refreshControl={refreshControl}
@@ -201,6 +202,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
         // Why: RN SectionList with empty `sections` often skips ListFooterComponent,
         // which hid "Committed on Branch" when only branch files remain.
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           style={hubStyles.tabBody}
           contentContainerStyle={styles.listContent}
           refreshControl={refreshControl}
@@ -209,6 +211,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
         </ScrollView>
       ) : (
         <SectionList
+          keyboardShouldPersistTaps="handled"
           style={hubStyles.tabBody}
           refreshControl={refreshControl}
           sections={sections}
