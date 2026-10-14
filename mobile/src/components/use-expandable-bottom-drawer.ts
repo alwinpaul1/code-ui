@@ -25,10 +25,12 @@ export function useExpandableBottomDrawer(args: {
   openingShare?: number
   translateY: SharedValue<number>
   progress: SharedValue<number>
+  /** The scrim's own fade (sheet-spec.ts); a drag-dismiss takes it out too. */
+  scrim: SharedValue<number>
   /** Stable for the drawer's life: the gestures are built once around it. */
   close: () => void
 }) {
-  const { expandable, screenHeight, translateY, progress, close } = args
+  const { expandable, screenHeight, translateY, progress, scrim, close } = args
   const { collapsed, full } = expandableSheetHeights({ screenHeight, topInset: args.topInset, topGap: spacing.lg, openingShare: args.openingShare })
   const openingOffset = expandable ? expandableSheetOpeningOffset({ collapsed, full }) : 0
   const dragStartOffset = useSharedValue(0)
@@ -56,6 +58,9 @@ export function useExpandableBottomDrawer(args: {
       const settle = settleExpandableSheet({ offset: translateY.value, velocityY }, heights)
       if (settle === 'dismiss') {
         translateY.value = withTiming(screenHeight, { duration: DISMISS_DURATION_MS })
+        // The scrim leaves with the sheet: left at 1, a close the parent refuses
+        // brought the sheet back under a scrim that snapped on in one frame.
+        scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
         progress.value = withTiming(0, { duration: DISMISS_DURATION_MS }, (finished) => {
           if (finished) {
             runOnJS(close)()

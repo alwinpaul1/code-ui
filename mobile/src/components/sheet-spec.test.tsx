@@ -339,8 +339,10 @@ function namesIn(source: ts.SourceFile): Set<string> {
   return names
 }
 
-/** Lines of object literals that round BOTH top corners (a sheet's silhouette)
- *  with a value that does not come from SHEET_SPEC. */
+const TOP_CORNERS = ['borderTopLeftRadius', 'borderTopRightRadius', 'borderTopStartRadius', 'borderTopEndRadius']
+
+/** Lines of object literals that round BOTH top corners (a sheet's silhouette;
+ *  Left/Right or Start/End) with a value other than SHEET_SPEC.radius. */
 function offSpecTopCorners(source: ts.SourceFile): number[] {
   const lines: number[] = []
   const visit = (node: ts.Node): void => {
@@ -349,9 +351,9 @@ function offSpecTopCorners(source: ts.SourceFile): number[] {
         (property): property is ts.PropertyAssignment =>
           ts.isPropertyAssignment(property) &&
           ts.isIdentifier(property.name) &&
-          (property.name.text === 'borderTopLeftRadius' || property.name.text === 'borderTopRightRadius')
+          TOP_CORNERS.includes(property.name.text)
       )
-      if (corners.length === 2 && corners.some((corner) => !corner.initializer.getText(source).includes('SHEET_SPEC'))) {
+      if (corners.length >= 2 && corners.some((corner) => !corner.initializer.getText(source).includes('SHEET_SPEC.radius'))) {
         lines.push(source.getLineAndCharacterOfPosition(node.getStart()).line + 1)
       }
     }
@@ -429,8 +431,8 @@ describe('every sheet draws from the one spec (ratchet)', () => {
   it('still catches the shape it was written for, and passes one that reads the spec', () => {
     const probe = parse(
       'probe.ts',
-      '// borderTopLeftRadius: 1, borderTopRightRadius: 1\nconst a = { borderTopLeftRadius: 24, borderTopRightRadius: 24 }\nconst b = { borderTopLeftRadius: SHEET_SPEC.radius, borderTopRightRadius: SHEET_SPEC.radius }'
+      '// borderTopLeftRadius: 1, borderTopRightRadius: 1\nconst a = { borderTopLeftRadius: 24, borderTopRightRadius: 24 }\nconst b = { borderTopLeftRadius: SHEET_SPEC.radius, borderTopRightRadius: SHEET_SPEC.radius }\nconst c = { borderTopStartRadius: 24, borderTopEndRadius: 24 }\nconst d = { borderTopLeftRadius: SHEET_SPEC.handle.width, borderTopRightRadius: SHEET_SPEC.handle.width }'
     )
-    expect(offSpecTopCorners(probe)).toEqual([2])
+    expect(offSpecTopCorners(probe)).toEqual([2, 4, 5])
   })
 })

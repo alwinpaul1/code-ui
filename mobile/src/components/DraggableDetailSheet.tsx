@@ -212,6 +212,9 @@ function MountedDraggableDetailSheet({
           MAX_DISMISS_DURATION_MS
         )
         translateY.value = withTiming(fullHeight, { duration })
+        // The scrim leaves with the sheet: left at 1, a close the parent refuses
+        // brought the sheet back under a scrim that snapped on in one frame.
+        scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
         progress.value = withTiming(0, { duration }, (finished) => {
           if (finished) {
             runOnJS(requestClose)()

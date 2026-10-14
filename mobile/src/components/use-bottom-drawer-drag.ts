@@ -41,6 +41,8 @@ export function useBottomDrawerDrag(args: {
   screenHeight: number
   translateY: SharedValue<number>
   progress: SharedValue<number>
+  /** The scrim's own fade (sheet-spec.ts); a drag-dismiss takes it out too. */
+  scrim: SharedValue<number>
   sheet: {
     begin: () => void
     drag: (translationY: number) => void
@@ -50,7 +52,7 @@ export function useBottomDrawerDrag(args: {
   /** Stable for the drawer's life. */
   close: () => void
 }) {
-  const { expandable, hasList, screenHeight, translateY, progress, close } = args
+  const { expandable, hasList, screenHeight, translateY, progress, scrim, close } = args
   const { begin, drag, release, listScrolls } = args.sheet
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const scrollOffsetY = useSharedValue(0)
@@ -100,6 +102,9 @@ export function useBottomDrawerDrag(args: {
         const remaining = screenHeight - translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
+        // The scrim leaves with the sheet: left at 1, a close the parent refuses
+        // brought the sheet back under a scrim that snapped on in one frame.
+        scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
         // Only a finished exit is a close: one cut short (Back or a tap on the
         // backdrop while it ran) is followed by the exit that cut it.
         progress.value = withTiming(0, { duration }, (finished) => {

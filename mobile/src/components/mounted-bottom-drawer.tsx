@@ -121,13 +121,14 @@ export function MountedBottomDrawer({
     onHidden,
     restore: () => restoreRef.current()
   })
-  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, openingShare, translateY, progress, close: requestClose })
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, openingShare, translateY, progress, scrim, close: requestClose })
   const drag = useBottomDrawerDrag({
     expandable,
     hasList: contentScrollable && dragContentToDismiss,
     screenHeight,
     translateY,
     progress,
+    scrim,
     sheet,
     close: requestClose
   })
