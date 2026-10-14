@@ -26,6 +26,16 @@ vi.mock('expo-router', () => ({
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  // The jump-to-latest button springs in and out (mobile-native-chat-list-edges.tsx).
+  Animated: {
+    View: 'AnimatedView',
+    Value: class {
+      interpolate() {
+        return 0
+      }
+    },
+    spring: () => ({ start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }), stop: () => {} })
+  },
   // The list's scroll owner listens for the app losing its touch (use-app-interruptions).
   AppState: { addEventListener: () => ({ remove: () => {} }) },
   Modal: 'Modal',
@@ -332,19 +342,19 @@ describe('the subagent transcript viewer', () => {
         })
       )
       const icon = renderer!.root.findByType('ArrowDown' as never)
-      const fab = renderer!.root
-        .findAllByType('Pressable' as never)
-        .find((node) => node.props.accessibilityLabel === 'Scroll to latest')!
+      // The circle is the springing holder around the Pressable since the button copied the
+      // Claude app's (2026-10-15): its fill is on the holder.
+      const holder = renderer!.root.findByType('AnimatedView' as never)
       const drawn = [
         icon.props.color,
-        [fab.props.style].flat(3).find((entry) => entry?.backgroundColor)?.backgroundColor
+        [holder.props.style].flat(3).find((entry) => entry?.backgroundColor)?.backgroundColor
       ]
       act(() => renderer?.unmount())
       renderer = null
       return drawn
     }
-    expect(await jumpColors('light')).toEqual([lightColors.text, lightColors.bgPanel])
-    expect(await jumpColors('dark')).toEqual([darkColors.text, darkColors.bgPanel])
+    expect(await jumpColors('light')).toEqual([lightColors.jumpButtonGlyph, lightColors.composerFill])
+    expect(await jumpColors('dark')).toEqual([darkColors.jumpButtonGlyph, darkColors.composerFill])
   })
 
   // Opus review, 2026-10-13: the transcript's body moved to the chat's

@@ -21,6 +21,7 @@ vi.mock('react-native', () => ({
   Animated: {
     View: 'AnimatedView',
     createAnimatedComponent: (c: unknown) => c,
+    spring: () => ({ start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }), stop: () => {} }),
     Value: class {
       interpolate() {
         return 0
