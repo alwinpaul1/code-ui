@@ -49,40 +49,17 @@ describe('groupProseBlocks', () => {
       type: 'image-ref',
       path: '/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T/orca-paste-1791732965258-6359231d-420f-40ec-a8fa-696466c27fe2.png'
     }
-    const groups = groupProseBlocks([paste, text('also fix this')], { isUser: true })
+    const groups = groupProseBlocks([paste, text('also fix this')])
     expect(imageLeadsText(groups, 0)).toBe(true)
-    expect(imageLeadsText(groupProseBlocks([paste], { isUser: true }), 0)).toBe(false)
-    expect(imageLeadsText(groupProseBlocks([paste, paste], { isUser: true }), 0)).toBe(false)
+    expect(imageLeadsText(groupProseBlocks([paste]), 0)).toBe(false)
+    expect(imageLeadsText(groupProseBlocks([paste, paste]), 0)).toBe(false)
   })
 
-  // docs/claude-app-parity.md item 9: Claude Code's own `@"<path>"` file
-  // mention, only read on the user's side of the turn.
-  describe('a file mention in the text', () => {
-    it('splits it into a file-cards group ahead of the remaining caption', () => {
-      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf" see this')], {
-        isUser: true
-      })
-      expect(groups).toEqual([
-        { type: 'file-cards', cards: [{ path: '/tmp/uploads/abcdef01-notes.pdf', name: 'notes', ext: 'PDF' }] },
-        { type: 'block', block: text('see this') }
-      ])
-    })
-
-    it('drops the caption block entirely when the mention was the whole message', () => {
-      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf"')], { isUser: true })
-      expect(groups).toEqual([
-        { type: 'file-cards', cards: [{ path: '/tmp/uploads/abcdef01-notes.pdf', name: 'notes', ext: 'PDF' }] }
-      ])
-    })
-
-    it('leaves the text alone when isUser is not set, even with the same marker', () => {
-      const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf" see this')])
-      expect(groups).toEqual([{ type: 'block', block: text('@"/tmp/uploads/abcdef01-notes.pdf" see this') }])
-    })
-
-    it('leaves ordinary user text with no mention untouched', () => {
-      const groups = groupProseBlocks([text('run the full gate')], { isUser: true })
-      expect(groups).toEqual([{ type: 'block', block: text('run the full gate') }])
-    })
+  // docs/claude-app-parity.md item 9: a prompt's `@"<path>"` uploads are
+  // taken out before grouping (takeUserUploads) and drawn above the bubble,
+  // so text that still holds the marker here is an agent quoting a path.
+  it('leaves a quoted path in the text it is grouping as text', () => {
+    const groups = groupProseBlocks([text('@"/tmp/uploads/abcdef01-notes.pdf" see this')])
+    expect(groups).toEqual([{ type: 'block', block: text('@"/tmp/uploads/abcdef01-notes.pdf" see this') }])
   })
 })

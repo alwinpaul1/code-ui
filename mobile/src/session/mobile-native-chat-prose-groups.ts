@@ -4,7 +4,7 @@ import {
   type NativeChatBlock,
   type NativeChatImageRefBlock
 } from '../../../src/shared/native-chat-types'
-import { parseFileMentionText, sentFileCard, type FileMentionCard } from './mobile-native-chat-file-mentions'
+import { sentFileCard, type FileMentionCard } from './mobile-native-chat-file-mentions'
 import { isAgentImageAlt, SENT_FILE_PRESENTATION } from './mobile-native-chat-agent-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 
@@ -21,26 +21,12 @@ export type ProseGroup =
  *  A lone image, a text block, or an image the phone cannot load stays its
  *  own block, so the placeholder chip and single thumbnail are unchanged.
  *
- *  `isUser` scopes file-mention detection to the user's own turn: the
- *  `@"<path>"` marker is Claude Code's record of what the user attached
- *  (docs/claude-app-parity.md item 9), and an agent's reply is free to quote
- *  an unrelated path in the same shape. */
-export function groupProseBlocks(
-  blocks: NativeChatBlock[],
-  options?: { isUser?: boolean }
-): ProseGroup[] {
+ *  A prompt's own uploads never reach here: they are taken out of the text
+ *  before the bubble is drawn and shown above it (takeUserUploads,
+ *  docs/claude-app-parity.md item 9). */
+export function groupProseBlocks(blocks: readonly NativeChatBlock[]): ProseGroup[] {
   const groups: ProseGroup[] = []
   for (const block of blocks) {
-    if (options?.isUser && isTextBlock(block)) {
-      const { cards, caption } = parseFileMentionText(block.text)
-      if (cards.length > 0) {
-        groups.push({ type: 'file-cards', cards })
-        if (caption) {
-          groups.push({ type: 'block', block: { ...block, text: caption } })
-        }
-        continue
-      }
-    }
     const last = groups[groups.length - 1]
     // A file the agent sent with SendUserFile (mobile-native-chat-agent-images.ts).
     if (isTextBlock(block) && block.presentation === SENT_FILE_PRESENTATION) {
