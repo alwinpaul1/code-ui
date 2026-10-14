@@ -345,3 +345,37 @@ describe('two replies to the same banner', () => {
     expect(nativeChatOutboxEntries().map((entry) => entry.id)).toEqual(['send-1000-1', 'send-1000-second'])
   })
 })
+
+// The banner can offer a Reply to a session whose agent it could not name (a headless push, a worktree
+// with two agents), so the tab's own agent is checked when the reply is typed: the drainer reads the
+// screen with Claude's or Codex's composer reader only (native-chat-outbox-headless.ts), and a message
+// for any other agent would wait for ever behind a banner that said it was sent.
+describe('a reply to a tab whose agent the outbox cannot drive', () => {
+  it.each([['gemini'], ['grok'], ['aider'], ['cursor']])('is refused for %s, and nothing is queued', async (agent) => {
+    const tab = terminalTab({ agentStatus: { agentType: agent, state: 'done', providerSession: { id: 'sess-1' } } })
+    const outcome = await replyToSessionFromNotification({
+      userText: REPLY,
+      data: DATA,
+      io: io({ readTabs: async () => tabsOf(tab) })
+    })
+    expect(outcome).toEqual({ kind: 'failed', failure: 'refused', kept: false })
+    expect(nativeChatOutboxEntries()).toHaveLength(0)
+  })
+
+  it('is refused by the tab’s launch agent when its status names none', async () => {
+    const tab = terminalTab({ agentStatus: { providerSession: { id: 'sess-1' } }, launchAgent: 'grok' })
+    const outcome = await replyToSessionFromNotification({
+      userText: REPLY,
+      data: DATA,
+      io: io({ readTabs: async () => tabsOf(tab) })
+    })
+    expect(outcome).toEqual({ kind: 'failed', failure: 'refused', kept: false })
+  })
+
+  it.each([['claude'], ['openclaude'], ['codex']])('is queued for %s', async (agent) => {
+    const tab = terminalTab({ agentStatus: { agentType: agent, state: 'done', providerSession: { id: 'sess-1' } } })
+    expect(
+      await replyToSessionFromNotification({ userText: REPLY, data: DATA, io: io({ readTabs: async () => tabsOf(tab) }) })
+    ).toEqual({ kind: 'queued' })
+  })
+})

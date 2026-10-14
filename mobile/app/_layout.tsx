@@ -34,6 +34,7 @@ import { PERMISSION_COMMENT_ACTION } from '../src/notifications/permission-notif
 import { answerSessionReplyFromResponse } from '../src/notifications/session-reply-answer'
 import { productionSessionReplyIo } from '../src/notifications/session-reply-io'
 import { SESSION_REPLY_ACTION } from '../src/notifications/session-reply-notification'
+import { sessionReplyTapKey } from '../src/notifications/session-reply-tap-key'
 import { sendClaudePermissionComment } from '../src/session/claude-permission-comment-send'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
 import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
@@ -190,8 +191,13 @@ function ThemedRoot() {
         // through to the clear below, exactly as before.
         if (response.actionIdentifier === SESSION_REPLY_ACTION) {
           // The Reply on a finished session: written to the chat outbox, which sends it
-          // (session-reply-response.ts), and the banner settled either way.
-          await answerSessionReplyFromResponse(response, productionSessionReplyIo())
+          // (session-reply-response.ts), and the banner settled either way. Once per response: at a
+          // cold start the same one arrives twice, and a reply is a message, not an idempotent answer.
+          const replyKey = sessionReplyTapKey(response)
+          if (!handledNotificationIdsRef.current.has(replyKey)) {
+            handledNotificationIdsRef.current.add(replyKey)
+            await answerSessionReplyFromResponse(response, productionSessionReplyIo())
+          }
           clearLastNotificationResponse()
           return
         }

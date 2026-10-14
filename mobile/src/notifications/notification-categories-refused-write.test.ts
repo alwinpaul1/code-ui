@@ -42,3 +42,21 @@ describe('the first read a banner waits for', () => {
     }
   })
 })
+
+// Changing one toggle writes the whole record. If storage cannot be read at that moment, the other
+// toggle must keep what the phone last knew, not fall back to on: that would turn a toggle the reader
+// switched off back on without a word.
+describe('a toggle changed while storage cannot be read', () => {
+  it('leaves the other toggle as the phone last knew it, not as the default', async () => {
+    await saveNotificationCategories({ updates: false })
+    const original = AsyncStorage.getItem
+    AsyncStorage.getItem = vi.fn().mockRejectedValue(new Error('locked'))
+    try {
+      await saveNotificationCategories({ permissionRequests: false })
+    } finally {
+      AsyncStorage.getItem = original
+    }
+    const stored = JSON.parse((await AsyncStorage.getItem(NOTIFICATION_CATEGORIES_STORAGE_KEY)) ?? '{}') as Record<string, unknown>
+    expect(stored).toEqual({ updates: false, permissionRequests: false })
+  })
+})

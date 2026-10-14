@@ -110,4 +110,36 @@ describe('reading a Claude Code permission dialog off the screen', () => {
     const dialog = readClaudePermissionDialog([' Do you want to proceed?', '   1. Yes', '   2. No', ' Esc to cancel'])
     expect(dialog?.highlighted).toBeNull()
   })
+
+  // A long comment typed into the No row wraps onto rows of its own. The frames below are the
+  // captured amend frame with that one row replaced by the wrapped words (SYNTHETIC: the capture is
+  // of a short comment): the continuation rows are indented as the Write dialog's wrapped second
+  // option is, six cells, where the question is at one.
+  function withTypedRow(rows: string[]): string[] {
+    const frame = capturedScreen('bash-no-amend')
+    const at = frame.findIndex((row) => row.includes('4. No, and tell Claude what to do differently'))
+    return [...frame.slice(0, at), ...rows, ...frame.slice(at + 1)]
+  }
+
+  it('reads a long comment that wraps and ends in a question mark as the No row, not as the dialog’s question', () => {
+    const dialog = readClaudePermissionDialog(
+      withTypedRow([
+        ' ❯ 4. No, run the whole suite first and show me which files changed, because the last time you did',
+        '      this the lockfile moved as well, and could you check whether that was on purpose?'
+      ])
+    )
+    expect(dialog?.options).toHaveLength(4)
+    expect(dialog?.highlighted).toBe('4')
+    expect(dialog?.options.at(-1)?.text).toMatch(/^No, run the whole suite first .* on purpose\?$/)
+  })
+
+  it('reads a comment that wraps over more rows than the question is far from the options', () => {
+    const rows = [' ❯ 4. No, ' + 'word '.repeat(18).trim()]
+    for (let at = 0; at < 24; at += 1) {
+      rows.push('      ' + 'word '.repeat(18).trim())
+    }
+    const dialog = readClaudePermissionDialog(withTypedRow(rows))
+    expect(dialog?.options).toHaveLength(4)
+    expect(dialog?.options.at(-1)?.text.startsWith('No, word')).toBe(true)
+  })
 })

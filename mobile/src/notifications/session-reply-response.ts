@@ -7,6 +7,7 @@ import type { NativeChatOutboxEntry, NativeChatOutboxRoute } from '../storage/na
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostCredentialStatus } from '../transport/types'
 import type { SessionReplyFailure } from './session-reply-failure'
+import { canReplyToAgent } from './session-reply-notification'
 
 /**
  * A reply typed into a session's notification, sent through the chat outbox.
@@ -177,6 +178,12 @@ export async function replyToSessionFromNotification(args: {
     return { kind: 'failed', failure: 'refused', kept: false }
   }
   const tabRoute = route(target, tab)
+  if (tabRoute.agent && !canReplyToAgent(tabRoute.agent)) {
+    // The banner may not have known the agent; the tab does, and the outbox's drainer reads only
+    // Claude's and Codex's composers. A message for another agent would wait behind a banner that
+    // said it was sent.
+    return { kind: 'failed', failure: 'refused', kept: false }
+  }
   if (!tabRoute.agent || !tabRoute.sessionId || !tabRoute.terminal) {
     // The tab exists but runs no session the phone can name yet (or has no terminal handle): the
     // drainer has nowhere to send it, so it waits in the chat's outbox.

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { NOTIFICATION_STATUS_ICONS } from './notification-status-icon'
 import {
   SESSION_REPLY_ACTION,
   SESSION_REPLY_LABEL,
@@ -116,5 +117,21 @@ describe('the Reply button on a finished session', () => {
       })
     }
     expect(await decorateWithReply(FINISHED, EVENT, d)).toEqual(FINISHED)
+  })
+
+  // A banner whose lookup failed (the link was down, the host slow) can still be one that says the
+  // agent needs input: it was drawn with the question icon. Words typed into its Reply would go in
+  // as a new prompt, after whatever dialog is up is answered at the desk.
+  it('is not offered on a banner that says the agent needs input, whether or not its prompt was found', async () => {
+    const d = deps()
+    const needsInput = { ...FINISHED, data: { ...FINISHED.data, statusIcon: NOTIFICATION_STATUS_ICONS.question } }
+    expect(await decorateWithReply(needsInput, EVENT, d)).toEqual(needsInput)
+    expect(d.ensureCategory).not.toHaveBeenCalled()
+  })
+
+  it('is still offered on a finished banner, whose icon is the done mark', async () => {
+    const d = deps()
+    const done = { ...FINISHED, data: { ...FINISHED.data, statusIcon: NOTIFICATION_STATUS_ICONS.done } }
+    expect((await decorateWithReply(done, EVENT, d)).categoryIdentifier).toBeTruthy()
   })
 })

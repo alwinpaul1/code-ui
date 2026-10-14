@@ -64,12 +64,13 @@ describe('the banner after a reply from the shade', () => {
     expect(Notifications.dismissNotificationAsync).toHaveBeenCalledWith('codeui:host-1:wt-1')
     const posted = vi.mocked(Notifications.scheduleNotificationAsync).mock.calls[0]![0] as unknown as {
       identifier: string
-      content: { body: string; categoryIdentifier: string; data: Record<string, unknown> }
+      content: { body: string; categoryIdentifier?: string; data: Record<string, unknown> }
     }
     expect(posted.identifier).toBe('codeui:host-1:wt-1')
     expect(posted.content.body).toBe(`${line}\nAdded the retry budget.`)
-    // The Reply field stays, so a second try can be typed without opening the app.
-    expect(posted.content.categoryIdentifier).toBe(RESPONSE.notification.request.content.categoryIdentifier)
+    // The words are kept for the chat (kept: true), so the Reply field goes: a second reply typed into
+    // the banner would be a second copy of the message (session-reply-banner-after.test.ts).
+    expect(posted.content.categoryIdentifier).toBeUndefined()
     expect(posted.content.data.replyVerdict).toBe(line)
   })
 

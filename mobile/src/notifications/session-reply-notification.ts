@@ -1,6 +1,7 @@
 import type { PromptNotificationCategoryAction } from './permission-notification-category'
 import type { DecoratableContent } from './permission-notification-decorate'
 import type { DesktopNotificationSource } from './notification-routing'
+import { notificationCategoryOf } from './notification-categories'
 import { agentHeadlineLabel } from './notification-presentation'
 
 /**
@@ -13,11 +14,17 @@ import { agentHeadlineLabel } from './notification-presentation'
 export const SESSION_REPLY_ACTION = 'session-reply'
 export const SESSION_REPLY_LABEL = 'Reply'
 
-/** The agents a reply can be typed to from here: those whose composer the outbox's drainer reads
- *  (Claude Code and Codex). The desktop names the agent of a finished session "Claude" when the
- *  host did not say, so an unnamed one is offered the Reply too. */
+/** Whether a reply can be typed to this agent from here: those whose composer the outbox's drainer
+ *  reads (Claude Code and Codex). Checked again against the tab's own agent when the reply is typed
+ *  (session-reply-response.ts), since the banner may not have known it. */
+export function canReplyToAgent(agent: string): boolean {
+  return agent === 'claude' || agent === 'openclaude' || agent === 'codex'
+}
+
+/** The banner is offered the Reply for an agent it names, or for one it does not: the desktop calls
+ *  a finished session's agent "Claude" when the host did not say. */
 function repliesTo(agent: string | null): boolean {
-  return agent === null || agent === 'claude' || agent === 'openclaude' || agent === 'codex'
+  return agent === null || canReplyToAgent(agent)
 }
 
 /** "Reply to Claude", or to the agent the session runs. */
@@ -56,6 +63,11 @@ export async function decorateWithReply(
 ): Promise<DecoratableContent> {
   try {
     if (event.source !== 'agent-task-complete' || !event.worktreeId || content.categoryIdentifier) {
+      return content
+    }
+    // A banner that says the agent needs input, even one whose prompt could not be looked up: words
+    // typed into a Reply would go in as a new prompt once the dialog is answered at the desk.
+    if (notificationCategoryOf(content) === 'permission-requests') {
       return content
     }
     if (

@@ -76,7 +76,20 @@ describe('the requests Approve is withheld from', () => {
     ['kubectl delete pod web-0'],
     ['terraform destroy -auto-approve'],
     ['gh repo delete acme/app --yes'],
-    ['npm publish']
+    ['npm publish'],
+    // Missed by the first table (reviewer, 2026-10-14).
+    ['/bin/rm -rf ~/project'],
+    ['/usr/local/bin/rm file'],
+    ['git checkout .'],
+    ['git checkout HEAD -- src/a.ts'],
+    ['git checkout -f main'],
+    ['git push origin --delete main'],
+    ['git push origin +main'],
+    ['git push origin :old-branch'],
+    ['git branch --delete --force old'],
+    ['git branch -d old'],
+    ['git restore src/a.ts'],
+    ['git restore --worktree --staged src/a.ts']
   ])('withholds it from the Bash command %s', (command) => {
     expect(approveWithheldReason(permission('Allow Bash?', command))).toBe('destructive')
   })
@@ -88,7 +101,11 @@ describe('the requests Approve is withheld from', () => {
     ['mcp__hearthbot__delete_project_file'],
     ['mcp__github__delete_branch'],
     ['mcp__db__drop_table'],
-    ['mcp__files__remove_file']
+    ['mcp__files__remove_file'],
+    ['mcp__github__deleteRepository'],
+    ['mcp__notion__notion-delete-page'],
+    ['mcp__slack__removeMember'],
+    ['mcp__db__dropTable']
   ])('withholds it from the tool %s', (tool) => {
     expect(approveWithheldReason(permission(`Allow ${tool}?`))).toBe('destructive')
   })
@@ -115,12 +132,30 @@ describe('the requests Approve is kept for', () => {
     ['echo firm'],
     ['./rm-helper.sh --dry-run'],
     ['cat README.md | head -20'],
-    ['Recompile and re-render page 2']
+    ['Recompile and re-render page 2'],
+    ['git restore --staged src/a.ts'],
+    ['git checkout main'],
+    ['git checkout -b feature'],
+    ['git branch --list'],
+    ['git push origin feature'],
+    ['grep "DELETE FROM" migrations/001.sql'],
+    ['grep -rn "DROP TABLE" db/'],
+    ['echo "drop table is a statement"'],
+    ['cat README.md | grep delete']
   ])('keeps it for the Bash command %s', (command) => {
     expect(approveWithheldReason(permission('Allow Bash?', command))).toBeNull()
   })
 
-  it.each(['Edit', 'Write', 'Read', 'WebFetch', 'mcp__github__list_issues', 'mcp__db__read_table'])(
+  it.each([
+    'Edit',
+    'Write',
+    'Read',
+    'WebFetch',
+    'mcp__github__list_issues',
+    'mcp__db__read_table',
+    'mcp__github__getRepository',
+    'mcp__notion__notion-fetch'
+  ])(
     'keeps it for the tool %s',
     (tool) => {
       expect(approveWithheldReason(permission(`Allow ${tool}?`))).toBeNull()

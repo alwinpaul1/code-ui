@@ -284,10 +284,19 @@ describe('what is typed', () => {
   })
 
   it('is cut at a whole character, never through an emoji', () => {
-    const long = `${'a'.repeat(999)}😀tail`
+    const long = `${'a'.repeat(499)}😀tail`
     const cut = sanitizeDenyComment(long)
-    expect(cut.length).toBeLessThanOrEqual(1000)
+    expect(cut.length).toBeLessThanOrEqual(500)
     expect(cut.endsWith('\ud83d')).toBe(false)
+  })
+
+  // Claude Code draws a long chunk of typed input as a "[Pasted text]" placeholder in place of the
+  // words (a paste is told by its size), and then the words are not on the No row to be read back.
+  // A comment from a notification's reply field is short; this keeps well under any such size.
+  it('is kept to 500 characters, far under the size at which Claude Code treats typed input as a paste', () => {
+    expect(sanitizeDenyComment('a'.repeat(5_000)).length).toBe(500)
+    expect(sanitizeDenyComment('a'.repeat(500))).toHaveLength(500)
+    expect(sanitizeDenyComment('a'.repeat(499))).toHaveLength(499)
   })
 
   it('is empty for nothing but whitespace and controls', () => {

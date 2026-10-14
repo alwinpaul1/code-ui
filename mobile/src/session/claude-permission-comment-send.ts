@@ -41,8 +41,10 @@ const KEY_TAB = '\t'
 const KEY_ENTER = '\r'
 const POLL_MS = 120
 const STEP_TIMEOUT_MS = 2_500
-/** What a reply can type: a notification's reply field is a line, not a document. */
-const MAX_COMMENT_CHARS = 1_000
+/** What a reply can type: a notification's reply field is a line, not a document. Kept far under
+ *  the size at which Claude Code draws typed input as a "[Pasted text]" placeholder, which would
+ *  hide the words from the read-back. */
+const MAX_COMMENT_CHARS = 500
 
 export type ClaudePermissionCommentIo = {
   /** The terminal's current screen, or null when it cannot be read. */

@@ -24,7 +24,11 @@ const OPTION_ROW = /^\s*([❯›>])?\s*(\d)[.)]\s+(\S.*?)\s*$/
 // capture), where an option starts at one or three.
 const CONTINUATION_ROW = /^ {4,}(\S.*?)\s*$/
 
-const QUESTION_REACH = 16
+// The question sits at the dialog's left margin (one cell in the captures); a row that wraps under
+// an option is indented past the digits (six cells), so a typed comment that wraps and ends in "?"
+// is not taken for it. How far above the footer to look: a long comment wraps over many rows.
+const QUESTION_ROW = /^ {0,2}\S.*\?\s*$/
+const QUESTION_REACH = 40
 
 /**
  * The permission dialog at the bottom of the screen: its numbered rows, which one the `❯` is on,
@@ -45,7 +49,7 @@ export function readClaudePermissionDialog(lines: readonly string[]): ClaudePerm
   let questionAt = -1
   for (let at = footerAt - 1; at >= 0 && footerAt - at <= QUESTION_REACH; at -= 1) {
     const line = lines[at]!
-    if (!OPTION_ROW.test(line) && /\?\s*$/.test(line)) {
+    if (!OPTION_ROW.test(line) && QUESTION_ROW.test(line)) {
       questionAt = at
       break
     }

@@ -42,13 +42,55 @@ export function replyVerdictLine(outcome: ReplyVerdict): string {
   }
 }
 
-async function stillShown(identifier: string): Promise<boolean> {
+/** The desktop's notification id, which tells one posting of a session's banner from the next: a
+ *  session's banners all share one request identifier (`codeui:<host>:<worktree>`). */
+function notificationIdOf(data: unknown): string | null {
+  if (data == null || typeof data !== 'object') {
+    return null
+  }
+  const id: unknown = Reflect.get(Object(data), 'notificationId')
+  return typeof id === 'string' && id !== '' ? id : null
+}
+
+/**
+ * Whether the banner a tap answered is still the one the system shows under its identifier.
+ *
+ * Answering takes round trips, and a newer banner of the same session can take the identifier
+ * meanwhile (a permission to approve from another tab, a push): that one was not answered, and
+ * dismissing it or posting the old banner over it would hide it. Two banners are told apart by the
+ * desktop's notification id; where either has none, or the system cannot say, the answered banner
+ * is taken to be the one showing, as it always was.
+ */
+export async function answeredBannerStillShown(
+  identifier: string,
+  answeredNotificationId: unknown = null
+): Promise<boolean> {
   try {
     const presented = await Notifications.getPresentedNotificationsAsync()
-    return presented.some((item) => item.request?.identifier === identifier)
+    const showing = presented.filter((item) => item.request?.identifier === identifier)
+    if (showing.length === 0) {
+      return false
+    }
+    const answered = notificationIdOf({ notificationId: answeredNotificationId })
+    if (answered === null) {
+      return true
+    }
+    return showing.some((item) => {
+      const now = notificationIdOf(item.request?.content?.data)
+      return now === null || now === answered
+    })
   } catch {
     return true
   }
+}
+
+/** Takes the answered banner off the screen, unless a newer one has taken its identifier. */
+export async function dismissAnsweredBanner(response: RepostableResponse): Promise<void> {
+  const { identifier, content } = response.notification.request
+  if (!(await answeredBannerStillShown(identifier, content.data?.notificationId))) {
+    return
+  }
+  await Notifications.dismissNotificationAsync(identifier).catch(() => undefined)
 }
 
 /** The banner's words without a verdict line an earlier post put on top: the line the banner's
@@ -102,7 +144,12 @@ export async function repostBannerWithReplyVerdict(
 /** The same re-post for a line that is already worded: a reply's failure line
  *  (session-reply-failure.ts). The line is recorded on the banner as `replyVerdict`, which the
  *  native view draws its warning from and a later re-post reads to take the line off again. */
-export async function repostBannerWithVerdictLine(response: RepostableResponse, verdict: string): Promise<void> {
+export async function repostBannerWithVerdictLine(
+  response: RepostableResponse,
+  verdict: string,
+  /** False drops the banner's buttons, as after a reply whose words are already kept. */
+  keepButtons = true
+): Promise<void> {
   const { identifier, content } = response.notification.request
   const body = withoutVerdict(content.body ?? '', content.data?.replyVerdict)
   try {
@@ -112,7 +159,7 @@ export async function repostBannerWithVerdictLine(response: RepostableResponse, 
     // nothing to clear it again. A banner the OS no longer shows stays gone.
     // When the OS cannot say, the re-post goes ahead: a spinning banner with
     // no word is the worse of the two.
-    if (!(await stillShown(identifier))) {
+    if (!(await answeredBannerStillShown(identifier, content.data?.notificationId))) {
       return
     }
     await Notifications.dismissNotificationAsync(identifier).catch(() => undefined)
@@ -122,7 +169,7 @@ export async function repostBannerWithVerdictLine(response: RepostableResponse, 
         ...(content.title ? { title: content.title } : {}),
         body: `${verdict}\n${body}`.trimEnd(),
         data: { ...content.data, replyVerdict: verdict },
-        ...(content.categoryIdentifier ? { categoryIdentifier: content.categoryIdentifier } : {})
+        ...(keepButtons && content.categoryIdentifier ? { categoryIdentifier: content.categoryIdentifier } : {})
       },
       trigger: notificationTrigger()
     })

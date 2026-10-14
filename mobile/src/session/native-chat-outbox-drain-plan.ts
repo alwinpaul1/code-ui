@@ -108,8 +108,16 @@ export function outboxDrainBackoffMs(failures: number): number {
   return OUTBOX_DRAIN_BACKOFF_MS[index]!
 }
 
-/** When a terminal entry may next be looked at, given its last send. */
+/** When a terminal entry may next be looked at, given its last send.
+ *
+ *  An entry handed to the outbox before anything was typed (`unwritten`, and no automatic send of it
+ *  started yet: a send parked offline, a reply typed into a notification) has no send in flight and
+ *  nothing that could still land, which is what outboxEntryLanding already says of it, so there is
+ *  nothing to wait for: it is due as soon as it is written. */
 export function outboxTerminalConfirmedAt(entry: NativeChatOutboxEntry): number {
+  if (entry.unwritten && entry.lastAttemptAt === undefined) {
+    return entry.createdAt
+  }
   return (entry.lastAttemptAt ?? entry.createdAt) + OUTBOX_TERMINAL_CONFIRM_WAIT_MS
 }
 

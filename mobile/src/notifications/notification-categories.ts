@@ -140,9 +140,13 @@ let writes: Promise<unknown> = Promise.resolve()
 /** Changes some of the toggles. The whole record is written, behind every earlier write, so two
  *  quick changes cannot land out of order; the remembered copy changes at once. */
 export function saveNotificationCategories(patch: Partial<NotificationCategoryPreferences>): Promise<void> {
+  const known = remembered
   remembered = { ...(remembered ?? DEFAULT_NOTIFICATION_CATEGORIES), ...patch }
   const write = writes.then(async () => {
-    const next = { ...(await loadNotificationCategories()), ...patch }
+    // What storage holds; failing that, what the phone last knew; the defaults only when it knew
+    // nothing. Storage that cannot be read must not turn a toggle the reader switched off back on.
+    const base = (await readStored()) ?? known ?? DEFAULT_NOTIFICATION_CATEGORIES
+    const next = { ...base, ...patch }
     remembered = next
     try {
       await AsyncStorage.setItem(NOTIFICATION_CATEGORIES_STORAGE_KEY, JSON.stringify(next))

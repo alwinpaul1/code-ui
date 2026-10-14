@@ -24,6 +24,18 @@ describe('the Reply on a finished session, in the root layout', () => {
     expect(branch).toContain('await answerSessionReplyFromResponse(response, productionSessionReplyIo())')
   })
 
+  it('queues one reply per response: the same one arrives twice at a cold start', () => {
+    const reply = handler.indexOf('if (response.actionIdentifier === SESSION_REPLY_ACTION) {')
+    const branch = handler.slice(reply, handler.indexOf('return\n      }', reply))
+    const key = branch.indexOf('const replyKey = sessionReplyTapKey(response)')
+    const guard = branch.indexOf('if (!handledNotificationIdsRef.current.has(replyKey)) {')
+    const answer = branch.indexOf('await answerSessionReplyFromResponse(')
+    expect(key).toBeGreaterThanOrEqual(0)
+    expect(guard).toBeGreaterThan(key)
+    expect(branch.indexOf('handledNotificationIdsRef.current.add(replyKey)')).toBeGreaterThan(guard)
+    expect(answer).toBeGreaterThan(branch.indexOf('handledNotificationIdsRef.current.add(replyKey)'))
+  })
+
   it('never navigates for a reply, and clears the response like every other button', () => {
     const reply = handler.indexOf('if (response.actionIdentifier === SESSION_REPLY_ACTION) {')
     const closing = handler.indexOf('return\n      }', reply)
