@@ -61,6 +61,7 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { resetHostImagePreviewCacheForTests, useHostImagePreviews } from './use-host-image-previews'
 import { useCcrSessionImages } from './use-ccr-session-images'
+import { useCcrSessionModel } from './use-ccr-session-model'
 import { resetCcrPipelineForTests, type CcrPipelineDeps } from './ccr-session-pipeline'
 import { showAgentImage } from './agent-image-visibility'
 import { ThemeProvider } from '../theme/theme-context'
@@ -271,6 +272,25 @@ describe('pictures pasted into a prompt on the desktop', () => {
     const root = render([PASTE_ROW], previews(), PASTE_ID, scheme)
     expect(imageUris(root)).toEqual([])
     expect(labels(root).filter((label) => label.startsWith('Image on Desktop')).length).toBe(2)
+  })
+
+  // Review of 2026-10-14: the controller mounts the model hook first. Its
+  // match-only run held the tab's one in-flight slot, the pictures' run joined
+  // it with nothing wanted, and the pasted pictures never came.
+  it('arrive when the model hook matched the tab first, in the controller’s order', async () => {
+    const { deps } = depsFor(matchingRoutes())
+    let remote: ReturnType<typeof useCcrSessionImages> | null = null
+    const local = {}
+    function Both() {
+      useCcrSessionModel({ enabled: true, tabId: 'tab-1', messages: [PASTE_ROW], epoch: 1, deps })
+      remote = useCcrSessionImages({ enabled: true, tabId: 'tab-1', messages: [PASTE_ROW], localPreviews: local, epoch: 1, deps })
+      return null
+    }
+    await act(async () => {
+      probe = create(createElement(Both))
+    })
+    await settle()
+    expect(remote!.byUserMessageId[PASTE_ID]).toEqual([JPEG_URI, PNG_URI])
   })
 
   it('leave a message the phone holds its own previews for alone', async () => {

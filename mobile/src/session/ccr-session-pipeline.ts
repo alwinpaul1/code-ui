@@ -57,23 +57,30 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  * the length); a token never reaches one.
  */
 
-const inFlight = new Map<string, Promise<CcrPipelineResult>>()
+const inFlight = new Map<string, { run: Promise<CcrPipelineResult>; wanted: ReadonlySet<string> }>()
 
 export function resetCcrPipelineForTests(): void {
   inFlight.clear()
   resetCcrCacheForTests()
 }
 
-/** Runs once per tab at a time; a second call while one runs shares it. */
+/**
+ * Runs once per tab at a time. A call that wants nothing the run in flight
+ * does not shares it; a call that wants more waits for it and then runs with
+ * its own list, on the match the first run made. Shared blindly, the model
+ * hook's match-only run swallowed the pictures' request (review of
+ * 2026-10-14).
+ */
 export function runCcrImagePipeline(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<CcrPipelineResult> {
+  const ids = [...input.wanted.toolUseIds, ...input.wanted.userMessageIds]
   const running = inFlight.get(input.tabId)
   if (running) {
-    return running
+    return ids.every((id) => running.wanted.has(id)) ? running.run : running.run.then(() => runCcrImagePipeline(input, deps))
   }
   const run = runOnce(input, deps).finally(() => {
     inFlight.delete(input.tabId)
   })
-  inFlight.set(input.tabId, run)
+  inFlight.set(input.tabId, { run, wanted: new Set(ids) })
   return run
 }
 

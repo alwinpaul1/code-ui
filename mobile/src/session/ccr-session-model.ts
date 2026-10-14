@@ -6,8 +6,8 @@ import { claudeTranscriptModelName, type ModelPillPair } from './claude-transcri
  * to Anthropic (`external_metadata.model` and `.effort_level`, see
  * ccr-session-api.ts), as the composer pill's pair.
  *
- * The session's own word, like the beacon, so the two are weighed by age: the
- * newer one states the pair. Never a guess: an id this phone cannot name as a
+ * The session's own word, used where the terminal states nothing (no beacon,
+ * no badge, no recorded /model): a hand-started tab, a Windows host. Never a guess: an id this phone cannot name as a
  * Claude model, or a reading older than CCR_MODEL_FRESH_MS or from before the
  * relay last connected, is not used, and the pill keeps today's sources.
  */
@@ -90,19 +90,18 @@ export function resetCcrModelForTests(): void {
 }
 
 /**
- * The pill's pair: the API's when it is fresh and newer than the last beacon
- * the phone heard (`beaconAt`, null when none), else `today` unchanged. The
- * pair travels whole: the API's model never takes another source's effort.
+ * The pill's pair: the API's only where nothing live states one, else
+ * `today` unchanged. A beacon heard at all, the badge, or a `/model` command
+ * the transcript recorded (all in `today.model`) is the session speaking
+ * through the terminal, and it wins: the API row's age is the phone's read,
+ * not when Claude Code wrote it, so a row fetched after a switch can still
+ * name the old model (review of 2026-10-14). The reading still outranks the
+ * transcript scan's fallback, which `claudeModelPillPair` applies after this.
+ * The pair travels whole: the API's model never takes another source's effort.
  */
 export function preferCcrModelPair<T extends ModelPillPair>(today: T, reading: CcrModelReading | null, beaconAt: number | null): T {
-  if (!reading) {
+  if (!reading || beaconAt !== null || today.model) {
     return today
   }
-  if (beaconAt !== null && beaconAt >= reading.fetchedAt) {
-    return today
-  }
-  if (today.model === reading.model && today.effort === reading.effort) {
-    return today
-  }
-  return { ...today, model: reading.model, label: today.model === reading.model ? today.label : null, effort: reading.effort }
+  return { ...today, model: reading.model, label: null, effort: reading.effort }
 }

@@ -100,7 +100,7 @@ describe('the model and effort a matched session reports', () => {
   it('states the pill’s pair once the tab is matched', async () => {
     await mount({ deps: deps().deps })
     expect(reading).toMatchObject({ sessionId: SESSION_A, model: 'claude-opus-5-5', effort: 'high' })
-    expect(preferCcrModelPair(today, reading, null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'high' })
+    expect(preferCcrModelPair({ model: null, label: null, effort: null }, reading, null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'high' })
   })
 
   it('is re-read every minute while the chat is shown, following an /effort typed on the desktop', async () => {
@@ -178,9 +178,9 @@ describe('the model and effort a matched session reports', () => {
 describe('the composer pill', () => {
   // A structural pin: the pill's pair is read in the controller, where no
   // behavioural test reaches without the whole session screen. It must pass
-  // through preferCcrModelPair with the beacon's time, so a fresh reading the
-  // beacon has not overtaken states the pill, and nothing else does.
-  it('goes through the session’s reported pair, weighed against the beacon', () => {
+  // through preferCcrModelPair with the beacon's time, so a fresh reading
+  // states the pill only where no beacon was heard and nothing live speaks.
+  it('goes through the session’s reported pair, which yields to any beacon', () => {
     const source = readFileSync(join(__dirname, 'use-mobile-native-chat-controller.ts'), 'utf8')
     const code = source
       .split('\n')

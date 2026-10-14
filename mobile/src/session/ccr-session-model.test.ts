@@ -50,30 +50,35 @@ describe('the model a session row reports', () => {
 })
 
 describe('the pill’s pair', () => {
-  it('is the session’s reported pair when fresh and no beacon was heard after it', () => {
-    expect(preferCcrModelPair(today, reading(), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'xhigh' })
-    expect(preferCcrModelPair(today, reading(), 9_000)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'xhigh' })
+  const nothing = { model: null, label: null, effort: null }
+
+  it('is the session’s reported pair when nothing live states one', () => {
+    expect(preferCcrModelPair(nothing, reading(), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'xhigh' })
   })
 
-  it('is today’s when the beacon spoke after the reading', () => {
-    expect(preferCcrModelPair(today, reading(), 10_000)).toBe(today)
-    expect(preferCcrModelPair(today, reading(), 11_000)).toBe(today)
+  // Review of 2026-10-14: a row fetched after the beacon can still name the
+  // model from before a switch (fetchedAt is the phone's read, not when Claude
+  // Code wrote the metadata), and it stated Sonnet over the beacon's Opus.
+  it('never overrides a beacon, however recently the row was fetched', () => {
+    const beacon = { model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'high' }
+    expect(preferCcrModelPair(beacon, reading({ model: 'claude-sonnet-5', fetchedAt: 105 }), 100)).toBe(beacon)
+    expect(preferCcrModelPair(nothing, reading({ fetchedAt: 105 }), 100)).toBe(nothing)
+  })
+
+  it('never overrides a live badge or a /model command the transcript recorded', () => {
+    expect(preferCcrModelPair(today, reading(), null)).toBe(today)
   })
 
   it('is today’s when there is no reading (unmatched, stale or unknown id)', () => {
-    expect(preferCcrModelPair(today, null, null)).toBe(today)
-  })
-
-  it('keeps the agent’s own name when the model is the same one, taking the reported effort', () => {
-    expect(preferCcrModelPair({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'high' }, reading(), null)).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh' })
+    expect(preferCcrModelPair(nothing, null, null)).toBe(nothing)
   })
 
   it('never mixes a reported model with another source’s effort', () => {
-    expect(preferCcrModelPair(today, reading({ effort: null }), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: null })
+    expect(preferCcrModelPair(nothing, reading({ effort: null }), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: null })
   })
 
-  it('reaches the pill over the transcript fallback', () => {
-    const pair = preferCcrModelPair({ model: null, label: null, effort: null }, reading(), null)
+  it('outranks the transcript scan’s fallback in the pill', () => {
+    const pair = preferCcrModelPair(nothing, reading(), null)
     expect(claudeModelPillPair(pair, { kind: 'transcript', model: { model: 'claude-sonnet-5', label: 'Sonnet 5' }, freshAsOf: 0 })).toEqual({
       model: 'claude-opus-5-5',
       label: null,
