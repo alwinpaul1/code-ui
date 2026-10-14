@@ -76,7 +76,11 @@ function mountViewSwitch(
   overrides: Record<string, unknown> = {}
 ) {
   const phoneModeClaimedHandlesRef = { current: new Set<string>() }
+  const coverTerminalUntilPhoneFrame = vi.fn()
+  const armTerminalFirstFrameRevealTimeout = vi.fn()
   const scope = {
+    coverTerminalUntilPhoneFrame,
+    armTerminalFirstFrameRevealTimeout,
     activeHandle,
     sessionTabs: [
       {
@@ -112,6 +116,8 @@ function mountViewSwitch(
   return {
     setDisplayMode,
     phoneModeClaimedHandlesRef,
+    coverTerminalUntilPhoneFrame,
+    armTerminalFirstFrameRevealTimeout,
     rerender(next: Record<string, unknown>) {
       Object.assign(scope, next)
       act(() => {
@@ -384,5 +390,63 @@ describe('the phone-mode claim a drawn subscribe waits on', () => {
     probe.unmount()
 
     expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
+  })
+})
+
+// 2026-10-14, after 0.9.139: "Coming back to the app from the Home screen still
+// reflows the terminal once." The hand-back on the way out resizes the pane to
+// the desk's width while the app is away (terminal-resume-from-home-no-reflow.test.ts).
+describe('coming back from the Home screen', () => {
+  it('covers the terminal on the way out, before its desk-width frame can land', () => {
+    const probe = mountViewSwitch('term-1')
+
+    act(() => {
+      appState.go('background')
+    })
+
+    expect(probe.coverTerminalUntilPhoneFrame).toHaveBeenCalledWith('term-1')
+    const coverOrder = probe.coverTerminalUntilPhoneFrame.mock.invocationCallOrder[0] ?? Infinity
+    const releaseOrder =
+      probe.setDisplayMode.mock.invocationCallOrder[
+        probe.setDisplayMode.mock.calls.findIndex((call) => call[1] === 'desktop')
+      ] ?? -Infinity
+    expect(coverOrder).toBeLessThan(releaseOrder)
+  })
+
+  it('starts the cover timeout only on the way back, with the phone-mode retake', () => {
+    const probe = mountViewSwitch('term-1')
+    act(() => {
+      appState.go('background')
+    })
+    expect(probe.armTerminalFirstFrameRevealTimeout).not.toHaveBeenCalled()
+
+    act(() => {
+      appState.go('active')
+    })
+
+    expect(probe.armTerminalFirstFrameRevealTimeout).toHaveBeenCalledWith('term-1')
+    expect(probe.setDisplayMode).toHaveBeenLastCalledWith('term-1', 'auto')
+  })
+
+  it('degenerate: covers nothing when no terminal is on screen', () => {
+    const probe = mountViewSwitch(null)
+
+    act(() => {
+      appState.go('background')
+    })
+
+    expect(probe.coverTerminalUntilPhoneFrame).not.toHaveBeenCalled()
+  })
+
+  it('covers nothing under chat, where the terminal is not drawn', () => {
+    const probe = mountViewSwitch('term-1', undefined, {
+      nativeChatController: { isTabChatView: () => true, toggleTabChatView: vi.fn(), showNativeChat: true }
+    })
+
+    act(() => {
+      appState.go('background')
+    })
+
+    expect(probe.coverTerminalUntilPhoneFrame).not.toHaveBeenCalled()
   })
 })

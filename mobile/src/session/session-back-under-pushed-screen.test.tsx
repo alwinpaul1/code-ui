@@ -81,6 +81,8 @@ function scopeFor(state: SessionState): MobileSessionPanelRouteActionsModel {
     ],
     setDisplayMode: calls.setDisplayMode,
     phoneModeClaimedHandlesRef: { current: new Set<string>() },
+    coverTerminalUntilPhoneFrame: vi.fn(),
+    armTerminalFirstFrameRevealTimeout: vi.fn(),
     requestLeaveSession: () => calls.requestLeaveSession(),
     nativeChatController: {
       isTabChatView: () => state.showNativeChat,

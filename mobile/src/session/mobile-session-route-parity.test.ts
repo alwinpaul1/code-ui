@@ -266,7 +266,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
 // 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
-const HEAD_CALLBACK_BODY_SHA256 = '2b9905277308385763c9557e01adbea22b42b82f470d5a01fc559dae780ae14c'
+const HEAD_CALLBACK_BODY_SHA256 = '5c7a0dfd0ed0254d5703516abcc55cab928e6204cf631d8eda3f06879c127405'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -476,7 +476,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 683 since 2026-10-14 (later): '/voice-settings' and 'Sign in to Anthropic to dictate', the
 // mic's sign-in gate.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'e4ae456491c5a12150979876190a538ac3953eaecad55a5dba25bda471d594cf'
+  'af7c92bb380b1f6a5f86778656191cb5e02aac04804ad20a5fe558ffc7572ea6'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1093,6 +1093,8 @@ describe('mobile session route extraction parity', () => {
     // useDictationHoldMode.
     // 80 since 2026-10-14 (later): requireAnthropicSignIn.
     expect(main.callbacks).toHaveLength(80)
+    // Bodies re-pinned 2026-10-14 (resume from Home): subscribeToTerminal's server-resize reveal
+    // names its reason by mode (serverResizeRevealReason). Count and identities unchanged.
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     // 24 since 2026-09-19 (night): the outside-worktree prefetch effect in the readers.
@@ -1228,8 +1230,11 @@ describe('mobile session route extraction parity', () => {
     // 683 since 2026-10-14 (later): the sign-in gate's route and toast.
     // 684 since 2026-10-14: the subscribe's 'awaiting-phone-mode' gate, and the controller's
     // 'auto' claim wired into it with its 'active' foreground check
-    // (terminal-phone-mode-before-subscribe.ts).
-    expect(strings).toHaveLength(686)
+    // (terminal-phone-mode-before-subscribe.ts). 683 + 3 = 686 at the merge.
+    // 685 since 2026-10-14 (resume from Home): the stream's server-resize reveal takes its reason
+    // from serverResizeRevealReason (terminal-first-frame-reveal.ts, outside this family), so its
+    // 'resized' literal left. 686 - 1 = 685.
+    expect(strings).toHaveLength(685)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
