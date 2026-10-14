@@ -52,8 +52,15 @@ export function useCcrSessionModel(args: {
         setTick((tick) => tick + 1)
       }
     }
-    void step()
-    const timer = setInterval(() => void step(), CCR_MODEL_REFRESH_MS)
+    // Why: the real deps load with import() and can reject (the secure store or the chunk fails,
+    // or, under Node, react-native under expo-modules-core). Uncaught, that rejection escaped on
+    // every mount and every tick with nothing naming the pill; the pill keeps today's sources.
+    const run = () =>
+      step().catch((error: unknown) => {
+        console.warn(`[ccr-model] could not run: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    void run()
+    const timer = setInterval(() => void run(), CCR_MODEL_REFRESH_MS)
     return () => {
       active = false
       clearInterval(timer)
