@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { X } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
@@ -11,11 +12,16 @@ import { Txt } from '../ui/Txt'
 export function MobileSheetTitleBar({
   title,
   onClose,
-  wrap = false
+  wrap = false,
+  trailing
 }: {
   title: string
   onClose?: () => void
   wrap?: boolean
+  /** A control at the row's end, centred on its height as the cross is at the
+   *  start (the code sheet's Copy). The title keeps its 44 dp each side, so
+   *  anything up to that wide cannot touch it. */
+  trailing?: ReactNode
 }) {
   const { colors, space } = useTheme()
   return (
@@ -53,6 +59,11 @@ export function MobileSheetTitleBar({
           >
             <X size={20} color={colors.textSecondary} />
           </Pressable>
+        </View>
+      ) : null}
+      {trailing ? (
+        <View pointerEvents="box-none" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}>
+          {trailing}
         </View>
       ) : null}
     </View>

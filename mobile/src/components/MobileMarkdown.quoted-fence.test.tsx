@@ -16,6 +16,7 @@ vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram'
 import { MobileMarkdown } from './MobileMarkdown'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
+import { codeBlockCards, codeBlockCode } from './mobile-markdown-code-block.test-support'
 
 // Review, 2026-09-30 (two reviewers): a fence inside a quote reached the HTML
 // pass, so the quote drew `**x** &` for `<b>x</b> &amp;` and a bare `a` for
@@ -69,17 +70,11 @@ function quoteWords(renderer: ReactTestRenderer): string[] {
   )
 }
 
-/** The code blocks: the Views on the scheme's code fill. */
-function codeBlocks(root: ReactTestInstance, scheme: Scheme): ReactTestInstance[] {
-  const fill = (scheme === 'light' ? lightColors : darkColors).codeBg
-  return views(root, (style) => style.backgroundColor === fill)
-}
+/** The code blocks, as cards (a header row over the code): a quoted fence is one too. */
+const codeBlocks = codeBlockCards
 
-/** A code block's code as drawn: each numbered row's line, gutter left out. */
-function codeOf(block: ReactTestInstance): string {
-  const rows = views(block, (style) => style.flexDirection === 'row' && style.alignItems === 'flex-start')
-  return rows.map((row) => textOf(row.findAllByType('Text' as never)[1]!)).join('\n')
-}
+/** A code block's code as drawn, header and label left out. */
+const codeOf = codeBlockCode
 
 /** The document's gap between blocks, which a bar that carries on a quote
  *  has to close for the bar to run unbroken. */
@@ -93,7 +88,7 @@ describe('a fenced code block inside a quote', () => {
     const renderer = render('Before:\n\n> ```\n> <b>x</b> &amp;\n> ```\n\nAfter <b>bold</b>.', scheme)
     const [bar] = bars(renderer)
     expect(bars(renderer)).toHaveLength(1)
-    expect(codeBlocks(bar!, scheme).map(codeOf)).toEqual(['<b>x</b> &amp;'])
+    expect(codeBlocks(bar!).map(codeOf)).toEqual(['<b>x</b> &amp;'])
     // The prose after the quote still goes through the HTML pass.
     expect(textOf(renderer.root)).toContain('After bold.')
     act(() => renderer.unmount())
@@ -101,7 +96,7 @@ describe('a fenced code block inside a quote', () => {
 
   it.each(SCHEMES)('keeps a component tag in a language fence (%s)', (scheme) => {
     const renderer = render('> ```tsx\n> <Text>a</Text>\n> ```', scheme)
-    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['<Text>a</Text>'])
+    expect(codeBlocks(renderer.root).map(codeOf)).toEqual(['<Text>a</Text>'])
     act(() => renderer.unmount())
   })
 
@@ -112,7 +107,7 @@ describe('a fenced code block inside a quote', () => {
     expect(flat(quoteBars[0]!.props.style).borderLeftColor).toBe(
       (scheme === 'light' ? lightColors : darkColors).borderStrong
     )
-    expect(codeBlocks(quoteBars[0]!, scheme).map(codeOf)).toEqual(['x = 1'])
+    expect(codeBlocks(quoteBars[0]!).map(codeOf)).toEqual(['x = 1'])
     // No quote words at all: the fence was all the quote held.
     expect(quoteWords(renderer)).toEqual([])
     expect(textOf(renderer.root)).not.toContain('`')
@@ -121,7 +116,7 @@ describe('a fenced code block inside a quote', () => {
 
   it.each(SCHEMES)('draws a quoted tilde fence as code, not as struck-through text (%s)', (scheme) => {
     const renderer = render('> ~~~\n> git commit -m "**wip**" *.ts\n> ~~~', scheme)
-    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['git commit -m "**wip**" *.ts'])
+    expect(codeBlocks(renderer.root).map(codeOf)).toEqual(['git commit -m "**wip**" *.ts'])
     expect(quoteWords(renderer)).toEqual([])
     expect(textOf(renderer.root)).not.toContain('~')
     act(() => renderer.unmount())
@@ -130,10 +125,10 @@ describe('a fenced code block inside a quote', () => {
   it.each(SCHEMES)('keeps the words around a quoted fence in the quote, without its language, under one bar (%s)', (scheme) => {
     const renderer = render('> intro\n>\n> ```sh\n> ls *.ts\n> ```\n>\n> outro', scheme)
     expect(quoteWords(renderer)).toEqual(['intro', 'outro'])
-    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['ls *.ts'])
+    expect(codeBlocks(renderer.root).map(codeOf)).toEqual(['ls *.ts'])
     const [first, code, last] = bars(renderer)
     expect(bars(renderer)).toHaveLength(3)
-    expect(codeBlocks(code!, scheme)).toHaveLength(1)
+    expect(codeBlocks(code!)).toHaveLength(1)
     // One quote, one bar: each block after the first closes the gap above it
     // and keeps the same distance inside, so the bar runs unbroken.
     const gap = blockGap(renderer)
@@ -154,7 +149,7 @@ describe('a fenced code block inside a quote', () => {
 
   it.each(SCHEMES)('runs an unclosed quoted fence to the end of the quote as code (%s)', (scheme) => {
     const renderer = render('> ```\n> unclosed `x`', scheme)
-    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['unclosed `x`'])
+    expect(codeBlocks(renderer.root).map(codeOf)).toEqual(['unclosed `x`'])
     expect(quoteWords(renderer)).toEqual([])
     act(() => renderer.unmount())
   })
@@ -163,7 +158,7 @@ describe('a fenced code block inside a quote', () => {
     const renderer = render('- item\n  > ```\n  > <b>x</b>\n  > ```', scheme)
     const [bar] = bars(renderer)
     expect(bars(renderer)).toHaveLength(1)
-    expect(codeBlocks(bar!, scheme).map(codeOf)).toEqual(['<b>x</b>'])
+    expect(codeBlocks(bar!).map(codeOf)).toEqual(['<b>x</b>'])
     expect(textOf(renderer.root)).toContain('item')
     act(() => renderer.unmount())
   })
@@ -180,7 +175,7 @@ describe('a fenced code block inside a quote', () => {
     it.each(SCHEMES)('draws an empty quoted fence as an empty code block, never as backticks (%s)', (scheme) => {
       for (const content of ['> ```\n> ```', '> ```']) {
         const renderer = render(content, scheme)
-        expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual([''])
+        expect(codeBlocks(renderer.root).map(codeOf)).toEqual([''])
         expect(textOf(renderer.root)).not.toContain('`')
         act(() => renderer.unmount())
       }
@@ -190,7 +185,7 @@ describe('a fenced code block inside a quote', () => {
       const renderer = render('> quoted **text**', scheme)
       expect(bars(renderer)).toHaveLength(1)
       expect(quoteWords(renderer)).toEqual(['quoted text'])
-      expect(codeBlocks(renderer.root, scheme)).toHaveLength(0)
+      expect(codeBlocks(renderer.root)).toHaveLength(0)
       act(() => renderer.unmount())
     })
   })
@@ -201,12 +196,12 @@ describe('a fenced code block inside a quote', () => {
 describe('a fenced code block under a list item inside a quote', () => {
   it.each(SCHEMES)('draws as a code block inside the bar, after the item’s words (%s)', (scheme) => {
     const renderer = render('> - run this:\n>   ```sh\n>   pnpm test\n>   ```\n> - then this', scheme)
-    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['pnpm test'])
+    expect(codeBlocks(renderer.root).map(codeOf)).toEqual(['pnpm test'])
     // The items are bullets inside the bar since 2026-10-10, not their `- ` source.
     expect(quoteWords(renderer)).toEqual(['•  run this:', '•  then this'])
     const quoteBars = bars(renderer)
     expect(quoteBars).toHaveLength(3)
-    expect(codeBlocks(quoteBars[1]!, scheme)).toHaveLength(1)
+    expect(codeBlocks(quoteBars[1]!)).toHaveLength(1)
     expect(flat(quoteBars[0]!.props.style).borderLeftColor).toBe(
       (scheme === 'light' ? lightColors : darkColors).borderStrong
     )

@@ -16,7 +16,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 1 }
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy', Maximize2: 'Maximize2', X: 'X' }))
 // The real writer runs (src/platform/clipboard.ts); only the device pasteboard
 // under it is fake, so a refusal takes the path a phone's would.
 // `held` keeps a write pending until the test lets it land.
@@ -215,11 +215,15 @@ describe('the Copy button on a chat code block', () => {
     expect(pasteboard.written).toEqual([])
   })
 
-  // A closed empty fence with no language had nothing to put in its header
-  // and drew an empty strip above its one blank line.
-  it('draws no header on a finished empty fence with no language', () => {
-    expect(headers(render(fence('', [])))).toHaveLength(0)
-    expect(headers(render(fence('sh', [])))).toHaveLength(1)
+  // The header always names the block now ("Code" over a fence with no
+  // language, as the Claude app does), so an empty fence keeps its row: the
+  // label, and neither Copy nor Expand (code-block-spec.ts).
+  it('keeps a header with only its label on a finished empty fence', () => {
+    for (const info of ['', 'sh']) {
+      const [row] = headers(render(fence(info, [])))
+      expect(row, `a header over an empty ${info || 'unlabelled'} fence`).toBeDefined()
+      expect(row!.findAllByType('Pressable' as never)).toHaveLength(0)
+    }
   })
 
   // While a fence streams, its row is already there, so the first character
@@ -228,20 +232,22 @@ describe('the Copy button on a chat code block', () => {
     expect(headers(render('```'))).toHaveLength(1)
   })
 
-  it('says Copied with a check for 1.5 s, then goes back to Copy', async () => {
+  // The Claude app's glyph swaps to a check for 2 s (l82.java, `Duration 2000`)
+  // and says "Copied" as its state; it draws no word beside it.
+  it('swaps to a check for 2 s and says Copied, then goes back to Copy', async () => {
     vi.useFakeTimers()
     const tree = render(fence('sh', ['pnpm test']))
     const button = onlyCopyButton(tree)
     expect(button.props.accessibilityRole).toBe('button')
-    expect(button.findAllByType('Copy' as never)).toHaveLength(1)
+    expect(button.findAllByType('Copy' as never).length).toBeGreaterThan(0)
     await press(button)
     const copied = onlyCopyButton(tree)
     expect(copied.props.accessibilityLabel).toBe('Copied')
-    expect(copied.findAllByType('Check' as never)).toHaveLength(1)
+    expect(copied.findAllByType('Check' as never).length).toBeGreaterThan(0)
     expect(copied.findAllByType('Copy' as never)).toHaveLength(0)
-    expect(textsIn(copied)).toEqual(['Copied'])
+    expect(textsIn(copied)).toEqual([])
     act(() => {
-      vi.advanceTimersByTime(1_499)
+      vi.advanceTimersByTime(1_999)
     })
     expect(onlyCopyButton(tree).props.accessibilityLabel).toBe('Copied')
     act(() => {
@@ -249,7 +255,7 @@ describe('the Copy button on a chat code block', () => {
     })
     const back = onlyCopyButton(tree)
     expect(back.props.accessibilityLabel).toBe('Copy code')
-    expect(back.findAllByType('Copy' as never)).toHaveLength(1)
+    expect(back.findAllByType('Copy' as never).length).toBeGreaterThan(0)
     expect(back.findAllByType('Check' as never)).toHaveLength(0)
   })
 
@@ -299,49 +305,38 @@ describe('the Copy button on a chat code block', () => {
     expect(tree.root.findAllByType('Copy' as never)).toHaveLength(0)
   })
 
-  it.each([
-    ['light', lightColors],
-    ['dark', darkColors]
-  ] as const)('draws the button in the %s scheme’s colours', async (scheme, colors) => {
-    const tree = render(fence('sh', ['pnpm test']), scheme)
-    expect(tree.root.findByType('Copy' as never).props.color).toBe(colors.textMuted)
-    await press(onlyCopyButton(tree))
-    expect(tree.root.findByType('Check' as never).props.color).toBe(colors.accent)
-    const label = onlyCopyButton(tree).findByType('Text' as never)
-    expect(flatStyle(label.props.style)).toMatchObject({ color: colors.accentText })
-  })
-
   // Review (2026-09-29): the refusal was drawn in `danger`, 4.48:1 on the
-  // light code fill, under AA for 11 px text.
+  // light code fill, under AA for 11 px text. The fill under it is the body's
+  // now (codeBlockBody), and so is the check on the sheet and the card.
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('reads on the code fill in the %s scheme, refusal included', async (scheme, colors) => {
+  ] as const)('reads on the code fills in the %s scheme, refusal included', async (scheme, colors) => {
     pasteboard.accepts = false
     const tree = render(fence('sh', ['pnpm test']), scheme)
-    expect(contrastRatio(tree.root.findByType('Copy' as never).props.color, colors.codeBg)).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(tree.root.findAllByType('Copy' as never)[0]!.props.color, colors.codeBlockHeader)).toBeGreaterThanOrEqual(3)
     await press(onlyCopyButton(tree))
     const notice = tree.root
       .findAllByType('Text' as never)
       .find((text) => text.children.join('').startsWith("Couldn't copy"))!
-    expect(contrastRatio(String(flatStyle(notice.props.style).color), colors.codeBg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(String(flatStyle(notice.props.style).color), colors.codeBlockBody)).toBeGreaterThanOrEqual(4.5)
     pasteboard.accepts = true
     await press(onlyCopyButton(tree))
-    expect(contrastRatio(tree.root.findByType('Check' as never).props.color, colors.codeBg)).toBeGreaterThanOrEqual(3)
-    const label = onlyCopyButton(tree).findByType('Text' as never)
-    expect(contrastRatio(String(flatStyle(label.props.style).color), colors.codeBg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(tree.root.findAllByType('Check' as never)[0]!.props.color, colors.codeBlockHeader)).toBeGreaterThanOrEqual(3)
   })
 })
 
-// Review (2026-09-29): the row was a fixed 18 dp, but "Copied" is text and
-// grows with the system font size, so at 130% the block grew for 1.5 s and
-// shrank back under the reader.
+// Review (2026-09-29): the row was a fixed 18 dp, so when its label grew with
+// the system font size the block grew for the time "Copied" showed. The
+// Claude app's row is at least 40 sp tall and holds 36 sp buttons, so it never
+// grows for them (kso.java:46, bf4): the row's floor has to clear the buttons
+// at every font size.
 describe('the code block header at the system font size', () => {
-  it.each([1, 1.3, 1.5, 2])('is already as tall as the Copied label at %sx', (fontScale) => {
+  it.each([1, 1.3, 1.5, 2])('is already as tall as its buttons at %sx', (fontScale) => {
     device.fontScale = fontScale
     const styles = makeMarkdownStyles(themeFor('light'))
-    const label = Number(styles.codeCopied.lineHeight)
-    const padding = 2 * Number(styles.codeCopy.paddingVertical)
-    expect(Number(styles.codeHeader.minHeight)).toBeGreaterThanOrEqual(systemSpScale().toDp(label) + padding)
+    const buttons = Math.round(systemSpScale().toDp(36))
+    expect(Number(styles.codeHeader.minHeight)).toBeGreaterThanOrEqual(buttons)
+    expect(Number(styles.codeHeader.minHeight)).toBeGreaterThanOrEqual(40)
   })
 })

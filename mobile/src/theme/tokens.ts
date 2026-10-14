@@ -135,6 +135,17 @@ export type ThemeColors = {
    *  its placeholder (2026-10-14). Without the prop Android draws AppCompat's
    *  default teal (`colorAccent`, #008577 / #80CBC4), whatever the theme. */
   caret: string
+  /** A fenced code block's header row: `pl7.s` (#F0EFEC light, #0D0D0D dark), as
+   *  `w330.b` fills it (com.anthropic.claude 1.261009.20, 2026-10-14). */
+  codeBlockHeader: string
+  /** The code under that header: `pl7.r` (#F3F3F0 light, #111111 dark). */
+  codeBlockBody: string
+  /** The header's language label and its Copy and Expand glyphs: `pl7.P`, the same
+   *  tone as `composerIcon` (`kso.java` passes it to all three). */
+  codeBlockLabel: string
+  /** The Copy glyph once the code is copied: `ad5.K` (#006300 light, #0CA30C dark),
+   *  the colour `fa20.a` tweens the glyph to over 300 ms. */
+  codeBlockCopied: string
 }
 
 export const lightColors: ThemeColors = {
@@ -194,7 +205,11 @@ export const lightColors: ThemeColors = {
   composerSendGlyph: '#FFFFFF',
   composerSendDisabled: 'rgba(198, 97, 63, 0.4)',
   composerSendGlyphDisabled: 'rgba(255, 255, 255, 0.4)',
-  caret: '#7B7974'
+  caret: '#7B7974',
+  codeBlockHeader: '#F0EFEC',
+  codeBlockBody: '#F3F3F0',
+  codeBlockLabel: '#383835',
+  codeBlockCopied: '#006300'
 }
 
 export const darkColors: ThemeColors = {
@@ -258,7 +273,11 @@ export const darkColors: ThemeColors = {
   composerSendGlyph: '#FFFFFF',
   composerSendDisabled: 'rgba(217, 119, 87, 0.4)',
   composerSendGlyphDisabled: 'rgba(255, 255, 255, 0.4)',
-  caret: '#97958D'
+  caret: '#97958D',
+  codeBlockHeader: '#0D0D0D',
+  codeBlockBody: '#111111',
+  codeBlockLabel: '#C3C2B7',
+  codeBlockCopied: '#0CA30C'
 }
 
 /** The brand red, now the notification tint (the mark itself is black or

@@ -1,10 +1,7 @@
 import { ScrollView, Text, View } from 'react-native'
-import { useTheme } from '../theme/theme-context'
-import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MarkdownCodeHeader } from './MobileMarkdownCodeHeader'
-import { MobileSyntaxLine } from './MobileSyntaxSegments'
-import { gutterWidthForLines } from './mobile-syntax-lines'
+import { MarkdownCodeText } from './MobileMarkdownCodeText'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMarkdownCodeLines } from './mobile-markdown-code-lines'
 import type { MobileMarkdownBlock } from './mobile-markdown-parser'
@@ -14,7 +11,7 @@ import type { ReactNode } from 'react'
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
 /** Kept out of MobileMarkdown.tsx only because that file is at its line
- *  ceiling; a fence is now a numbered, coloured block rather than one Text. */
+ *  ceiling; a fence is a card (header, then coloured code), not one Text. */
 export function renderMarkdownCodeBlock({
   block,
   index,
@@ -47,38 +44,36 @@ export function renderMarkdownCodeBlock({
             )
           }
           const code = mobileMarkdownCodeLines(block.text, block.language)
-          const gutterWidth = gutterWidthForLines(code.lines.length)
           return inQuote(
             block,
             styles,
             index,
-            <View key={index} style={styles.codeBlock}>
-              <MarkdownCodeHeader
-                language={block.language}
-                code={block.text}
-                closed={block.closed}
-                styles={styles}
-              />
-              {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
-                  command or an indented block shreds it, and a reader who
-                  wants to copy a line needs the line. */}
-              {/* The bar is SHOWN, and kept on Android rather than fading, so a
-                  line the phone cannot fit reads as scrollable instead of as
-                  broken. Reported 2026-09-15: the gate command in CLAUDE.md
-                  ended at "npx" and looked truncated — it scrolled the whole
-                  time, nothing said so. Android only draws the bar when the
-                  content actually overflows, so a short fence gets none. */}
-              <ScrollView horizontal showsHorizontalScrollIndicator persistentScrollbar>
-                <MarkdownCodeLines
-                  lines={code.lines}
-                  gutterWidth={gutterWidth}
-                  styles={styles}
-                  selectable={selectable}
-                />
-              </ScrollView>
-              {code.hidden > 0 ? (
-                <Text style={styles.codeTruncated}>{`${code.hidden} more lines`}</Text>
-              ) : null}
+            <View key={index} style={styles.codeBlock} testID="markdown-code-block">
+              <MarkdownCodeHeader language={block.language} code={block.text} styles={styles} />
+              <View style={styles.codeBody} testID="markdown-code-body">
+                {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
+                    command or an indented block shreds it, and a reader who
+                    wants to copy a line needs the line. The 16 dp padding is
+                    inside the scroll, as the Claude app has it, so a long line
+                    scrolls out to the card's edge. */}
+                {/* The bar is SHOWN, and kept on Android rather than fading, so a
+                    line the phone cannot fit reads as scrollable instead of as
+                    broken. Reported 2026-09-15: the gate command in CLAUDE.md
+                    ended at "npx" and looked truncated — it scrolled the whole
+                    time, nothing said so. Android only draws the bar when the
+                    content actually overflows, so a short fence gets none. */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator
+                  persistentScrollbar
+                  contentContainerStyle={styles.codeBodyContent}
+                >
+                  <MarkdownCodeText lines={code.lines} lineStyle={styles.codeText} selectable={selectable} />
+                </ScrollView>
+                {code.hidden > 0 ? (
+                  <Text style={styles.codeTruncated}>{`${code.hidden} more lines`}</Text>
+                ) : null}
+              </View>
             </View>
           )
 
@@ -100,41 +95,6 @@ function inQuote(
   return (
     <View key={key} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
       {drawn}
-    </View>
-  )
-}
-
-/** A fence's lines in the theme's code colours. A component of its own so it
- *  can read the theme: the fence sits on the themed code fill, and the
- *  dark-only default drew plain code near-white on cream in light mode
- *  (2026-09-26). */
-function MarkdownCodeLines({
-  lines,
-  gutterWidth,
-  styles,
-  selectable
-}: {
-  lines: MobileSyntaxSegment[][]
-  gutterWidth: number
-  styles: MarkdownStyles
-  selectable: boolean
-}) {
-  const { syntax } = useTheme()
-  return (
-    <View>
-      {lines.map((segments, lineIndex) => (
-        <MobileSyntaxLine
-          key={lineIndex}
-          number={lineIndex + 1}
-          segments={segments}
-          gutterWidth={gutterWidth}
-          gutterDigits={String(lines.length).length}
-          lineStyle={styles.codeText}
-          gutterStyle={styles.codeGutter}
-          selectable={selectable}
-          palette={syntax}
-        />
-      ))}
     </View>
   )
 }

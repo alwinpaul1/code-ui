@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { PixelRatio, StyleSheet } from 'react-native'
 import { systemSpScale } from './system-font-scale'
+import { CODE_BLOCK_LABEL_LINE_HEIGHT, CODE_BLOCK_LABEL_SIZE, CODE_BLOCK_SPEC } from './code-block-spec'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
@@ -45,13 +46,6 @@ export function markdownScreenDensity(): number {
   }
 }
 
-/** The Copy icon on a fence's header, in dp: an icon does not follow the
- *  system font size. */
-export const MARKDOWN_CODE_COPY_ICON_SIZE = 14
-const CODE_COPY_PADDING_VERTICAL = 2
-/** The "Copied" label's line, in sp: text does follow the font size. */
-const CODE_COPIED_LINE_HEIGHT = 14
-
 export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY) {
   const { colors, fonts, radius, space } = theme
   const { prose, chip } = typography
@@ -63,12 +57,13 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
     typography === DEFAULT_MARKDOWN_TYPOGRAPHY
       ? MARKDOWN_INLINE_CHIP_BASELINE_SHIFT
       : markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography))
-  // Tall enough for "Copied" at this phone's font size, which grows with it
-  // while the icon does not: a fixed 18 dp let a block grow for the 1.5 s the
-  // label shows and shrink back under the reader (review, 2026-09-29).
-  const codeHeaderHeight =
-    Math.max(MARKDOWN_CODE_COPY_ICON_SIZE, Math.ceil(spScale.toDp(CODE_COPIED_LINE_HEIGHT))) +
-    2 * CODE_COPY_PADDING_VERTICAL
+  // The header's floor: 40 sp at this phone's font size, never under 40 dp
+  // (kso.java:46, `max(krz.v(40), 40)`). The buttons are 36 sp, so the row
+  // does not grow with the check or the buttons arriving.
+  const codeHeaderHeight = Math.max(
+    Math.ceil(spScale.toDp(CODE_BLOCK_SPEC.header.minHeightSp)),
+    CODE_BLOCK_SPEC.header.minHeightDp
+  )
   // Between one block and the next.
   const blockGap = typography.blockGap ?? space.sm + 2
   return StyleSheet.create({
@@ -195,48 +190,48 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
       lineHeight: prose.lineHeight,
       color: colors.text
     },
+    /** A fence: a card clipped to 12 dp, the header row over the body, as the
+     *  Claude app draws it (code-block-spec.ts). The fills are on the two
+     *  halves, so neither shows a hairline of the other at the corner. */
     codeBlock: {
-      backgroundColor: colors.codeBg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.md,
-      padding: space.md
+      borderRadius: CODE_BLOCK_SPEC.radius,
+      overflow: 'hidden'
     },
-    /** A fence's language and its Copy button (MobileMarkdownCodeHeader). As
-     *  tall as the button at its tallest, with or without a language beside
-     *  it, so a block does not grow when its first character streams in or
-     *  while "Copied" shows. */
+    /** The row over the code: the label on the left, Copy and Expand on the
+     *  right. At least 40 sp tall (and 40 dp), so a block does not grow when
+     *  its first character brings the buttons in, or while the check shows. */
     codeHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       minHeight: codeHeaderHeight,
-      marginBottom: space.xs
+      paddingHorizontal: CODE_BLOCK_SPEC.header.paddingHorizontal,
+      backgroundColor: colors.codeBlockHeader
     },
-    codeLanguage: {
+    /** The fence language, or "Code": small, monospace, in the muted
+     *  `codeBlockLabel` tone. Not upper-cased: the label is the language with
+     *  its first letter capital, as the app writes it. */
+    codeLabel: {
       flexShrink: 1,
-      fontFamily: fonts.medium,
-      fontSize: 10,
-      color: colors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6
+      fontFamily: fonts.mono,
+      fontSize: CODE_BLOCK_LABEL_SIZE,
+      lineHeight: CODE_BLOCK_LABEL_LINE_HEIGHT,
+      color: colors.codeBlockLabel
     },
-    codeCopy: {
+    codeHeaderActions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: space.xs,
-      // Right-aligned whether or not a language sits on its left.
-      marginLeft: 'auto',
-      paddingVertical: CODE_COPY_PADDING_VERTICAL,
-      paddingLeft: space.sm
+      gap: CODE_BLOCK_SPEC.button.gap,
+      // Right-aligned whether or not there is room beside the label.
+      marginLeft: 'auto'
     },
-    codeCopyPressed: {
-      opacity: 0.5
+    /** The code under the header. The padding sits inside the sideways scroll,
+     *  as the app has it: the first column starts 16 dp in and a long line
+     *  scrolls out to the card's edge. */
+    codeBody: {
+      backgroundColor: colors.codeBlockBody
     },
-    codeCopied: {
-      fontFamily: fonts.medium,
-      fontSize: 11,
-      lineHeight: CODE_COPIED_LINE_HEIGHT,
-      color: colors.accentText
+    codeBodyContent: {
+      padding: CODE_BLOCK_SPEC.body.padding
     },
     // The words say it failed; `danger` was 4.48:1 on the light code fill,
     // under AA for text this size (review, 2026-09-29).
@@ -245,7 +240,9 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
       fontSize: 11,
       lineHeight: 15,
       color: colors.textSecondary,
-      marginBottom: space.xs
+      backgroundColor: colors.codeBlockBody,
+      paddingHorizontal: CODE_BLOCK_SPEC.body.padding,
+      paddingTop: space.sm
     },
     codeText: {
       fontFamily: fonts.mono,
@@ -253,19 +250,12 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
       lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.text
     },
-    /** The line number beside a fence: dim, so the gutter reads as chrome and
-     *  the eye stays on the code. Same weight the file reader's gutter uses. */
-    codeGutter: {
-      fontFamily: fonts.mono,
-      fontSize: MARKDOWN_BASE_SIZE - 2,
-      lineHeight: MARKDOWN_BASE_SIZE + 5,
-      color: colors.textMuted
-    },
     codeTruncated: {
       fontFamily: fonts.regular,
       fontSize: 11,
       color: colors.textMuted,
-      marginTop: space.xs
+      paddingHorizontal: CODE_BLOCK_SPEC.body.padding,
+      paddingBottom: space.md
     },
     /** A drawn figure, a block of its own between prose runs; see
      *  MobileMarkdown for why it is not inside the run. */
