@@ -22,6 +22,10 @@ vi.mock('lucide-react-native', () => ({
   Paperclip: 'Paperclip',
   FileUp: 'FileUp',
   Zap: 'Zap',
+  // The Permission row's glyph per mode (permission-mode-appearance.ts).
+  Code: 'Code',
+  Hand: 'Hand',
+  ScrollText: 'ScrollText',
   ChevronRight: 'ChevronRight'
 }))
 vi.mock('../theme/theme-context', () => ({

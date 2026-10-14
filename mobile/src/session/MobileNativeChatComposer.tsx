@@ -8,7 +8,6 @@ import { Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
 import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
-import { MobileNativeChatModeChip } from './MobileNativeChatModeChip'
 import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 import type {
   TerminalAgentMode,
@@ -526,7 +525,6 @@ export function MobileNativeChatComposer({
                 attachmentCount={nativeChatAttachmentCount(attachments)}
               />
             ) : null}
-            <MobileNativeChatModeChip {...{ agent, agentMode, permissionMode, disabled }} onPress={onSelectPermissionMode && (() => setShowModeSheet(true))} />
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}

@@ -153,6 +153,20 @@ export type ThemeColors = {
   /** The Copy glyph once the code is copied: `ad5.K` (#006300 light, #0CA30C dark),
    *  the colour `fa20.a` tweens the glyph to over 300 ms. */
   codeBlockCopied: string
+  /** The Select mode sheet's glyph tints, one per mode (`ky20.h` / `ky20.i`, com.anthropic.claude
+   *  1.261009.20, read 2026-10-14). Manual's hand is `pl7.P`, the plain secondary text
+   *  (#383835 light, #C3C2B7 dark), the one mode the app leaves uncoloured. */
+  modeManual: string
+  /** Accept edits' code glyph: `pl7.n0`, #9747FF in both schemes (Claude Code's own
+   *  accept-edits purple). 3.6:1 on the dark sheet panel, 4.3:1 on the light one. */
+  modeAcceptEdits: string
+  /** Plan's scroll: `pl7.m0`, #006666 in both schemes (Claude Code's plan-mode teal). The
+   *  app's value is one hex for both, so it is 2.4:1 on the dark sheet panel (6.5:1 light); it
+   *  stays the app's until the user asks for a lifted dark teal. */
+  modePlan: string
+  /** Auto's lightning bolt, and Bypass's: `pl7.e`, the clay (#C6613F light, #D97757 dark), the
+   *  same colour as `composerSend`. */
+  modeAuto: string
 }
 
 export const lightColors: ThemeColors = {
@@ -219,7 +233,11 @@ export const lightColors: ThemeColors = {
   codeBlockHeader: '#F0EFEC',
   codeBlockBody: '#F3F3F0',
   codeBlockLabel: '#383835',
-  codeBlockCopied: '#006300'
+  codeBlockCopied: '#006300',
+  modeManual: '#383835',
+  modeAcceptEdits: '#9747FF',
+  modePlan: '#006666',
+  modeAuto: '#C6613F'
 }
 
 export const darkColors: ThemeColors = {
@@ -290,7 +308,11 @@ export const darkColors: ThemeColors = {
   codeBlockHeader: '#0D0D0D',
   codeBlockBody: '#111111',
   codeBlockLabel: '#C3C2B7',
-  codeBlockCopied: '#0CA30C'
+  codeBlockCopied: '#0CA30C',
+  modeManual: '#C3C2B7',
+  modeAcceptEdits: '#9747FF',
+  modePlan: '#006666',
+  modeAuto: '#D97757'
 }
 
 /** The brand red, now the notification tint (the mark itself is black or

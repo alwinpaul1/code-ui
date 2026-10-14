@@ -45,7 +45,11 @@ vi.mock('lucide-react-native', () => ({
   Image: 'Image',
   Paperclip: 'Paperclip',
   FileUp: 'FileUp',
-  Zap: 'Zap'
+  Zap: 'Zap',
+  // The Permission row's glyph per mode (permission-mode-appearance.ts).
+  Code: 'Code',
+  Hand: 'Hand',
+  ScrollText: 'ScrollText'
 }))
 
 // A shared value that is a real timeline: `withTiming` and `withSpring` hand

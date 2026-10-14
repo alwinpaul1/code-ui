@@ -58,7 +58,11 @@ vi.mock('lucide-react-native', () => ({
   Paperclip: 'Paperclip',
   FileUp: 'FileUp',
   Plus: 'Plus',
-  Zap: 'Zap'
+  Zap: 'Zap',
+  // The Permission row's glyph per mode (permission-mode-appearance.ts).
+  Code: 'Code',
+  Hand: 'Hand',
+  ScrollText: 'ScrollText'
 }))
 
 // The upload itself: the host RPC is not what is under test, only when it starts.
