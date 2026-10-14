@@ -104,6 +104,24 @@ describe('a saved comment under its line', () => {
     expect(onEdit).toHaveBeenCalledWith(COMMENT)
   })
 
+  // Review of 302aa95f8: the words' tap target was also named "Edit comment" and carried the
+  // comment as a hint, so a screen reader said "Edit comment" twice and a reader with hints off
+  // never heard the words.
+  it('names the tap target of the words by the words, and says what a tap does as its hint', () => {
+    render('light')
+    const body = renderer!.root.findByProps({ children: 'Rename this to retryCount' })
+    let node = body.parent
+    while (node && String(node.type) !== 'Pressable') {
+      node = node.parent
+    }
+    expect(node!.props.accessibilityLabel).toBe('Rename this to retryCount')
+    expect(node!.props.accessibilityHint).toBe('Edit comment')
+    const labels = renderer!.root
+      .findAllByType('Pressable' as never)
+      .map((pressable) => pressable.props.accessibilityLabel)
+    expect(labels.filter((label) => label === 'Edit comment')).toHaveLength(1)
+  })
+
   it('opens for editing from a tap on the words too', () => {
     const { onEdit } = render('dark')
     const body = renderer!.root.findByProps({ children: 'Rename this to retryCount' })

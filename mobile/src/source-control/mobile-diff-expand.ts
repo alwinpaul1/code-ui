@@ -124,8 +124,20 @@ export function expandMobileDiffGap(
   return next
 }
 
+/**
+ * A row the fold keeps three lines beside. A change is one, and so are the notes that ride with a
+ * change (git's "\ No newline at end of file" and the row a cut diff ends on) and a line that
+ * carries a comment. The line-endings note is not: it opens the file, says something about all of
+ * it and sits beside no particular change, so counting it kept the first rows on screen for
+ * nothing and turned the top fold into a "between" one.
+ */
 function isAnchor(line: MobileDiffLine, rawIndex: number, pinned: ReadonlySet<number>): boolean {
-  return line.kind !== 'context' || line.note !== undefined || pinned.has(rawIndex)
+  return (
+    line.kind !== 'context' ||
+    line.note?.kind === 'no-newline' ||
+    line.note?.kind === 'truncated' ||
+    pinned.has(rawIndex)
+  )
 }
 
 /** Whether a fold can be built at all: there is a change to fold toward, and the rows still hold
@@ -141,6 +153,33 @@ function canFold(lines: readonly MobileDiffLine[]): boolean {
     }
   }
   return changed
+}
+
+/**
+ * Whether two loads of a file hold the same rows. A comment save or a reconnect loads the diff
+ * again into a new array; what the reader opened is still true of it when no row differs, and is
+ * not when one does (the raw indexes then name other lines).
+ */
+export function sameMobileDiffRows(
+  a: readonly MobileDiffLine[],
+  b: readonly MobileDiffLine[]
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.length !== b.length) {
+    return false
+  }
+  return a.every((line, index) => {
+    const other = b[index]!
+    return (
+      line.kind === other.kind &&
+      line.text === other.text &&
+      line.oldLineNumber === other.oldLineNumber &&
+      line.newLineNumber === other.newLineNumber &&
+      line.note?.kind === other.note?.kind
+    )
+  })
 }
 
 export function buildMobileDiffDisplayRows<T extends MobileDiffLine>(
@@ -168,7 +207,8 @@ export function buildMobileDiffDisplayRows<T extends MobileDiffLine>(
     // A row is hidden when it is unchanged, is not within three rows of an anchor, and has not
     // been opened.
     const hidden = lines.map((_, rawIndex) => {
-      if (anchor[rawIndex] || expansion.has(rawIndex)) {
+      // A note row is always drawn, whether or not it is an anchor.
+      if (anchor[rawIndex] || expansion.has(rawIndex) || lines[rawIndex]!.note !== undefined) {
         return false
       }
       for (let near = 1; near <= MOBILE_DIFF_CONTEXT_LINES; near += 1) {

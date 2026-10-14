@@ -6,6 +6,7 @@ import {
   expandMobileDiffGap,
   mobileDiffGapAction,
   mobileDiffGapLabel,
+  sameMobileDiffRows,
   type MobileDiffDisplayRow,
   type MobileDiffGap
 } from './mobile-diff-expand'
@@ -263,7 +264,62 @@ describe('the degenerate diffs', () => {
     expect(shape(rows)).toEqual(['gap:top:17', 'c:18', 'c:19', 'c:20', 'a:21', 'c:undefined'])
   })
 
+  // Review of 302aa95f8: the note a CRLF-to-LF file carries at its first row was counted as a
+  // change, which kept rows 1-3 on screen for nothing and made the fold above the real change a
+  // "between" fold offering "Expand all" instead of the top fold's "Expand down".
+  it('does not count the line-endings note as a change: the fold above the first change is the top one', () => {
+    const lines: MobileDiffLine[] = [
+      {
+        kind: 'context',
+        text: 'Line endings changed too (CRLF → LF)',
+        note: { kind: 'line-endings', from: 'crlf', to: 'lf', only: false }
+      },
+      ...context(1, 50),
+      added(51),
+      ...context(52, 54)
+    ]
+    const { rows } = buildMobileDiffDisplayRows(lines)
+    expect(shape(rows)).toEqual([
+      'c:undefined',
+      'gap:top:47',
+      'c:48',
+      'c:49',
+      'c:50',
+      'a:51',
+      'c:52',
+      'c:53',
+      'c:54'
+    ])
+    expect(mobileDiffGapAction(gapsOf(rows)[0]!)).toBe('down')
+  })
+
   it('offers no action on a fold that cannot expand either way', () => {
     expect(mobileDiffGapAction({ canExpandUp: false, canExpandDown: false })).toBeNull()
+  })
+})
+
+describe('whether two loads are the same rows', () => {
+  it('is true for a copy and false once a row differs in kind, text or number', () => {
+    const lines = [...context(1, 5), added(6), ...context(7, 9)]
+    expect(sameMobileDiffRows(lines, lines)).toBe(true)
+    expect(sameMobileDiffRows(lines, lines.map((line) => ({ ...line })))).toBe(true)
+    expect(sameMobileDiffRows(lines, lines.slice(0, -1))).toBe(false)
+    expect(
+      sameMobileDiffRows(lines, lines.map((line, index) => (index === 2 ? { ...line, text: 'x' } : line)))
+    ).toBe(false)
+    expect(
+      sameMobileDiffRows(
+        lines,
+        lines.map((line, index) => (index === 2 ? { ...line, newLineNumber: 99 } : line))
+      )
+    ).toBe(false)
+    expect(
+      sameMobileDiffRows(lines, lines.map((line, index) => (index === 5 ? { ...line, kind: 'delete' } : line)))
+    ).toBe(false)
+  })
+
+  it('is true for two empty loads and false for an empty one against a full one', () => {
+    expect(sameMobileDiffRows([], [])).toBe(true)
+    expect(sameMobileDiffRows([], [added(1)])).toBe(false)
   })
 })

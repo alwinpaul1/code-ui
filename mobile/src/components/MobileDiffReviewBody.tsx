@@ -8,6 +8,7 @@ import {
   expandMobileDiffGap,
   mobileDiffGapAction,
   NO_MOBILE_DIFF_EXPANSION,
+  sameMobileDiffRows,
   type MobileDiffDisplayRow,
   type MobileDiffExpandDirection,
   type MobileDiffExpansion
@@ -92,7 +93,9 @@ export function MobileDiffReviewBody({
     return <DiffUnavailableState diffState={diffState} onRetry={onRetry} />
   }
   if (diffState.lines.length === 0) {
-    return <NoChanges />
+    // A queued file with nothing to compare (an empty new file, a mode change), which is not the
+    // repo having no changes.
+    return <CenteredState title="No line changes" text="This file has no lines to compare." />
   }
   return (
     <MobileDiffReviewHunks
@@ -128,13 +131,17 @@ function MobileDiffReviewHunks({
   const styles = useThemedStyles(mobileDiffReviewStyles)
   const innerRef = useRef<FlatList<MobileDiffDisplayRow<ReviewDiffLine>> | null>(null)
   const { lines, hunks } = diffState
-  // What was opened belongs to the rows it was opened on: another file, or the same file loaded
-  // again after a stage or an edit, starts folded again.
+  // What was opened belongs to the rows it was opened on. A load of other rows (another file, or
+  // this one after a stage or an edit) starts folded again; a load of the same rows, which every
+  // comment save and every reconnect brings, keeps what the reader opened.
   const [opened, setOpened] = useState<OpenedFold>({
     lines,
     expansion: NO_MOBILE_DIFF_EXPANSION
   })
-  const expansion = opened.lines === lines ? opened.expansion : NO_MOBILE_DIFF_EXPANSION
+  const expansion = useMemo(
+    () => (sameMobileDiffRows(opened.lines, lines) ? opened.expansion : NO_MOBILE_DIFF_EXPANSION),
+    [lines, opened]
+  )
 
   const gutterWidth = useMemo(
     () =>

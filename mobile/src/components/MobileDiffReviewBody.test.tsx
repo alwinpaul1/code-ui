@@ -225,9 +225,13 @@ describe('the body of the review screen', () => {
       expect(text(description)).toBeDefined()
     })
 
-    it('says there are no changes for a file whose diff has no lines at all', () => {
+    // Review of 302aa95f8: an empty new file or a mode-only change is a queued file, not a repo
+    // with nothing changed, so "No changes yet ... after Claude makes edits" misdescribed it.
+    it('says a file with no lines has none to compare, not that nothing has changed', () => {
       render('light', { diffState: readyDiff({ lines: [] }) })
-      expect(text('No changes yet')).toBeDefined()
+      expect(text('No line changes')).toBeDefined()
+      expect(text('This file has no lines to compare.')).toBeDefined()
+      expect(text('No changes yet')).toBeUndefined()
     })
   })
 
@@ -282,13 +286,14 @@ describe('the body of the review screen', () => {
       expect(text('+44 lines')).toBeDefined()
     })
 
-    it('closes what was opened when a different diff is loaded, even of the same file', () => {
+    // Review of 302aa95f8: a comment save rebuilds the queue, the diff loads again, and the new
+    // array holds the same rows. The reader's open folds shut under them.
+    it('keeps what was opened when the same diff is loaded again as a new array', () => {
       const props = render('light')
       act(() =>
         renderer!.root.findByProps({ accessibilityLabel: 'Expand down, +47 lines' }).props.onPress()
       )
       expect(text('45')).toBeDefined()
-      // The file was staged and loaded again: the same key, new rows.
       act(() =>
         renderer!.update(
           <ThemeProvider initialPreference="light">
@@ -296,8 +301,34 @@ describe('the body of the review screen', () => {
           </ThemeProvider>
         )
       )
+      expect(text('45')).toBeDefined()
+      expect(text('+44 lines')).toBeDefined()
+    })
+
+    it('closes what was opened when the rows that load are different ones', () => {
+      const props = render('light')
+      act(() =>
+        renderer!.root.findByProps({ accessibilityLabel: 'Expand down, +47 lines' }).props.onPress()
+      )
+      expect(text('45')).toBeDefined()
+      // The file was edited and loaded again: the same key, other rows.
+      const original = numbered(100)
+      const modified = [...original]
+      modified[50] = 'CHANGED'
+      modified[10] = 'ALSO CHANGED'
+      act(() =>
+        renderer!.update(
+          <ThemeProvider initialPreference="light">
+            <MobileDiffReviewBody
+              {...props}
+              diffState={readyDiff(
+                buildMobileDiffLines(`${original.join('\n')}\n`, `${modified.join('\n')}\n`)
+              )}
+            />
+          </ThemeProvider>
+        )
+      )
       expect(text('45')).toBeUndefined()
-      expect(text('+47 lines')).toBeDefined()
     })
 
     it('draws a one-line diff as that line alone, with no fold', () => {

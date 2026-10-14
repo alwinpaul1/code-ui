@@ -6,6 +6,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 
@@ -117,7 +118,9 @@ describe('the comment composer', () => {
     const field = renderer!.root.findByType('TextInput' as never)
     expect(field.props.placeholder).toBe('Tell Claude what to change')
     expect(field.props.placeholderTextColor).toBe(colors.composerPlaceholder)
-    expect(styleOf(field)).toMatchObject({ color: colors.text, fontSize: 17 })
+    // The size is the platform seam's, not the app's 17 sp: text-input-font-size.test.ts pins every
+    // page-served input to it (iOS zooms the page for anything under 16 px).
+    expect(styleOf(field)).toMatchObject({ color: colors.text, fontSize: TEXT_INPUT_FONT_SIZE })
   })
 
   it('names the field for the line being commented on, as the app does', () => {

@@ -130,10 +130,11 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       borderColor: colors.border,
       backgroundColor: colors.bgPanel,
       color: colors.text,
-      // The app's field is 17 sp (`jn7.B`). Through the seam, as the commit bar is, so the page
-      // never draws it under what the platform needs: 14px focuses into a zoomed page on iOS.
-      fontSize: Math.max(TEXT_INPUT_FONT_SIZE, 17),
-      lineHeight: 24,
+      // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS. The
+      // Claude app's field is 17 sp (`jn7.B`); text-input-font-size.test.ts pins every
+      // page-served input to the seam, so this stays the platform's size.
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      lineHeight: 20,
       padding: spacing.md,
       textAlignVertical: 'top'
     },

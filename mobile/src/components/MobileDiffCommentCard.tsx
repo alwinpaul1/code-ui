@@ -56,8 +56,8 @@ export function MobileDiffCommentCard({ comment, stale, onEdit, onDelete }: Prop
         <Pressable
           onPress={() => onEdit(comment)}
           accessibilityRole="button"
-          accessibilityLabel="Edit comment"
-          accessibilityHint={comment.body}
+          accessibilityLabel={comment.body}
+          accessibilityHint="Edit comment"
         >
           <Text style={styles.body}>{comment.body}</Text>
         </Pressable>
