@@ -2,7 +2,11 @@ import * as SecureStore from 'expo-secure-store'
 import * as Crypto from 'expo-crypto'
 import * as Linking from 'expo-linking'
 
-const STORE_KEY = 'anthropic-dictation-oauth'
+/** v2 since 2026-10-14: tokens carry Claude Code's six login scopes. A sign-in stored under the
+ *  old key holds the three-scope token the voice server refused, so it no longer counts and is
+ *  deleted on the next read; the mic then asks for a new sign-in. */
+const STORE_KEY = 'anthropic-dictation-oauth-v2'
+const PRE_SCOPES_STORE_KEY = 'anthropic-dictation-oauth'
 const VERIFIER_KEY = 'anthropic-dictation-pkce-verifier'
 const STATE_KEY = 'anthropic-dictation-oauth-state'
 
@@ -11,11 +15,17 @@ const AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize'
 const TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'
 const REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback'
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
-const SCOPES = [
-  'user:inference',
+/** Claude Code 2.1.296's claude.ai scopes: it refreshes with these (its lpt()) and logs in with
+ *  org:create_api_key in front (its DTo()). 0.9.139 asked for three of them, and the voice server
+ *  refused that token (2026-10-14). */
+const REFRESH_SCOPES = [
   'user:profile',
-  'user:sessions:claude_code'
+  'user:inference',
+  'user:sessions:claude_code',
+  'user:mcp_servers',
+  'user:file_upload'
 ]
+const LOGIN_SCOPES = ['org:create_api_key', ...REFRESH_SCOPES]
 
 export type StoredCredential = {
   readonly accessToken: string
@@ -129,7 +139,7 @@ export async function startLogin(): Promise<string> {
     client_id: CLIENT_ID,
     response_type: 'code',
     redirect_uri: REDIRECT_URI,
-    scope: SCOPES.join(' '),
+    scope: LOGIN_SCOPES.join(' '),
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
     state
@@ -204,7 +214,7 @@ export async function refreshAccessToken(
       grant_type: 'refresh_token',
       refresh_token: credential.refreshToken,
       client_id: CLIENT_ID,
-      scope: SCOPES.join(' ')
+      scope: REFRESH_SCOPES.join(' ')
     })
   })
   if (!res.ok) {
@@ -230,6 +240,7 @@ export async function storeCredential(
 }
 
 export async function readCredential(): Promise<StoredCredential | null> {
+  await SecureStore.deleteItemAsync(PRE_SCOPES_STORE_KEY).catch(() => undefined)
   const raw = await SecureStore.getItemAsync(STORE_KEY)
   if (!raw) {
     return null

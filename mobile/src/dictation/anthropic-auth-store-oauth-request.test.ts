@@ -87,6 +87,17 @@ describe('the sign-in page Voice settings opens', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256')
   })
 
+  // Claude Code 2.1.296's claude.ai login asks for these six (its DTo(): org:create_api_key and
+  // user:profile, then user:profile, user:inference, user:sessions:claude_code, user:mcp_servers,
+  // user:file_upload, de-duplicated). 0.9.139 asked for three, and its token was refused by the
+  // voice server (2026-10-14).
+  it("asks for the scopes Claude Code's own claude.ai login asks for", async () => {
+    const url = await openedLogin()
+    expect(url.searchParams.get('scope')).toBe(
+      'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload'
+    )
+  })
+
   it('draws a fresh state for every sign-in', async () => {
     const first = (await openedLogin()).searchParams.get('state')
     const second = (await openedLogin()).searchParams.get('state')
@@ -148,7 +159,19 @@ describe('refreshing the token', () => {
     expect(JSON.parse(posted[0]!.body)).toMatchObject({
       grant_type: 'refresh_token',
       refresh_token: 'rt-old',
-      scope: 'user:inference user:profile user:sessions:claude_code'
+      // Claude Code refreshes with its lpt() list: the login's scopes without org:create_api_key.
+      scope: 'user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload'
     })
+  })
+})
+
+describe('a sign-in from before the scopes changed', () => {
+  it('no longer counts as signed in, so the mic asks for a new sign-in', async () => {
+    fake.store.set(
+      'anthropic-dictation-oauth',
+      JSON.stringify({ accessToken: 'three-scope-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 })
+    )
+    expect(await readCredential()).toBeNull()
+    expect(fake.store.has('anthropic-dictation-oauth')).toBe(false)
   })
 })

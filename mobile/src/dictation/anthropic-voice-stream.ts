@@ -44,6 +44,24 @@ const SAFETY_TIMEOUT_MS = 5000
  *  every message that does arrive. */
 const NO_DATA_TIMEOUT_MS = 1500
 
+/** The Anthropic API's error shape, `{ type: 'error', error: { type, message }, request_id }`, as
+ *  one line naming the reason and the request id to look up; null for any other shape. */
+function apiErrorMessage(msg: Record<string, unknown>): string | null {
+  const error = msg.error
+  if (typeof error !== 'object' || error === null) {
+    return null
+  }
+  const { type, message } = error as { type?: unknown; message?: unknown }
+  const reason = typeof message === 'string' && message ? message : null
+  const detail = [typeof type === 'string' ? type : null, typeof msg.request_id === 'string' ? msg.request_id : null]
+    .filter((part): part is string => part !== null)
+    .join(', ')
+  if (!reason && !detail) {
+    return null
+  }
+  return `Voice server: ${reason ?? 'error'}${detail ? ` (${detail})` : ''}`
+}
+
 export class AnthropicVoiceStream {
   private ws: WebSocket | null = null
   private callbacks: VoiceStreamCallbacks | null
@@ -242,7 +260,7 @@ export class AnthropicVoiceStream {
         // Claude Code logs the frame's keys when it has no message; "unstructured server error"
         // alone said nothing about which frame it was (2026-10-14).
         const message =
-          (msg.message as string) ??
+          (msg.message as string) ?? apiErrorMessage(msg) ??
           `Voice server error (keys: ${Object.keys(msg).join(', ')})`
         this.promoteInterim('server error')
         if (!this.done) {

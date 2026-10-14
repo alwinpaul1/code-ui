@@ -99,6 +99,25 @@ describe('the voice_stream socket', () => {
     expect(errors).toEqual(['Voice server error (keys: type, error_code)'])
   })
 
+  // 0.9.139 on the phone (2026-10-14): "Voice server error (keys: type, error, request_id)". That is
+  // the Anthropic API's error shape; the reason is in error.message, and the request id is what
+  // to look up, so both are said.
+  it("says the server's own reason and request id for an API-shaped error frame", () => {
+    const errors: string[] = []
+    const stream = new AnthropicVoiceStream({ accessToken: 'tok' }, { onError: (e) => errors.push(e.message) })
+    stream.connect()
+    FakeSocket.last!.onmessage!({
+      data: JSON.stringify({
+        type: 'error',
+        error: { type: 'permission_error', message: 'OAuth token does not meet scope requirement' },
+        request_id: 'req_011CabcDEF'
+      })
+    })
+    expect(errors).toEqual([
+      'Voice server: OAuth token does not meet scope requirement (permission_error, req_011CabcDEF)'
+    ])
+  })
+
   it('says why the server closed the stream', () => {
     const errors: string[] = []
     const stream = new AnthropicVoiceStream({ accessToken: 'tok' }, { onError: (e) => errors.push(e.message) })
