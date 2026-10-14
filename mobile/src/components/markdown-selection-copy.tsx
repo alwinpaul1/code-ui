@@ -11,7 +11,13 @@ import type { ReactNode } from 'react'
 /** Only Android's native root can stop a hold without switching `selectable` off. */
 export const MARKDOWN_ROOT_GUARDS_HOLDS = false
 
-export function MarkdownSelectionRoot({ children }: { children: ReactNode; holdSelects?: boolean }): ReactNode {
+export function MarkdownSelectionRoot({
+  children
+}: {
+  children: ReactNode
+  holdSelects?: boolean
+  document?: string
+}): ReactNode {
   return children
 }
 

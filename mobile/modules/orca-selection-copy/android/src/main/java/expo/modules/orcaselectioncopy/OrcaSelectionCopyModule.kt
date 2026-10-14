@@ -26,6 +26,11 @@ class OrcaSelectionCopyModule : Module() {
       }
 
       // False while the chat scrolls: a hold below starts no selection, an open one stays.
+      // A selection this document held before its row went away (chat-held-selection.ts).
+      Prop("restoreSelection") { view: SelectionCopyRootView, held: Map<String, Any?>? ->
+        view.setRestoreSelection(heldSelectionOf(held))
+      }
+
       Prop("holdSelects") { view: SelectionCopyRootView, holds: Boolean? ->
         view.setHoldSelects(holds != false)
       }

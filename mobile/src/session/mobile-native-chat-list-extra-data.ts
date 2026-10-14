@@ -11,9 +11,9 @@ const MAX_DRAW_DISTANCE_DP = 1200
  * How far past the visible window FlashList prepares cells, in dp.
  *
  * One screen-height of runway, whatever the screen. The default 250dp is under
- * a third of a phone screen, and with recycling off every newly exposed message
- * is a fresh mount — markdown, code blocks and all — so a scroll outruns what
- * is ready and the content lands late.
+ * a third of a phone screen, and every newly exposed message is drawn fresh —
+ * markdown, code blocks and all — so a scroll outruns what is ready and the
+ * content lands late.
  *
  * Deliberately measured against the WINDOW, not the visible list: the keyboard
  * shrinks the list but not how far a flick travels, so sizing off the visible
@@ -28,19 +28,23 @@ export function chatListDrawDistanceDp(windowHeightDp: number): number {
   )
 }
 
+/** The item type of every row that holds no selection: they recycle among themselves. */
+export const CHAT_ROW_ITEM_TYPE = 'message'
+
 /**
- * Each message its own FlashList item type, so a row only ever draws the message it was made for.
+ * FlashList's item type for a chat row: one shared type, except for the row holding a selection.
  *
- * `maxItemsInRecyclePool={0}` does not stop recycling. In FlashList 2.3.2's
- * RenderStackManager.sync a row leaving the window goes into its type's pool and a message
- * entering the window in the same sync takes it; the cap only trims what is left afterwards. With
- * one type for every message, a scroll handed the row holding a selection, TextViews and all, to
- * another message, and the highlight came back on words nobody selected (the user's phone,
- * 2026-10-14 13:30; the Claude app keeps a selection on its words). With a type per message no
- * other message can take the row, and one that leaves the window unmounts, as the cap intended.
+ * In FlashList 2.3.2's RenderStackManager.sync a row leaving the window goes into its type's pool
+ * and a message entering the window in the same sync takes it. With one type for every message, a
+ * scroll handed the row holding a selection, TextViews and all, to another message, and the
+ * highlight came back on words nobody selected (the user's phone, 2026-10-14 13:30; the Claude app
+ * keeps a selection on its words). 8827567bf gave every message its own type, which stopped all
+ * recycling. Now only the row holding a selection has its own type: no other message can take it,
+ * and (with no pool cap on the list) it stays drawn when it leaves the window, so the selection
+ * is still there when the reader comes back. Every other row recycles as FlashList means it to.
  */
-export function chatRowItemType(row: { id: string }): string {
-  return row.id
+export function chatRowItemType(row: { id: string }, held: ReadonlySet<string>): string {
+  return held.has(row.id) ? `held:${row.id}` : CHAT_ROW_ITEM_TYPE
 }
 
 /**

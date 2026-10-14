@@ -598,7 +598,7 @@ function MobileMarkdownInner({
       })}
     </View>
   )
-  return <MarkdownSelectionRoot holdSelects={holdSelects}>{drawn}</MarkdownSelectionRoot>
+  return <MarkdownSelectionRoot holdSelects={holdSelects} document={identity}>{drawn}</MarkdownSelectionRoot>
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)

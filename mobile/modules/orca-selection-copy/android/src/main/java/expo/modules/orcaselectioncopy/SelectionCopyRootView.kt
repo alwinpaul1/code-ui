@@ -124,36 +124,100 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
     if (originalView !is TextView || menu == null) {
       return super.startActionModeForChild(originalView, menu, type)
     }
-    return super.startActionModeForChild(originalView, SelectionLifeCallback(menu, originalView) { active -> selectionChanged(active) }, type)
+    val run = textViewsBelow(this).indexOf(originalView)
+    return super.startActionModeForChild(originalView, SelectionLifeCallback(menu, originalView, run, ::selectionChanged), type)
   }
 
-  private fun selectionChanged(active: Boolean) {
+  private fun selectionChanged(active: Boolean, held: HeldSelection?) {
     try {
-      onSelectionChange(mapOf("active" to active))
+      val payload: Map<String, Any> =
+        if (held == null) {
+          mapOf("active" to active)
+        } else {
+          mapOf("active" to active, "run" to held.run, "start" to held.start, "end" to held.end, "words" to held.words)
+        }
+      onSelectionChange(payload)
     } catch (error: RuntimeException) {
       // The selection itself must never break over this; the chat then behaves as before.
       Log.w("OrcaSelectionCopy", "Could not report a selection ${if (active) "opening" else "closing"}", error)
     }
   }
+
+  /** A selection this document held before its row went away (chat-held-selection.ts), to put
+   *  back once its Text is drawn; null when there is none, or it is back. */
+  private var pendingRestore: HeldSelection? = null
+
+  internal fun setRestoreSelection(held: HeldSelection?) {
+    pendingRestore = held
+    if (held != null) {
+      post { restoreHeld() }
+    }
+  }
+
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    super.onLayout(changed, l, t, r, b)
+    if (pendingRestore != null) {
+      post { restoreHeld() }
+    }
+  }
+
+  /** Puts [pendingRestore] back on the Text it was in, if that Text draws the same words there. */
+  private fun restoreHeld() {
+    val held = pendingRestore ?: return
+    val text = textViewsBelow(this).getOrNull(held.run) ?: return
+    if (text.text.length < held.end || text.width == 0) {
+      // Not drawn yet (or still streaming in): the next layout tries again.
+      return
+    }
+    pendingRestore = null
+    if (reselect(text, held)) {
+      Log.i("OrcaSelectionCopy", "Selection put back on a row drawn again (${held.end - held.start} chars)")
+    } else {
+      Log.w("OrcaSelectionCopy", "Selection not put back: its words no longer stand where they were")
+    }
+  }
+}
+
+/** Every TextView at or under [view], in drawing order: how a selection names its Text ([HeldSelection.run]). */
+internal fun textViewsBelow(view: View): List<TextView> {
+  val found = ArrayList<TextView>()
+  fun walk(at: View) {
+    if (at is TextView) {
+      found.add(at)
+    }
+    if (at is ViewGroup) {
+      for (index in 0 until at.childCount) {
+        walk(at.getChildAt(index))
+      }
+    }
+  }
+  walk(view)
+  return found
 }
 
 /**
- * A Text's selection menu, unchanged, that says when it opens and closes: a created action mode
- * is a selection on screen, a destroyed one a selection gone (a tap away, a Copy, the Text leaving
- * the window). Everything else is the wrapped menu's.
+ * A Text's selection menu, unchanged, that reports the selection it stands for: opened, moved by
+ * its handles, closed. Everything else is the wrapped menu's.
  *
- * While it is open it also watches the words it was made on. A list that hands this Text to
- * another message (FlashList did, 2026-10-14 13:30: the highlight came back on other words) gives
- * it new text, and a selection must not survive onto words nobody selected: before the next frame
- * the selection is removed and the menu closed, with a line in the log.
+ * It watches the selection before each frame for as long as its words are selected, menu or not:
+ * - The Text was given new text (a streaming reply grew, a list reused the view). Android ends a
+ *   selection on any new text; where the selected words still stand at the same place
+ *   ([selectionStillHolds]) the selection is put back with its menu ([reselect]), as the Claude app
+ *   keeps a selection while a reply grows. Where they do not (another message's words, an edit
+ *   inside the range) it is dropped, the menu closed, and the log says so (FlashList handed the
+ *   view to another message on 2026-10-14 13:30 and the highlight came back on other words).
+ * - The reader dragged a handle: the new range is reported, so the chat holds the words they mean.
+ * - The words are no longer selected (a tap away, a Copy): reported closed.
  */
 internal class SelectionLifeCallback(
   private val inner: ActionMode.Callback,
   private val text: TextView,
-  private val changed: (Boolean) -> Unit
+  private val run: Int,
+  private val report: (Boolean, HeldSelection?) -> Unit
 ) : ActionMode.Callback2(), ViewTreeObserver.OnPreDrawListener {
-  // The words, not the object: a re-render that sets the same words again is not another message.
-  private var heldText: String? = null
+  private var held: HeldSelection? = null
+  // The words the Text drew when last looked at: a re-render that sets the same words is no change.
+  private var lastText: String? = null
   private var liveMode: ActionMode? = null
   private var observer: ViewTreeObserver? = null
 
@@ -161,23 +225,49 @@ internal class SelectionLifeCallback(
     val created = inner.onCreateActionMode(mode, menu)
     if (created) {
       Log.i("OrcaSelectionCopy", "Selection opened in ${text.javaClass.simpleName} (${text.selectionEnd - text.selectionStart} chars)")
-      heldText = text.text.toString()
+      held = heldSelectionIn(text, run)
+      lastText = text.text.toString()
       liveMode = mode
       observer = text.viewTreeObserver.also { it.addOnPreDrawListener(this) }
-      changed(true)
+      report(true, held)
     }
     return created
   }
 
   override fun onPreDraw(): Boolean {
-    val mode = liveMode ?: return true
-    if (text.text.toString() != heldText) {
-      Log.w("OrcaSelectionCopy", "Selection dropped: the Text was given other words (${text.javaClass.simpleName})")
-      (text.text as? Spannable)?.let { Selection.removeSelection(it) }
-      liveMode = null
-      mode.finish()
+    val held = held ?: return true
+    val now = text.text.toString()
+    if (now != lastText) {
+      lastText = now
+      if (selectionStillHolds(held.words, held.start, held.end, text.text)) {
+        // A new action mode comes with the reselect, and its own callback reports and watches.
+        stopWatching()
+        reselect(text, held)
+      } else {
+        Log.w("OrcaSelectionCopy", "Selection dropped: its words changed under it (${text.javaClass.simpleName})")
+        (text.text as? Spannable)?.let { Selection.removeSelection(it) }
+        val mode = liveMode
+        stopWatching()
+        mode?.finish()
+        report(false, null)
+      }
+      return true
+    }
+    val current = heldSelectionIn(text, run)
+    if (current == null) {
+      if (liveMode == null) {
+        stopWatching()
+        report(false, null)
+      }
+    } else if (current != held) {
+      moved(current)
     }
     return true
+  }
+
+  private fun moved(current: HeldSelection) {
+    held = current
+    report(true, current)
   }
 
   override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = inner.onPrepareActionMode(mode, menu)
@@ -186,16 +276,31 @@ internal class SelectionLifeCallback(
 
   override fun onDestroyActionMode(mode: ActionMode) {
     inner.onDestroyActionMode(mode)
-    // Whether the words are still selected says who ended it: a tap away or a Copy clears them,
-    // the platform closing only its menu (a scroll on some builds) leaves them.
+    // Whether the words are still selected says who ended it: a tap away clears them, new text
+    // ends the mode under them, and the platform may close only its menu.
     Log.i("OrcaSelectionCopy", "Selection menu closed in ${text.javaClass.simpleName}: hasSelection=${text.hasSelection()} attached=${text.isAttachedToWindow}")
     liveMode = null
-    heldText = null
+    val held = held
+    if (held != null && text.text.toString() != lastText && selectionStillHolds(held.words, held.start, held.end, text.text)) {
+      // New text ended it and the words still stand: put it back once the text is in.
+      stopWatching()
+      text.post { reselect(text, held) }
+      return
+    }
+    if (held != null && text.isAttachedToWindow && text.hasSelection()) {
+      // The menu went, the words are still selected: keep watching until they are not.
+      return
+    }
+    stopWatching()
+    report(false, null)
+  }
+
+  private fun stopWatching() {
+    held = null
     // The observer it was added to, if still alive; a re-attached view has a new one.
     val added = observer?.takeIf { it.isAlive } ?: text.viewTreeObserver
     observer = null
     added.removeOnPreDrawListener(this)
-    changed(false)
   }
 
   // The floating toolbar sits over the selection only if the wrapped menu still places it.

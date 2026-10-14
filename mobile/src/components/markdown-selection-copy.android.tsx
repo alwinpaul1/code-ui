@@ -1,8 +1,9 @@
 import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core'
-import { useCallback, useEffect, useRef, type ComponentType, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { processColor, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { useChatTextSelectionReport } from './chat-text-selectable-context'
+import { useChatHeldSelections, useHeldSelectionFor, type HeldSelection } from './chat-held-selection'
 import { chatSelectionColors } from './chat-selection-colors'
 import { encodePillCopyNativeId, SELECTION_COPY_MODULE } from './markdown-pill-copy-id'
 
@@ -27,8 +28,12 @@ type SelectionCopyViewProps = ViewProps & {
   /** Android colour ints (processColor); absent, the platform's colours. */
   selectionHandleColor?: number
   selectionHighlightColor?: number
-  /** A Text inside opened (`active`) or closed its selection's action mode (SelectionCopyRootView.kt). */
-  onSelectionChange?: (event: NativeSyntheticEvent<{ active: boolean }>) => void
+  /** A Text inside opened (`active`) or closed its selection, or moved it: with `active`, where it
+   *  is (SelectionCopyRootView.kt). */
+  onSelectionChange?: (event: NativeSyntheticEvent<SelectionChange>) => void
+  /** A selection this document held before its row went away: the root puts it back where the
+   *  same words still stand (chat-held-selection.ts). */
+  restoreSelection?: HeldSelection
   /** False while the chat scrolls: the root makes its Texts not long-clickable, so a hold starts
    *  no selection, and one already open stays (SelectionCopyRootView.applyHoldSelects). */
   holdSelects?: boolean
@@ -60,12 +65,24 @@ function colorInt(color: string | null): number | undefined {
   return typeof processed === 'number' ? processed : undefined
 }
 
+type SelectionChange = { active: boolean } & Partial<HeldSelection>
+
+function heldSelectionOf(change: SelectionChange): HeldSelection | null {
+  const { run, start, end, words } = change
+  return typeof run === 'number' && typeof start === 'number' && typeof end === 'number' && typeof words === 'string'
+    ? { run, start, end, words }
+    : null
+}
+
 export function MarkdownSelectionRoot({
   children,
-  holdSelects = true
+  holdSelects = true,
+  document
 }: {
   children: ReactNode
   holdSelects?: boolean
+  /** The chat document this is (MobileMarkdown's `identity`), for the selection held outside it. */
+  document?: string
 }): ReactNode {
   const { colors } = useTheme()
   // In the chat, the document says when it holds a selection, so a scroll does not switch its
@@ -73,26 +90,47 @@ export function MarkdownSelectionRoot({
   // per document; one that unmounts with a selection open releases it, or every later scroll
   // in the chat would keep selection on.
   const report = useChatTextSelectionReport()
+  const held = useChatHeldSelections()
+  const restore = useHeldSelectionFor(held, document)
   const owner = useRef({}).current
   const live = useRef(false)
+  const [isLive, setIsLive] = useState(false)
+  // A row being torn down still closes its selection natively, after React let go of it. That
+  // close is the row leaving, not the reader dismissing, so it must not forget the selection.
+  const mounted = useRef(true)
   const onSelectionChange = useCallback(
-    (event: NativeSyntheticEvent<{ active: boolean }>) => {
-      live.current = event.nativeEvent.active === true
+    (event: NativeSyntheticEvent<SelectionChange>) => {
+      if (!mounted.current) {
+        return
+      }
+      const change = event.nativeEvent
+      live.current = change.active === true
+      setIsLive(live.current)
       report?.(owner, live.current)
-    },
-    [owner, report]
-  )
-  useEffect(
-    () => () => {
-      if (live.current) {
-        live.current = false
-        // Rule 9: a selection lost to the row unmounting (FlashList left it behind) says so.
-        console.warn('[selection] dropped: the reply holding it unmounted')
-        report?.(owner, false)
+      if (held && document !== undefined) {
+        const where = live.current ? heldSelectionOf(change) : null
+        if (where) {
+          held.hold(document, where)
+        } else if (!live.current) {
+          held.release(document)
+        }
       }
     },
-    [owner, report]
+    [document, held, owner, report]
   )
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      if (live.current) {
+        live.current = false
+        // Rule 9: the row went with a selection open. It stays held (chat-held-selection.ts) and
+        // comes back when the row is drawn again; this line says where it went meanwhile.
+        console.info('[selection] row unmounted holding a selection; kept to restore')
+        report?.(owner, false)
+      }
+    }
+  }, [owner, report])
   if (!SelectionCopyView) {
     return children
   }
@@ -103,6 +141,7 @@ export function MarkdownSelectionRoot({
       selectionHighlightColor={colorInt(selection.highlight)}
       onSelectionChange={onSelectionChange}
       holdSelects={holdSelects}
+      restoreSelection={isLive ? undefined : restore}
     >
       {children}
     </SelectionCopyView>
