@@ -514,20 +514,21 @@ describe('MobileNativeChatMessage', () => {
   // bubbles drew the plain text they typed until 2026-10-14, when the Claude
   // app drew a pasted Markdown prompt formatted
   // (MobileNativeChatMessage.user-markdown.test.tsx): now their own take the
-  // document too, but only when they are written in it, and keep their typed
-  // line breaks, which a lead's prompt does not.
+  // document too, but only when they are written in it, and are drawn as
+  // typed (their line breaks, their indents, no HTML read), which a lead's
+  // prompt is not.
   it('draws a prompt the lead wrote as Markdown in a transcript, and the user\'s own as Markdown only when written in it', () => {
     const task = '1. **Duplicate after dequeue.** Code is under `mobile/`.'
     const asMarkdown = render(userMessage([{ type: 'text', text: task }]), { promptsAsMarkdown: true })
     const rendered = asMarkdown.root.findAllByType('MobileMarkdown' as never)
     expect(rendered.map((node) => node.props.content)).toEqual([task])
-    expect(rendered.map((node) => Boolean(node.props.keepLineBreaks))).toEqual([false])
+    expect(rendered.map((node) => Boolean(node.props.typed))).toEqual([false])
     expect(textIn(asMarkdown.root)).not.toContain(task)
     act(() => renderer?.unmount())
     const written = render(userMessage([{ type: 'text', text: task }]))
     const own = written.root.findAllByType('MobileMarkdown' as never)
     expect(own.map((node) => node.props.content)).toEqual([task])
-    expect(own.map((node) => node.props.keepLineBreaks)).toEqual([true])
+    expect(own.map((node) => node.props.typed)).toEqual([true])
     expect(textIn(written.root)).not.toContain(task)
     act(() => renderer?.unmount())
     const typed = render(userMessage([{ type: 'text', text: 'ship it, then tell me what broke' }]))

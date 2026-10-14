@@ -91,18 +91,24 @@ export function Prose({
         }
         renderVisual={visuals}
         textScale={fontScale}
-        onOpenFile={onOpenFile}
+        // A path in the user's own words stays words: a link would take the
+        // hold that copies the prompt, and the tap that opens its controls.
+        onOpenFile={ownMarkdown ? undefined : onOpenFile}
         identity={identity}
         typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
         widthKey={invert ? undefined : 'chat-reply'}
-        // A person's lines were each meant; a lead's prompt keeps filling the width.
-        keepLineBreaks={ownMarkdown}
+        // The user's own words, as typed: their lines, their indents, their
+        // `<Text>` (a lead's prompt keeps filling the width, as a reply does).
+        typed={ownMarkdown}
       />
     )
-    // The user's own bubble copies on a hold, as the plain line does: the
-    // document's Texts must not take that hold for a selection. False here
-    // turns selection off in them, and on Android makes the document's native
-    // root stop a hold from starting one (chat-text-selectable-context.ts).
+    // The user's own bubble copies on a hold, as the plain line does, so the
+    // document must not take that hold for a selection. False here turns
+    // selection off in its Texts where the document can; on Android the Texts
+    // stay selectable (that is what keeps a selection through a scroll) and
+    // only the document's native root hears it, and stops a hold from
+    // starting one (chat-text-selectable-context.ts). A double tap on a word
+    // there can still select it; that is not checked on a phone.
     return ownMarkdown ? (
       <ChatTextSelectableContext.Provider value={false}>{document}</ChatTextSelectableContext.Provider>
     ) : (

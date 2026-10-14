@@ -62,13 +62,28 @@ export function reflowProse(value: string): string {
  * a code span is still a space, as CommonMark reads it: the span's text runs on.
  */
 export function breakProse(value: string): string {
+  return inlineBreaksAsLines(breakLines(value, false).trim())
+}
+
+/**
+ * A person's own prose, in a prompt they sent: every newline a line break, as
+ * in a quote, and every line as indented as it was typed (a CommonMark reader
+ * strips a continuation line's indent; pasted code and layouts mean theirs).
+ * No `<br>` is read either, and a backslash that ends a line stays: it is
+ * what they typed (`C:\dir\`), and the newline after it breaks anyway.
+ */
+export function typedProse(value: string): string {
+  return breakLines(value, true).trim()
+}
+
+function breakLines(value: string, typed: boolean): string {
   const spans = value.includes('`') && value.includes('\n') ? markdownCodeSpans(value, true) : []
   const lines = value.split('\n')
   let broken = ''
   let at = 0
   for (let index = 0; index < lines.length; index += 1) {
     const raw = lines[index]!
-    let line = index > 0 ? raw.replace(/^[ \t]+/, '') : raw
+    let line = index > 0 && !typed ? raw.replace(/^[ \t]+/, '') : raw
     if (index === lines.length - 1) {
       broken += line.replace(/[ \t]+$/, '')
       break
@@ -79,10 +94,10 @@ export function breakProse(value: string): string {
       broken += `${line.replace(/[ \t]+$/, '')} `
       continue
     }
-    if (trailingBackslashes(line) % 2 === 1) {
+    if (!typed && trailingBackslashes(line) % 2 === 1) {
       line = line.slice(0, -1)
     }
     broken += `${line.replace(/[ \t]+$/, '')}\n`
   }
-  return inlineBreaksAsLines(broken.trim())
+  return broken
 }

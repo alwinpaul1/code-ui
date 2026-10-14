@@ -3,9 +3,11 @@ import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 // A sent prompt's lines are each meant: the person pressed Enter. A reply's
 // soft newline is a space (the phone fills prose to its width), which for a
-// prompt would fold "Fix this:\n`foo()`\nthen run tests" into one line.
-// `keepLineBreaks` is the prompt's rule, the one a quote already has.
-describe('keeping the line breaks a person typed', () => {
+// prompt would fold "Fix this:\n`foo()`\nthen run tests" into one line. And
+// a reply's continuation line loses its indent (CommonMark), where a prompt's
+// is pasted code or a layout. `typed` is the prompt's rule, the one a quote
+// already has, and more (review of b6faacb4a).
+describe('keeping what a person typed', () => {
   const text = (blocks: ReturnType<typeof parseMobileMarkdown>, at = 0): string | undefined => {
     const block = blocks[at]
     return block && 'text' in block ? block.text : undefined
@@ -41,9 +43,17 @@ describe('keeping the line breaks a person typed', () => {
     }
   })
 
-  it('still takes the two spelled hard breaks as breaks, without their marks', () => {
+  it('keeps the indent of a line, where a reply drops it', () => {
+    const source = 'Steps:\n  first\n    second'
+    expect(text(parseMobileMarkdown(source))).toBe('Steps: first second')
+    expect(text(parseMobileMarkdown(source, true))).toBe('Steps:\n  first\n    second')
+  })
+
+  it('takes the two trailing spaces as the break they are, and keeps a trailing backslash', () => {
     expect(text(parseMobileMarkdown('a  \nb', true))).toBe('a\nb')
-    expect(text(parseMobileMarkdown('a\\\nb', true))).toBe('a\nb')
+    // `C:\dir\` is a path; the newline after it breaks without the backslash's help.
+    expect(text(parseMobileMarkdown('copy to C:\\dir\\\nthen go', true))).toBe('copy to C:\\dir\\\nthen go')
+    expect(text(parseMobileMarkdown('a\\\nb'))).toBe('a\nb')
   })
 
   it('keeps the two rules apart in the cache, whichever is read first', () => {

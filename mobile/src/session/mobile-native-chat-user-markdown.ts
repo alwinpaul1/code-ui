@@ -1,4 +1,4 @@
-import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from '../components/mobile-markdown-preview-html'
+import { markdownDocumentSource } from '../components/mobile-markdown-preview-html'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from '../components/mobile-markdown-parser'
 
 /**
@@ -8,6 +8,15 @@ import { parseMobileMarkdown, type MobileMarkdownBlock } from '../components/mob
  * `code` come out formatted. Only a slash command is a chip of its own
  * (m330.java:27804, `rro`). Code UI drew the characters instead: literal
  * `**6. Check memory pressure**` and ``` fences (screenshot, 2026-10-14).
+ *
+ * Only a mark that is plainly Markdown sends a prompt through it. The document
+ * is built for a reply, and a reply's `__init__`, `dist/*.js`, `*x*` or bare
+ * address is the writer's to mean; a prompt's is the user's to type, and an
+ * Opus review of the first version found the document eating `<Text>`,
+ * `__name__` and `logs\*.log` out of messages with no Markdown in them. So the
+ * marks that count are the ones nobody types for another reason: a fence or a
+ * code span, a bold with its closing pair, a link with its address, a heading,
+ * quote, bullet or numbered step at the start of a line, a table's rule row.
  *
  * Not every prompt goes through the document. Most are a line of words, and
  * the plain bubble line costs a Text where the document costs a parse, a run
@@ -47,13 +56,17 @@ export const USER_MARKDOWN_MAX_BACKTICKS = 1000
 const SLASH_COMMAND = /^\s*\/[A-Za-z][\w.:-]*(?:\s|$)/
 
 /** The marks of a block, at the start of a line: a heading, a quote, a bullet,
- *  a numbered step, a rule, a table row. */
+ *  a numbered step, and a table's rule row (`|---|---|`). A bare `---` is not
+ *  one: the document would take it for a rule, or the line above for a heading. */
 const BLOCK_MARK =
-  /^[ \t]{0,3}(?:#{1,6}[ \t]+\S|>[ \t]?\S|[-*+][ \t]+\S|\d{1,9}[.)][ \t]+\S|(?:-{3,}|\*{3,}|_{3,})[ \t]*$|\|.*\|[ \t]*$)/m
+  /^(?:[ \t]{0,3}(?:#{1,6}[ \t]+\S|>[ \t]?\S|[-*+][ \t]+\S|\d{1,9}[.)][ \t]+\S)|[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*\|)/m
 
-/** The marks inside a line: a code span or a fence, bold, strike, an
- *  emphasis with its closing mark on the line, a link, a web address. */
-const INLINE_MARK = /`|\*\*\S|__\S|~~\S|\*[^\s*][^*\n]*\*|(?:^|[\s(])_[^\s_][^_\n]*_(?:[\s.,;:!?)]|$)|\]\(|https?:\/\/\S/
+/** The marks inside a line: a code span or a fence, a bold with its closing
+ *  pair on the line (`**a**`; `src/**\/*.ts` and `a*b*c` are not), and a link
+ *  whose address has a `/`, `.`, `:` or `#` in it (`fns[i](x)` is a call). Emphasis by one star or underscore, strike and a bare web
+ *  address are left out: each is as often typed for itself. The lengths are
+ *  bounded so a line of stray openers costs a scan of 200 each, not of the line. */
+const INLINE_MARK = /`|\*\*(?:[^\s*]|[^\s*][^\n]{0,200}?\S)\*\*|\[[^\]\n]{1,200}\]\([^)\s/.:#]{0,500}[/.:#][^)\s]{0,500}\)/
 
 const WORD_CHARACTER = /\w/
 
@@ -104,8 +117,8 @@ function blockDraws(block: MobileMarkdownBlock): boolean {
   }
 }
 
-/** Whether a sent prompt is drawn as the Markdown document. The same source
- *  and line-break rule the document is given (MobileNativeChatProse). */
+/** Whether a sent prompt is drawn as the Markdown document. The same source,
+ *  read the same way, as the document is given (MobileNativeChatProse). */
 export function userTextDrawsAsMarkdown(text: string): boolean {
   if (text.length > USER_MARKDOWN_MAX_CHARS || isSlashCommandPrompt(text)) {
     return false
@@ -116,6 +129,5 @@ export function userTextDrawsAsMarkdown(text: string): boolean {
   if (overMarkBudget(text)) {
     return false
   }
-  const source = markdownDocumentSource(text)
-  return parseMobileMarkdown(normalizeMobileMarkdownPreviewHtml(source), true).some(blockDraws)
+  return parseMobileMarkdown(markdownDocumentSource(text), true).some(blockDraws)
 }

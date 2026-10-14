@@ -131,8 +131,9 @@
             // prop, the blocks hook that lifts directive lines out
             // (use-mobile-markdown-blocks.ts, mobile-markdown-visual-lines.ts)
             // and the branch that draws a visual run between prose runs.
-            // 2026-10-14: +2 for keepLineBreaks, the prop that keeps a prompt's
-            // typed newlines (use-mobile-markdown-blocks.ts holds the parse).
+            // 2026-10-14: +2 for `typed`, the prop that draws a prompt as it was
+            // typed (use-mobile-markdown-blocks.ts holds the parse), and the
+            // emphasis a nested span keeps (mobile-markdown-emphasis.ts).
             "max": 457,
             "skipBlankLines": true,
             "skipComments": true

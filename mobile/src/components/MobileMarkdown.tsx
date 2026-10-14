@@ -88,9 +88,9 @@ type Props = {
    *  #26071), each as a block of its own between the prose runs around it. Without it, a
    *  directive line is ordinary text. Must be referentially stable (this component is memoized). */
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
-  /** A newline in a paragraph is a line break, not a space: for text a person typed into a
-   *  prompt, where each line was meant (a reply's soft wraps still fill the width). */
-  keepLineBreaks?: boolean
+  /** The text is a person's own, a sent prompt: each newline is a line break and each line
+   *  keeps its indent, and it is not read as HTML, so `<Text>` and `&amp;` draw as typed. */
+  typed?: boolean
 }
 
 const MAX_TABLE_ROWS = 40
@@ -262,8 +262,8 @@ function renderInline(
       }
     } else if (token.startsWith('~~')) {
       parts.push(
-        <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+        <Text key={key} style={around ? [emphasisStyle(styles, around), styles.strike] : styles.strike}>
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, around)}
         </Text>
       )
     } else {
@@ -294,7 +294,7 @@ function MobileMarkdownInner({
   typography = DEFAULT_MARKDOWN_TYPOGRAPHY,
   widthKey,
   renderVisual,
-  keepLineBreaks
+  typed
 }: Props) {
   // `false` while the chat scrolls (chat-text-selectable-context.ts). Where the document's native
   // root guards holds (Android), the Texts stay selectable and only the root hears it: switching
@@ -319,7 +319,7 @@ function MobileMarkdownInner({
   const [nativeWidth, setNativeWidth] = useState(() => (nativeProse ? lastNativeProseWidth(widthKey, textScale) : 0))
   // Not trimmed whole: the first line's indent can make it code.
   const text = markdownDocumentSource(content)
-  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined, keepLineBreaks)
+  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined, typed)
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
   // why the line height is not simply `(size + 8) * scale`.
   const proseScale = markdownProseScale(typography.prose.fontSize, textScale, typography.prose.lineHeight)

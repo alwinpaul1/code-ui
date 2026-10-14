@@ -13,26 +13,27 @@ const NO_LINES: string[] = []
 
 /** The blocks MobileMarkdown draws, from its document source; with `visuals`, directive lines
  *  become `visual` blocks (Orca #26071). Without it, every surface parses exactly as before.
- *  With `keepLineBreaks`, a newline the writer typed stays a line break instead of a space
- *  (a sent prompt, MobileNativeChatProse). */
+ *  With `typed`, the text is a person's own (a sent prompt, MobileNativeChatProse): its
+ *  newlines and indents stay, and it is not read as HTML, so `<Text>` and `&amp;` are drawn
+ *  as typed. */
 export function useMobileMarkdownBlocks(
   text: string,
   visuals: boolean,
-  keepLineBreaks = false
+  typed = false
 ): { blocks: readonly MobileMarkdownRenderBlock[]; directives: NativeChatVisualDirective[] } {
   const visualLines = useMemo(
     () => (visuals ? protectMobileMarkdownVisualLines(text) : null),
     [text, visuals]
   )
   const previewText = useMemo(
-    () => normalizeMobileMarkdownPreviewHtml(visualLines?.text ?? text),
-    [visualLines, text]
+    () => (typed ? (visualLines?.text ?? text) : normalizeMobileMarkdownPreviewHtml(visualLines?.text ?? text)),
+    [visualLines, text, typed]
   )
   const directives = visualLines?.directives ?? NO_DIRECTIVES
   const lines = visualLines?.lines ?? NO_LINES
   const blocks = useMemo(
-    () => withMobileMarkdownVisualBlocks(parseMobileMarkdown(previewText, keepLineBreaks), lines),
-    [previewText, lines, keepLineBreaks]
+    () => withMobileMarkdownVisualBlocks(parseMobileMarkdown(previewText, typed), lines),
+    [previewText, lines, typed]
   )
   return { blocks, directives }
 }

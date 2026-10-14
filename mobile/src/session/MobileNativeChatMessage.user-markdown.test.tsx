@@ -291,6 +291,63 @@ describe('a sent prompt written in Markdown', () => {
     expect(words(prose)).toContain('\n')
   })
 
+  // Review of b6faacb4a (an Opus reviewer, probes 1-4): the document is built
+  // for a reply, and it read a prompt as one: it took tag names out of
+  // `<Text> inside <View>`, decoded `&amp;`, dropped the indent of a
+  // continuation line, and read `__init__`, `dist/*.js` and `logs\*.log` as
+  // marks. A prompt is the user's words; only a mark that is plainly Markdown
+  // may change how they draw, and nothing else of them may.
+  describe('what the user typed stays what they typed', () => {
+    it.each([
+      ['a tag name', 'why does <Text> inside <View> not wrap? **help**', ['<Text> inside <View> not wrap?']],
+      ['a generic type', 'a `x` of Array<Image> and <Button>', ['Array<Image> and <Button>']],
+      ['an entity', '**x** &amp; &lt;div&gt;', [' &amp; &lt;div&gt;']],
+      ['an HTML comment', '<!-- todo --> **x**', ['<!-- todo --> ']],
+      ['the indent of a line', 'Steps `a`:\n  first\n    second', ['\n  first\n    second']],
+      ['a path with a backslash', 'copy `x` to C:\\dir\\ now', ['C:\\dir\\ now']]
+    ])('draws %s of a Markdown prompt as it was typed', (_name, text, kept) => {
+      const root = render(userMessage(text))
+      expect(mocks.documents).toEqual([text])
+      for (const words of kept) {
+        expect(drawn(root)).toContain(words)
+      }
+    })
+
+    it.each([
+      "if __name__ == '__main__': run()",
+      'open __init__.py and check',
+      'rm dist/*.js lib/*.js',
+      'cp -r src/**/*.ts out/',
+      'a*b*c and 2*3*4',
+      'logs\\*.log are in C:\\logs',
+      '\\\\nas\\share has the file',
+      'match \\d+\\.\\d+ in it',
+      '---',
+      '***',
+      'above\n\n---\n\nbelow',
+      'this is *really* it, and _so_ is this',
+      'try https://example.com/spec',
+      'it was ~~wrong~~ right'
+    ])('does not take %j for Markdown', (text) => {
+      const root = render(userMessage(text))
+      expect(mocks.documents).toEqual([])
+      expect(texts(root).map(words)).toContain(text)
+    })
+
+    it('leaves a file name and a path in a Markdown prompt plain, so a hold on them still copies', () => {
+      const root = render(userMessage('see `run.py` at src/app/index.ts, then **go**'), 'light', {
+        onOpenFile: () => undefined
+      })
+      expect(mocks.documents).toHaveLength(1)
+      expect(texts(root).filter((node) => typeof node.props.onPress === 'function')).toEqual([])
+    })
+
+    it('still opens a link the user wrote as one', () => {
+      const root = render(userMessage('read [the spec](https://example.com/spec) **now**'))
+      expect(texts(root).filter((node) => typeof node.props.onPress === 'function').map(words)).toEqual(['the spec'])
+    })
+  })
+
   describe('what stays plain', () => {
     it('draws ordinary words as the plain bubble line they always were', () => {
       const root = render(userMessage('ship it, then tell me what broke at 3 * 4 * 5'))

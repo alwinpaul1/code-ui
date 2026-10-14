@@ -88,6 +88,16 @@ describe('the face each span of emphasis draws', () => {
     act(() => renderer.unmount())
   })
 
+  // Review of b6faacb4a: a strike is a Text of its own and set the face of its
+  // style alone, so the emphasis around it was gone from every word inside it.
+  it('keeps the emphasis around a strike on the words inside it', () => {
+    const renderer = render('**a ~~b~~ c** and **d ~~*e*~~ f** and *g ~~h~~ i*')
+    expect(drawn(renderer, 'b')).toBe('InstrumentSans_600SemiBold')
+    expect(drawn(renderer, 'e')).toBe('InstrumentSans_600SemiBold_Italic')
+    expect(drawn(renderer, 'h')).toBe('InstrumentSans_400Regular_Italic')
+    act(() => renderer.unmount())
+  })
+
   it('draws one word of each emphasis, and none, without a face of another', () => {
     const renderer = render('*i*')
     expect(drawn(renderer, 'i')).toBe('InstrumentSans_400Regular_Italic')

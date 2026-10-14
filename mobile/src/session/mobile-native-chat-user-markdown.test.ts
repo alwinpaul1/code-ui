@@ -28,13 +28,9 @@ describe('which sent prompts are written in Markdown', () => {
     ['a numbered step with a bracket', '1) first'],
     ['a heading', '# Plan'],
     ['a quote', '> said it'],
-    ['strike', 'it was ~~wrong~~ right'],
-    ['an emphasis', 'this is *really* it'],
-    ['an underscore emphasis', 'this is _really_ it'],
     ['a link', 'see [the spec](https://example.com/spec)'],
-    ['a web address', 'try https://example.com/spec'],
     ['a table', '| a | b |\n|---|---|\n| 1 | 2 |'],
-    ['a rule', 'above\n\n---\n\nbelow']
+    ['a bold with a star inside', '**bold with *em* inside**']
   ])('draws %s as Markdown', (_name, text) => {
     expect(userTextDrawsAsMarkdown(text)).toBe(true)
   })
@@ -46,7 +42,28 @@ describe('which sent prompts are written in Markdown', () => {
     ['a number and a dot', 'I have 1. question'],
     ['a dash in the middle', 'a - b'],
     ['an email address', 'mail me at me@example.com'],
-    ['words over several lines', 'first line\nsecond line\n\nthird paragraph']
+    ['words over several lines', 'first line\nsecond line\n\nthird paragraph'],
+    // Review of b6faacb4a: each of these drew with a character gone.
+    ['a dunder name', "if __name__ == '__main__': run()"],
+    ['a dunder file', 'open __init__.py and check'],
+    ['a glob', 'rm dist/*.js lib/*.js'],
+    ['a double-star glob', 'cp -r src/**/*.ts out/ && ls **/*.md'],
+    ['stars between letters', 'a*b*c and 2*3*4'],
+    ['a backslash path', 'logs\\*.log are in C:\\logs'],
+    ['a UNC path', '\\\\nas\\share has the file'],
+    ['a regex', 'match \\d+\\.\\d+ in it'],
+    ['a rule and nothing else', '---'],
+    ['stars and nothing else', '***'],
+    ['a rule between words', 'above\n\n---\n\nbelow'],
+    ['a single-star emphasis', 'this is *really* it'],
+    ['an underscore emphasis', 'this is _really_ it'],
+    ['strike', 'it was ~~wrong~~ right'],
+    ['a bare web address', 'try https://example.com/spec'],
+    ['an address on its own', 'https://example.com/a_b/c?d=e'],
+    ['a tag name', 'why does <Text> inside <View> not wrap?'],
+    ['an entity', 'AT&amp;T and &lt;div&gt;'],
+    ['a hashtag', '#bug in the parser'],
+    ['a link-looking pair of brackets', 'see [1] and (2) and arr[i](x)']
   ])('keeps %s the plain bubble line', (_name, text) => {
     expect(userTextDrawsAsMarkdown(text)).toBe(false)
   })
@@ -119,8 +136,8 @@ describe('which sent prompts are written in Markdown', () => {
 
     it('stays plain past the emphasis-mark budget and Markdown at it', () => {
       expect(USER_MARKDOWN_MAX_EMPHASIS_MARKS).toBe(600)
-      expect(userTextDrawsAsMarkdown('*a* '.repeat(USER_MARKDOWN_MAX_EMPHASIS_MARKS / 2))).toBe(true)
-      expect(userTextDrawsAsMarkdown('*a* '.repeat(USER_MARKDOWN_MAX_EMPHASIS_MARKS / 2 + 1))).toBe(false)
+      expect(userTextDrawsAsMarkdown('**a** '.repeat(USER_MARKDOWN_MAX_EMPHASIS_MARKS / 4))).toBe(true)
+      expect(userTextDrawsAsMarkdown('**a** '.repeat(USER_MARKDOWN_MAX_EMPHASIS_MARKS / 4 + 1))).toBe(false)
     })
 
     it('stays plain past the backtick budget and Markdown at it', () => {
@@ -131,12 +148,17 @@ describe('which sent prompts are written in Markdown', () => {
     // 3000 stray `**a ` in 12,000 characters took the parser 1.5 s on a
     // laptop: it pairs every unmatched opener against the rest. The cap on
     // length alone let that through; a paste of a log can look like it.
+    //
+    // These carry one backtick, which is what sends a paste to the parser at
+    // all; without it the marks are too weak to count and it stays plain.
     it.each([
-      ['stray bold openers', '**a '.repeat(3000)],
-      ['stray emphasis openers', '*a '.repeat(4000)],
-      ['stray underscore openers', ' __a'.repeat(2400)],
-      ['mixed openers', '*a **b _c '.repeat(1200)],
-      ['stacked stars', '*'.repeat(11_999)]
+      ['stray bold openers', '`x` ' + '**a '.repeat(3000)],
+      ['stray emphasis openers', '`x` ' + '*a '.repeat(4000)],
+      ['stray underscore openers', '`x` ' + ' __a'.repeat(2400)],
+      ['mixed openers', '`x` ' + '*a **b _c '.repeat(1200)],
+      ['stacked stars', '`x` ' + '*'.repeat(11_900)],
+      ['stray link openers', '[a](b '.repeat(2000)],
+      ['stray bold openers with no backtick', '**a '.repeat(3000)]
     ])('answers a paste of %s in a frame or two, not a second', (_name, text) => {
       expect(fastestRunMs(() => userTextDrawsAsMarkdown(text), 3)).toBeLessThan(100)
       expect(userTextDrawsAsMarkdown(text)).toBe(false)
