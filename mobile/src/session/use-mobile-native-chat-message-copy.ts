@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 
-/** How long a message stays tinted once its copy landed. */
-const MESSAGE_COPIED_MS = 700
+/** How long a sent prompt stays tinted once its copy landed. */
+export const MESSAGE_COPIED_MS = 700
 /** How long a refused copy's notice stays under the message. */
 const MESSAGE_COPY_FAILED_MS = 5_000
 
@@ -17,7 +17,7 @@ export type MobileNativeChatMessageCopy = {
 }
 
 /**
- * A message's Copy control and a sent prompt's hold-to-copy.
+ * A reply's Copy control and a sent prompt's Copy message (the row of the menu a hold opens).
  *
  * Why: this used to fire `setStringAsync` and forget it, then buzz success
  * and tint the bubble. `setStringAsync` answers false when the pasteboard did
@@ -27,7 +27,10 @@ export type MobileNativeChatMessageCopy = {
  * success haptic and the tint come only once it lands; a refusal buzzes an
  * error and leaves a notice, the way the code block's Copy does.
  */
-export function useMobileNativeChatMessageCopy(): MobileNativeChatMessageCopy {
+export function useMobileNativeChatMessageCopy(
+  /** How long `copied` stays true: a prompt's tint, or a reply's check (2000 ms, as the Claude app holds it). */
+  copiedMs: number = MESSAGE_COPIED_MS
+): MobileNativeChatMessageCopy {
   const clipboard = useClipboardWriter()
   const [state, setState] = useState<{ copied: boolean; error: string | null }>({
     copied: false,
@@ -56,7 +59,7 @@ export function useMobileNativeChatMessageCopy(): MobileNativeChatMessageCopy {
         } catch (error) {
           next = { copied: false, error: error instanceof Error ? error.message : String(error) }
         }
-        // The hold has no button to press back, so the phone says how it went.
+        // A menu row has no button to press back (and the sheet is gone), so the phone says how it went.
         if (next.copied) {
           triggerSuccess()
         } else {
@@ -74,12 +77,12 @@ export function useMobileNativeChatMessageCopy(): MobileNativeChatMessageCopy {
             timer.current = null
             setState({ copied: false, error: null })
           },
-          next.copied ? MESSAGE_COPIED_MS : MESSAGE_COPY_FAILED_MS
+          next.copied ? copiedMs : MESSAGE_COPY_FAILED_MS
         )
       }
       void write()
     },
-    [clipboard]
+    [clipboard, copiedMs]
   )
   return { copied: state.copied, error: state.error, copy }
 }

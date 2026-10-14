@@ -56,10 +56,11 @@ vi.mock('lucide-react-native', () => ({
   SquareChevronRight: 'SquareChevronRight',
   SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
+  TextCursor: 'TextCursor',
   Undo2: 'Undo2',
   Wrench: 'Wrench'
 }))
-// The subagent message's sheet: a frame that draws its content while open.
+// The subagent message's sheet, and the menu a hold on a sent prompt opens: a frame that draws its content while open.
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
@@ -70,6 +71,7 @@ vi.mock('../components/BottomDrawer', async () => {
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { agentMessageRow } from './mobile-native-chat-agent-messages'
+import { holdThenChoose } from './user-message-menu.test-support'
 
 const REPLY = ['Run the gate:', '', '```sh', 'cd mobile && npx tsc --noEmit', 'npx vitest run', '```', '', 'Then push.'].join('\n')
 const CODE = 'cd mobile && npx tsc --noEmit\nnpx vitest run'
@@ -131,17 +133,16 @@ describe('a code block in the chat', () => {
 
   // A prompt the user wrote in Markdown draws the fence as the Claude app
   // does, in the reply's card with its own Copy (recording, 2026-10-14); the
-  // hold on the bubble still copies the whole prompt as typed (2026-09-21).
-  it('has it on a prompt the user wrote in Markdown, and a hold on the bubble still copies the whole prompt', async () => {
+  // menu a hold on the bubble opens still copies the whole prompt as typed
+  // (2026-09-21).
+  it('has it on a prompt the user wrote in Markdown, and the menu a hold opens still copies the whole prompt', async () => {
     const tree = mount(createElement(MobileNativeChatMessage, { message: message('user', REPLY) }))
     const [button, ...others] = codeButtons(tree)
     expect(others).toHaveLength(0)
     await press(button!)
     expect(pasteboard.written).toEqual([CODE])
-    const bubble = tree.root.findByProps({ accessibilityLabel: 'Sent prompt' })
-    await act(async () => {
-      await bubble.props.onLongPress()
-    })
+    // A hold opens the message menu now; its Copy message gives the prompt as typed.
+    await holdThenChoose(tree.root, 'Copy message')
     expect(pasteboard.written).toEqual([CODE, REPLY])
   })
 

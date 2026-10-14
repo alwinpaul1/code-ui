@@ -193,7 +193,9 @@ describe.each([
     expect(root.findAll((node) => node.props.testID === 'tool-run-active-header')).toHaveLength(1)
     expect(order(root)).toEqual(['words', 'copy', 'run'])
     expect(root.findAll(isCopy)).toHaveLength(1)
-    expect(root.findAll(isCopy)[0]!.find((node) => String(node.type) === 'Copy').props.color).toBe(palette.textMuted)
+    expect(root.findAll(isCopy)[0]!.findAll((node) => String(node.type) === 'Copy')[0]!.props.color).toBe(
+      palette.composerPlaceholder
+    )
   })
 
   it('keeps Copy under the words and above an agent that is still running at the end of a settled reply', () => {
@@ -267,7 +269,7 @@ describe.each([
   it('keeps the action buttons their old size: a 14 icon in a padding of 4, 4 apart, pulled left 4', () => {
     const root = render(assistant('a1', [{ type: 'text', text: WORDS }]), scheme, IDLE, { endsTurn: true })
     const copy = root.findAll(isCopy)[0]!
-    expect(copy.find((node) => String(node.type) === 'Copy').props.size).toBe(14)
+    expect(copy.findAll((node) => String(node.type) === 'Copy')[0]!.props.size).toBe(14)
     const box = flatStyle(copy.props.style({ pressed: false }))
     expect(box.padding).toBe(4)
     const row = copy.parent!

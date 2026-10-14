@@ -14,7 +14,7 @@ export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): strin
 
 /** What a reply's Copy puts on the clipboard: each text block as the words
  *  MobileMarkdown draws for it, not its Markdown source. A sent prompt is
- *  drawn as typed, so its hold copies `nativeChatMessageText`. A visual line
+ *  drawn as typed, so the menu a hold opens gives `nativeChatMessageText`. A visual line
  *  (`::orca-visual{...}`, Orca #26071) is not prose; only the transcript can
  *  show it, so it is left out (one inside a code fence stays). */
 export function nativeChatReplyPlainText(blocks: readonly NativeChatBlock[]): string {

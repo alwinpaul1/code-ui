@@ -145,7 +145,8 @@ describe.each([
     const root = render(PROSE_AFTER_TOOLS, scheme)
     const [copy] = copyControls(root)
     expect(copy).toBeDefined()
-    expect(copy!.find((node) => String(node.type) === 'Copy').props.color).toBe(palette.textMuted)
+    // The resting glyph, in the Claude app's muted tone (the tint over it is a second Copy).
+    expect(copy!.findAll((node) => String(node.type) === 'Copy')[0]!.props.color).toBe(palette.composerPlaceholder)
     await act(async () => copy!.props.onPress())
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('All green.')
     expect(flat(copy!.props.style({ pressed: false })).opacity ?? 1).not.toBe(0)
@@ -153,8 +154,9 @@ describe.each([
 })
 
 // The same dead control on a sent prompt: an image-only prompt offered "Hold
-// to copy" and a hold copied nothing.
-describe('the hold-to-copy of a sent prompt', () => {
+// to copy" and a hold copied nothing. A hold opens the message menu now (Copy
+// message, Select text), and a prompt with nothing to copy has no menu to open.
+describe('the hold on a sent prompt', () => {
   const prompt = (blocks: NativeChatBlock[]): NativeChatMessage => ({
     id: 'u1',
     role: 'user',
@@ -172,12 +174,12 @@ describe('the hold-to-copy of a sent prompt', () => {
     expect(bubble.props.accessibilityHint).toBeUndefined()
   })
 
-  it('keeps hold-to-copy on a prompt with text', () => {
+  it('opens the menu on a prompt with text', () => {
     const root = render(prompt([{ type: 'text', text: 'run the gate' }]), 'light')
     const bubble = root.find(
       (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Sent prompt'
     )
     expect(bubble.props.onLongPress).toBeTypeOf('function')
-    expect(bubble.props.accessibilityHint).toBe('Hold to copy')
+    expect(bubble.props.accessibilityHint).toBe('Hold for options')
   })
 })

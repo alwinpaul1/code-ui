@@ -1,6 +1,8 @@
 import { View } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { useAgentPulseStyle } from './use-agent-pulse-style'
 import type { BackgroundTask } from './mobile-background-tasks'
 import type { WorkflowDetail } from './mobile-background-task-workflows'
 import {
@@ -23,6 +25,13 @@ import {
  * rows, and a running card says how many lanes are running only when it can
  * show they are this workflow's. The totals (agents, tokens, failures, time)
  * come from the workflow's own completion notification.
+ *
+ * Motion is the Claude app's (cu2.java:1071, 2609, claude-motion-spec.ts): a
+ * running workflow's dot pulses, alpha 1.0 to 0.55 and back on a 1200 ms
+ * cubic-bezier(0.4, 0, 0.2, 1). The app also draws a grid of agent cells that
+ * pulse in stagger, but only under each phase, and nothing here says which
+ * agent is in which phase, so there is no grid (the lane count is the line
+ * above the description).
  */
 export function MobileWorkflowCard({
   task,
@@ -33,17 +42,22 @@ export function MobileWorkflowCard({
   statusUnknown?: boolean
 }) {
   const { colors, radius, space } = useTheme()
+  const running = task.status === 'running'
+  // Before the early return below: hooks run in the same order whatever the task holds.
+  const pulse = useAgentPulseStyle(running)
   const detail = task.workflow
   if (!detail) {
     return null
   }
-  const running = task.status === 'running'
   const dot = running ? colors.info : task.status === 'failed' ? colors.danger : colors.textMuted
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs ?? detail.usage?.durationMs ?? null)
   return (
     <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.bgSunken }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
+        <Animated.View
+          testID="workflow-status-dot"
+          style={[{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }, pulse]}
+        />
         <Txt variant="body" weight="medium" numberOfLines={2} style={{ flex: 1 }}>
           {task.title}
         </Txt>
