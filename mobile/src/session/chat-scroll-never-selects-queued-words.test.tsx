@@ -50,7 +50,7 @@ function show(
   act(() => {
     renderer = create(
       createElement(
-        ThemeProvider,
+        ThemeProvider as never,
         { initialPreference: options.scheme ?? 'light' },
         createElement(
           ChatTextSelectableContext.Provider,

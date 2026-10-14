@@ -141,7 +141,7 @@ function render(messages: NativeChatMessage[], scheme: 'light' | 'dark'): void {
   act(() => {
     renderer = create(
       createElement(
-        ThemeProvider,
+        ThemeProvider as never,
         { initialPreference: scheme },
         createElement(MobileNativeChatView, {
           messages,
@@ -154,14 +154,14 @@ function render(messages: NativeChatMessage[], scheme: 'light' | 'dark'): void {
           pending: [],
           composerText: '',
           onComposerTextChange: vi.fn()
-        } as Parameters<typeof MobileNativeChatView>[0])
+        } as unknown as Parameters<typeof MobileNativeChatView>[0])
       )
     )
   })
 }
 
 function list(): ReactTestInstance {
-  return renderer!.root.find((node) => node.type === 'FlashList')
+  return renderer!.root.find((node) => String(node.type) === 'FlashList')
 }
 
 function roots(): ReactTestInstance[] {
