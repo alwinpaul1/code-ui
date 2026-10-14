@@ -30,6 +30,10 @@ type Props = {
    *  focus (use-keyboard-dismissed-on-open.ts). Never for a sheet that
    *  focuses a field of its own. */
   dismissKeyboardOnOpen?: boolean
+  /** Drops the drawer's 12 dp side padding so the content can fill the
+   *  sheet's width, as the Claude app's code sheet does. The content (and any
+   *  `header`) then brings its own side padding. */
+  edgeToEdge?: boolean
 }
 
 export function BottomDrawer({
@@ -45,7 +49,8 @@ export function BottomDrawer({
   openingShare,
   header,
   zIndex,
-  dismissKeyboardOnOpen = false
+  dismissKeyboardOnOpen = false,
+  edgeToEdge = false
 }: Props) {
   const { mounted: resolvedMounted, handleHidden } = useDrawerMountLifecycle(visible, onAfterClose)
 
@@ -69,6 +74,7 @@ export function BottomDrawer({
       header={header}
       zIndex={zIndex}
       dismissKeyboardOnOpen={dismissKeyboardOnOpen}
+      edgeToEdge={edgeToEdge}
     >
       {children}
     </MountedBottomDrawer>

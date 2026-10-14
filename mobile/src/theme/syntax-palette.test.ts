@@ -11,9 +11,11 @@ import { darkColors, lightColors } from './tokens'
 
 const WCAG_AA_BODY = 4.5
 
+// A chat code block sits on `codeBlockBody` (the Claude app's card, 2026-10-14);
+// `codeBg` still carries the surfaces that did not move to it.
 const SCHEMES = [
-  ['light', lightSyntaxPalette, lightColors.codeBg],
-  ['dark', darkSyntaxPalette, darkColors.codeBg]
+  ['light', lightSyntaxPalette, [lightColors.codeBg, lightColors.codeBlockBody]],
+  ['dark', darkSyntaxPalette, [darkColors.codeBg, darkColors.codeBlockBody]]
 ] as const
 
 describe('the code colours in both schemes', () => {
@@ -26,12 +28,14 @@ describe('the code colours in both schemes', () => {
     }
   })
 
-  it.each(SCHEMES)('%s: every token colour also reads inside a chat code block', (scheme, palette, codeBg) => {
-    for (const role of SYNTAX_TOKEN_ROLES) {
-      expect(
-        contrastRatio(palette[role], codeBg),
-        `${scheme} ${role} ${palette[role]} on ${codeBg}`
-      ).toBeGreaterThanOrEqual(WCAG_AA_BODY)
+  it.each(SCHEMES)('%s: every token colour also reads inside a chat code block', (scheme, palette, fills) => {
+    for (const fill of fills) {
+      for (const role of SYNTAX_TOKEN_ROLES) {
+        expect(
+          contrastRatio(palette[role], fill),
+          `${scheme} ${role} ${palette[role]} on ${fill}`
+        ).toBeGreaterThanOrEqual(WCAG_AA_BODY)
+      }
     }
   })
 

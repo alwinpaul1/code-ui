@@ -421,6 +421,30 @@ describe('the Expand sheet', () => {
     expect(sheetOf(tree)).toBeNull()
   })
 
+  it('lets the sheet go, and the lines it built, once its exit has played', async () => {
+    const tree = await render(fence('sh', ['pnpm test']))
+    await press(expandButton(tree))
+    await press(buttonLabelled(sheetOf(tree)!, 'Close')[0]!)
+    const asked = mocks.sheets.at(-1)!
+    expect(asked.visible).toBe(false)
+    const drawn = mocks.sheets.length
+    await act(async () => {
+      ;(asked.onAfterClose as () => void)()
+    })
+    // No drawer is rendered for it any more.
+    await act(async () => {
+      tree.update(
+        <ThemeProvider initialPreference="dark">
+          <MobileMarkdown content={fence('sh', ['pnpm test'])} />
+        </ThemeProvider>
+      )
+    })
+    expect(mocks.sheets.length).toBe(drawn)
+    // And asking again builds a fresh one.
+    await press(expandButton(tree))
+    expect(sheetOf(tree)).not.toBeNull()
+  })
+
   it('copies the exact code from the sheet and shows Copied on its button', async () => {
     const lines = ['a', '', '  b\tc']
     const tree = await render(fence('sh', lines))
@@ -453,11 +477,14 @@ describe('the Expand sheet', () => {
       visible: true,
       expandable: true,
       openingShare: 1,
-      fillAvailable: true,
       contentScrollable: false,
+      // Edge to edge, and not `fillAvailable`: that lifts a full-height box by
+      // the keyboard still up behind the composer (markdown-code-sheet-drawer.test.tsx).
+      edgeToEdge: true,
       // Nothing to type in it: the composer's keyboard goes as it opens.
       dismissKeyboardOnOpen: true
     })
+    expect(asked.fillAvailable).toBeUndefined()
     const vertical = byType(sheetOf(tree)!, 'ScrollView').filter((node) => node.props.horizontal !== true)
     expect(vertical.length).toBeGreaterThan(0)
   })

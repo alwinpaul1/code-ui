@@ -24,44 +24,55 @@ import { copyFailedNotice, useCopyToClipboard } from './use-copy-to-clipboard'
  * it draws the grabber, and it opens large. That is the drawer's `expandable`
  * mode opened at full height, with its content static so the code owns its
  * own two scrolls instead of the drawer's list (which stands still until the
- * sheet is dragged to its top). The drawer's motion is unchanged (0.9.139).
+ * sheet is dragged to its top). Not `fillAvailable`: that lifts the box by the
+ * keyboard, and a full-height box cannot be lifted, so with the composer's
+ * keyboard still up the top of the sheet stood off the screen. The drawer's
+ * motion is unchanged (0.9.139).
+ *
+ * Known, unproven on a device: a Modal's touches reach its React ancestors, so
+ * a block drawn inside a pressable bubble (a lead agent's prompt drawn as
+ * Markdown, MobileNativeChatMessage's Bubble) may see taps made in this sheet.
  */
 export function MarkdownCodeSheet({
   visible,
   language,
   code,
-  onClose
+  onClose,
+  onAfterClose
 }: {
   visible: boolean
   language: string | undefined
   code: string
   onClose: () => void
+  /** The sheet has left the screen; the caller may let go of it. */
+  onAfterClose?: () => void
 }) {
   const { colors, space } = useTheme()
   const styles = useMarkdownStyles()
   const { copied, error, copy } = useCopyToClipboard(CODE_BLOCK_SPEC.copy.copiedMs)
-  // Highlighted once per source, and only while the sheet is up.
-  const lines = useMemo(
-    () => (visible ? mobileMarkdownCodeLines(code, language, Infinity).lines : []),
-    [visible, code, language]
-  )
+  // Highlighted once per source. Not only while `visible`: the cross flips it
+  // at once and the drawer plays its exit, which would play over an empty
+  // body. The caller lets the sheet go once it has left (`onAfterClose`).
+  const lines = useMemo(() => mobileMarkdownCodeLines(code, language, Infinity).lines, [code, language])
   const { sheetButton } = CODE_BLOCK_SPEC
   const glyphColor = sheetColors(colors).content
   return (
     <BottomDrawer
       visible={visible}
       onClose={onClose}
+      onAfterClose={onAfterClose}
       expandable
       openingShare={1}
-      fillAvailable
       contentScrollable={false}
+      // The code fill runs the sheet's whole width, as the app's does.
+      edgeToEdge
       // Nothing to type here: the keyboard behind the composer goes as the
       // sheet opens, instead of lifting the sheet above it.
       dismissKeyboardOnOpen
       header={
-        // The cross and Copy sit 8 dp further in than the drawer's edge, as in
-        // the Claude app's other sheets.
-        <View style={{ paddingHorizontal: space.sm }}>
+        // The cross and Copy sit 8 dp further in than the drawer's own padding,
+        // as in the Claude app's other sheets; edge to edge, that is both.
+        <View style={{ paddingHorizontal: space.md + space.sm }}>
           <MobileSheetTitleBar
             title={codeBlockSheetTitle(language)}
             onClose={onClose}

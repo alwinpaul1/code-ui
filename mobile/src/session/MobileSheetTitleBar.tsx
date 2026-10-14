@@ -19,8 +19,9 @@ export function MobileSheetTitleBar({
   onClose?: () => void
   wrap?: boolean
   /** A control at the row's end, centred on its height as the cross is at the
-   *  start (the code sheet's Copy). The title keeps its 44 dp each side, so
-   *  anything up to that wide cannot touch it. */
+   *  start (the code sheet's Copy). The title keeps its 44 dp each side, which
+   *  clears a control up to 44 dp wide: the sheet's 40 sp Copy, until the
+   *  system font size passes about 1.1, when a long title could meet it. */
   trailing?: ReactNode
 }) {
   const { colors, space } = useTheme()

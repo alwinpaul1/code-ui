@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   timings: [] as { to: number; duration: number | undefined }[],
-  springs: [] as unknown[]
+  springs: [] as unknown[],
+  /** What the keyboard reports as the drawer mounts: the chat list keeps taps
+   *  `handled`, so Expand opens with the composer's keyboard still up. */
+  keyboard: null as { height: number } | null
 }))
 
 vi.mock('react-native', () => ({
@@ -21,7 +24,7 @@ vi.mock('react-native', () => ({
     isReduceMotionEnabled: () => Promise.resolve(false)
   },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
-  Keyboard: { addListener: () => ({ remove: () => {} }), dismiss: () => {}, metrics: () => null },
+  Keyboard: { addListener: () => ({ remove: () => {} }), dismiss: () => {}, metrics: () => mocks.keyboard },
   Modal: 'Modal',
   PixelRatio: { get: () => 3, getFontScale: () => 1 },
   Platform: { OS: 'android', Version: 34, select: (options: { android?: unknown }) => options.android },
@@ -86,6 +89,7 @@ let renderer: ReactTestRenderer | null = null
 beforeEach(() => {
   mocks.timings.length = 0
   mocks.springs.length = 0
+  mocks.keyboard = null
 })
 
 afterEach(() => {
@@ -96,10 +100,10 @@ afterEach(() => {
 const flatten = (style: unknown): Record<string, unknown> =>
   Object.assign({}, ...([] as unknown[]).concat(style ?? []).flat(Infinity).filter(Boolean))
 
-function sheet(onClose: () => void, code = 'pnpm test'): ReactElement {
+function sheet(onClose: () => void, code = 'pnpm test', visible = true): ReactElement {
   return (
     <ThemeProvider initialPreference="dark">
-      <MarkdownCodeSheet visible language="sh" code={code} onClose={onClose} />
+      <MarkdownCodeSheet visible={visible} language="sh" code={code} onClose={onClose} />
     </ThemeProvider>
   )
 }
@@ -184,5 +188,65 @@ describe('the Expand sheet in the real drawer', () => {
     )[0]!
     const runs = hosts(body, 'Text').filter((node) => node.props.selectable === true)
     expect(runs).toHaveLength(Math.ceil(5_000 / 24))
+  })
+
+  // Review (2026-10-14): the sheet asked the drawer for `fillAvailable` only to
+  // make its static body flex. In fill mode the drawer lifts its box by the
+  // keyboard's height, and an expandable sheet's box has a fixed full height,
+  // so with the composer's keyboard still up the sheet stood a keyboard's
+  // height too high, its top (grabber, title, cross, Copy) off the screen.
+  it('does not lift the sheet by the keyboard that is still up when Expand is pressed', async () => {
+    mocks.keyboard = { height: 320 }
+    const tree = await open(sheet(() => {}))
+    const [drawn] = tree.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.testID === 'bottom-drawer-sheet'
+    )
+    expect(flatten(drawn!.props.style).marginBottom ?? 0).toBe(0)
+    expect(flatten(drawn!.props.style).height).toBe(956 - 62 - spacing.lg)
+  })
+
+  it('still gives its code the sheet’s whole height to fill', async () => {
+    const tree = await open(sheet(() => {}))
+    const body = tree.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.testID === 'markdown-code-sheet-body'
+    )[0]!
+    expect(flatten(body.parent!.props.style).flex).toBe(1)
+  })
+
+  // Review (2026-10-14): the cross flips `visible` at once and the drawer plays
+  // its 150 ms exit, and the lines were built only while `visible`, so the exit
+  // played over an empty body.
+  it('keeps the code on screen while the sheet leaves', async () => {
+    const element = sheet(() => {})
+    const tree = await open(element)
+    const runs = (): number =>
+      tree.root
+        .findAll((node) => typeof node.type === 'string' && node.props.testID === 'markdown-code-sheet-body')[0]!
+        .findAll((node) => String(node.type) === 'Text' && node.props.selectable === true).length
+    expect(runs()).toBe(1)
+    await act(async () => {
+      tree.update(sheet(() => {}, 'pnpm test', false))
+    })
+    expect(runs()).toBe(1)
+  })
+
+  // The Claude app's sheet puts the code fill edge to edge; the drawer's own
+  // 12 dp side padding left a margin of sheet ground either side of it.
+  it('draws the code fill edge to edge and keeps the title row where it was', async () => {
+    const tree = await open(sheet(() => {}))
+    const [drawn] = tree.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.testID === 'bottom-drawer-sheet'
+    )
+    expect(flatten(drawn!.props.style).paddingHorizontal).toBe(0)
+    const closeRow = tree.root
+      .findAll((node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Close')[0]!
+    const wrappers = []
+    for (let node: ReactTestInstance | null = closeRow.parent; node; node = node.parent) {
+      if (String(node.type) === 'View' && flatten(node.props.style).paddingHorizontal !== undefined) {
+        wrappers.push(flatten(node.props.style).paddingHorizontal)
+      }
+    }
+    // 12 dp of drawer padding that is gone + the 8 dp the other sheets' title rows keep.
+    expect(wrappers).toContain(spacing.md + spacing.sm)
   })
 })

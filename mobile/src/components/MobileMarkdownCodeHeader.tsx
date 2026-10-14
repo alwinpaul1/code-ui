@@ -39,11 +39,14 @@ function MarkdownCodeHeaderInner({
 }) {
   const { colors } = useTheme()
   const { copied, error, copy } = useCopyToClipboard(CODE_BLOCK_SPEC.copy.copiedMs)
-  // The sheet is built the first time it is asked for and kept, so its close
-  // has a drawer to animate, and a block nobody expands mounts none.
+  // The sheet is built when it is asked for and kept until its exit has played,
+  // so its close has a drawer to animate, and a block nobody expands mounts none.
   const [sheet, setSheet] = useState<'never' | 'open' | 'closed'>('never')
   const openSheet = useCallback(() => setSheet('open'), [])
   const closeSheet = useCallback(() => setSheet('closed'), [])
+  // Once it has left the screen the sheet goes, with the lines it built. A
+  // reopen that began during the exit is `open` by then and is left alone.
+  const releaseSheet = useCallback(() => setSheet((now) => (now === 'closed' ? 'never' : now)), [])
   // An empty fence has nothing to copy (writing '' would empty whatever the
   // reader had on the clipboard) and nothing to expand.
   const hasCode = code.length > 0
@@ -82,7 +85,13 @@ function MarkdownCodeHeaderInner({
       </View>
       {error ? <Text style={styles.codeCopyFailed}>{copyFailedNotice(error)}</Text> : null}
       {sheet === 'never' ? null : (
-        <MarkdownCodeSheet visible={sheet === 'open'} language={language} code={code} onClose={closeSheet} />
+        <MarkdownCodeSheet
+          visible={sheet === 'open'}
+          language={language}
+          code={code}
+          onClose={closeSheet}
+          onAfterClose={releaseSheet}
+        />
       )}
     </>
   )

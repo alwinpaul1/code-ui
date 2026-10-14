@@ -49,6 +49,10 @@ export function bottomDrawerStyles({ colors }: Theme) {
       overflow: 'hidden',
       flexDirection: 'column'
     },
+    // A sheet whose content fills its width (the code sheet's fill).
+    drawerFlush: {
+      paddingHorizontal: 0
+    },
     // Drawn only on a sheet with a partial stop; a one-rest sheet keeps the
     // same box without the fill (`sheetShowsHandle`).
     handle: {
