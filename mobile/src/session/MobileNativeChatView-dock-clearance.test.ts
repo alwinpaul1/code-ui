@@ -189,7 +189,9 @@ describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session,
       (node) => typeof node.type === 'function' && node.type.name === 'MobileNativeChatJumpToLatest'
     )
     const fab = Object.assign({}, ...[jump.props.styles.fab].flat(Infinity).filter(Boolean)) as { bottom: number }
-    // space.md: the button's own gap above whatever it clears.
-    expect(fab.bottom).toBe(DOCK + space.md)
+    // space.sm = 8 dp: the Claude app's own gap, `rrb.S(..., 8.0f, 7)` on the
+    // button's modifier in cp6.java:2658 (1.261009.20); it was space.md, 12 dp,
+    // until 2026-10-15.
+    expect(fab.bottom).toBe(DOCK + space.sm)
   })
 })

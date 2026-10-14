@@ -407,7 +407,7 @@ export function MobileNativeChatView({
           />
           </MobileNativeChatVisualProvider>
           </ChatTextSelectionProvider>
-          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
+          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.sm }] }} colors={colors} />
         </GestureHandlerRootView>
       )}
       <MobileNativeChatQueueEditor editor={queueEditor} />

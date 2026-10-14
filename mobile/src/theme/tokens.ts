@@ -119,6 +119,13 @@ export type ThemeColors = {
   /** The + and mic glyphs: `pl7.P`, the colour `yg9.e` passes its plain icon buttons
    *  (#383835 light, #C3C2B7 dark; 1.261009.20, 2026-10-14). */
   composerIcon: string
+  /** The chat's ↓ jump button: its arrow, `pl7.O` (#131313 light, #F9F9F7 dark), the
+   *  primary text colour `c6b.java` case 7 tints the 16 dp `arrowDown` with
+   *  (com.anthropic.claude 1.261009.20, 2026-10-15). Its fill and border are
+   *  `composerFill` and `composerBorder`: the same `pl7.p` at 96 % and `pl7.x` at 15 %. */
+  jumpButtonGlyph: string
+  /** Its shadow: `an7.c`, black at 10 % in BOTH schemes (an7.java:18). */
+  jumpButtonShadow: string
   /** An uploaded file's card above the user's message (`f0f.f`, com.anthropic.claude
    *  1.261009.20): fill `pl7.p`, Material `surface` (#FFFFFF / #20201F), opaque. */
   attachmentCardFill: string
@@ -222,6 +229,8 @@ export const lightColors: ThemeColors = {
   composerPill: '#F0EFEC',
   composerPillText: '#1E1C19',
   composerIcon: '#383835',
+  jumpButtonGlyph: '#131313',
+  jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
   attachmentCardFill: '#FFFFFF',
   attachmentCardBorder: 'rgba(30, 30, 29, 0.3)',
   attachmentCardText: '#383835',
@@ -297,6 +306,8 @@ export const darkColors: ThemeColors = {
   composerPill: 'rgba(255, 255, 255, 0.08)',
   composerPillText: '#F8F8F6',
   composerIcon: '#C3C2B7',
+  jumpButtonGlyph: '#F9F9F7',
+  jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
   attachmentCardFill: '#20201F',
   attachmentCardBorder: 'rgba(225, 224, 217, 0.3)',
   attachmentCardText: '#C3C2B7',

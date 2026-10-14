@@ -86,25 +86,25 @@ export function makeChatViewStyles(theme: Theme) {
       padding: space.xl,
       gap: space.sm
     },
-    // Centred above the composer, as the Claude app draws it (2026-10-11):
-    // half the width in, less half the button's own 40.
+    // The Claude app's scroll-to-bottom button, com.anthropic.claude 1.261009.20
+    // (2026-10-15): a 40 dp circle (c6b.java:949), `pl7.p` at 96 % (p54.java:223),
+    // a 0.5 dp `pl7.x` hairline (p54.java:195), shadow 8 dp blur, black at 10 %,
+    // 2 dp down (an7.java:18). Bottom centre: half the width in, less half its 40.
     fab: {
       position: 'absolute',
       left: '50%',
       marginLeft: -20,
-      bottom: space.md,
+      bottom: space.sm,
       width: 40,
       height: 40,
       borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.bgPanel,
-      borderWidth: 1,
-      borderColor: colors.border,
-      shadowColor: colors.shadow,
+      backgroundColor: colors.composerFill,
+      borderWidth: 0.5,
+      borderColor: colors.composerBorder,
+      shadowColor: colors.jumpButtonShadow,
       shadowOpacity: 1,
       shadowRadius: 8,
-      shadowOffset: { width: 0, height: 3 },
+      shadowOffset: { width: 0, height: 2 },
       elevation: 4
     },
     loadEarlier: {
