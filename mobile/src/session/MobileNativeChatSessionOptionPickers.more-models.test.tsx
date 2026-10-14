@@ -145,7 +145,7 @@ function title(): string {
   return renderer!.root
     .findAllByType('Text' as never)
     .map((text) => String(text.props.children))
-    .find((text) => text === 'Select model' || text === 'Effort')!
+    .find((text) => text === 'Select model' || text === 'More models' || text === 'Effort')!
 }
 
 async function openSheet(): Promise<void> {
@@ -187,24 +187,41 @@ describe('the model sheet laid out as the Claude app picker', () => {
     expect((children.at(-1)!.type as unknown) === 'Check').toBe(true)
   })
 
-  // Claude Android 1.261009.20: one list — the featured models, the Effort
-  // row, then "Other models" under a header in the same scroll, not a page.
-  it('puts Effort under the featured models, then Other models in the same list', async () => {
+  // The Claude app's chat picker (1.261009.20, ModelSelectorBottomSheetDestination):
+  // "Select model" lists the featured models, then an Effort row, then a "More
+  // models" row that opens a page of its own titled "More models". The user
+  // (2026-10-14): "I had to click and see old models, like in Claude mobile."
+  it('puts older models behind a tap, as the Claude app does', async () => {
+    mount('opus')
+    await openSheet()
+    expect(title()).toBe('Select model')
+    expect(choiceRows().map((row) => texts(row)[0])).toEqual([
+      'Fable 5.1',
+      'Opus 5.5',
+      'Sonnet 5.5',
+      'Haiku 5.5'
+    ])
+    const shown = renderer!.root.findAllByType('Text' as never).map((t) => String(t.props.children))
+    expect(shown).not.toContain('Other models')
+    expect(shown).not.toContain('Opus 4.8')
+    expect(pressable('More models').props.accessibilityLabel).toBe('More models')
+  })
+
+  it('keeps Effort under the featured models and More models after it', async () => {
     mount('opus')
     await openSheet()
     expect(pressable('Effort').props.accessibilityLabel).toBe('Effort, Medium')
     const shown = renderer!.root.findAllByType('Text' as never).map((t) => String(t.props.children))
-    expect(shown).toContain('Other models')
-    expect(shown.indexOf('Effort')).toBeLessThan(shown.indexOf('Other models'))
-    expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'More models')).toEqual([])
+    expect(shown.indexOf('Haiku 5.5')).toBeLessThan(shown.indexOf('Effort'))
+    expect(shown.indexOf('Effort')).toBeLessThan(shown.lastIndexOf('More models'))
   })
 
-  it('lists the older models under Other models, names alone, and picks one there', async () => {
+  it('opens the older models on their own page, names alone, and picks one', async () => {
     mount('opus')
     await openSheet()
-    expect(title()).toBe('Select model')
-    const older = choiceRows().slice(4)
-    expect(older.map((row) => texts(row)[0])).toEqual([
+    await press(pressable('More models'))
+    expect(title()).toBe('More models')
+    expect(choiceRows().map((row) => texts(row)[0])).toEqual([
       'Fable 5',
       'Opus 5',
       'Opus 4.8',
@@ -214,16 +231,62 @@ describe('the model sheet laid out as the Claude app picker', () => {
       'Sonnet 4.6',
       'Haiku 4.5'
     ])
-    expect(older.every((row) => texts(row).length === 1)).toBe(true)
+    // The second page lists names alone, as the app does.
+    expect(choiceRows().every((row) => texts(row).length === 1)).toBe(true)
     await press(rowLabelled('Opus 4.8'))
     expect(setOption).toHaveBeenCalledWith('model', 'claude-opus-4-8', expect.any(Function))
   })
 
-  it('checks an older running model under Other models, and nothing above it', async () => {
+  it('goes back from More models to the first page', async () => {
+    mount('opus')
+    await openSheet()
+    await press(pressable('More models'))
+    await press(pressable('Back to models'))
+    expect(title()).toBe('Select model')
+    expect(choiceRows()).toHaveLength(4)
+  })
+
+  it('names an older running model on the More models row, and checks it there', async () => {
     mount('claude-opus-4-8')
     await openSheet()
-    expect(choiceRows().slice(0, 4).some((row) => row.props.accessibilityState.checked)).toBe(false)
+    expect(choiceRows().some((row) => row.props.accessibilityState.checked)).toBe(false)
+    expect(pressable('More models').props.accessibilityLabel).toBe('More models, Opus 4.8')
+    await press(pressable('More models'))
     expect(rowLabelled('Opus 4.8').props.accessibilityState.checked).toBe(true)
+  })
+
+  it('leaves the More models row bare while a featured model runs', async () => {
+    mount('opus')
+    await openSheet()
+    expect(pressable('More models').props.accessibilityLabel).toBe('More models')
+    await press(pressable('More models'))
+    expect(choiceRows().some((row) => row.props.accessibilityState.checked)).toBe(false)
+  })
+
+  // A model is half the choice and its effort the other half, so an older pick
+  // steps into Effort too, and Back from there is the first page.
+  it('lands on Effort after an older pick, and Back goes to the first page', async () => {
+    mount('opus')
+    await openSheet()
+    await press(pressable('More models'))
+    await press(rowLabelled('Opus 4.8'))
+    expect(title()).toBe('Effort')
+    await press(pressable('Back to models'))
+    expect(title()).toBe('Select model')
+    expect(choiceRows()).toHaveLength(4)
+  })
+
+  // Failure path: a refused pick keeps the page it was made on, so the user can
+  // choose again; it must not drop them on the first page or on Effort.
+  it('stays on More models when the agent refuses the pick', async () => {
+    setOption.mockResolvedValue(false)
+    mount('opus')
+    await openSheet()
+    await press(pressable('More models'))
+    await press(rowLabelled('Opus 4.8'))
+    expect(setOption).toHaveBeenCalledTimes(1)
+    expect(title()).toBe('More models')
+    expect(choiceRows()).toHaveLength(8)
   })
 
   it('titles the effort sheet "Effort", as the Claude app does, and goes back to the models', async () => {
@@ -235,15 +298,80 @@ describe('the model sheet laid out as the Claude app picker', () => {
     expect(title()).toBe('Select model')
   })
 
-  it('opens on the model list again after closing on the effort sheet', async () => {
+  it('opens on the first page again after closing on the second', async () => {
     mount('opus')
     await openSheet()
-    await press(pressable('Effort'))
+    await press(pressable('More models'))
     // Swiped down or tapped outside: the drawer's own close, not Back.
     await act(async () => renderer!.root.findByType('BottomDrawer' as never).props.onClose())
     expect(renderer!.root.findAllByType('BottomDrawer' as never)).toHaveLength(0)
     await openSheet()
     expect(title()).toBe('Select model')
+    expect(choiceRows()).toHaveLength(4)
+  })
+
+  it('opens on the first page again after closing on the effort sheet', async () => {
+    mount('opus')
+    await openSheet()
+    await press(pressable('Effort'))
+    await act(async () => renderer!.root.findByType('BottomDrawer' as never).props.onClose())
+    await openSheet()
+    expect(title()).toBe('Select model')
+  })
+
+  // Degenerate sizes: the row is there only when there is something behind it.
+  describe('with a list too short to split', () => {
+    function mountList(choices: typeof CHOICES): void {
+      const descriptor: SessionOptionDescriptor = {
+        ...model('opus'),
+        kind: { type: 'select', currentValue: 'opus', choices }
+      }
+      act(() => {
+        renderer = create(
+          <ThemeProvider initialPreference="light">
+            {createElement(MobileNativeChatSessionOptionPickers, {
+              controller: {
+                snapshot: [descriptor, EFFORT],
+                pendingId: null,
+                setOption,
+                invokeAction: vi.fn(),
+                recordCommand: vi.fn()
+              },
+              isWorking: false,
+              reportFailure: vi.fn(),
+              scopeKey: 'host\0wt\0tab',
+              claudeModelLayout: true
+            })}
+          </ThemeProvider>
+        )
+      })
+    }
+    const moreRows = (): ReactTestInstance[] =>
+      renderer!.root.findAll((node) =>
+        String(node.props.accessibilityLabel ?? '').startsWith('More models')
+      )
+
+    it('shows no More models row when every model is featured', async () => {
+      mountList(CHOICES.filter((choice) => ['opus', 'fable', 'sonnet', 'haiku'].includes(choice.value)))
+      await openSheet()
+      expect(choiceRows()).toHaveLength(4)
+      expect(moreRows()).toEqual([])
+    })
+
+    it('draws one model alone, with no More models row', async () => {
+      mountList(CHOICES.filter((choice) => choice.value === 'opus'))
+      await openSheet()
+      expect(choiceRows().map((row) => texts(row)[0])).toEqual(['Opus 5.5'])
+      expect(moreRows()).toEqual([])
+    })
+
+    it('draws an empty list without rows or a More models row', async () => {
+      mountList([])
+      await openSheet()
+      expect(title()).toBe('Select model')
+      expect(choiceRows()).toEqual([])
+      expect(moreRows()).toEqual([])
+    })
   })
 
   // OMP labels its rows with the model's own name ("Claude Opus 4.5") and
@@ -253,9 +381,7 @@ describe('the model sheet laid out as the Claude app picker', () => {
     mount('opus', 'light', false)
     await openSheet()
     expect(choiceRows()).toHaveLength(CHOICES.length)
-    expect(
-      renderer!.root.findAllByType('Text' as never).some((t) => t.props.children === 'Other models')
-    ).toBe(false)
+    expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'More models')).toEqual([])
   })
 
   // Light tiles are the panel colour, lighter than the sheet, outlined by the
@@ -279,5 +405,28 @@ describe('the model sheet laid out as the Claude app picker', () => {
     expect(group!.props.style).toEqual(
       expect.arrayContaining([expect.objectContaining({ backgroundColor: palette.border })])
     )
+  })
+
+  // The More models row and the page behind it are tiles like the rest: both
+  // paint from the theme, in light and in dark.
+  it.each([
+    ['light', lightColors, lightColors.bgPanel],
+    ['dark', darkColors, darkColors.bgRaised]
+  ] as const)('paints the More models row and its page from the %s theme', async (scheme, palette, tile) => {
+    mount('claude-opus-4-8', scheme)
+    await openSheet()
+    const row = pressable('More models')
+    const style = (row.props.style as (state: { pressed: boolean }) => Record<string, unknown>)({
+      pressed: false
+    })
+    expect(style.backgroundColor).toBe(tile)
+    expect(row.findByType('ChevronRight' as never).props.color).toBe(palette.textMuted)
+    await press(row)
+    const older = rowLabelled('Opus 4.8')
+    const olderStyle = (
+      older.props.style as (state: { pressed: boolean }) => Record<string, unknown>
+    )({ pressed: false })
+    expect(olderStyle.backgroundColor).toBe(tile)
+    expect(older.findByType('Check' as never).props.color).toBe(palette.accent)
   })
 })

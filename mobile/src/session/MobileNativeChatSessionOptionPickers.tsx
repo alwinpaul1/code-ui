@@ -172,9 +172,12 @@ export function MobileNativeChatSessionOptionPickers({
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const { colors, space, isDark } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
+  // The model view's second page: the older models behind the "More models" row.
+  const [morePage, setMorePage] = useState(false)
   const [lastRequest, setLastRequest] = useState(controller.optionPickerRequest)
   if (controller.optionPickerRequest && lastRequest !== controller.optionPickerRequest) {
     setLastRequest(controller.optionPickerRequest)
+    setMorePage(false)
     setOpenDescriptorId(controller.optionPickerRequest.id)
   }
   const { snapshot, pendingId } = controller
@@ -185,6 +188,7 @@ export function MobileNativeChatSessionOptionPickers({
   useEffect(() => {
     if (openRequest > 0 && modelId) {
       Keyboard.dismiss()
+      setMorePage(false)
       setOpenDescriptorId(modelId)
     }
   }, [modelId, openRequest])
@@ -237,23 +241,36 @@ export function MobileNativeChatSessionOptionPickers({
     claudeModelLayout && modelShown.kind.type === 'select'
       ? modelSheetLayout(modelShown.kind.choices)
       : null
-  // The Claude app's model sheet is one list: its featured models, the Effort
-  // row, then "Other models" under a header in the same scroll — not a second
-  // page behind a row (Claude Android 1.261009.20).
-  const otherModels = modelView && !modelsPending && layout ? layout.more : []
+  // The Claude app's chat picker keeps its older models behind a tap: a "More
+  // models" row under the Effort row opens a page of its own (Claude Android
+  // 1.261009.20, ModelSelectorBottomSheetDestination: "Select model", "More
+  // models", "Effort"). Its Code section lists them inline under "Other
+  // models", which Code UI drew from 2026-10-12 (05a1f68b5) until the user
+  // asked for the tap back on 2026-10-14. The row exists only when there is
+  // something behind it.
+  const hasMoreModels = modelView && !modelsPending && layout !== null && layout.more.length > 0
+  const onMorePage = hasMoreModels && morePage
+  // Why the More models row names a pick: with the running model on the second
+  // page, the first page checks nothing, and the row is where it is.
+  const runningValue = modelShown.kind.type === 'select' ? modelShown.kind.currentValue : undefined
+  const moreSelectedLabel =
+    layout?.more.find((choice) => choice.value === runningValue)?.label ?? null
 
   // Another view of the drawer drops the failure the user read in this one.
   // Closing leaves it to use-sheet-failure.ts, which drops it if
   // it has been read and hands it to the chat's banner if not.
-  const showView = (id: string): void => {
+  const showView = (id: string, more = false): void => {
     failure.clear()
+    setMorePage(more)
     setOpenDescriptorId(id)
   }
   const closePicker = (): void => {
+    setMorePage(false)
     setOpenDescriptorId(null)
   }
   const openPicker = (): void => {
     Keyboard.dismiss()
+    setMorePage(false)
     setOpenDescriptorId(model.id)
     onOpen?.()
   }
@@ -265,6 +282,7 @@ export function MobileNativeChatSessionOptionPickers({
   // what the pick said (an ack that was lost): it stays in the drawer, or goes to
   // the banner once the drawer has closed.
   const afterApply = (descriptor: SessionOptionDescriptor): void => {
+    setMorePage(false)
     setOpenDescriptorId(descriptor.id === model.id ? EFFORT_OPTION_ID : null)
   }
 
@@ -294,7 +312,7 @@ export function MobileNativeChatSessionOptionPickers({
     failure.clear()
     void controller.invokeAction(descriptor.id, failure.reporter()).then((invoked) => {
       if (invoked) {
-        setOpenDescriptorId(null)
+        closePicker()
       }
     })
   }
@@ -313,17 +331,18 @@ export function MobileNativeChatSessionOptionPickers({
           <View style={{ paddingBottom: space.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: space.lg }}>
               <IconButton
-                icon={modelView ? X : ArrowLeft}
-                accessibilityLabel={modelView ? 'Close picker' : 'Back to models'}
+                icon={modelView && !onMorePage ? X : ArrowLeft}
+                accessibilityLabel={modelView && !onMorePage ? 'Close picker' : 'Back to models'}
                 variant="ghost"
                 size={36}
                 iconSize={22}
-                onPress={modelView ? closePicker : () => showView(model.id)}
+                onPress={modelView && !onMorePage ? closePicker : () => showView(model.id)}
               />
               {/* The app titles an option's own sheet with its name alone
-                  ("Effort"), and the model sheet "Select model". */}
+                  ("Effort"), the older models "More models", and the model
+                  sheet "Select model". */}
               <Txt variant="title" weight="semibold" align="center" style={{ flex: 1 }}>
-                {modelView ? 'Select model' : activeDescriptor.label}
+                {onMorePage ? 'More models' : modelView ? 'Select model' : activeDescriptor.label}
               </Txt>
               <View
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
@@ -371,7 +390,7 @@ export function MobileNativeChatSessionOptionPickers({
                 <DescriptorRows
                   descriptor={
                     modelView && layout
-                      ? withChoices(modelShown, layout.featured)
+                      ? withChoices(modelShown, onMorePage ? layout.more : layout.featured)
                       : withRunningModelSelected(activeDescriptor, model.id, liveModel)
                   }
                   disabled={disabled}
@@ -381,7 +400,7 @@ export function MobileNativeChatSessionOptionPickers({
                 />
               )}
             </RowGroup>
-            {modelView && options.length > 0 ? (
+            {modelView && !onMorePage && options.length > 0 ? (
               <RowGroup style={{ marginTop: space.md }}>
                 {options.map((descriptor) => (
                   <SessionOptionSummaryRow
@@ -399,26 +418,16 @@ export function MobileNativeChatSessionOptionPickers({
                 ))}
               </RowGroup>
             ) : null}
-            {otherModels.length > 0 ? (
-              <>
-                <Txt
-                  variant="label"
-                  tone="secondary"
-                  accessibilityRole="header"
-                  style={{ marginTop: space.lg, marginBottom: space.xs, paddingHorizontal: space.md }}
-                >
-                  Other models
-                </Txt>
-                <RowGroup>
-                  <DescriptorRows
-                    descriptor={withChoices(modelShown, otherModels)}
-                    disabled={disabled}
-                    grouped
-                    onSetOption={(value) => applyOption(model, value)}
-                    onInvokeAction={() => invokeAction(model)}
-                  />
-                </RowGroup>
-              </>
+            {hasMoreModels && !onMorePage ? (
+              <RowGroup style={{ marginTop: space.md }}>
+                <SessionOptionSummaryRow
+                  label="More models"
+                  value={moreSelectedLabel ?? ''}
+                  disabled={false}
+                  divided={false}
+                  onPress={() => showView(model.id, true)}
+                />
+              </RowGroup>
             ) : null}
           </View>
         ) : null}
