@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import { anyTextFieldFocused } from './text-field-focus'
+import { clearKeyboardRelease, keyboardReleased } from './keyboard-release'
 import { useAppReturns } from './use-app-returns'
 import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
 
@@ -16,6 +17,13 @@ export const COMPOSER_KEYBOARD_CLAIM_MS = 1500
  *  right after) the keyboard still reads as up. A keyboard that is leaving has
  *  reported its hide by then; an orphaned one stays. */
 export const COMPOSER_KEYBOARD_SETTLE_MS = 500
+
+/** After the settle, how often the claim looks again while its window is
+ *  open. One look at the settle missed a keyboard that was not yet orphaned
+ *  at that instant and became so a moment later: the terminal field the
+ *  keyboard came from still read as focused, or the chat surface was still
+ *  settling, on a new terminal tab that starts Claude (2026-10-14). */
+export const COMPOSER_KEYBOARD_RETRY_MS = 250
 
 /**
  * Never a keyboard up over a composer that does not hold focus.
@@ -56,21 +64,34 @@ export function useComposerKeepsKeyboard(
     []
   )
   const claim = useCallback(() => {
-    if (Date.now() > claimUntilRef.current || !orphaned() || settleRef.current !== null) {
+    if (
+      Date.now() > claimUntilRef.current ||
+      !keyboardUpRef.current ||
+      !screenFocusedRef.current ||
+      settleRef.current !== null
+    ) {
       return
     }
-    settleRef.current = setTimeout(() => {
+    const look = (): void => {
       settleRef.current = null
-      if (!orphaned()) {
+      if (!keyboardUpRef.current || !screenFocusedRef.current || keyboardReleased()) {
+        // Down, covered, or put away on purpose: nothing to keep.
         return
       }
-      claimUntilRef.current = 0
-      // The one line this leaves behind: a keyboard nobody held, and the
-      // composer taking it. If keys still go nowhere after it, native dropped
-      // the focus.
-      console.warn('[composer] claimed an open keyboard no field held')
-      input.current?.focus()
-    }, COMPOSER_KEYBOARD_SETTLE_MS)
+      if (orphaned() && input.current) {
+        claimUntilRef.current = 0
+        // The one line this leaves behind: a keyboard nobody held, and the
+        // composer taking it. If keys still go nowhere after it, native dropped
+        // the focus.
+        console.warn('[composer] claimed an open keyboard no field held')
+        input.current.focus()
+        return
+      }
+      if (Date.now() <= claimUntilRef.current) {
+        settleRef.current = setTimeout(look, COMPOSER_KEYBOARD_RETRY_MS)
+      }
+    }
+    settleRef.current = setTimeout(look, COMPOSER_KEYBOARD_SETTLE_MS)
   }, [input, orphaned])
   const arm = useCallback(() => {
     claimUntilRef.current = Date.now() + COMPOSER_KEYBOARD_CLAIM_MS
@@ -89,6 +110,8 @@ export function useComposerKeepsKeyboard(
   useEffect(() => {
     if (keyboardUp) {
       claim()
+    } else {
+      clearKeyboardRelease()
     }
   }, [claim, keyboardUp])
   useNativeChatScreenFocus(

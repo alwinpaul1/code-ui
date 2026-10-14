@@ -145,6 +145,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     resetLiveInputFocus
   } = useTerminalLiveInputFocus({
     activeHandleRef,
+    canCompose,
+    commandInputRef,
     canSend,
     inputRef: liveInputRef,
     isAnyTextFieldFocused: anyTextFieldFocused,

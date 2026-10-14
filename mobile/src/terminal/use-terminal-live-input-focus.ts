@@ -6,6 +6,11 @@ import {
   type TerminalLiveInputFocusTarget,
   type TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
+import {
+  clearKeyboardRelease,
+  keyboardReleased,
+  releaseKeyboard
+} from '../session/keyboard-release'
 
 type TerminalLiveInputFocusContext = {
   readonly canSend: boolean
@@ -13,9 +18,17 @@ type TerminalLiveInputFocusContext = {
   readonly liveInputEnabled: boolean
 }
 
+type DockFieldContext = TerminalLiveInputFocusContext & {
+  /** The buffered command field may take keys (composing is local). */
+  readonly canCompose: boolean
+}
+
 type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
   TerminalLiveInputFocusContext & {
     readonly activeHandleRef: RefObject<string | null>
+    readonly canCompose: boolean
+    /** The buffered command field, the dock's field while live input is off. */
+    readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
     readonly inputRef: RefObject<T | null>
     /** Whether any text field holds focus, as React Native records it
      *  (`anyTextFieldFocused` in session/text-field-focus.ts). Passed in so
@@ -27,12 +40,12 @@ type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
   }
 
 type TerminalLiveInputFocusHandlers = {
-  /** The live field came on screen: claim an open keyboard no field holds. */
+  /** A dock field (live or command) came on screen: claim an open keyboard no field holds. */
   readonly armLiveInputKeyboardClaim: () => void
   readonly focusLiveInput: () => void
-  /** The live field's own onBlur. */
+  /** A dock field's own onBlur. */
   readonly handleLiveInputBlur: () => void
-  /** The live field's own onFocus. */
+  /** A dock field's own onFocus. */
   readonly handleLiveInputFocus: () => void
   readonly handleTerminalTap: (handle: string) => void
   /** The app is putting the keyboard away on purpose: the next blur is not
@@ -49,10 +62,18 @@ type TerminalLiveInputFocusHandlers = {
  *  hide animation, so a keyboard that is leaving still reads as up for about
  *  that long. Not imported from there: that module reaches react-native. */
 export const LIVE_INPUT_KEYBOARD_SETTLE_MS = 500
+/** After the settle, how often the claim looks again, and for how long after
+ *  it was armed. A single look missed a field that was not ready at that
+ *  instant (the tab's PTY not named yet, the old field's focus not cleared
+ *  yet, the replacement field not mounted yet) and never looked again. */
+export const LIVE_INPUT_KEYBOARD_RETRY_MS = 250
+export const LIVE_INPUT_KEYBOARD_CLAIM_MS = 2000
 
 export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget>({
   activeHandleRef,
+  canCompose,
   canSend,
+  commandInputRef,
   inputRef,
   isAnyTextFieldFocused,
   keyboardHeight,
@@ -66,9 +87,19 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
     keyboardHeight,
     liveInputEnabled
   })
+  const dockRef = useRef<DockFieldContext>({
+    canCompose,
+    canSend,
+    keyboardHeight,
+    liveInputEnabled
+  })
   useLayoutEffect(() => {
     contextRef.current = { canSend, keyboardHeight, liveInputEnabled }
-  }, [canSend, keyboardHeight, liveInputEnabled])
+    dockRef.current = { canCompose, canSend, keyboardHeight, liveInputEnabled }
+    if (keyboardHeight <= 0) {
+      clearKeyboardRelease()
+    }
+  }, [canCompose, canSend, keyboardHeight, liveInputEnabled])
 
   // Keyboard claim state; see claimOrphanedKeyboard below.
   const heldRef = useRef(false)
@@ -134,38 +165,48 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
    * (a tab switch from chat) is the same state from the other side; the chat
    * composer handles its own case in use-composer-keeps-keyboard.ts.
    *
-   * So when the field loses a focus it held, or comes on screen, it takes the
-   * keyboard back once that has stayed up for LIVE_INPUT_KEYBOARD_SETTLE_MS
-   * with no text field focused. A blur this app asks for goes through
-   * resetLiveInputFocus or releaseLiveInputKeyboard, which clear `held`, so
-   * it is never undone. Another field that takes focus keeps it.
+   * So when the dock's field loses a focus it held, or comes on screen, it
+   * takes the keyboard back once that has stayed up for
+   * LIVE_INPUT_KEYBOARD_SETTLE_MS with no text field focused. The field is
+   * whichever the bar draws: the live field, or the buffered command field
+   * while live input is off. It keeps looking every
+   * LIVE_INPUT_KEYBOARD_RETRY_MS until LIVE_INPUT_KEYBOARD_CLAIM_MS: on
+   * 0.9.141 a new terminal tab that started Claude still left the keyboard
+   * up with nothing focused (2026-10-14), because one look at the settle
+   * found the tab not ready yet and never looked again. A blur this app asks
+   * for goes through resetLiveInputFocus or releaseLiveInputKeyboard (which
+   * also releases the keyboard for the chat composer, keyboard-release.ts),
+   * so it is never undone. Another field that takes focus keeps it.
    */
   const claimOrphanedKeyboard = useCallback(() => {
     if (claimTimerRef.current !== null) {
       return
     }
-    claimTimerRef.current = setTimeout(() => {
+    const until = Date.now() + LIVE_INPUT_KEYBOARD_CLAIM_MS
+    const look = (): void => {
       claimTimerRef.current = null
-      const context = contextRef.current
-      if (
-        context.keyboardHeight <= 0 ||
-        !context.canSend ||
-        !context.liveInputEnabled ||
-        !screenFocusedRef.current ||
-        isAnyTextFieldFocused()
-      ) {
+      const dock = dockRef.current
+      if (dock.keyboardHeight <= 0 || keyboardReleased() || !screenFocusedRef.current) {
+        // Down, put away on purpose, or not on screen: nothing to keep.
         return
       }
-      const input = inputRef.current
-      if (!input) {
+      const live = dock.liveInputEnabled
+      const input = live ? inputRef.current : commandInputRef.current
+      if (input && (live ? dock.canSend : dock.canCompose) && !isAnyTextFieldFocused()) {
+        // The one line this leaves behind. If keys still go nowhere after it,
+        // native refused the focus.
+        console.warn(
+          `[live-input] claimed an open keyboard no field held for the ${live ? 'live' : 'command'} field`
+        )
+        input.focus()
         return
       }
-      // The one line this leaves behind. If keys still go nowhere after it,
-      // native refused the focus.
-      console.warn('[live-input] claimed an open keyboard no field held')
-      input.focus()
-    }, LIVE_INPUT_KEYBOARD_SETTLE_MS)
-  }, [inputRef, isAnyTextFieldFocused])
+      if (Date.now() < until) {
+        claimTimerRef.current = setTimeout(look, LIVE_INPUT_KEYBOARD_RETRY_MS)
+      }
+    }
+    claimTimerRef.current = setTimeout(look, LIVE_INPUT_KEYBOARD_SETTLE_MS)
+  }, [commandInputRef, inputRef, isAnyTextFieldFocused])
 
   const handleLiveInputFocus = useCallback(() => {
     heldRef.current = true
@@ -188,6 +229,7 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   // focused may not hide anything at all.
   const releaseLiveInputKeyboard = useCallback(() => {
     heldRef.current = false
+    releaseKeyboard()
     cancelKeyboardClaim()
   }, [cancelKeyboardClaim])
 

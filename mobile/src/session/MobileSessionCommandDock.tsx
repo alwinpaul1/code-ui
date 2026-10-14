@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { View, TextInput, Pressable, Platform } from 'react-native'
 import { ArrowUp } from 'lucide-react-native'
@@ -75,14 +75,34 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     viewResolved,
     loading: showLoadingState
   })
-  // A live field coming on screen under a keyboard no field holds takes it
-  // (use-terminal-live-input-focus.ts, claimOrphanedKeyboard).
-  const liveFieldShown = shown && liveBar
+  // The dock's field, live or buffered, coming on screen under a keyboard no
+  // field holds takes it (use-terminal-live-input-focus.ts,
+  // claimOrphanedKeyboard). On the bar's own transitions here, and on each
+  // field's native mount below: a field remounted under the same bar (a new
+  // PTY handle, the autocomplete key) is a fresh field too.
   useEffect(() => {
-    if (liveFieldShown) {
+    if (shown) {
       armLiveInputKeyboardClaim()
     }
-  }, [armLiveInputKeyboardClaim, liveFieldShown, activeHandle])
+  }, [armLiveInputKeyboardClaim, shown, liveBar, activeHandle])
+  const bindLiveField = useCallback(
+    (node: TextInput | null) => {
+      bindLiveInputField(node)
+      if (node) {
+        armLiveInputKeyboardClaim()
+      }
+    },
+    [armLiveInputKeyboardClaim, bindLiveInputField]
+  )
+  const bindBufferedField = useCallback(
+    (node: TextInput | null) => {
+      bindCommandField(node)
+      if (node) {
+        armLiveInputKeyboardClaim()
+      }
+    },
+    [armLiveInputKeyboardClaim, bindCommandField]
+  )
   if (!shown) {
     return null
   }
@@ -117,7 +137,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               echo arrives one relay round trip later. Enter clears the field. */}
           <TextInput
             cursorColor={colors.caret}
-            ref={bindLiveInputField}
+            ref={bindLiveField}
             style={{
               flex: 1,
               height: 38,
@@ -190,7 +210,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         >
           <TextInput
             cursorColor={colors.caret}
-            ref={bindCommandField}
+            ref={bindBufferedField}
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={
               Platform.OS === 'android'
@@ -229,6 +249,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
             // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
             editable={canCompose}
             onSubmitEditing={() => void handleSend()}
+            onFocus={handleLiveInputFocus}
+            onBlur={handleLiveInputBlur}
             selectionColor={colors.accent}
           />
           <MobileTerminalInputActions

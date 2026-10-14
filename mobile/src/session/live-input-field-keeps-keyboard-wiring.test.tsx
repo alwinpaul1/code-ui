@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +42,8 @@ afterEach(() => {
 function renderDock(scheme: 'light' | 'dark', overrides: Record<string, unknown> = {}) {
   const wiring = {
     armLiveInputKeyboardClaim: vi.fn(),
+    bindCommandField: vi.fn(),
+    bindLiveInputField: vi.fn(),
     handleLiveInputBlur: vi.fn(),
     handleLiveInputFocus: vi.fn()
   }
@@ -52,10 +54,8 @@ function renderDock(scheme: 'light' | 'dark', overrides: Record<string, unknown>
     autocompleteEnabled: false,
     liveInputCapture: '',
     dictationMode: 'tap',
-    bindCommandField: () => undefined,
     handleLiveInputChange: () => undefined,
     handleLiveInputKeyPress: () => undefined,
-    bindLiveInputField: () => undefined,
     submitLiveInput: () => undefined,
     activeSessionTab: { type: 'terminal', id: 'term_claude' },
     activeHandle: 'term_claude',
@@ -82,15 +82,28 @@ function renderDock(scheme: 'light' | 'dark', overrides: Record<string, unknown>
     ...wiring,
     ...overrides
   } as unknown as MobileSessionController
+  const draw = (next: MobileSessionController) => (
+    <ThemeProvider initialPreference={scheme}>
+      {createElement(MobileSessionCommandDock, { controller: next })}
+    </ThemeProvider>
+  )
   act(() => {
-    renderer = create(
-      <ThemeProvider initialPreference={scheme}>
-        {createElement(MobileSessionCommandDock, { controller })}
-      </ThemeProvider>
-    )
+    renderer = create(draw(controller), {
+      // A native node for every field, so the dock's field refs see a mount.
+      createNodeMock: (element: ReactElement) =>
+        String(element.type) === 'TextInput' ? NATIVE_FIELD : null
+    })
   })
-  return wiring
+  return {
+    ...wiring,
+    update: (changes: Record<string, unknown>) =>
+      act(() => {
+        renderer!.update(draw({ ...controller, ...changes } as MobileSessionController))
+      })
+  }
 }
+
+const NATIVE_FIELD = { focus: () => undefined, blur: () => undefined }
 
 function liveField(): ReactTestInstance {
   const field = renderer!.root
@@ -123,6 +136,32 @@ describe.each([
 
   it('claims an open keyboard when it comes on screen', () => {
     const wiring = renderDock(scheme)
+    expect(wiring.armLiveInputKeyboardClaim).toHaveBeenCalled()
+    expect(wiring.bindLiveInputField).toHaveBeenLastCalledWith(NATIVE_FIELD)
+  })
+
+  // 2026-10-14 on 0.9.141: a new terminal tab that starts Claude left the
+  // keyboard up with no field focused. The claim was armed only for the live
+  // field and only when the bar changed, never for the buffered command field
+  // and never for a field remounted under the same bar.
+  it('a new terminal tab that starts Claude keeps typed keys in the box on screen: the buffered field claims too, and again when it remounts', () => {
+    const wiring = renderDock(scheme, { liveInputEnabled: false })
+    const command = renderer!.root
+      .findAll((node) => String(node.type) === 'TextInput')
+      .find((node) => node.props.placeholder === 'Type a command…')
+    expect(command).toBeDefined()
+    expect(wiring.armLiveInputKeyboardClaim).toHaveBeenCalled()
+    // The session's own binding still gets the field (submit and dismissal read it).
+    expect(wiring.bindCommandField).toHaveBeenLastCalledWith(NATIVE_FIELD)
+    expect(command!.props.cursorColor).toBe(palette.caret)
+    act(() => command!.props.onFocus())
+    act(() => command!.props.onBlur())
+    expect(wiring.handleLiveInputFocus).toHaveBeenCalledTimes(1)
+    expect(wiring.handleLiveInputBlur).toHaveBeenCalledTimes(1)
+
+    wiring.armLiveInputKeyboardClaim.mockClear()
+    // Android keys the field on autocomplete, so this is a fresh native field.
+    wiring.update({ liveInputEnabled: false, autocompleteEnabled: true })
     expect(wiring.armLiveInputKeyboardClaim).toHaveBeenCalledTimes(1)
   })
 

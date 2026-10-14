@@ -50,7 +50,7 @@ vi.mock('react-native', () => ({
 }))
 // The real seam, over the AppState above (vitest.setup.ts stubs it for everyone else).
 vi.mock('./use-app-returns', async () => await vi.importActual('./use-app-returns'))
-vi.mock('react-native-svg',() => ({ default: () => null, Circle: () => null }))
+vi.mock('react-native-svg', () => ({ default: () => null, Circle: () => null }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
@@ -99,7 +99,12 @@ vi.mock('./use-native-chat-screen-focus', async () => {
 })
 
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
-import { COMPOSER_KEYBOARD_CLAIM_MS, COMPOSER_KEYBOARD_SETTLE_MS } from './use-composer-keeps-keyboard'
+import {
+  COMPOSER_KEYBOARD_CLAIM_MS,
+  COMPOSER_KEYBOARD_RETRY_MS,
+  COMPOSER_KEYBOARD_SETTLE_MS
+} from './use-composer-keeps-keyboard'
+import { clearKeyboardRelease, releaseKeyboard } from './keyboard-release'
 
 // focus() writes React Native's record at once, as TextInputState.focusTextInput does.
 const field = {
@@ -119,6 +124,7 @@ beforeEach(() => {
   focus.shownOnMount = true
   focus.screen = null
   rn.appStateListeners = []
+  clearKeyboardRelease()
 })
 afterEach(() => {
   act(() => renderer?.unmount())
@@ -163,7 +169,8 @@ function wait(ms: number): void {
   })
 }
 
-const appState = (state: string) => act(() => rn.appStateListeners.forEach((listener) => listener(state)))
+const appState = (state: string) =>
+  act(() => rn.appStateListeners.forEach((listener) => listener(state)))
 
 describe('a keyboard left up over the chat composer', () => {
   it('keeps typed keys in the box after the composer remounts under an open keyboard', () => {
@@ -291,5 +298,40 @@ describe('the claim never takes a keyboard from someone else', () => {
     renderer = null
     wait(COMPOSER_KEYBOARD_SETTLE_MS)
     expect(field.focus).not.toHaveBeenCalled()
+  })
+})
+
+// Reported 2026-10-14 on 0.9.141: open a new terminal tab, type `claude`, and
+// once Claude Code is up the keyboard is open but keys appear nowhere and no
+// field shows a caret. When the tab settles into chat, the composer mounts
+// under the keyboard the terminal field held. The claim looked once, at the
+// settle: if the terminal field still read as focused at that instant, it gave
+// up for good. The terminal ending is in terminal-live-input-keeps-keyboard.test.ts.
+describe('a new terminal tab that starts Claude keeps typed keys in the box on screen', () => {
+  it('takes the keyboard once the terminal field it came from stops reading as focused', () => {
+    focus.someFieldFocused = true // the terminal's live field, on its way out
+    mount(true)
+    wait(COMPOSER_KEYBOARD_SETTLE_MS + 300)
+    expect(field.focus).not.toHaveBeenCalled()
+    focus.someFieldFocused = false
+    wait(COMPOSER_KEYBOARD_RETRY_MS)
+    expect(field.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not bring back a keyboard a terminal send put away, however late keyboardDidHide is', () => {
+    // dismissKeyboardAfterAgentSend releases the keyboard, and the tab flips
+    // to chat while the keyboard still reports its height.
+    releaseKeyboard()
+    mount(true)
+    wait(COMPOSER_KEYBOARD_CLAIM_MS + COMPOSER_KEYBOARD_SETTLE_MS)
+    expect(field.focus).not.toHaveBeenCalled()
+  })
+
+  it('stops looking when its window closes, leaving no timer behind', () => {
+    focus.someFieldFocused = true // a sheet's field keeps it the whole time
+    mount(true)
+    wait(COMPOSER_KEYBOARD_CLAIM_MS + COMPOSER_KEYBOARD_SETTLE_MS)
+    expect(field.focus).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

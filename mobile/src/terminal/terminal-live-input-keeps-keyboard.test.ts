@@ -5,7 +5,10 @@ import type {
   TerminalLiveInputFocusTarget,
   TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
+import { clearKeyboardRelease } from '../session/keyboard-release'
 import {
+  LIVE_INPUT_KEYBOARD_CLAIM_MS,
+  LIVE_INPUT_KEYBOARD_RETRY_MS,
   LIVE_INPUT_KEYBOARD_SETTLE_MS,
   useTerminalLiveInputFocus
 } from './use-terminal-live-input-focus'
@@ -42,6 +45,8 @@ function liveField(): Field {
 
 type Props = {
   readonly canSend: boolean
+  readonly canCompose?: boolean
+  readonly commandInputRef?: RefObject<TerminalLiveInputFocusTarget | null>
   readonly inputRef: RefObject<TerminalLiveInputFocusTarget | null>
   readonly keyboardHeight: number
   readonly liveInputEnabled: boolean
@@ -49,6 +54,7 @@ type Props = {
 
 type Handlers = ReturnType<typeof useTerminalLiveInputFocus>
 
+const NO_COMMAND_FIELD: RefObject<TerminalLiveInputFocusTarget | null> = { current: null }
 let renderer: ReactTestRenderer | null = null
 let handlers: Handlers | null = null
 const timerRef: TerminalLiveInputFocusTimerRef = { current: null }
@@ -57,6 +63,8 @@ const activeHandleRef = { current: 'term_claude' as string | null }
 function Harness(props: Props): null {
   handlers = useTerminalLiveInputFocus({
     ...props,
+    canCompose: props.canCompose ?? true,
+    commandInputRef: props.commandInputRef ?? NO_COMMAND_FIELD,
     activeHandleRef,
     isAnyTextFieldFocused: () => native.someFieldFocused,
     lifecycleIdentity: null,
@@ -103,6 +111,7 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   native.someFieldFocused = false
   timerRef.current = null
+  clearKeyboardRelease()
 })
 
 afterEach(() => {
@@ -125,7 +134,9 @@ describe('the live field keeps the keyboard it holds', () => {
 
     expect(field.focus).toHaveBeenCalledTimes(1)
     // The diagnostic line it leaves behind.
-    expect(console.warn).toHaveBeenCalledWith('[live-input] claimed an open keyboard no field held')
+    expect(console.warn).toHaveBeenCalledWith(
+      '[live-input] claimed an open keyboard no field held for the live field'
+    )
   })
 
   it('waits for the keyboard to settle before it claims, so a keyboard on its way down is not raised', () => {
@@ -309,5 +320,129 @@ describe('the live field keeps the keyboard it holds', () => {
       })
     ).not.toThrow()
     expect(console.warn).not.toHaveBeenCalled()
+  })
+})
+
+// Reported 2026-10-14 on 0.9.141 (which carried the claim above): open a new
+// terminal tab, type `claude`, and once Claude Code is up the keyboard is open
+// but keys appear nowhere and no field shows a caret. The claim looked once,
+// at the settle, and only for the live field. A new tab is still settling at
+// that instant: its PTY handle lands (the tab cannot take keys yet), the field
+// the keyboard came from still reads as focused for a moment, or the bar is
+// the buffered command field. These cases are the terminal ending; the chat
+// ending is in composer-keeps-keyboard-focus.test.tsx.
+describe('a new terminal tab that starts Claude keeps typed keys in the box on screen', () => {
+  const settle = (ms: number): void => {
+    act(() => {
+      vi.advanceTimersByTime(ms)
+    })
+  }
+
+  it('takes the keyboard once the new tab can take keys, after the settle', () => {
+    const field = liveField()
+    const inputRef = { current: field }
+    const hook = mount({ canSend: false, inputRef, keyboardHeight: 320, liveInputEnabled: true })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_SETTLE_MS + 200)
+    expect(field.focus).not.toHaveBeenCalled()
+    // The host names the tab's PTY (the session's field ref is one object).
+    rerender({ canSend: true, inputRef, keyboardHeight: 320, liveInputEnabled: true })
+    settle(LIVE_INPUT_KEYBOARD_RETRY_MS)
+
+    expect(field.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('takes the keyboard once the field it came from stops reading as focused', () => {
+    const field = liveField()
+    native.someFieldFocused = true // the unmounted field, still on React Native's record
+    const hook = mount({
+      canSend: true,
+      inputRef: { current: field },
+      keyboardHeight: 320,
+      liveInputEnabled: true
+    })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_SETTLE_MS + 300)
+    native.someFieldFocused = false
+    settle(LIVE_INPUT_KEYBOARD_RETRY_MS)
+
+    expect(field.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives the keyboard to the buffered command field when that is the bar on screen', () => {
+    const live = liveField()
+    const command = liveField()
+    const hook = mount({
+      canSend: true,
+      commandInputRef: { current: command },
+      inputRef: { current: live },
+      keyboardHeight: 320,
+      liveInputEnabled: false
+    })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_SETTLE_MS)
+
+    expect(command.focus).toHaveBeenCalledTimes(1)
+    expect(live.focus).not.toHaveBeenCalled()
+    expect(console.warn).toHaveBeenCalledWith(
+      '[live-input] claimed an open keyboard no field held for the command field'
+    )
+  })
+
+  it('never brings back a keyboard the app put away, however late keyboardDidHide is', () => {
+    const field = liveField()
+    const hook = mount({
+      canSend: true,
+      inputRef: { current: field },
+      keyboardHeight: 320,
+      liveInputEnabled: true
+    })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.releaseLiveInputKeyboard()
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_CLAIM_MS + LIVE_INPUT_KEYBOARD_SETTLE_MS)
+
+    expect(field.focus).not.toHaveBeenCalled()
+  })
+
+  it('stops looking when the window closes with no field mounted, leaving no timer behind', () => {
+    const hook = mount({
+      canSend: true,
+      inputRef: { current: null },
+      keyboardHeight: 320,
+      liveInputEnabled: true
+    })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_CLAIM_MS + LIVE_INPUT_KEYBOARD_SETTLE_MS)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('degenerate: a command field that cannot compose is never focused', () => {
+    const command = liveField()
+    const hook = mount({
+      canCompose: false,
+      canSend: true,
+      commandInputRef: { current: command },
+      inputRef: { current: null },
+      keyboardHeight: 320,
+      liveInputEnabled: false
+    })
+    hook.reportLiveInputScreenFocus(true)
+
+    hook.armLiveInputKeyboardClaim()
+    settle(LIVE_INPUT_KEYBOARD_CLAIM_MS + LIVE_INPUT_KEYBOARD_SETTLE_MS)
+
+    expect(command.focus).not.toHaveBeenCalled()
   })
 })
