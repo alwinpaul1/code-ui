@@ -29,6 +29,21 @@ export function chatListDrawDistanceDp(windowHeightDp: number): number {
 }
 
 /**
+ * Each message its own FlashList item type, so a row only ever draws the message it was made for.
+ *
+ * `maxItemsInRecyclePool={0}` does not stop recycling. In FlashList 2.3.2's
+ * RenderStackManager.sync a row leaving the window goes into its type's pool and a message
+ * entering the window in the same sync takes it; the cap only trims what is left afterwards. With
+ * one type for every message, a scroll handed the row holding a selection, TextViews and all, to
+ * another message, and the highlight came back on words nobody selected (the user's phone,
+ * 2026-10-14 13:30; the Claude app keeps a selection on its words). With a type per message no
+ * other message can take the row, and one that leaves the window unmounts, as the cap intended.
+ */
+export function chatRowItemType(row: { id: string }): string {
+  return row.id
+}
+
+/**
  * FlashList is a PureComponent. Its own typings say it plainly: "If any of your
  * `renderItem`, Header, Footer, etc. functions depend on anything outside of
  * the `data` prop, stick it here and treat it immutably."

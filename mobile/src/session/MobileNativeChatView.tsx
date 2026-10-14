@@ -14,10 +14,7 @@ import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn
 import { useMobileChatExpandTools } from './use-mobile-chat-expand-tools'
 import { useMobileChatFocusView } from './use-mobile-chat-focus-view'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
-import {
-  chatListDrawDistanceDp,
-  useChatListRenderStability
-} from './mobile-native-chat-list-extra-data'
+import { chatListDrawDistanceDp, chatRowItemType, useChatListRenderStability } from './mobile-native-chat-list-extra-data'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { useMobileNativeChatTaskProgress } from './mobile-native-chat-composer-tasks'
 import { MobileNativeChatSessionBar } from './MobileNativeChatSessionBar'
@@ -365,8 +362,9 @@ export function MobileNativeChatView({
             // list's tail at offset 0 by itself, so this only re-asserts it,
             // and only while the reader is still following.
             onLayout={pinToTail}
-            // Message descendants hold disclosure and copy state. Keep it
-            // scoped to the message when off-screen cells leave the window.
+            // Message descendants hold disclosure, copy and selection
+            // state: a row draws one message only (chatRowItemType).
+            getItemType={chatRowItemType}
             maxItemsInRecyclePool={0}
             // Why: with recycling off, every newly exposed message is a fresh
             // mount — markdown, code blocks and all — on the JS thread. The
