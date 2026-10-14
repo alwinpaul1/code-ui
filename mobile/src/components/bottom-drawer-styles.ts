@@ -1,8 +1,11 @@
 import { Platform, StyleSheet } from 'react-native'
 import { spacing } from '../theme/mobile-theme'
 import type { Theme } from '../theme/theme-context'
+import { SHEET_SPEC, sheetColors } from './sheet-spec'
 
 export function bottomDrawerStyles({ colors }: Theme) {
+  // The one sheet spec (sheet-spec.ts): corners, ground, grabber and scrim.
+  const sheet = sheetColors(colors)
   return StyleSheet.create({
     overlay: {
       ...StyleSheet.absoluteFill,
@@ -13,7 +16,7 @@ export function bottomDrawerStyles({ colors }: Theme) {
     },
     backdrop: {
       ...StyleSheet.absoluteFill,
-      backgroundColor: colors.bgOverlay
+      backgroundColor: sheet.scrim
     },
     backdropPressable: {
       ...StyleSheet.absoluteFill
@@ -26,9 +29,9 @@ export function bottomDrawerStyles({ colors }: Theme) {
       alignItems: 'center'
     },
     drawer: {
-      backgroundColor: colors.bg,
-      borderTopLeftRadius: 16,
-      borderTopRightRadius: 16,
+      backgroundColor: sheet.container,
+      borderTopLeftRadius: SHEET_SPEC.radius,
+      borderTopRightRadius: SHEET_SPEC.radius,
       paddingHorizontal: spacing.md,
       ...Platform.select({
         ios: {
@@ -46,18 +49,22 @@ export function bottomDrawerStyles({ colors }: Theme) {
       overflow: 'hidden',
       flexDirection: 'column'
     },
+    // Drawn only on a sheet with a partial stop; a one-rest sheet keeps the
+    // same box without the fill (`sheetShowsHandle`).
     handle: {
-      alignSelf: 'center',
-      width: 36,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.textMuted,
-      opacity: 0.4
+      width: SHEET_SPEC.handle.width,
+      height: SHEET_SPEC.handle.height,
+      borderRadius: SHEET_SPEC.handle.borderRadius,
+      backgroundColor: sheet.handle
+    },
+    handleSpace: {
+      width: SHEET_SPEC.handle.width,
+      height: SHEET_SPEC.handle.height
     },
     handleHitArea: {
       alignItems: 'center',
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.md
+      paddingHorizontal: SHEET_SPEC.handle.paddingHorizontal,
+      paddingVertical: SHEET_SPEC.handle.paddingVertical
     },
     staticContent: {
       minHeight: 0
@@ -77,7 +84,7 @@ export function bottomDrawerStyles({ colors }: Theme) {
       left: 0,
       right: 0,
       height: 500,
-      backgroundColor: colors.bg
+      backgroundColor: sheet.container
     }
   })
 }

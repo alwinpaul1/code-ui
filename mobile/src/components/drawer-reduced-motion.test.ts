@@ -84,6 +84,7 @@ vi.mock('./bottom-drawer-modal-host', () => ({
 import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 import { RightDrawer } from './RightDrawer'
+import { SHEET_SPEC } from './sheet-spec'
 
 const noop = () => {}
 let renderer: ReactTestRenderer | null = null
@@ -166,7 +167,8 @@ afterEach(() => {
 // only the mapping from `progress` to the screen changes, travel → opacity.
 describe('the bottom sheet under reduced motion', () => {
   const sheet = () =>
-    sheetStyle(renderer!.root, (style) => style.borderTopLeftRadius === 24)
+    // The sheet spec's corner (sheet-spec.ts; 24 until 2026-10-14).
+    sheetStyle(renderer!.root, (style) => style.borderTopLeftRadius === SHEET_SPEC.radius)
 
   async function sheetKeys(reduced: boolean) {
     act(() => renderer?.unmount())

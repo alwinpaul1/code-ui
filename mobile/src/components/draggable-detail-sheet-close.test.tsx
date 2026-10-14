@@ -39,6 +39,7 @@ vi.mock('react-native-gesture-handler', () => {
 // re-render sees the same cells; the cells are listed in creation order.
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
+  const { SHEET_SPEC } = await import('./sheet-spec')
   return {
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) =>
@@ -51,7 +52,15 @@ vi.mock('react-native-reanimated', async () => {
       ).current,
     useAnimatedStyle: () => ({}),
     useAnimatedScrollHandler: () => () => {},
-    withSpring: (to: number) => to,
+    // Since 2026-10-14 the sheet opens on the app's sheet spring (sheet-spec.ts),
+    // so its open is recorded here like the timed hide. The drag settle and
+    // the scrim's own fade are springs too and are not the sheet's open/close.
+    withSpring: (to: number, config?: unknown) => {
+      if (config === SHEET_SPEC.motion.open || config === SHEET_SPEC.motion.reducedOpen) {
+        seam.timings.push({ to })
+      }
+      return to
+    },
     withTiming: (to: number, _config?: unknown, done?: (finished: boolean) => void) => {
       seam.timings.push({ to, done })
       return to

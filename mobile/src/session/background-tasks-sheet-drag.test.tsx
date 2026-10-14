@@ -720,7 +720,8 @@ describe('the Background tasks sheet dragged down from full height (recording of
   it('keeps the chat behind dimmed at its opening height', async () => {
     await open(tasksSheet('light'))
     const backdrop = renderer!.root.find(
-      (node) => isHost(node, 'AnimatedView') && flatten(node.props.style).backgroundColor === lightColors.bgOverlay
+      // The sheet scrim (sheet-spec.ts, 2026-10-14; `bgOverlay` before).
+      (node) => isHost(node, 'AnimatedView') && flatten(node.props.style).backgroundColor === lightColors.sheetScrim
     )
     expect(flatten(backdrop.props.style).opacity).toBe(1)
   })
@@ -732,7 +733,8 @@ describe('the bottom of the Background tasks sheet', () => {
     await open(tasksSheet(scheme))
     // The gesture bar's inset (24) and the drawer's own 16 below it.
     expect(flatten(bottomStripNode().props.style).height).toBe(24 + 16)
-    expect(flatten(bottomStripNode().props.style).backgroundColor).toBe(colors.bgPanel)
+    // The sheet's own ground, `chatBg` (sheet-spec.ts, 2026-10-14; `bgPanel` before).
+    expect(flatten(bottomStripNode().props.style).backgroundColor).toBe(colors.chatBg)
     expect(bottomStripBottom(), 'the strip is not on the screen edge at the opening height').toBe(WINDOW)
     // Drawn after the list, so it lies over the rows that run under the bar.
     const children = sheetNode().children as ReactTestInstance[]
@@ -763,7 +765,7 @@ describe('the Background tasks sheet title', () => {
     expect(inList(titleText()), 'the title scrolls away with the list').toBe(false)
     expect(inList(close), 'the close cross scrolls away with the list').toBe(false)
     expect(flatten(titleText().props.style).color).toBe(colors.text)
-    expect(sheetStyle().backgroundColor).toBe(colors.bgPanel)
+    expect(sheetStyle().backgroundColor).toBe(colors.chatBg)
   })
 
   it('moves the sheet when dragged, even with the list scrolled', async () => {

@@ -48,25 +48,49 @@ vi.mock('lucide-react-native', () => ({
   Zap: 'Zap'
 }))
 
-// A shared value that is a real timeline: `withTiming` hands back the curve it
-// was asked for, and reading `.value` evaluates that curve at `clock.now`, from
-// wherever the value stood when the animation was assigned. The curve is
-// Reanimated's own default when the caller names none (Easing.inOut(Easing.quad),
-// react-native-reanimated/src/animation/timing.ts), so an unconfigured open is
-// played back the way the device plays it.
+// A shared value that is a real timeline: `withTiming` and `withSpring` hand
+// back the motion they were asked for, and reading `.value` evaluates it at
+// `clock.now`, from wherever the value stood when the animation was assigned.
+// A timing's curve is Reanimated's own default when the caller names none
+// (Easing.inOut(Easing.quad), react-native-reanimated/src/animation/timing.ts).
+// A spring is the closed-form damped oscillator for the config it is given,
+// starting at rest, which is how the open starts (since 2026-10-14 the open is
+// the Claude app's sheet spring, sheet-spec.ts).
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
   type Timing = { timing: true; to: number; duration: number; easing: (t: number) => number }
+  type Spring = { spring: true; to: number; stiffness: number; damping: number; mass: number }
   const inOutQuad = (t: number) => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
   const isTiming = (value: unknown): value is Timing =>
     typeof value === 'object' && value !== null && (value as Timing).timing === true
+  const isSpring = (value: unknown): value is Spring =>
+    typeof value === 'object' && value !== null && (value as Spring).spring === true
+  /** Displacement left at `seconds`, from `x0` at rest. */
+  function springDisplacement(spring: Spring, x0: number, seconds: number): number {
+    const omega = Math.sqrt(spring.stiffness / spring.mass)
+    const zeta = spring.damping / (2 * Math.sqrt(spring.stiffness * spring.mass))
+    if (zeta >= 1) {
+      // Critically damped (the sheet spec has no overdamped spring).
+      return Math.exp(-omega * seconds) * (x0 + omega * x0 * seconds)
+    }
+    const omegaD = omega * Math.sqrt(1 - zeta * zeta)
+    return (
+      Math.exp(-zeta * omega * seconds) *
+      (x0 * Math.cos(omegaD * seconds) + ((zeta * omega * x0) / omegaD) * Math.sin(omegaD * seconds))
+    )
+  }
   function timeline(initial: number) {
     let from = initial
-    let animation: Timing | null = null
+    let animation: Timing | Spring | null = null
     let startedAt = 0
     const read = (): number => {
       if (!animation) {
         return from
+      }
+      if (isSpring(animation)) {
+        const left = springDisplacement(animation, from - animation.to, Math.max(clock.now - startedAt, 0) / 1000)
+        // Reanimated stops a spring once its energy is negligible and lands it on its target.
+        return Math.abs(left) < 1e-6 ? animation.to : animation.to + left
       }
       const t = Math.min(Math.max((clock.now - startedAt) / animation.duration, 0), 1)
       return from + (animation.to - from) * animation.easing(t)
@@ -75,8 +99,8 @@ vi.mock('react-native-reanimated', async () => {
       get value(): number {
         return read()
       },
-      set value(next: number | Timing) {
-        if (isTiming(next)) {
+      set value(next: number | Timing | Spring) {
+        if (isTiming(next) || isSpring(next)) {
           from = read()
           animation = next
           startedAt = clock.now
@@ -101,7 +125,11 @@ vi.mock('react-native-reanimated', async () => {
       duration: config?.duration ?? 300,
       easing: config?.easing ?? inOutQuad
     }),
-    withSpring: (to: number) => to,
+    withSpring: (to: number, config: { stiffness: number; damping: number; mass: number }) => ({
+      spring: true,
+      to,
+      ...config
+    }),
     runOnJS: (fn: () => void) => fn,
     interpolate: (value: number, input: [number, number], output: [number, number]) => {
       const t = Math.min(Math.max((value - input[0]) / (input[1] - input[0]), 0), 1)
@@ -212,19 +240,28 @@ async function frameAt(scheme: 'light' | 'dark', ms: number): Promise<void> {
   })
 }
 
+// 2026-10-14: the open moved from a 180 ms ease-out-cubic timing to the Claude
+// app's own sheet spring (Material 3 DefaultSpatial, ζ 0.9 / k 700,
+// sheet-spec.ts). A spring starts from rest, so its first frame moves less
+// than the cubic's did: 7.5% of the travel at 16.7 ms, which the 24 dp
+// below-edge margin still hides, then 23% at 33 ms and 71% at 90 ms. The pins
+// below were moved to that curve on purpose (they were "on screen at the first
+// frame, > 10%" and "> 75% at 90 ms"); what they still refuse is the
+// 2026-09-26 defect, a sheet that travels the whole window and is mostly below
+// the edge halfway through its open.
 describe.each(['light', 'dark'] as const)('the Add context sheet in %s mode', (scheme) => {
-  it('is on screen from the first frame after the + tap', async () => {
+  it('is on screen within two frames of the + tap', async () => {
     await tapPlus(scheme)
-    await frameAt(scheme, FRAME_MS)
-    expect(onScreenHeight(), 'nothing of the sheet showed on the first frame of its open').toBeGreaterThan(
+    await frameAt(scheme, 2 * FRAME_MS)
+    expect(onScreenHeight(), 'nothing of the sheet showed in the first two frames of its open').toBeGreaterThan(
       SHEET_HEIGHT * 0.1
     )
   })
 
-  it('is mostly up halfway through its open, not still below the screen', async () => {
+  it('is mostly up 90 ms into its open, not still below the screen', async () => {
     await tapPlus(scheme)
     await frameAt(scheme, 90)
-    expect(onScreenHeight()).toBeGreaterThan(SHEET_HEIGHT * 0.75)
+    expect(onScreenHeight()).toBeGreaterThan(SHEET_HEIGHT * 0.65)
   })
 
   it('rests fully open once the open has run', async () => {
@@ -233,9 +270,10 @@ describe.each(['light', 'dark'] as const)('the Add context sheet in %s mode', (s
     expect(onScreenHeight()).toBe(SHEET_HEIGHT)
   })
 
-  it('draws on this theme’s panel ground', async () => {
+  // The Claude app's sheet ground, pl7.q = `chatBg` (sheet-spec.ts, 2026-10-14; `bgPanel` before).
+  it('draws on this theme’s sheet ground', async () => {
     await tapPlus(scheme)
-    expect(flatten(sheetNode().props.style).backgroundColor).toBe(colorsForScheme(scheme).bgPanel)
+    expect(flatten(sheetNode().props.style).backgroundColor).toBe(colorsForScheme(scheme).chatBg)
   })
 })
 
@@ -297,7 +335,9 @@ describe.each(['light', 'dark'] as const)(
       const heights = await playOpen()
       const steps = heights.slice(1).map((height, index) => height - heights[index]!)
       // The steepest frame of the open's own curve, over the sheet's own travel
-      // (280 dp + the 24 dp margin), is about 3 x 8.3/180 x 304 = 42 dp at 120 Hz.
+      // (280 dp + the 24 dp margin), was about 3 x 8.3/180 x 304 = 42 dp at
+      // 120 Hz on the old cubic timing; the sheet spring's peak speed is lower
+      // (about 27 dp a frame, 2026-10-14).
       expect(Math.max(...steps), `frame-by-frame on-screen heights: ${heights.map(Math.round).join(', ')}`).toBeLessThan(50)
     })
 
