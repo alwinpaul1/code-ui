@@ -1,33 +1,51 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { tapTargetHitSlop } from '../ui/tap-target'
-import { MessageSquare } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
-import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../source-control/mobile-diff-format'
-import { spacing, typography } from '../theme/mobile-theme'
+import {
+  MOBILE_DIFF_CODE_START_PADDING,
+  MOBILE_DIFF_MARKER_WIDTH,
+  MOBILE_DIFF_TYPE,
+  mobileDiffPaletteForScheme
+} from '../source-control/mobile-diff-claude-palette'
+import { mobileDiffLineNumber } from '../source-control/mobile-diff-format'
+import { typography } from '../theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { Theme } from '../theme/theme-context'
-import { MobileSyntaxSegments } from './MobileSyntaxSegments'
+import { MobileDiffCommentCard } from './MobileDiffCommentCard'
+import { MobileDiffGapRow } from './MobileDiffGapRow'
 import { MobileDiffNoteRow } from './MobileDiffNoteRow'
+import { MobileSyntaxSegments } from './MobileSyntaxSegments'
 
 type Props = {
   line: MobileHighlightedDiffLine<MobileDiffLine>
   comments: readonly DiffComment[]
   staleCommentIds: ReadonlySet<string>
   active: boolean
+  /** Width of the gutter cell, the same for every row of one file (`mobileDiffGutterWidth`). */
+  gutterWidth: number
   onAddNote: (lineNumber: number) => void
   onEditNote: (comment: DiffComment) => void
+  onDeleteNote: (comment: DiffComment) => void
 }
 
-function accessibilityLabelForLine(line: MobileDiffLine): string {
+/** The gutter's text: a "+" or "-" and the number, as the Claude app draws it (`jlc.c`). */
+function gutterLabel(line: MobileDiffLine): string {
   const number = mobileDiffLineNumber(line)
-  const label = line.kind === 'add' ? 'Added' : line.kind === 'delete' ? 'Deleted' : 'Context'
-  return number ? `${label} line ${number}` : `${label} line`
+  if (line.kind === 'add') {
+    return `+${number}`
+  }
+  return line.kind === 'delete' ? `-${number}` : number
 }
 
 function canCommentOnLine(line: MobileDiffLine): boolean {
   return line.kind !== 'delete' && line.newLineNumber !== undefined
+}
+
+/** What a screen reader says of the row: the gutter, then the code (`diff_line_description`). */
+function describeLine(line: MobileDiffLine): string {
+  const label = gutterLabel(line)
+  return line.text.trim().length === 0 ? label : `${label}, ${line.text}`
 }
 
 export function MobileDiffReviewLine({
@@ -35,34 +53,47 @@ export function MobileDiffReviewLine({
   comments,
   staleCommentIds,
   active,
+  gutterWidth,
   onAddNote,
-  onEditNote
+  onEditNote,
+  onDeleteNote
 }: Props) {
-  const { colors, syntax } = useTheme()
+  const { syntax, scheme } = useTheme()
   const styles = useThemedStyles(diffReviewLineStyles)
-  const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
+  const commented = comments.length > 0
 
-  // Folded unchanged lines, or what the mobile cap left out: not a line of the file.
+  // A run of unchanged lines the mobile cap folded away: the lines are not here to bring back,
+  // so the fold row is plain text. Anything else that is not a line of the file stays a note.
+  if (line.note?.kind === 'collapsed') {
+    return (
+      <MobileDiffGapRow
+        hiddenLines={line.note.hiddenLines}
+        action={null}
+        gutterWidth={gutterWidth}
+        accessibilityLabel={line.text}
+      />
+    )
+  }
   if (line.note) {
     return <MobileDiffNoteRow line={line} />
   }
 
+  const palette = mobileDiffPaletteForScheme(scheme)
+  const marker =
+    line.kind === 'add' ? palette.addMarker : line.kind === 'delete' ? palette.delMarker : null
   return (
-    <View
-      style={[
-        styles.row,
-        line.kind === 'add' && styles.addedRow,
-        line.kind === 'delete' && styles.deletedRow,
-        active && styles.activeRow
-      ]}
-      accessible
-      accessibilityLabel={accessibilityLabelForLine(line)}
-    >
-      <Text style={styles.prefix}>{mobileDiffLinePrefix(line.kind)}</Text>
-      <Text style={styles.lineNumber}>{lineNumber ? String(lineNumber) : ''}</Text>
+    <>
       <Pressable
-        style={({ pressed }) => [styles.code, pressed && canComment && styles.codePressed]}
+        style={({ pressed }) => [
+          styles.row,
+          line.kind === 'add' && styles.addedRow,
+          line.kind === 'delete' && styles.deletedRow,
+          // The highlight wins over the tint, as `jlc.c` picks `mng.f` first.
+          commented && styles.commentedRow,
+          active && styles.activeRow,
+          pressed && canComment && styles.rowPressed
+        ]}
         disabled={!canComment}
         onPress={() => {
           if (canComment && line.newLineNumber !== undefined) {
@@ -70,105 +101,103 @@ export function MobileDiffReviewLine({
           }
         }}
         accessibilityRole={canComment ? 'button' : 'text'}
-        accessibilityLabel={
-          canComment && line.newLineNumber !== undefined
-            ? `Add note on line ${line.newLineNumber}`
-            : accessibilityLabelForLine(line)
+        accessibilityLabel={describeLine(line)}
+        accessibilityHint={canComment ? 'Comment on this line' : undefined}
+        accessibilityValue={
+          line.kind === 'add'
+            ? { text: 'Added' }
+            : line.kind === 'delete'
+              ? { text: 'Removed' }
+              : undefined
         }
       >
-        <Text style={styles.codeText}>
-          <MobileSyntaxSegments segments={line.segments} palette={syntax} />
-        </Text>
-      </Pressable>
-      {comments.length > 0 ? (
-        <View style={styles.notes}>
-          {comments.map((comment) => (
-            <Pressable
-              hitSlop={tapTargetHitSlop(styles.noteButton)}
-              key={comment.id}
-              style={({ pressed }) => [styles.noteButton, pressed && styles.noteButtonPressed]}
-              onPress={() => onEditNote(comment)}
-              accessibilityRole="button"
-              accessibilityLabel={`Edit note on line ${comment.lineNumber}`}
-            >
-              <MessageSquare
-                size={13}
-                color={staleCommentIds.has(comment.id) ? colors.warning : colors.textSecondary}
-                strokeWidth={2}
-              />
-            </Pressable>
-          ))}
+        {marker ? <View style={[styles.marker, { backgroundColor: marker }]} /> : null}
+        <View style={[styles.gutterCell, { width: gutterWidth }]}>
+          <Text
+            style={[
+              styles.gutterText,
+              commented && line.kind === 'context' && styles.gutterTextMuted
+            ]}
+            numberOfLines={1}
+          >
+            {gutterLabel(line)}
+          </Text>
         </View>
-      ) : null}
-    </View>
+        <View style={styles.code}>
+          <Text style={styles.codeText}>
+            <MobileSyntaxSegments segments={line.segments} palette={syntax} />
+          </Text>
+        </View>
+      </Pressable>
+      {comments.map((comment) => (
+        <MobileDiffCommentCard
+          key={comment.id}
+          comment={comment}
+          stale={staleCommentIds.has(comment.id)}
+          onEdit={onEditNote}
+          onDelete={onDeleteNote}
+        />
+      ))}
+    </>
   )
 }
 
-// Row height comes from the 18px code lineHeight alone (no vertical padding or
-// minHeight) so mobile diff density matches the desktop diff editor (STA-1239).
-function diffReviewLineStyles({ colors }: Theme) {
+// Row height comes from the 19.5 line height alone (no vertical padding or minHeight), as in the
+// Claude app, where the gutter text's 1.5 em at 13 sp sets it.
+function diffReviewLineStyles({ colors, scheme }: Theme) {
+  const palette = mobileDiffPaletteForScheme(scheme)
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
-      alignItems: 'stretch',
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border
+      alignItems: 'stretch'
     },
     addedRow: {
-      backgroundColor: colors.diffAddBg
+      backgroundColor: palette.addBg
     },
     deletedRow: {
-      backgroundColor: colors.diffDelBg
+      backgroundColor: palette.delBg
+    },
+    commentedRow: {
+      backgroundColor: palette.commentedBg
     },
     activeRow: {
       borderLeftWidth: 2,
       borderLeftColor: colors.accent
     },
-    prefix: {
-      width: 18,
-      textAlign: 'center',
-      color: colors.textMuted,
-      fontFamily: typography.monoFamily,
-      fontSize: typography.metaSize,
-      lineHeight: 18
+    rowPressed: {
+      opacity: 0.8
     },
-    lineNumber: {
-      width: 44,
-      paddingRight: spacing.xs,
-      textAlign: 'right',
-      color: colors.textMuted,
+    marker: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: MOBILE_DIFF_MARKER_WIDTH
+    },
+    gutterCell: {
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: colors.composerBorder
+    },
+    gutterText: {
+      color: colors.text,
       fontFamily: typography.monoFamily,
-      fontSize: typography.metaSize,
-      lineHeight: 18
+      fontSize: MOBILE_DIFF_TYPE.gutterSize,
+      lineHeight: MOBILE_DIFF_TYPE.lineHeight,
+      textAlign: 'left'
+    },
+    gutterTextMuted: {
+      color: colors.composerPlaceholder
     },
     code: {
       flex: 1,
       minWidth: 0,
-      paddingHorizontal: spacing.sm
-    },
-    codePressed: {
-      backgroundColor: colors.bgRaised
+      paddingLeft: MOBILE_DIFF_CODE_START_PADDING
     },
     codeText: {
       color: colors.text,
       fontFamily: typography.monoFamily,
-      fontSize: 12,
-      lineHeight: 18
-    },
-    notes: {
-      width: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 2
-    },
-    noteButton: {
-      minWidth: 32,
-      minHeight: 28,
-      alignItems: 'center',
-      justifyContent: 'center'
-    },
-    noteButtonPressed: {
-      opacity: 0.72
+      fontSize: MOBILE_DIFF_TYPE.codeSize,
+      lineHeight: MOBILE_DIFF_TYPE.lineHeight
     }
   })
 }

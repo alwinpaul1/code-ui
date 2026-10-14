@@ -10,6 +10,7 @@ import {
   mobileReviewScopeLabel,
   type ReviewDiffState
 } from '../session/mobile-diff-review-screen-model'
+import { MobileDiffChangeStat } from './MobileDiffChangeStat'
 import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
@@ -54,6 +55,17 @@ export function MobileDiffReviewFileSummary({
   const styles = useThemedStyles(mobileDiffReviewStyles)
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
   const badgeColor = statusColor(item.status, colors)
+  // Only a whole diff has a count to state: one the mobile cap cut shows fewer rows than changed.
+  const changeCount =
+    diffState.kind === 'ready' && !diffState.truncated
+      ? diffState.hunks.reduce(
+          (sum, hunk) => ({
+            added: sum.added + hunk.addedLines,
+            deleted: sum.deleted + hunk.deletedLines
+          }),
+          { added: 0, deleted: 0 }
+        )
+      : null
   return (
     <View style={styles.fileHeader}>
       <View style={styles.fileTitleRow}>
@@ -76,6 +88,9 @@ export function MobileDiffReviewFileSummary({
         <Text style={styles.fileMeta}>
           {currentIndex + 1}/{filteredCount}
         </Text>
+        {changeCount ? (
+          <MobileDiffChangeStat added={changeCount.added} deleted={changeCount.deleted} />
+        ) : null}
         {item.isReviewed ? <Text style={styles.reviewedPill}>Reviewed</Text> : null}
         {item.changedSinceReview ? <Text style={styles.stalePill}>Changed</Text> : null}
         {item.noteCount > 0 ? (

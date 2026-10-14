@@ -180,18 +180,25 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     }
   }, [closeComposer, composer, composerBody, currentItem, savedFromTap, screenState, worktreeId])
 
-  const deleteComment = useCallback(async () => {
-    if (!composer || composer.mode !== 'edit' || screenState.kind !== 'ready') {
-      return
-    }
-    const nextComments = removeMobileDiffComments(
-      screenState.comments,
-      new Set([composer.comment.id])
-    )
-    if (await savedFromTap(nextComments, screenState.reviewState)) {
-      closeComposer()
-    }
-  }, [closeComposer, composer, savedFromTap, screenState])
+  /**
+   * Deletes `target`, or the note open in the editor when none is given. A saved comment's card
+   * carries its own Delete (the Claude app's `diff_remove_comment`), so it names the note itself:
+   * there is no editor behind it, and one open on another note stays as it is.
+   */
+  const deleteComment = useCallback(
+    async (target?: DiffComment) => {
+      const editing = composer?.mode === 'edit' ? composer.comment : null
+      const doomed = target ?? editing
+      if (!doomed || screenState.kind !== 'ready') {
+        return
+      }
+      const nextComments = removeMobileDiffComments(screenState.comments, new Set([doomed.id]))
+      if ((await savedFromTap(nextComments, screenState.reviewState)) && editing?.id === doomed.id) {
+        closeComposer()
+      }
+    },
+    [closeComposer, composer, savedFromTap, screenState]
+  )
 
   const markReviewed = useCallback(async () => {
     if (!currentItem || screenState.kind !== 'ready') {

@@ -29,6 +29,7 @@ vi.mock('lucide-react-native', () => ({
   Edit3: 'Edit3',
   FileText: 'FileText',
   ListChecks: 'ListChecks',
+  MessageSquare: 'MessageSquare',
   MoreHorizontal: 'MoreHorizontal',
   Plus: 'Plus',
   Send: 'Send',

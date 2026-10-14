@@ -102,8 +102,10 @@ const ROWS: [string, () => ReturnType<typeof createElement>][] = [
         comments: [],
         staleCommentIds: new Set<string>(),
         active: false,
+        gutterWidth: 37,
         onAddNote: () => undefined,
-        onEditNote: () => undefined
+        onEditNote: () => undefined,
+        onDeleteNote: () => undefined
       })
   ],
   [

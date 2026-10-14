@@ -104,7 +104,7 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: spacing.md,
-      marginBottom: spacing.md
+      marginBottom: spacing.sm
     },
     drawerTitle: {
       color: colors.text,
@@ -116,6 +116,13 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       fontSize: typography.metaSize,
       marginTop: 2
     },
+    // "Line N" over the field: 13 sp muted, `jn7.H` in `pl7.Q` (`px20.d`, com.anthropic.claude
+    // 1.261009.20).
+    composerCaption: {
+      color: colors.composerPlaceholder,
+      fontSize: 13,
+      lineHeight: 18
+    },
     composerInput: {
       minHeight: 112,
       borderRadius: radii.input,
@@ -123,7 +130,9 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       borderColor: colors.border,
       backgroundColor: colors.bgPanel,
       color: colors.text,
-      // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
+      // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS. The
+      // Claude app's field is 17 sp (`jn7.B`); text-input-font-size.test.ts pins every
+      // page-served input to the seam, so this stays the platform's size.
       fontSize: TEXT_INPUT_FONT_SIZE,
       lineHeight: 20,
       padding: spacing.md,

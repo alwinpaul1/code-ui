@@ -216,24 +216,31 @@ export function mobileDiffReviewLayoutStyles({ colors }: Theme) {
       padding: spacing.md,
       textAlign: 'center'
     },
+    // The Claude app's diff states (`yc20.c`, com.anthropic.claude 1.261009.20): 32 dp around, a
+    // 17 sp title in the primary colour, 15 sp centred text in the secondary one 8 dp under it,
+    // and 16 dp between a spinner and its words.
     state: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: spacing.xl,
-      gap: spacing.md
+      padding: 32,
+      gap: spacing.sm
     },
     stateTitle: {
       color: colors.text,
-      fontSize: typography.titleSize,
-      fontWeight: '700',
+      fontSize: 17,
+      lineHeight: 22,
+      fontWeight: '600',
       textAlign: 'center'
     },
     stateText: {
-      color: colors.textSecondary,
-      fontSize: typography.bodySize,
-      textAlign: 'center',
-      lineHeight: 20
+      color: colors.composerIcon,
+      fontSize: 15,
+      lineHeight: 21,
+      textAlign: 'center'
+    },
+    stateTextBusy: {
+      marginTop: spacing.sm
     },
     retryButton: {
       minHeight: 44,
