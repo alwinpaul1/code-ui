@@ -255,7 +255,12 @@ export type TerminalDocumentSelection = {
 export type TerminalDocumentTouchOrigin = { x: number; y: number; identifier: number }
 
 /** A touch that may still resolve as a tap: its origin, its start time and its finger. */
-export type TerminalDocumentTapCandidate = TerminalDocumentTouchOrigin & { t: number }
+/** `dismissesSelection`: the touch went down while a selection was already showing, so as a tap
+ *  it clears that selection and nothing else (tap-dispatch.ts). */
+export type TerminalDocumentTapCandidate = TerminalDocumentTouchOrigin & {
+  t: number
+  dismissesSelection?: boolean
+}
 
 /** The terminal modes the host mirrors. */
 export type TerminalDocumentModes = {

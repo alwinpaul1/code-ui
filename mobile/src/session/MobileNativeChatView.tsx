@@ -26,7 +26,7 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { Mo
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
-import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
+import { ChatTextSelectionProvider } from '../components/ChatTextSelectionProvider'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'; import { retrySendFromComposer } from './native-chat-send-error-retry'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useMobileNativeChatTurnEnds } from './use-mobile-native-chat-turn-ends'
@@ -183,6 +183,7 @@ export function MobileNativeChatView({
     showJumpToLatest,
     detachedFromTail,
     textSelectable,
+    reportSelection,
     touchStart,
     touchEnd,
     evaluateEdge,
@@ -323,7 +324,7 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <ChatTextSelectableContext.Provider value={textSelectable}>
+          <ChatTextSelectionProvider selectable={textSelectable} report={reportSelection}>
           {/* Inline `::orca-visual` lines of a structured chat's replies (Orca #26071). */}
           <MobileNativeChatVisualProvider source={visualSource}>
           <FlashList
@@ -405,7 +406,7 @@ export function MobileNativeChatView({
             }
           />
           </MobileNativeChatVisualProvider>
-          </ChatTextSelectableContext.Provider>
+          </ChatTextSelectionProvider>
           <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}

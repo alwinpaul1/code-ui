@@ -1,12 +1,16 @@
 package expo.modules.orcaselectioncopy
 
 import android.content.Context
+import android.graphics.Rect
 import android.util.Log
 import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.widget.TextView
 import com.facebook.react.views.view.ReactViewGroup
+import expo.modules.kotlin.viewevent.EventDispatcher
 
 /**
  * Wraps a Markdown document on Android (markdown-selection-copy.android.tsx) and gives each Text
@@ -28,9 +32,17 @@ import com.facebook.react.views.view.ReactViewGroup
  * opposite of a View, and a prose Text that kept its pill Views would crash the mount (Fabric
  * cannot put a view inside a TextView). A ReactViewGroup, so it lays out, clips and hit-tests its
  * one child as a View does.
+ *
+ * It also tells the JavaScript when a Text inside holds a selection: `onSelectionChange` with
+ * `active` true when the selection's action mode opens and false when it closes. The chat
+ * switches `selectable` off while its list scrolls, and off ends a selection
+ * (setTextIsSelectable(false) re-sets the text with none), so the first scroll after a hold
+ * wiped what the reader was copying (the user, 2026-10-14). Knowing one is open, the chat leaves
+ * it alone (chat-text-selectable-context.ts).
  */
 class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private val colors = ChatSelectionColors()
+  private val onSelectionChange by EventDispatcher()
 
   fun setSelectionHandleColor(color: Int?) {
     if (colors.set(color, colors.highlight)) {
@@ -73,7 +85,56 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
         keptOwnMenu(error)
         callback
       }
-    return super.startActionModeForChild(originalView, menu, type)
+    if (originalView !is TextView || menu == null) {
+      return super.startActionModeForChild(originalView, menu, type)
+    }
+    return super.startActionModeForChild(originalView, SelectionLifeCallback(menu) { active -> selectionChanged(active) }, type)
+  }
+
+  private fun selectionChanged(active: Boolean) {
+    try {
+      onSelectionChange(mapOf("active" to active))
+    } catch (error: RuntimeException) {
+      // The selection itself must never break over this; the chat then behaves as before.
+      Log.w("OrcaSelectionCopy", "Could not report a selection ${if (active) "opening" else "closing"}", error)
+    }
+  }
+}
+
+/**
+ * A Text's selection menu, unchanged, that says when it opens and closes: a created action mode
+ * is a selection on screen, a destroyed one a selection gone (a tap away, a Copy, the Text leaving
+ * the window). Everything else is the wrapped menu's.
+ */
+internal class SelectionLifeCallback(
+  private val inner: ActionMode.Callback,
+  private val changed: (Boolean) -> Unit
+) : ActionMode.Callback2() {
+  override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+    val created = inner.onCreateActionMode(mode, menu)
+    if (created) {
+      changed(true)
+    }
+    return created
+  }
+
+  override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = inner.onPrepareActionMode(mode, menu)
+
+  override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean = inner.onActionItemClicked(mode, item)
+
+  override fun onDestroyActionMode(mode: ActionMode) {
+    inner.onDestroyActionMode(mode)
+    changed(false)
+  }
+
+  // The floating toolbar sits over the selection only if the wrapped menu still places it.
+  override fun onGetContentRect(mode: ActionMode, view: View, outRect: Rect) {
+    val placed = inner as? ActionMode.Callback2
+    if (placed != null) {
+      placed.onGetContentRect(mode, view, outRect)
+    } else {
+      super.onGetContentRect(mode, view, outRect)
+    }
   }
 }
 

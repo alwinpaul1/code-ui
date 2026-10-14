@@ -165,8 +165,10 @@ export function attachSurfaceMouseClickDragHandler(
         dismissedSelection: false
       }
       if (scope.selMode === 'select') {
-        // Why: touch parity — pressing outside the pill dismisses the current
-        // selection; the same press may still start a new drag selection.
+        // Why: desktop parity — a mouse press outside the pill dismisses the
+        // current selection, and the same press may start a new drag selection.
+        // (A touch dismisses only on a tap; a swipe scrolls and keeps it,
+        // tap-dispatch.ts. A mouse scrolls with the wheel, not a press.)
         cancelSelect(scope)
         scope.mouseGesture.dismissedSelection = true
       }

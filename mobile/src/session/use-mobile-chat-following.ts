@@ -19,7 +19,8 @@ const QUIET_MS = 250
  *  While it does, chat text is not selectable: Android arms a text-selection
  *  long-press under any selectable Text, and a finger put down to stop a fling
  *  and held tripped it — a buzz from nowhere and a stray selection
- *  (2026-09-12). Only new data may pull the list to the live edge; see
+ *  (2026-09-12). Unless a reply already holds a selection: see
+ *  `reportSelection`. Only new data may pull the list to the live edge; see
  *  `mobile-chat-follow-gate.ts` for the press-and-hold jump that rule ends. */
 export function useMobileChatFollowing() {
   const followingRef = useRef(true)
@@ -32,6 +33,21 @@ export function useMobileChatFollowing() {
   // viewport (use-mobile-native-chat-tail-follow.ts).
   const [detached, setDetached] = useState(false)
   const [textSelectable, setTextSelectable] = useState(true)
+  // The documents holding an open selection, as they report it (the native
+  // root sees the selection's action mode open and close). While any does, a
+  // scroll leaves text selectable: switching `selectable` off is what ended
+  // the selection, so the first drag after a hold wiped what the reader was
+  // copying (the user, 2026-10-14; the Claude app keeps it through a scroll).
+  const liveSelections = useRef(new Set<object>())
+  const [selectionLive, setSelectionLive] = useState(false)
+  const reportSelection = useCallback((owner: object, live: boolean) => {
+    if (live) {
+      liveSelections.current.add(owner)
+    } else {
+      liveSelections.current.delete(owner)
+    }
+    setSelectionLive(liveSelections.current.size > 0)
+  }, [])
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next
     setDetached((current) => (current === !next ? current : !next))
@@ -203,7 +219,8 @@ export function useMobileChatFollowing() {
     touchEnd,
     scrollSample,
     followGate,
-    textSelectable,
+    textSelectable: textSelectable || selectionLive,
+    reportSelection,
     detached,
     setFollowing,
     beginScroll,
