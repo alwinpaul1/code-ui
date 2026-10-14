@@ -149,9 +149,12 @@ describe('host image preview reads', () => {
           openTarget: { kind: 'worktree-file', relativePath: 'a.png' }
         }
       })
+      // Its size first: a file over the chat's cap is never read (agent-read-picture-inline.test.tsx).
+      .mockResolvedValueOnce({ ok: true, result: { size: 3, isDirectory: false, mtime: 1 } })
       .mockResolvedValueOnce(preview)
     const client = { sendRequest } as unknown as import('../transport/rpc-client').RpcClient
     expect(await loadHostImage({ ...args, client })).toBe('data:image/png;base64,AAAA')
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'files.stat', { worktree: 'id:sibling', relativePath: 'a.png' }, expect.any(Object))
     expect(sendRequest).toHaveBeenLastCalledWith(
       'files.readPreview',
       { worktree: 'id:sibling', relativePath: 'a.png' },

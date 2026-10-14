@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { resetHostImagePreviewCacheForTests, useHostImagePreviews } from './use-host-image-previews'
+import { showAgentImage } from './agent-image-visibility'
 import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { SEND_CALL_ID, SEND_FILE_TURN } from './fixtures/claude-send-user-file-2.1.296'
 
@@ -82,6 +83,9 @@ describe('pictures from two records of one turn', () => {
 
   it('draws the sent picture in its own slot when the read one before it was refused', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    // No view here: both slots are taken as on screen (agent-image-visibility.ts).
+    showAgentImage(READ_PATH)
+    showAgentImage(SENT_PATH)
     let previews: Record<string, string[]> = {}
     const client = hostClient()
     const terminalHandleRef = { current: 'term' }

@@ -148,9 +148,20 @@ describe('the same picture read twice in one run', () => {
 
 describe('pictures that follow each other in a turn', () => {
   let renderer: ReactTestRenderer | null = null
+  // A placeholder here is the chip of a picture the desktop refused. While
+  // the desktop has not answered, the slot is the tile the picture will fill
+  // and joins its neighbours' row (agent-read-picture-inline.test.tsx).
+  beforeEach(async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    for (const path of [CHIPS_PATH, READ_IMAGE_PATH]) {
+      await loadHostImage({ client: refusingDesktop(), hostId: 'host', worktreeId: 'worktree', nativeChatContext: { tabId: 'tab', sessionId: '3dec2e94-c429-4c34-af89-68c601b2d4ec' }, terminalHandle: 'term', path, agentTextNamesPath: false })
+    }
+  })
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    resetHostImagePreviewCacheForTests()
+    vi.restoreAllMocks()
   })
   const render = (message: NativeChatMessage, scheme: 'light' | 'dark' = 'light'): ReactTestRendererJSON => {
     act(() => {
@@ -226,6 +237,9 @@ describe('a placeholder for a picture the desktop did not share', () => {
   }
   const placeholder = (root: ReactTestInstance) =>
     root.find((node) => (node.type as unknown) === 'Pressable' && placeholderOf('chips.png')(node.props))
+  /** The slot while the desktop has not answered: the tile the picture will fill. */
+  const loading = (root: ReactTestInstance) =>
+    root.find((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Loading image: chips.png')
   const texts = (root: ReactTestInstance) =>
     root.findAll((node) => (node.type as unknown) === 'Text').map((node) => ({ text: [node.props.children].flat().join(''), style: flat(node.props.style) }))
 
@@ -276,7 +290,7 @@ describe('a placeholder for a picture the desktop did not share', () => {
   // and nothing else re-renders the turn then (its preview stays '').
   it('changes an open "waiting" note to the refusal when the desktop answers', async () => {
     const root = render(turnOf(RAW, { [FIRST_CHIPS_READ_ID]: [''], [SECOND_CHIPS_READ_ID]: [''] }), 'light')
-    act(() => placeholder(root).props.onPress())
+    act(() => loading(root).props.onPress())
     expect(texts(root).some((line) => line.text.includes('Waiting for the desktop'))).toBe(true)
     await act(async () => {
       await loadHostImage({
@@ -296,7 +310,7 @@ describe('a placeholder for a picture the desktop did not share', () => {
 
   it('says it is still waiting, not refused, while the host has not answered', () => {
     const root = render(turnOf(RAW, { [FIRST_CHIPS_READ_ID]: [''], [SECOND_CHIPS_READ_ID]: [''] }), 'light')
-    act(() => placeholder(root).props.onPress())
+    act(() => loading(root).props.onPress())
     const lines = texts(root).map((line) => line.text)
     expect(lines.some((line) => line.includes("didn't share"))).toBe(false)
     expect(lines.some((line) => line.includes('Waiting for the desktop'))).toBe(true)

@@ -9,7 +9,12 @@ import {
 } from '../components/mobile-markdown-prose-scale'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { MobileNativeChatAgentImageTile, MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
+import {
+  MobileNativeChatAgentImageLoadingTile,
+  MobileNativeChatAgentImageTile,
+  MobileNativeChatImageThumb
+} from './MobileNativeChatImageStrip'
+import { useShowAgentImage } from './agent-image-visibility'
 import { AGENT_UNSAVED_SCREENSHOT_ALT, isAgentImageAlt } from './mobile-native-chat-agent-images'
 import { useAgentImageSharePhase } from './agent-image-share-context'
 import { hostImageMissing, subscribeHostImageMissing, type HostImageMissing } from './host-image-refusals'
@@ -95,8 +100,8 @@ export function Prose({
       return <AgentImagePlaceholder path={undefined} unsaved fontScale={fontScale} styles={styles} />
     }
     // A picture the agent read or sent: a square tile, as the Claude app
-    // draws it, or, until the host sends it (or when it will not), a
-    // placeholder naming the file.
+    // draws it, or, until the host sends it, a loading tile of that size,
+    // and when it will not, a chip naming the file.
     if (!invert && isAgentImageAlt(block.alt)) {
       if (isRenderableImageUri(block.url)) {
         return <MobileNativeChatAgentImageTile uri={block.url} label={block.alt ?? 'Image'} />
@@ -146,6 +151,8 @@ function missingPictureNote(why: HostImageMissing | undefined): string {
       return "The desktop didn't share this picture. It shares a file outside the project only when the agent's reply names it or the terminal printed its path."
     case 'failed':
       return "The picture couldn't be fetched from the desktop."
+    case 'too-large':
+      return 'This picture is too large to show in the chat.'
     case undefined:
       return 'Waiting for the desktop to send this picture.'
     default: {
@@ -157,12 +164,15 @@ function missingPictureNote(why: HostImageMissing | undefined): string {
 
 const UNSAVED_SCREENSHOT_NOTE = "This screenshot was never saved as a file, so the phone can't show it."
 
-/** A picture the host has not sent, or will not. A tap says which, under the
- *  chip, and a second tap folds it away. Opening the path is no use: it asks
+/** A picture the host has not sent, or will not. While the desktop has not
+ *  answered it is the tile the picture will fill, so the row keeps its size
+ *  when it comes; once the desktop says it will not send it, or the ask
+ *  failed, it is a chip naming the file. A tap says which, under it, and a
+ *  second tap folds it away. Opening the path is no use: it asks
  *  the same host the same question. An open note follows the host's latest
  *  answer. Under "didn't share", one tap asks the agent to write the path,
  *  which is what makes the desktop share it (agent-image-share-ask.ts). */
-function AgentImagePlaceholder({
+export function AgentImagePlaceholder({
   path,
   unsaved = false,
   fontScale,
@@ -180,8 +190,24 @@ function AgentImagePlaceholder({
   const name = unsaved ? 'Screenshot' : fileName(path)
   const textStyle = [styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale }]
   const asked = phase === 'asked'
+  // The host is asked for a picture only while a slot for it is on screen.
+  useShowAgentImage(unsaved ? undefined : path)
+  const waiting = !unsaved && why === undefined
   return (
     <View style={styles.imagePlaceholder}>
+      {waiting ? (
+        <Pressable
+          onPress={() => setExplained((shown) => !shown)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Loading image: ${name}`}
+          accessibilityHint="Says why the picture is not shown yet"
+          accessibilityState={{ expanded: explained }}
+          style={({ pressed }) => (pressed ? styles.controlPressed : null)}
+        >
+          <MobileNativeChatAgentImageLoadingTile path={path} name={name} />
+        </Pressable>
+      ) : (
       <Pressable
         onPress={() => setExplained((shown) => !shown)}
         hitSlop={8}
@@ -196,6 +222,7 @@ function AgentImagePlaceholder({
           {name}
         </Text>
       </Pressable>
+      )}
       {explained ? (
         <Text accessibilityLiveRegion="polite" style={textStyle}>
           {unsaved ? UNSAVED_SCREENSHOT_NOTE : missingPictureNote(why)}
@@ -219,7 +246,8 @@ function AgentImagePlaceholder({
   )
 }
 
-function fileName(path: string | undefined): string {
+/** The file name a slot or chip shows for a host path. */
+export function fileName(path: string | undefined): string {
   if (!path) {
     return 'Image'
   }

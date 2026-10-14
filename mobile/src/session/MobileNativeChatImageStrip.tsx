@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Image, Pressable, ScrollView, useWindowDimensions } from 'react-native'
+import { Image, Pressable, ScrollView, View, useWindowDimensions } from 'react-native'
+import { Image as ImageIcon } from 'lucide-react-native'
 import { openImagePreview } from './image-preview-store'
 import { chatMarkupOpener } from './chat-image-markup-target'
 import { useTheme } from '../theme/theme-context'
+import { useShowAgentImage } from './agent-image-visibility'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 /** A figure the agent read fills the message width, up to most of the screen
@@ -86,6 +88,40 @@ export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; la
         accessibilityLabel={label}
       />
     </Pressable>
+  )
+}
+
+/** The slot of an agent's picture the desktop has not sent yet: the tile it
+ *  will be drawn in, at its size, so the row does not move when it comes.
+ *  The Claude app fills a loading tile with the screen background and draws
+ *  nothing on it (`pl7.q`, #F9F9F7 / #151515: `chatBg`); on the phone the
+ *  picture can take seconds over the relay, so the tile here also carries a
+ *  hairline and a muted picture glyph, or a slot would read as empty space.
+ *  Mounting it is what lets the host be asked for the picture
+ *  (agent-image-visibility.ts). */
+export function MobileNativeChatAgentImageLoadingTile({ path, name }: { path: string | undefined; name: string }) {
+  const { colors } = useTheme()
+  useShowAgentImage(path)
+  return (
+    <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Loading image: ${name}`}
+      accessibilityState={{ busy: true }}
+      testID="agent-image-loading-tile"
+      style={{
+        width: AGENT_IMAGE_TILE_SIZE,
+        height: AGENT_IMAGE_TILE_SIZE,
+        borderRadius: AGENT_IMAGE_TILE_RADIUS,
+        backgroundColor: colors.chatBg,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <ImageIcon size={20} color={colors.textMuted} strokeWidth={1.75} />
+    </View>
   )
 }
 

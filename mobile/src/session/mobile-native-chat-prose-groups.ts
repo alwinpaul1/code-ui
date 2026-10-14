@@ -1,11 +1,19 @@
-import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import {
+  isImageRefBlock,
+  isTextBlock,
+  type NativeChatBlock,
+  type NativeChatImageRefBlock
+} from '../../../src/shared/native-chat-types'
 import { parseFileMentionText, sentFileCard, type FileMentionCard } from './mobile-native-chat-file-mentions'
-import { SENT_FILE_PRESENTATION } from './mobile-native-chat-agent-images'
+import { isAgentImageAlt, SENT_FILE_PRESENTATION } from './mobile-native-chat-agent-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 
 export type ProseGroup =
   | { type: 'block'; block: NativeChatBlock }
   | { type: 'image-strip'; uris: string[]; alt: string }
+  /** Two or more pictures an agent read or sent, side by side, while at
+   *  least one has not come from the desktop: its tile holds the place. */
+  | { type: 'agent-image-row'; slots: NativeChatImageRefBlock[] }
   | { type: 'file-cards'; cards: FileMentionCard[]; sent?: true }
 
 /** Fold a run of two or more loadable images into one sideways-scrolling
@@ -43,6 +51,19 @@ export function groupProseBlocks(
       }
       continue
     }
+    // An agent's picture still on its way joins its neighbours, so the row
+    // does not turn from a column of tiles into a strip when it lands.
+    if (isAgentSlot(block)) {
+      if (last?.type === 'agent-image-row') {
+        last.slots.push(block)
+        continue
+      }
+      const before = last ? agentSlotsOf(last) : null
+      if (before && (before.some((slot) => !isRenderableImageUri(slot.url)) || !isRenderableImageUri(block.url))) {
+        groups[groups.length - 1] = { type: 'agent-image-row', slots: [...before, block] }
+        continue
+      }
+    }
     const uri = isImageRefBlock(block) ? (block.url ?? block.path) : undefined
     if (uri && isRenderableImageUri(uri)) {
       if (last?.type === 'image-strip') {
@@ -63,6 +84,22 @@ export function groupProseBlocks(
   return groups
 }
 
+/** A picture an agent read or sent: loaded, or a slot waiting for the host. */
+function isAgentSlot(block: NativeChatBlock): block is NativeChatImageRefBlock {
+  return isImageRefBlock(block) && isAgentImageAlt(block.alt) && Boolean(block.path || isRenderableImageUri(block.url))
+}
+
+/** The agent pictures a group holds, or null when it holds anything else. */
+function agentSlotsOf(group: ProseGroup): NativeChatImageRefBlock[] | null {
+  if (group.type === 'block') {
+    return isAgentSlot(group.block) ? [group.block] : null
+  }
+  if (group.type === 'image-strip' && isAgentImageAlt(group.alt)) {
+    return group.uris.map((url) => ({ type: 'image-ref', url, alt: group.alt }))
+  }
+  return null
+}
+
 function renderableImageUri(block: NativeChatBlock): string | undefined {
   if (!isImageRefBlock(block)) {
     return undefined
@@ -74,7 +111,11 @@ function renderableImageUri(block: NativeChatBlock): string | undefined {
 /** Any picture group: a strip, or one picture block, loaded or drawn as its
  *  "Image on Desktop" chip. */
 function isPictureGroup(group: ProseGroup | undefined): boolean {
-  return group?.type === 'image-strip' || (group?.type === 'block' && isImageRefBlock(group.block))
+  return (
+    group?.type === 'image-strip' ||
+    group?.type === 'agent-image-row' ||
+    (group?.type === 'block' && isImageRefBlock(group.block))
+  )
 }
 
 /** Whether the group at `index` is a picture with text right after it. */

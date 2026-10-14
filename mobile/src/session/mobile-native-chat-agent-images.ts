@@ -22,9 +22,10 @@ import { toolCallKind } from './mobile-native-chat-tool-kind'
  * a base64 `image` block, and Orca 1.4.224's reader drops it (it keeps an
  * image only when its source is a URL); SendUserFile records only the path and
  * the `file_uuid` the Claude app downloads it by. So each picture is asked of
- * the host by its path (use-host-image-previews.ts) and drawn when it comes;
- * until then, or when the host will not share it, the slot is a placeholder
- * that names the file (MobileNativeChatProse.tsx).
+ * the host by its path (use-host-image-previews.ts), once its slot is on
+ * screen, and drawn when it comes; until then the slot is a loading tile of
+ * the picture's size, and when the host will not share it, a chip that names
+ * the file (MobileNativeChatProse.tsx).
  */
 
 export const AGENT_READ_IMAGE_ALT = 'Image the agent read'

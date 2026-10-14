@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Prose } from './MobileNativeChatProse'
 import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
+import { MobileNativeChatAgentImageRow } from './MobileNativeChatAgentImageRow'
 import { MobileNativeChatFileCardRow } from './MobileNativeChatFileCard'
 import type { ProseGroup } from './mobile-native-chat-prose-groups'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -39,6 +40,8 @@ export function renderProseGroup(
       return (
         <MobileNativeChatImageStrip uris={group.uris} label={group.alt} styles={options.styles} />
       )
+    case 'agent-image-row':
+      return <MobileNativeChatAgentImageRow slots={group.slots} fontScale={options.fontScale} styles={options.styles} />
     case 'file-cards':
       return <MobileNativeChatFileCardRow cards={group.cards} sent={group.sent === true} />
     case 'block':

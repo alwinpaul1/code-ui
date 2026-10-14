@@ -7,9 +7,13 @@ import { useEffect, useMemo, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import {
+  formatPreviewByteLength,
   normalizeMobileFilePreviewResult,
   previewErrorFromRefusal
 } from '../files/mobile-file-preview-response'
+import { AGENT_IMAGE_MAX_BYTES, worktreeFileSize } from './host-image-size-cap'
+import { notShared } from './host-image-not-shared'
+import { isAgentImageShown, resetAgentImagesShownForTests, useAgentImagesShownVersion } from './agent-image-visibility'
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentImagePaths } from './mobile-native-chat-agent-images'
@@ -92,6 +96,7 @@ export function resetHostImagePreviewCacheForTests(): void {
   inFlight.clear()
   explained.clear()
   resetHostImageFilesForTests()
+  resetAgentImagesShownForTests()
 }
 
 /** The one line a picture that never came leaves behind: which path, and
@@ -106,42 +111,6 @@ function explainMissing(key: string, path: string, why: string): void {
 
 // Whether assistant TEXT names a path (the desktop's rule 1), loosely or as that rule accepts it.
 export { agentTextNamesPath } from './agent-image-share-ask'
-
-/** The host resolved the path and granted nothing. Outside every workspace
- *  Orca 1.4.223's resolveTerminalPath shares a file on one of two rules:
- *  (1) assistant text in the session's transcript tail names it, or (2) the
- *  path lies under a temp folder and the tab's terminal printed it, as one
- *  unbroken string, in its recent raw output. Every refusal comes back as the
- *  same empty resolution, so this says what the phone knows of each rule.
- *  It cannot see the desktop's other rule-2 refusals (no cwd for the handle,
- *  a handle from another worktree), and it takes /var/folders as macOS's
- *  $TMPDIR; a Linux host with its own $TMPDIR is reported as outside it.
- *
- *  Rule 2 rarely holds for a Read (Claude Code 2.1.296, captured 2026-10-09):
- *  the path shows only on a `⎿` row under `Reading N files…`, painted once
- *  and then folded into `Read N files`. Its renderer writes only the cells
- *  that changed, so a cell the last frame already held splits the path with
- *  a cursor move (`/pr\x1b[15Gvate/tmp/…`), a row narrower than the path
- *  wraps it, and a parallel read that ends between frames is never painted. */
-function notShared(args: {
-  path: string
-  nativeChatContext: unknown
-  terminalHandle: string | null
-  agentTextNamesPath?: boolean
-}): string {
-  const rule1 = !args.nativeChatContext
-    ? 'not checked, no chat session was sent'
-    : args.agentTextNamesPath
-      ? "this chat's text names it, but the desktop's transcript tail did not"
-      : 'it is not'
-  const rule2 = !args.terminalHandle
-    ? 'Rule 2, printed in the terminal: not checked, no terminal handle was sent'
-    : !/^\/(?:private\/)?tmp\/|^\/(?:private\/)?var\/folders\//.test(args.path)
-      ? 'Rule 2, printed in the terminal: cannot apply, it is outside the temp folders (/tmp, $TMPDIR)'
-      : `Rule 2, printed in terminal ${args.terminalHandle}: not found there as one unbroken path ` +
-        "(Claude Code shows a Read's path once, while it runs, on a row its renderer can split or wrap)"
-  return `the desktop did not share it (outside every workspace). Rule 1, named in the agent's text: ${rule1}. ${rule2}`
-}
 
 export async function loadHostImage(args: {
   client: RpcClient
@@ -237,6 +206,15 @@ export async function loadHostImage(args: {
                 params: { worktree: resolvedWorktree, relativePath: target.relativePath }
               }
             : null
+      if (target?.kind === 'worktree-file' && target.relativePath) {
+        const size = await worktreeFileSize(args.client, { worktree: resolvedWorktree, relativePath: target.relativePath })
+        if (size !== null && size > AGENT_IMAGE_MAX_BYTES) {
+          recordHostImageFailure(key, { refused: true, named, cleanly, newlyNamed })
+          recordHostImageMissing(args.path, 'too-large')
+          explainMissing(key, args.path, `it is ${formatPreviewByteLength(size)}, over the ${formatPreviewByteLength(AGENT_IMAGE_MAX_BYTES)} the phone takes for a chat picture, so it was not read`)
+          return null
+        }
+      }
       if (!request) {
         fail(true)
         explainMissing(key, args.path, `${gone ? "the agent's text names it cleanly, so the file may be gone (moved or deleted), or Orca's rule 1 did not apply (another session or agent on the tab, a transcript it could not read, older than its 2,000-message tail); " : ''}${notShared(args)}`)
@@ -310,13 +288,25 @@ export function useHostImagePreviews(args: {
   )
   const namedCleanly = useMemo(() => new Set([...namedInAgentText].filter((path) => agentTextNamesPathCleanly(messages, path))), [messages, namedInAgentText])
   const [loaded, setLoaded] = useState<Record<string, string>>({})
+  // An agent's picture is asked for only while its slot is on screen
+  // (agent-image-visibility.ts); a picture the user pasted is asked for at once.
+  const shownVersion = useAgentImagesShownVersion()
+  const userPaths = useMemo(
+    () => new Set(Object.entries(wanted).filter(([id]) => !agentIds.has(id)).flatMap(([, paths]) => paths)),
+    [agentIds, wanted]
+  )
 
   useEffect(() => {
     if (!client || !enabled) {
       return
     }
     let active = true
-    const paths = [...new Set(Object.values(wanted).flat())]
+    const paths = [...new Set(Object.values(wanted).flat())].filter(
+      (path) => userPaths.has(path) || isAgentImageShown(path)
+    )
+    if (paths.length === 0) {
+      return
+    }
     let timer: ReturnType<typeof setTimeout> | undefined
     let attempts = 0
     const read = async () => {
@@ -352,7 +342,7 @@ export function useHostImagePreviews(args: {
       active = false
       clearTimeout(timer)
     }
-  }, [client, enabled, hostId, namedInAgentText, namedCleanly, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
+  }, [client, enabled, hostId, namedInAgentText, namedCleanly, shownVersion, tabId, sessionId, terminalHandleRef, userPaths, wanted, worktreeId])
 
   return useMemo(() => {
     const previews: Record<string, string[]> = {}
