@@ -136,7 +136,7 @@ const AFFIRMS = /^(?:yes|allow|approve|always|proceed)(?![\p{L}\p{N}])/iu
 const REFUSES =
   /^(?:no|deny|decline|reject|cancel|skip|not\s+(?:now|yet)|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
 
-function approvalAnswer(label: string): 'yes' | 'no' | null {
+export function approvalAnswer(label: string): 'yes' | 'no' | null {
   const plain = label.replace(/^[*_`]+/, '')
   if (AFFIRMS.test(plain)) {
     return 'yes'

@@ -2,6 +2,10 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FONT_SCALE_STEP, quantizeFontScale } from './mobile-native-chat-message-text'
+import {
+  resetChatReadingSettingsForTests,
+  saveChatReadingSettings
+} from '../settings/chat-reading-settings'
 
 const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
 
@@ -87,5 +91,57 @@ describe('useMobileNativeChatPinchGesture', () => {
     expect(latest).toBe(1.35)
     act(() => handlers.update?.({ scale: 1.42 }))
     expect(latest).toBe(1.4)
+  })
+
+  // The Claude app's "Transcript text size" (s230.java:641-652): Small 0.85, Medium 1.0,
+  // Large 1.15, applied to the whole transcript. Here it is where the transcript starts, and a
+  // pinch still works from it.
+  describe('with a text size chosen in Settings', () => {
+    afterEach(() => {
+      resetChatReadingSettingsForTests()
+    })
+
+    async function remount(): Promise<void> {
+      act(() => renderer?.unmount())
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+
+    it.each([
+      ['small', 0.85],
+      ['medium', 1],
+      ['large', 1.15]
+    ] as const)('starts the transcript at %s: %s', async (size, scale) => {
+      resetChatReadingSettingsForTests()
+      await saveChatReadingSettings({ textSize: size })
+      await remount()
+      expect(latest).toBe(scale)
+    })
+
+    it('pinches from the chosen size, not from 1', async () => {
+      resetChatReadingSettingsForTests()
+      await saveChatReadingSettings({ textSize: 'small' })
+      await remount()
+      act(() => handlers.start?.())
+      act(() => handlers.update?.({ scale: 1.4 }))
+      // 0.85 x 1.4 = 1.19, on the step grid: 1.2. From 1 it would be 1.4.
+      expect(latest).toBe(1.2)
+    })
+
+    it('follows the Settings screen while the chat stays open, dropping an earlier pinch', async () => {
+      resetChatReadingSettingsForTests()
+      await saveChatReadingSettings({ textSize: 'medium' })
+      await remount()
+      act(() => handlers.start?.())
+      act(() => handlers.update?.({ scale: 1.5 }))
+      expect(latest).toBe(1.5)
+      await act(async () => {
+        await saveChatReadingSettings({ textSize: 'large' })
+      })
+      expect(latest).toBe(1.15)
+    })
   })
 })

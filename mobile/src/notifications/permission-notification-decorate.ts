@@ -4,7 +4,15 @@ import type { RpcClient } from '../transport/rpc-client'
 import { desktopNotificationLocation } from './notification-presentation'
 import type { PendingPermission, PendingPrompt, PendingQuestion } from './permission-lookup'
 import type { PromptNotificationCategoryAction } from './permission-notification-category'
-import { permissionNotificationContent } from './permission-notification-content'
+import { approvalAnswer } from '../session/mobile-native-chat-permission'
+import { approveWithheldReason } from './permission-notification-approve-gate'
+import {
+  PERMISSION_COMMENT_ACTION,
+  PERMISSION_COMMENT_HINT,
+  PERMISSION_COMMENT_LABEL,
+  permissionNotificationContent,
+  type PermissionNotificationAction
+} from './permission-notification-content'
 import type { PermissionNotificationData } from './permission-notification-response'
 import { questionNotificationContent } from './question-notification-content'
 import type { QuestionNotificationData } from './question-notification-response'
@@ -33,6 +41,22 @@ type Decoration = {
   answerData: PermissionNotificationData | QuestionNotificationData
 }
 
+/** Android draws three actions and drops the rest. */
+const MAX_ACTIONS = 3
+
+const ESCAPE = String.fromCharCode(27)
+
+/** An action that says no: Escape, or a label that reads as a refusal. */
+function refuses(action: PermissionNotificationAction): boolean {
+  return action.send === ESCAPE || approvalAnswer(action.label) === 'no'
+}
+
+/** Claude Code's dialog is the one whose "No" row takes a comment from here (verified on 2.1.299,
+ *  claude-permission-comment-send.ts). Codex's was not captured, so it gets no such button. */
+function agentTakesComment(agent: string): boolean {
+  return agent === 'claude' || agent === 'openclaude'
+}
+
 function permissionDecoration(
   pending: PendingPermission,
   hostId: string,
@@ -42,20 +66,44 @@ function permissionDecoration(
   if (!permission) {
     return null
   }
+  // Approve is not drawn for a plan, a question, an unknown tool or a destructive request
+  // (permission-notification-approve-gate.ts); what is left to answer is the refusals.
+  const withheld = approveWithheldReason(pending.permission)
+  const answerable = withheld === null ? permission.actions : permission.actions.filter(refuses)
+  // A comment needs a dialog it is known to work against: not a plan review or a question (their
+  // "No" rows are other shapes), and not an unknown tool.
+  const offersComment =
+    agentTakesComment(pending.agent) && (withheld === null || withheld === 'destructive')
+  const room = offersComment ? MAX_ACTIONS - 1 : MAX_ACTIONS
+  const kept =
+    answerable.length > room ? [...answerable.slice(0, room - 1), answerable[answerable.length - 1]!] : answerable
+  if (kept.length === 0) {
+    // Nothing a tap could answer: the desktop's own banner stays as it is.
+    return null
+  }
   return {
     title: permission.title,
     body: permission.body,
-    actions: permission.actions.map((action) => ({
-      identifier: action.identifier,
-      label: action.label
-    })),
+    actions: [
+      ...kept.map((action) => ({ identifier: action.identifier, label: action.label })),
+      ...(offersComment
+        ? [
+            {
+              identifier: PERMISSION_COMMENT_ACTION,
+              label: PERMISSION_COMMENT_LABEL,
+              textInput: { placeholder: PERMISSION_COMMENT_HINT }
+            }
+          ]
+        : [])
+    ],
     answerData: {
       hostId,
       worktreeId,
       // Identity of the prompt this banner was built from, so a tap minutes
       // later can tell whether the agent is still asking the same thing.
       permissionKey: mobileChatPermissionKey(pending.permission),
-      sends: Object.fromEntries(permission.actions.map((a) => [a.identifier, a.send]))
+      sends: Object.fromEntries(kept.map((a) => [a.identifier, a.send])),
+      ...(offersComment ? { comment: true as const } : {})
     }
   }
 }

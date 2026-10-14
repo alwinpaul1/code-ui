@@ -9,6 +9,32 @@ import { Txt } from '../src/ui/Txt'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
 import { useMobileChatFocusViewPreference } from '../src/session/use-mobile-chat-focus-view'
 import { useMobileChatExpandToolsPreference } from '../src/session/use-mobile-chat-expand-tools'
+import { ChatReadingOptionGroup, type ChatReadingOption } from '../src/settings/ChatReadingOptionGroup'
+import {
+  chatCodeFont,
+  chatTranscriptFonts,
+  useChatReadingPreference,
+  type ChatCodeFont,
+  type ChatTextSize,
+  type ChatTranscriptFont
+} from '../src/settings/chat-reading-settings'
+
+// The Claude app's labels (gd9.java:52-66, 610-665; strings.xml). Instrument Sans stands where
+// Claude's Anthropic Sans does: it is the face this app ships and the transcript has always used.
+const TEXT_SIZE_OPTIONS: readonly ChatReadingOption<ChatTextSize>[] = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' }
+]
+// Each font option is drawn in the face it picks, so the choice is seen before it is made.
+const TRANSCRIPT_FONT_OPTIONS: readonly ChatReadingOption<ChatTranscriptFont>[] = [
+  { value: 'instrument_sans', label: 'Instrument Sans', face: chatTranscriptFonts('instrument_sans').regular },
+  { value: 'system', label: 'System', face: chatTranscriptFonts('system').regular }
+]
+const CODE_FONT_OPTIONS: readonly ChatReadingOption<ChatCodeFont>[] = [
+  { value: 'system', label: 'System', face: chatCodeFont('system') },
+  { value: 'jetbrains_mono', label: 'JetBrains Mono', face: chatCodeFont('jetbrains_mono') }
+]
 
 export default function NativeChatSettingsScreen() {
   const router = useRouter()
@@ -19,6 +45,7 @@ export default function NativeChatSettingsScreen() {
   const chatDefault = defaultView === 'chat'
   const { focusView, setFocusView } = useMobileChatFocusViewPreference()
   const { expandTools, setExpandTools } = useMobileChatExpandToolsPreference()
+  const reading = useChatReadingPreference()
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -110,6 +137,56 @@ export default function NativeChatSettingsScreen() {
             trackColor={{ false: colors.borderStrong, true: colors.accent }}
             thumbColor={colors.bgPanel}
           />
+        </Surface>
+        <SectionLabel style={{ marginTop: space.lg }}>Appearance</SectionLabel>
+        <Surface rounded="lg" style={{ overflow: 'hidden', paddingBottom: space.sm }}>
+          <ChatReadingOptionGroup
+            title="Transcript text size"
+            options={TEXT_SIZE_OPTIONS}
+            value={reading.settings.textSize}
+            onChange={reading.setTextSize}
+          />
+          <ChatReadingOptionGroup
+            title="Transcript font"
+            options={TRANSCRIPT_FONT_OPTIONS}
+            value={reading.settings.transcriptFont}
+            onChange={reading.setTranscriptFont}
+          />
+        </Surface>
+        <SectionLabel style={{ marginTop: space.lg }}>Code appearance</SectionLabel>
+        <Surface rounded="lg" style={{ overflow: 'hidden' }}>
+          <View style={{ paddingBottom: space.sm }}>
+            <ChatReadingOptionGroup
+              title="Code font"
+              options={CODE_FONT_OPTIONS}
+              value={reading.settings.codeFont}
+              onChange={reading.setCodeFont}
+            />
+          </View>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.md,
+              paddingVertical: space.md,
+              paddingHorizontal: space.lg,
+              borderTopWidth: 1,
+              borderTopColor: colors.border
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Txt variant="body" weight="medium">
+                Wrap long lines
+              </Txt>
+            </View>
+            <Switch
+              accessibilityLabel="Wrap long lines"
+              value={reading.settings.wrapLongLines}
+              onValueChange={reading.setWrapLongLines}
+              trackColor={{ false: colors.borderStrong, true: colors.accent }}
+              thumbColor={colors.bgPanel}
+            />
+          </View>
         </Surface>
       </ScrollView>
     </View>

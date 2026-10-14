@@ -23,6 +23,12 @@ import {
   requestBackgroundDeliveryUnrestricted
 } from '../src/background/background-link'
 import { adviseBackgroundDeliveryPower } from '../src/background/background-delivery-power'
+import {
+  DEFAULT_NOTIFICATION_CATEGORIES,
+  loadNotificationCategories,
+  saveNotificationCategories,
+  type NotificationCategoryPreferences
+} from '../src/notifications/notification-categories'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -38,15 +44,18 @@ export default function NotificationsScreen() {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
   const [unrestricted, setUnrestricted] = useState(true)
+  const [categories, setCategories] = useState<NotificationCategoryPreferences>(DEFAULT_NOTIFICATION_CATEGORIES)
   const backgroundAvailable = isBackgroundDeliveryAvailable()
 
   const refreshSettings = useCallback(async () => {
-    const [enabled, permission] = await Promise.all([
+    const [enabled, permission, stored] = await Promise.all([
       loadPushNotificationsEnabled(),
-      getNotificationPermissionState()
+      getNotificationPermissionState(),
+      loadNotificationCategories()
     ])
     setPushEnabled(enabled)
     setPermissionState(permission)
+    setCategories(stored)
     setUnrestricted(isBackgroundDeliveryUnrestricted())
   }, [])
 
@@ -89,6 +98,13 @@ export default function NotificationsScreen() {
     if (on && adviseBackgroundDeliveryPower({ deliveryOn: true, unrestricted }).promptOnEnable) {
       requestBackgroundDeliveryUnrestricted()
     }
+  }
+
+  // The two Code toggles (notification-categories.ts): the screen changes at once and storage
+  // follows, put back to what it holds if it refuses.
+  const changeCategory = (patch: Partial<NotificationCategoryPreferences>) => {
+    setCategories((now) => ({ ...now, ...patch }))
+    void saveNotificationCategories(patch).catch(() => loadNotificationCategories().then(setCategories))
   }
 
   const switchEnabled = pushEnabled && permissionState.granted
@@ -179,6 +195,24 @@ export default function NotificationsScreen() {
             </View>
           ) : null}
         </Surface>
+        <SectionLabel style={{ marginTop: space.lg }}>Code sessions</SectionLabel>
+        <Surface rounded="lg" style={{ overflow: 'hidden' }}>
+          <CategoryRow
+            label="Code updates"
+            hint="Get notified when Code sessions have updates"
+            value={categories.updates}
+            disabled={!switchEnabled}
+            onChange={(updates) => changeCategory({ updates })}
+          />
+          <CategoryRow
+            label="Code permission requests"
+            hint="Get notified when Code sessions need your approval to use a tool"
+            value={categories.permissionRequests}
+            disabled={!switchEnabled}
+            divided
+            onChange={(permissionRequests) => changeCategory({ permissionRequests })}
+          />
+        </Surface>
         {notificationsBlocked ? (
           <Pressable
             accessibilityRole="button"
@@ -200,6 +234,55 @@ export default function NotificationsScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
+    </View>
+  )
+}
+
+/** One of the two Code toggles, drawn like the screen's own switch row. */
+function CategoryRow({
+  label,
+  hint,
+  value,
+  disabled,
+  divided = false,
+  onChange
+}: {
+  label: string
+  hint: string
+  value: boolean
+  disabled: boolean
+  divided?: boolean
+  onChange: (next: boolean) => void
+}) {
+  const { colors, space } = useTheme()
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.lg,
+        borderTopWidth: divided ? 1 : 0,
+        borderTopColor: colors.border
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <Txt variant="body" weight="medium">
+          {label}
+        </Txt>
+        <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+          {hint}
+        </Txt>
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={value}
+        disabled={disabled}
+        onValueChange={onChange}
+        trackColor={{ false: colors.borderStrong, true: colors.accent }}
+        thumbColor={colors.bgPanel}
+      />
     </View>
   )
 }

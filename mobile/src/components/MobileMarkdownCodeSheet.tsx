@@ -5,6 +5,7 @@ import { useTheme } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 import { CODE_BLOCK_SPEC, codeBlockSheetTitle } from './code-block-spec'
 import { CodeCopyGlyph, CodeIconButton } from './MobileMarkdownCodeIconButton'
+import { MarkdownCodeScroller } from './MobileMarkdownCodeScroller'
 import { MarkdownCodeText } from './MobileMarkdownCodeText'
 import { mobileMarkdownCodeLines } from './mobile-markdown-code-lines'
 import { useMarkdownStyles } from './mobile-markdown-styles'
@@ -100,18 +101,15 @@ export function MarkdownCodeSheet({
       <View style={[styles.codeBody, { flex: 1 }]} testID="markdown-code-sheet-body">
         {error ? <Text style={styles.codeCopyFailed}>{copyFailedNotice(error)}</Text> : null}
         <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
-          {/* A horizontal scroller, not a wrap, and the same bar the card shows. */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator
-            persistentScrollbar
-            contentContainerStyle={{
+          {/* The card's own switch: a sideways scroller with the same bar, or a wrap. */}
+          <MarkdownCodeScroller
+            contentStyle={{
               paddingHorizontal: CODE_BLOCK_SPEC.body.sheetPaddingHorizontal,
               paddingVertical: CODE_BLOCK_SPEC.body.sheetPaddingVertical
             }}
           >
             <MarkdownCodeText lines={lines} lineStyle={styles.codeText} selectable />
-          </ScrollView>
+          </MarkdownCodeScroller>
         </ScrollView>
       </View>
     </BottomDrawer>

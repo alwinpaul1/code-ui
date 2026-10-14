@@ -131,6 +131,9 @@ export type MarkdownTypography = {
    *  native-prose-model.ts) instead of a React Native Text. Only the chat
    *  transcript sets it; iOS and the web keep the Text either way. */
   nativeProse?: boolean
+  /** The surface is the chat transcript, so the reader's transcript font and code font apply to
+   *  it (chat-reading-settings.ts). Every other surface keeps the faces it has always had. */
+  followsReadingSettings?: boolean
 }
 
 export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
@@ -187,7 +190,8 @@ export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
   listMarkerSize: 14,
   blockGap: 7,
-  nativeProse: true
+  nativeProse: true,
+  followsReadingSettings: true
 }
 
 /**

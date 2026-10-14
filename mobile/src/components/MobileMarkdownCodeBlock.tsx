@@ -1,6 +1,7 @@
-import { ScrollView, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MarkdownCodeHeader } from './MobileMarkdownCodeHeader'
+import { MarkdownCodeScroller } from './MobileMarkdownCodeScroller'
 import { MarkdownCodeText } from './MobileMarkdownCodeText'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMarkdownCodeLines } from './mobile-markdown-code-lines'
@@ -51,25 +52,13 @@ export function renderMarkdownCodeBlock({
             <View key={index} style={styles.codeBlock} testID="markdown-code-block">
               <MarkdownCodeHeader language={block.language} code={block.text} styles={styles} />
               <View style={styles.codeBody} testID="markdown-code-body">
-                {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
-                    command or an indented block shreds it, and a reader who
-                    wants to copy a line needs the line. The 16 dp padding is
-                    inside the scroll, as the Claude app has it, so a long line
-                    scrolls out to the card's edge. */}
-                {/* The bar is SHOWN, and kept on Android rather than fading, so a
-                    line the phone cannot fit reads as scrollable instead of as
-                    broken. Reported 2026-09-15: the gate command in CLAUDE.md
-                    ended at "npx" and looked truncated — it scrolled the whole
-                    time, nothing said so. Android only draws the bar when the
-                    content actually overflows, so a short fence gets none. */}
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator
-                  persistentScrollbar
-                  contentContainerStyle={styles.codeBodyContent}
-                >
+                {/* A horizontal scroller, not a wrap, unless the reader turned Wrap long
+                    lines on (MobileMarkdownCodeScroller, which says why). The 16 dp padding
+                    is inside the scroll, as the Claude app has it, so a long line scrolls
+                    out to the card's edge. */}
+                <MarkdownCodeScroller contentStyle={styles.codeBodyContent}>
                   <MarkdownCodeText lines={code.lines} lineStyle={styles.codeText} selectable={selectable} />
-                </ScrollView>
+                </MarkdownCodeScroller>
                 {code.hidden > 0 ? (
                   <Text style={styles.codeTruncated}>{`${code.hidden} more lines`}</Text>
                 ) : null}

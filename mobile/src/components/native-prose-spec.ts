@@ -19,7 +19,9 @@ type Options = {
   scale: number
   /** The current scheme's colours, light or dark (useTheme().colors). */
   colors: ThemeColors
-  fonts: typeof fontFamily
+  /** The faces to set it in: the theme's, or the reader's choice for the transcript
+   *  (useMarkdownFonts). */
+  fonts: Readonly<Record<keyof typeof fontFamily, string>>
   /** processColor, which is react-native's and so passed in. */
   toColor: (color: string) => number
 }

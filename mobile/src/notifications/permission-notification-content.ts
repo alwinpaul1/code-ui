@@ -1,5 +1,16 @@
 import type { MobileChatPermission } from '../session/mobile-native-chat-permission'
 
+/**
+ * "Deny with comment" on a permission banner, after the Claude app's notification (n030.java:486-520,
+ * i09.java): a button that opens a reply field, its hint "Tell Claude what to do instead"
+ * (`ccr_notification_comment_hint`), the label `ccr_notification_deny_with_comment`. The identifier
+ * is not an option's index: it is answered by typing into Claude Code's own "No" row
+ * (claude-permission-comment-send.ts), and no option carries its keystrokes.
+ */
+export const PERMISSION_COMMENT_ACTION = 'permission-comment'
+export const PERMISSION_COMMENT_LABEL = 'Deny with comment'
+export const PERMISSION_COMMENT_HINT = 'Tell Claude what to do instead'
+
 export type PermissionNotificationAction = {
   /** What Android hands back when the action is tapped. */
   identifier: string

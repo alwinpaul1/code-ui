@@ -182,6 +182,6 @@ If Samsung still hides it, the phone owner has to allow it (an app cannot):
 2. Settings > Lock screen and AOD > Always On Display: turn on, and enable
    "Show notifications" if offered.
 3. Settings > Notifications > App notifications > Code UI: allow, and in the
-   category "Desktop Notifications" enable "Show on lock screen" and the pop-up
+   category "Code sessions" (named "Desktop Notifications" before 2026-10-14) enable "Show on lock screen" and the pop-up
    style (Alert, not Silent).
 4. Settings > Apps > Code UI > Battery: Unrestricted, so delivery is not delayed.

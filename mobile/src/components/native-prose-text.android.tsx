@@ -2,6 +2,7 @@ import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modu
 import { useEffect, useMemo, type ComponentType, type ReactNode } from 'react'
 import { PixelRatio, processColor, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import { useTheme } from '../theme/theme-context'
+import { useMarkdownFonts } from './use-markdown-fonts'
 import { nativeProseHeightDp, nativeProseLayoutWidth, nativeProseSpec } from './native-prose-spec'
 import type { NativeProseTextProps } from './native-prose-text-props'
 
@@ -60,7 +61,8 @@ export function NativeProseText({
   onLink,
   onRefused
 }: NativeProseTextProps): ReactNode {
-  const { colors, fonts } = useTheme()
+  const { colors } = useTheme()
+  const fonts = useMarkdownFonts(typography)
   const spec = useMemo(
     () => nativeProseSpec(model, { typography, scale: textScale, colors, fonts, toColor }),
     [model, typography, textScale, colors, fonts]

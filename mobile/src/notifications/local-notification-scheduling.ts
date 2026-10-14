@@ -10,6 +10,13 @@ import type { RpcClient } from '../transport/rpc-client'
 import { decorateWithPrompt } from './permission-notification-decorate'
 import { lookupPendingPrompt } from './permission-lookup'
 import { ensurePermissionCategory } from './permission-notification-category'
+import { decorateWithReply, isSessionReplyCategory } from './session-reply-notification'
+import {
+  allCategoriesOff,
+  categoryLetsThrough,
+  notificationCategoriesForBanner,
+  warmNotificationCategories
+} from './notification-categories'
 
 export type NotificationEvent = {
   type: 'notification'
@@ -108,6 +115,7 @@ export function notificationTrigger(): { channelId: string } | null {
 let channelReady: Promise<void> | null = null
 
 export function configureNotificationChannel(): void {
+  warmNotificationCategories()
   void ensureNotificationChannel()
 }
 
@@ -116,7 +124,11 @@ export function ensureNotificationChannel(): Promise<void> {
     return Promise.resolve()
   }
   channelReady ??= Notifications.setNotificationChannelAsync(ANDROID_NOTIFICATION_CHANNEL_ID, {
-    name: 'Desktop Notifications',
+    // What the system's notification settings list. The Claude app's Code channel is "Code
+    // sessions" (jsm.java:30, notification_channel_code_name); the id above is unchanged, so
+    // a phone that has the channel keeps its settings and only the name moves.
+    name: 'Code sessions',
+    description: 'Notifying you when an agent has finished working on your code',
     importance: Notifications.AndroidImportance.HIGH,
     enableVibrate: false,
     // PUBLIC (1): the lock screen and Always On Display show the app icon with
@@ -168,9 +180,16 @@ export type LocalNotificationLink = {
   quietUnlessActionable?: boolean
 }
 
-/** Whether a banner's content carries buttons or a reply field. */
+/** Whether a banner's content carries buttons or a reply field that are the point of it: an
+ *  approval to give, a question to answer. The Reply on a finished session is not: it rides on every
+ *  such banner, and counting it would bring every finished session back when the app is opened
+ *  ("when I open the app suddenly all the notifications come up", 2026-09-21). */
 function isActionable(content: { categoryIdentifier?: string }): boolean {
-  return typeof content.categoryIdentifier === 'string' && content.categoryIdentifier.length > 0
+  return (
+    typeof content.categoryIdentifier === 'string' &&
+    content.categoryIdentifier.length > 0 &&
+    !isSessionReplyCategory(content.categoryIdentifier)
+  )
 }
 
 async function presentedNotificationContent(
@@ -203,9 +222,15 @@ async function presentedNotificationContent(
   // the lookup found no client, gave up, and the banner had no Approve or
   // Deny (a friend's phone, Windows host, 2026-09-18). The event arrived over
   // a link; that link is up by definition, and it is the one to ask on.
-  return decorateWithPrompt(content, event, hostId, {
+  const decorated = await decorateWithPrompt(content, event, hostId, {
     resolveClient: (id) => link.client ?? peekLiveHostClient(id),
     lookup: lookupPendingPrompt,
+    ensureCategory: ensurePermissionCategory
+  })
+  // A banner with nothing to answer is a session that finished: it gets the Reply field
+  // (session-reply-notification.ts). One that carries a permission or a question keeps its buttons.
+  return decorateWithReply(decorated, event, {
+    agent: uniqueWorktreeLaunchAgent(event.worktreeId),
     ensureCategory: ensurePermissionCategory
   })
 }
@@ -230,8 +255,15 @@ export async function showLocalNotification(
       return
     }
 
+    const categories = await notificationCategoriesForBanner()
+    if (allCategoriesOff(event.source, categories)) {
+      return
+    }
     await ensureNotificationChannel()
     const content = await presentedNotificationContent(event, hostId, link)
+    if (!categoryLetsThrough(event.source, content, categories)) {
+      return
+    }
     if (link.quietUnlessActionable && !isActionable(content)) {
       return
     }
@@ -263,6 +295,11 @@ export async function showLocalNotification(
       return null
     }
 
+    const categories = await notificationCategoriesForBanner()
+    if (allCategoriesOff(event.source, categories)) {
+      return null
+    }
+
     if (notificationState.identifier) {
       await Notifications.dismissNotificationAsync(notificationState.identifier).catch(() => {})
       notificationState.identifier = undefined
@@ -270,6 +307,9 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     const content = await presentedNotificationContent(event, hostId, link)
+    if (!categoryLetsThrough(event.source, content, categories)) {
+      return null
+    }
     if (link.quietUnlessActionable && !isActionable(content)) {
       return null
     }

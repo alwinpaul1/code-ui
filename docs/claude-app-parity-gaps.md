@@ -326,7 +326,7 @@ SSE stream as `control_response` with the same `request_id`.
 | Attachments | upload to `{org}/upload`, referenced by `file_uuid` | `clipboard.*Upload` to a desktop temp file, pasted as a bracketed path | Yes, done |
 | Stop | `interrupt`, no reply awaited; failure "Couldn't stop the session. Try again." | Escape twice, 80 ms apart (`use-mobile-native-chat-stop.ts`); structured lane `agentSession.cancel` | Yes. Done 2026-10-14 (G24): a Stop that failed, or an agent still working 10 s after it, says "Couldn't stop the session. Try again." on both lanes and Stop is live again; the cause is one `[stop] …` log line. An ack lost after the Escape went keeps "Stop unconfirmed — check chat before retrying", because it may have worked |
 | Allow once / Always allow / Deny | `control_response` with `behavior`, `updatedInput`, `updatedPermissions`, `message: "Denied by user"` | the option's digit key after a screen re-read (`mobile-native-chat-permission-send.ts`) | Yes, done |
-| Deny with comment | deny with `message` (notification inline reply) | "Send back" exists for plans only | Yes, by typing into the TUI's "No, and tell Claude…" option (gap G21) |
+| Deny with comment | deny with `message` (notification inline reply) | Done 2026-10-14: typed into the dialog's "No" row with its own keys, Claude Code only | Yes (gap G21) |
 | AskUserQuestion | allow with `updatedInput.answers` | paced key groups (`mobile-native-chat-answer-stepping.ts`) | Yes, done |
 | Plan approve / approve & auto / suggest edits | allow plus `setMode`; deny with feedback | the plan permission card's digit keys; "Send back" | Yes (gap G11 is the look) |
 | Model | `set_model`, 30 s | `/model <id>` typed | Yes, done |
@@ -480,19 +480,19 @@ padding on all sides and Send's colours.
 
 | Claude app | Code UI | Class |
 |---|---|---|
-| Transcript text size Small 0.85 / Medium 1.0 / Large 1.15 | pinch-zoom 0.8–1.8, not persisted (`use-mobile-native-chat-pinch-gesture.ts`) | **Missing** (G8) |
-| Transcript font Anthropic Sans / System; code font JetBrains Mono / System | fixed Instrument Sans and JetBrains Mono | **Missing** (G8) |
-| "Wrap long lines" (default off) | none; always scrolls | **Missing** (G8) |
-| Notification toggles "Code updates" / "Code permission requests" | one "Agent notifications" toggle (`app/notifications.tsx`) | **Differs** (G22) |
+| Transcript text size Small 0.85 / Medium 1.0 / Large 1.15 | Done 2026-10-14: the three sizes, persisted, where the transcript's pinch (0.8-1.8) starts (G8) | Match |
+| Transcript font Anthropic Sans / System; code font JetBrains Mono / System | Done 2026-10-14: Instrument Sans / System, and System / JetBrains Mono, each option drawn in its own face (G8) | Match (Instrument Sans for Anthropic Sans) |
+| "Wrap long lines" (default off) | Done 2026-10-14 (G8) | Match |
+| Notification toggles "Code updates" / "Code permission requests" | Done 2026-10-14: both, under the one "Agent notifications" switch (G22) | Match |
 | Auto mode opt-in dialog | none | **Missing** (P3, G33) |
 
 ### 3.7 Notifications
 
 | Claude app | Code UI | Class |
 |---|---|---|
-| Channel "Code sessions", importance HIGH; one notification per session; MessagingStyle keeps the last 25 | `src/notifications/*` | Match-ish |
-| An inline **Reply** on an ordinary notification ("Reply to Claude") | none | **Missing** (G21) |
-| Permission notification: a monospace body (8 lines, `$ ` for Bash); Approve / Deny / **Deny with comment** ("Tell Claude what to do instead"); Approve withheld for AskUserQuestion, ExitPlanMode and destructive tools; ongoing, 24 h timeout | up to 3 option buttons from a screen read (`permission-notification-*.ts`) | **Differs** (G21) |
+| Channel "Code sessions", importance HIGH; one notification per session; MessagingStyle keeps the last 25 | `src/notifications/*`; the channel is named "Code sessions" since 2026-10-14 (same id, so settings are kept) | Match-ish |
+| An inline **Reply** on an ordinary notification ("Reply to Claude") | Done 2026-10-14: through the outbox, terminal tabs (G21) | Match |
+| Permission notification: a monospace body (8 lines, `$ ` for Bash); Approve / Deny / **Deny with comment** ("Tell Claude what to do instead"); Approve withheld for AskUserQuestion, ExitPlanMode and destructive tools; ongoing, 24 h timeout | Done 2026-10-14 except the monospace body, ongoing and the 24 h timeout: Approve / Deny / Deny with comment (Claude Code), Approve withheld for a plan, a question, an unknown tool and a destructive command or MCP tool (G21) | Partly matches |
 | Question notification | option buttons plus "Answer" / "Other…" | Code UI extra |
 
 ### 3.8 Viewer and markup
@@ -532,7 +532,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G5 | P2 | Mode sheet icons, colours and descriptions; drop Bypass from the list; Effort row inside the model sheet; "Not available for the selected model" | Mode sheet: done 2026-10-14 (coloured glyphs, descriptions, no Bypass row; the + sheet row takes the current mode's glyph and colour). Effort row: differs | S | C | `permission-mode-appearance.ts` |
 | G6 | P1 | Session bar above the composer: "Open diff" pill (+A −R, opens review) and todo pill "N/M tasks" with a ring | Missing | M | C | |
 | G7 | P2 | Slash popup look (mono 15 link-blue names, ≤240 dp, hairline, 150 ms animation) | Differs | S | C | |
-| G8 | P2 | Reading settings: transcript text size S/M/L (0.85/1.0/1.15), transcript font, code font, wrap long lines | Missing | M | E | |
+| G8 | P2 | Reading settings: transcript text size S/M/L (0.85/1.0/1.15), transcript font, code font, wrap long lines | Done 2026-10-14 | M | E | `src/settings/chat-reading-settings.ts`; screen in `app/native-chat-settings.tsx`. Text size is where the pinch starts (the pinch still works from it); the two fonts reach the transcript's Markdown, its code spans and block, and a sent prompt, and no other Markdown surface; Wrap long lines moves the code card and its Expand sheet from a sideways scroller to a wrap (`MobileMarkdownCodeScroller.tsx`). Anthropic Sans is Instrument Sans here, and the code face defaults to JetBrains Mono, so the defaults are today's look |
 | G9 | P1 | Header: 15/550 title; repo · branch subtitle; the context ring moves to the header with blue/amber/red at 75/90 % | Differs | M | A | |
 | G10 | P2 | Permission card: 24 dp card, 40 dp buttons, a filled primary; raw input to 6 arguments then "Show full input" (360 dp cap); a diff face for Edit/Write | Differs | M | B | |
 | G11 | P2 | Plan approval buttons above the composer: Approve Plan / Approve & auto mode / Suggest Edits; Plan sheet; "Describe what you'd like changed…" placeholder | Differs | M | B | |
@@ -542,11 +542,11 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G15 | P2 | Error rows: API error and "Session interrupted" result rows styled in the danger colour, not as prose | Missing | S | B | |
 | G16 | P3 | Rate-limit banner in the chat ("Approaching limit", "Resets at …"), from beacon rate limits | Missing | S | D | |
 | G17 | P2 | Compacted marker wording "Compacted conversation · saved N tokens" when the figure is known | Differs | S | B | |
-| G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Done except wrap | S | E | done 2026-10-14: the card, its Copy (check for 2 s, glyph tint 300 ms) and Expand, and the sheet (spec and sources in `code-block-spec.ts`). Left: wrap that follows a setting, which waits for G8. The line-number gutter on the card is gone (the app draws none); the file reader keeps its own |
+| G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Done 2026-10-14 | S | E | done 2026-10-14: the card, its Copy (check for 2 s, glyph tint 300 ms) and Expand, and the sheet (spec and sources in `code-block-spec.ts`). Wrap follows the G8 setting. The line-number gutter on the card is gone (the app draws none); the file reader keeps its own |
 | G19 | P2 | Read sheet: line-numbered viewer, "Showing N of M lines (truncated)", **Load full file** via `files.read`, Render for .md | Differs | M | F | |
 | G20 | P2 | Inline file links: tap opens the file viewer; long-press Open / Copy file name / Copy relative path | Missing | M | E | |
-| G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Missing | M | G | |
-| G22 | P3 | Two notification toggles (updates vs permission requests) | Differs | S | G | |
+| G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Done 2026-10-14 | M | G | Reply: `session-reply-*.ts` (written to the chat outbox first, the drainer sends it; a lost link keeps the words; terminal tabs only). Deny with comment: `claude-permission-comment-send.ts`, Claude Code only (Down to the No row, Tab, the words, Enter, each read back; frames in `fixtures/claude-screen-permission-amend-2.1.299.txt`). Approve withheld: `permission-notification-approve-gate.ts`. Left: the comment for a plan review and for Codex; a structured session's Reply |
+| G22 | P3 | Two notification toggles (updates vs permission requests) | Done 2026-10-14 | S | G | `notification-categories.ts`, rows on `app/notifications.tsx` |
 | G23 | P1 | ↓ arrow threshold, running-row shimmer | — | — | — | in progress |
 | G24 | P2 | Stop failure: re-enable Stop and say "Couldn't stop the session. Try again." when the agent is still working after Escape | Done 2026-10-14 | S | D | |
 | G25 | P3 | Context window card in the transcript for `/context` output (categories, MCP tools, memory files, agents) | Missing | M | F | |

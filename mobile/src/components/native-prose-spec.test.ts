@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { chatReadingFaces } from '../settings/chat-reading-settings'
 import { darkColors, fontFamily, lightColors } from '../theme/tokens'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { buildProseRuns, type ProseBlock } from './mobile-markdown-prose-runs'
@@ -104,5 +107,36 @@ describe('the spec the native prose view is drawn from', () => {
     expect(nativeProseHeightDp(630, 3)).toBeCloseTo(631 / 3)
     // A measure that failed draws nothing native: the caller falls back.
     expect(nativeProseHeightDp(-1, 3)).toBeNull()
+  })
+})
+
+// The Android view draws the transcript's replies, so it takes the reader's transcript font and
+// code font (chat-reading-settings.ts) from the same place the React Native Text styles do.
+describe('the faces the native prose view is drawn in', () => {
+  it('are the reader’s choice, in the three slots the module reads', () => {
+    const spec = JSON.parse(
+      nativeProseSpec(model, {
+        typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
+        scale: 1,
+        colors: lightColors,
+        fonts: chatReadingFaces({ transcriptFont: 'system', codeFont: 'system' }),
+        toColor: () => 0
+      })
+    )
+    expect(spec.fonts).toEqual({ regular: 'sans-serif', bold: 'sans-serif-medium', mono: 'monospace' })
+  })
+
+  it('come from useMarkdownFonts in the Android view, not from the bare theme', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./native-prose-text.android.tsx', import.meta.url)),
+      'utf8'
+    )
+    // Code, not the comments above it: a bare includes() finds prose.
+    const code = source
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n')
+    expect(code).toMatch(/useMarkdownFonts\(typography\)/)
+    expect(code).not.toMatch(/const \{[^}]*\bfonts\b[^}]*\} = useTheme\(\)/)
   })
 })

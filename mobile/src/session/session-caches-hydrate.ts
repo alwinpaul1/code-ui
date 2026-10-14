@@ -1,3 +1,4 @@
+import { loadChatReadingSettings } from '../settings/chat-reading-settings'
 import { hydrateSessionViewPreferences } from '../storage/session-view-preferences'
 import { hydrateAgentHudBeacons } from './agent-hud-beacon'
 import { hydrateNativeChatTranscriptCache } from './mobile-native-chat-transcript-cache'
@@ -22,6 +23,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateNativeChatImagePreviewCache(),
     hydrateWaitingPhotoSends(),
     hydrateSessionViewPreferences(),
+    // Why: the transcript's text size, fonts and code wrap, so a reader who changed them does not
+    // see the first frame of a chat in the defaults (chat-reading-settings.ts).
+    loadChatReadingSettings(),
     // Why: the beacon only arrives when the agent repaints, so without this a
     // cold start shows a staler source until then. See agent-hud-beacon-warm-start.
     hydrateAgentHudBeacons(),
