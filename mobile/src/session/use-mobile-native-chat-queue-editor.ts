@@ -2,8 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import type { RpcClient } from '../transport/rpc-client'
 import { createQueueEditorIo } from './mobile-native-chat-queue-editor-io'
 import { opaque } from './native-queue-input'
-import { sendClaudeQueueNow } from './claude-send-queue-now'
-import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
+import { joinPressInFlight, pressClaudeSendNowWhenTyped } from './claude-send-now-press'
 import {
   clearMobileNativeChatInputResidue,
   markMobileNativeChatInputResidue
@@ -292,7 +291,7 @@ export function useMobileNativeChatQueueEditor(args: {
   }
   // Claude's send-now key (2.1.275): interrupt the turn, send the whole queue.
   // Same scope the editor writes with — the terminal the queue is drawn in.
-  const sendNow = async (): Promise<boolean> => {
+  const pressSendNow = async (): Promise<boolean> => {
     const current = latest.current
     const handle = current.handleRef.current
     // Same as the pencil: "Send now" is drawn whatever the connection is doing.
@@ -306,22 +305,11 @@ export function useMobileNativeChatQueueEditor(args: {
       )
       return false
     }
-    // The key is for the chat; a dialog on screen would take it (2026-09-27).
-    const refusal = await readSendUnderDialogRefusal({ client: current.client, terminal: handle, agent: current.agent })
-    if (refusal) {
-      current.onError(refusal)
-      return false
-    }
-    const accepted = await sendClaudeQueueNow({
-      client: current.client,
-      terminal: handle,
-      deviceToken: current.deviceTokenRef.current
-    })
-    if (!accepted) {
-      current.onError('The agent did not take the send-now key. The queue is unchanged.')
-    }
-    return accepted
+    // Not over a message still being typed in: Claude drops the key then.
+    return pressClaudeSendNowWhenTyped(handle, () => latest.current, (message) => latest.current.onError(message))
   }
+  const sendingNow = useRef<Promise<boolean> | null>(null)
+  const sendNow = () => joinPressInFlight(sendingNow, pressSendNow)
 
   return {
     open,

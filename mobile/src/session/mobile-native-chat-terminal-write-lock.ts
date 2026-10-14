@@ -8,6 +8,8 @@ const writeInFlightTerminals = new Set<string>()
 // written its body and now only reads) cannot later release a lock someone else
 // has since taken.
 const writeOwners = new Map<string, symbol>()
+// Who is waiting for each terminal's lock to come free (whenMobileNativeChatTerminalWriteFree).
+const freeWaiters = new Map<string, Set<() => void>>()
 
 /** Claim the terminal for one composed write sequence. False = another
  *  sequence is mid-flight; the caller must reject its send. */
@@ -72,6 +74,36 @@ export function releaseMobileNativeChatTerminalWrite(
   writeInFlightTerminals.delete(terminal)
   writeOwners.delete(terminal)
   sendOwners.delete(terminal)
+  for (const wake of new Set(freeWaiters.get(terminal))) {
+    wake()
+  }
+}
+
+/**
+ * Resolves true once no composed sequence holds the terminal, false if one
+ * still does after `timeoutMs`. Free now resolves true at once. It does not
+ * take the lock: a caller that must write acquires it after, and may lose it to
+ * a writer that got there first.
+ */
+export function whenMobileNativeChatTerminalWriteFree(terminal: string, timeoutMs: number): Promise<boolean> {
+  if (!writeInFlightTerminals.has(terminal)) {
+    return Promise.resolve(true)
+  }
+  return new Promise((resolve) => {
+    const waiters = freeWaiters.get(terminal) ?? new Set<() => void>()
+    freeWaiters.set(terminal, waiters)
+    const settle = (free: boolean): void => {
+      clearTimeout(timer)
+      waiters.delete(wake)
+      if (waiters.size === 0 && freeWaiters.get(terminal) === waiters) {
+        freeWaiters.delete(terminal)
+      }
+      resolve(free)
+    }
+    const wake = (): void => settle(true)
+    const timer = setTimeout(() => settle(false), timeoutMs)
+    waiters.add(wake)
+  })
 }
 
 /** Test-only: module scope outlives a single test's hooks. */
@@ -81,6 +113,7 @@ export function resetMobileNativeChatTerminalWritesForTests(): void {
   sendOwners.clear()
   burstTerminals.clear()
   halfSteppedTerminals.clear()
+  freeWaiters.clear()
 }
 
 /**
