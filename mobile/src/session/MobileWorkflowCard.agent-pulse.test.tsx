@@ -38,7 +38,10 @@ vi.mock('react-native-reanimated', async () => {
     default: { View: AnimatedView },
     Easing: { linear: 'linear' },
     useSharedValue: () => React.useRef({ value: seen.clockAt }).current,
-    useAnimatedStyle: (factory: () => unknown) => factory(),
+    useAnimatedStyle: (factory: () => Record<string, unknown>) => ({
+      ...factory(),
+      animatedStyle: true
+    }),
     withTiming: (to: number, config?: { duration?: number; easing?: unknown }) => {
       seen.timings.push({ to, config })
       return to
@@ -142,14 +145,14 @@ describe.each([
     it('stands still, in the muted tone, once the workflow has completed', () => {
       const root = render(workflow({ status: 'completed', elapsedMs: null }), scheme)
       expect(flat(dot(root).props.style).backgroundColor).toBe(palette.textMuted)
-      expect(opacityOf(dot(root))).toBeUndefined()
+      expect(opacityOf(dot(root))).toBe(1)
       expect(seen.timings).toEqual([])
     })
 
     it('stands still, in the danger tone, once it has failed', () => {
       const root = render(workflow({ status: 'failed', elapsedMs: null }), scheme)
       expect(flat(dot(root).props.style).backgroundColor).toBe(palette.danger)
-      expect(opacityOf(dot(root))).toBeUndefined()
+      expect(opacityOf(dot(root))).toBe(1)
       expect(seen.timings).toEqual([])
     })
   }
@@ -161,21 +164,37 @@ describe('the pulse', () => {
     (reduced) => {
       seen.reduced = reduced
       const root = render(workflow(), 'dark')
-      expect(opacityOf(dot(root))).toBeUndefined()
+      expect(opacityOf(dot(root))).toBe(1)
       expect(seen.timings).toEqual([])
       expect(seen.repeats).toEqual([])
     }
   )
 
-  it('stops when the workflow ends: the loop is cancelled and the dot is drawn at rest', () => {
+  // A view that had an animated style and then lost it keeps the last opacity the UI thread wrote
+  // (a dot that stopped mid-pulse would stay dim), so the style is never swapped for nothing.
+  it.each([
+    ['running', { status: 'running' as const }],
+    ['completed', { status: 'completed' as const, elapsedMs: null }],
+    ['failed', { status: 'failed' as const, elapsedMs: null }]
+  ])('keeps the one animated style on the dot of a %s workflow', (_label, overrides) => {
+    expect(flat(dot(render(workflow(overrides), 'light')).props.style).animatedStyle).toBe(true)
+  })
+
+  it('keeps the animated style on the dot when reduced motion is on', () => {
+    seen.reduced = true
+    expect(flat(dot(render(workflow(), 'light')).props.style).animatedStyle).toBe(true)
+  })
+
+  it('stops when the workflow ends: the loop is cancelled and a dot caught mid-pulse is drawn at full alpha again', () => {
+    seen.clockAt = 1200
     const root = render(workflow(), 'light')
-    expect(opacityOf(dot(root))).toBeDefined()
+    expect(opacityOf(dot(root))).toBeCloseTo(0.55, 10)
     const before = seen.cancelled
     act(() => {
       renderer!.update(card(workflow({ status: 'completed', elapsedMs: null }), 'light'))
     })
     expect(seen.cancelled).toBeGreaterThan(before)
-    expect(opacityOf(dot(renderer!.root))).toBeUndefined()
+    expect(opacityOf(dot(renderer!.root))).toBe(1)
   })
 
   it('is cancelled when the card goes away mid-pulse', () => {

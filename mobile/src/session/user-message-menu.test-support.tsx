@@ -46,6 +46,7 @@ export function menuRow(root: ReactTestInstance, label: string): ReactTestInstan
     (node) =>
       String(node.type) === 'Pressable' &&
       node.props.accessibilityLabel === undefined &&
+      typeof node.props.onPress === 'function' &&
       wordsOf(node) === label
   )
 }

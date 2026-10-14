@@ -290,6 +290,21 @@ describe('a chip that names a picture the phone cannot show', () => {
     expect(pasted.props.onLongPress).toBeUndefined()
   })
 
+  it('does not carry its menu over to the next picture bound to the same cell', () => {
+    const onOpenFile = vi.fn()
+    const root = renderReply(reply('shots/one.png'), onOpenFile)
+    act(() => chip(root).props.onLongPress())
+    expect(rows(root)).toEqual(['Open', 'Copy file name', 'Copy relative path'])
+    act(() => {
+      renderer!.update(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatMessage message={reply('shots/two.png')} onOpenFile={onOpenFile} />
+        </ThemeProvider>
+      )
+    })
+    expect(rows(root)).toEqual([])
+  })
+
   it('carries no sheet until it is held', () => {
     const root = renderReply(reply('shots/ui.png'), vi.fn())
     expect(rows(root)).toEqual([])

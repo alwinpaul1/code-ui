@@ -137,26 +137,30 @@ function render(
   return renderer!.root
 }
 
+/** The bubble that takes the hold: a sent prompt carries the label, a waiting message only the hold. */
 const bubble = (root: ReactTestInstance): ReactTestInstance =>
+  root.find(
+    (node) => String(node.type) === 'Pressable' && typeof node.props.onLongPress === 'function'
+  )
+
+/** A sent prompt's bubble, held or not. */
+const sentPrompt = (root: ReactTestInstance): ReactTestInstance =>
   root.find(
     (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Sent prompt'
   )
 
+/** A menu row: an unlabelled Pressable that takes a tap (a waiting message's bubble takes none). */
+const isRow = (node: ReactTestInstance): boolean =>
+  String(node.type) === 'Pressable' &&
+  node.props.accessibilityLabel === undefined &&
+  typeof node.props.onPress === 'function'
+
 /** The menu's rows, by the words on them. */
 const menuRows = (root: ReactTestInstance): string[] =>
-  root
-    .findAll(
-      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === undefined
-    )
-    .map((node) => words(node))
+  root.findAll(isRow).map((node) => words(node))
 
 const row = (root: ReactTestInstance, label: string): ReactTestInstance =>
-  root.find(
-    (node) =>
-      String(node.type) === 'Pressable' &&
-      node.props.accessibilityLabel === undefined &&
-      words(node) === label
-  )
+  root.find((node) => isRow(node) && words(node) === label)
 
 const selectBody = (root: ReactTestInstance): ReactTestInstance | undefined =>
   root.findAll(
@@ -272,6 +276,17 @@ describe('the menu on a message still waiting behind a running turn', () => {
     expect(menuRows(root)).not.toContain('Send now')
   })
 
+  // A label on the bubble replaces what TalkBack reads inside it; a sent prompt has always carried
+  // "Sent prompt", but a waiting message was plain text before it could be held.
+  it('is read by its own words and Queued line: no label over them, no button role', () => {
+    const root = render(prompt([{ type: 'text', text: 'queued words' }]), 'light', {
+      onCancelQueued: vi.fn()
+    })
+    expect(bubble(root).props.accessibilityLabel).toBeUndefined()
+    expect(bubble(root).props.accessibilityRole).toBeUndefined()
+    expect(bubble(root).props.accessibilityHint).toBe('Hold for options')
+  })
+
   it('keeps its Queued line and Cancel beside the menu', () => {
     const root = render(prompt([{ type: 'text', text: 'queued words' }]), 'light', {
       onCancelQueued: vi.fn()
@@ -295,19 +310,19 @@ describe('a message with nothing to copy or select', () => {
     'offers no hold at all on a prompt with no words, in %s',
     (scheme) => {
       const root = render(prompt([{ type: 'image-ref', path: '/tmp/shot.png' }]), scheme)
-      expect(bubble(root).props.onLongPress).toBeUndefined()
-      expect(bubble(root).props.accessibilityHint).toBeUndefined()
+      expect(sentPrompt(root).props.onLongPress).toBeUndefined()
+      expect(sentPrompt(root).props.accessibilityHint).toBeUndefined()
     }
   )
 
   it('offers no hold on a prompt with no blocks at all', () => {
     const root = render(prompt([]))
-    expect(bubble(root).props.onLongPress).toBeUndefined()
+    expect(sentPrompt(root).props.onLongPress).toBeUndefined()
   })
 
   it('offers no hold on a prompt of blank words', () => {
     const root = render(prompt([{ type: 'text', text: ' \n ' }]))
-    expect(bubble(root).props.onLongPress).toBeUndefined()
+    expect(sentPrompt(root).props.onLongPress).toBeUndefined()
   })
 })
 
@@ -332,6 +347,54 @@ describe('a prompt the lead agent wrote, drawn as Markdown', () => {
     await hold(root)
     await act(async () => row(root, 'Select text').props.onPress())
     expect(words(selectBody(root)!)).toBe('Task: run npm test and report')
+  })
+})
+
+// The chat list recycles a row's component instance for other messages (FlashList gives them one
+// item type), so what a row holds in state belongs to the message it was opened on.
+describe('a cell the list recycles for another message', () => {
+  const bind = (message: NativeChatMessage): void => {
+    act(() => {
+      renderer!.update(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatMessage message={message} />
+        </ThemeProvider>
+      )
+    })
+  }
+
+  it('does not carry an open menu over to the next prompt bound to it', async () => {
+    const root = render(prompt([{ type: 'text', text: 'first words' }], 'u1'))
+    await hold(root)
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
+    bind(prompt([{ type: 'text', text: 'second words' }], 'u2'))
+    expect(menuRows(root)).toEqual([])
+  })
+
+  it('does not open by itself when a prompt comes back to a cell a reply passed through', async () => {
+    const root = render(prompt([{ type: 'text', text: 'first words' }], 'u1'))
+    await hold(root)
+    bind(reply)
+    bind(prompt([{ type: 'text', text: 'third words' }], 'u3'))
+    expect(menuRows(root)).toEqual([])
+  })
+
+  it('does not open by itself when the very prompt that was held is bound back to it', async () => {
+    const first = prompt([{ type: 'text', text: 'first words' }], 'u1')
+    const root = render(first)
+    await hold(root)
+    bind(prompt([{ type: 'text', text: 'second words' }], 'u2'))
+    bind(first)
+    expect(menuRows(root)).toEqual([])
+  })
+
+  it('does not show the selected words of one prompt under another', async () => {
+    const root = render(prompt([{ type: 'text', text: 'first words' }], 'u1'))
+    await hold(root)
+    await act(async () => row(root, 'Select text').props.onPress())
+    expect(words(selectBody(root)!)).toBe('first words')
+    bind(prompt([{ type: 'text', text: 'second words' }], 'u2'))
+    expect(selectBody(root)).toBeUndefined()
   })
 })
 

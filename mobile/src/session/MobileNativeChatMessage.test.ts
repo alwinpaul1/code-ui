@@ -289,9 +289,11 @@ describe('MobileNativeChatMessage', () => {
       onCancelQueued: vi.fn()
     })
     // A waiting message takes no tap (nothing to disclose), only the hold that opens its menu.
-    const [waiting] = queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })
+    const [waiting] = queued.root.findAll(
+      (node) => (node.type as unknown) === 'Pressable' && typeof node.props.onLongPress === 'function'
+    )
     expect(waiting!.props.onPress).toBeUndefined()
-    expect(waiting!.props.onLongPress).toBeTypeOf('function')
+    expect(queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })).toHaveLength(0)
     expect(queued.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
   })
 

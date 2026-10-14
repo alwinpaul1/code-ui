@@ -381,7 +381,7 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | User card | 12 dp radius, fill `pl7.w0`, hairline, 12×14 padding, 15 sp | `mobile-native-chat-message-styles.ts` | **In progress** (typography and colours) |
 | Assistant prose | `zv.d` 17/400/1.5, Anthropic Sans | `MobileNativeChatProse.tsx`, 15/22 | **In progress** |
 | Assistant action row | Copy, Read aloud, thumbs; 36 dp icons in `pl7.Q`; Copy becomes a check tinted `ad5.K` (300 ms tween, back after 2000 ms; `fa20.a`) | one Copy per turn, resting in `pl7.Q` (`composerPlaceholder`), a check tinted `codeBlockCopied` for 2 s with the 300 ms tween, a 40 dp touch target (2026-10-14). **The size stays the user's: a 14 icon in a padding of 4, fixed in dp (2026-10-11)**, and the row stays under the words while work runs | **Differs** (size by the user's choice; no read aloud: G31) |
-| Message hold (a sent prompt): M3 menu "Copy message", "Select text"; on a waiting message "Send now", "Undo send" first (`gv20`) | a hold opens the menu in Code UI's sheet look (2026-10-14): Copy message (as typed), Select text (the whole message selectable in a sheet), and Undo send on a waiting message. **No Send now**: Claude Code delivers a queued message between tool calls on its own, no key makes it sooner. A reply keeps its in-place selection (user, 2026-10-09) | **Match** (rows the terminal can carry out) |
+| Hold on a sent prompt | M3 menu "Copy message", "Select text"; on a waiting message "Send now", "Undo send" first (`gv20`) | a hold opens the menu in Code UI's sheet look (2026-10-14): Copy message (as typed), Select text (the whole message selectable in a sheet), and Undo send on a waiting message. **No Send now**: Claude Code delivers a queued message between tool calls on its own, no key makes it sooner. A reply keeps its in-place selection (user, 2026-10-09) | **Match** (rows the terminal can carry out) |
 | Thinking | a row like a finished tool run: `extendedThinking` icon + "Thought process" (15/400, muted); a tap opens a sheet with the text as Markdown; **never inline** | inline text with a side rail, folded past 600 characters (`MobileNativeChatReasoningNote.tsx`); terminal Claude tabs get none (Orca role bug) | **Differs** (G1). Terminal tabs: **impossible** until Orca emits `reasoning` |
 | Tool-run row | sentence, shimmer, pill, chevron | `MobileNativeChatToolRun*.tsx` | Match; shimmer **in progress** |
 | Run sheet | sentence title, child rows | `MobileNativeChatRunSheet.tsx` | Match |
@@ -411,18 +411,19 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 
 The Claude app's numbers for the transcript's motion are pinned in `session/claude-motion-spec.ts`
 (each with its source line) and tested in `claude-motion-spec.test.ts`. Easing is `k8d.a`,
-cubic-bezier(0.4, 0, 0.2, 1), the default of every `hay.E` tween that names none.
+cubic-bezier(0.4, 0, 0.2, 1), the default of every `hay.E` tween that names none. Two of the
+plan's motions were read from the wrong class first and are recorded here under what they are.
 
 | Motion | Claude (1.261009.20) | Code UI |
 |---|---|---|
-| Agent pulse | alpha 1.0 to 0.55, tween 1200 ms, Reverse, five pulses shared by every cell, each started `i * -240` ms in (`cu2.java:1071`; read as a fast-forward, inferred from Compose's packed `StartOffset`) | the workflow card's status dot, pulse 0 (`use-agent-pulse-style.ts`); the other four phases are in the spec for the agent grid (G32) |
-| Todo pill | alpha 1 on a 150 ms tween when it appears, snap when it goes; an animated value starts at its target, so a pill present when the screen opens does not fade (`yfy.java:3873`) | `MobileNativeChatSessionBar.tsx`: a plan that arrives while the screen is open fades in, one already there does not, closing the card brings the pill back at once |
-| Turn edits "Show more" | `expandVertically` + `fadeIn`, both 250 ms; exit None (`bv20.java:2259`) | the rows past the folded three (`MobileNativeChatTurnEditsCard.tsx`), measured in place; Show less drops them at once |
+| Agent pulse | alpha 1.0 to 0.55, tween 1200 ms, Reverse, five pulses shared by every cell, pulse i started `i * -240` ms after the first: `uts.java:22-30` plays position `elapsed + offset` and holds at the start while that is not positive, so a negative offset is a **delay** (`cu2.java:1071`) | the workflow card's status dot, pulse 0 (`use-agent-pulse-style.ts`). The other four are in the spec for the agent grid (G32) |
 | Copy glyph | colour tween 300 ms to `ad5.K`, check held 2000 ms (`fa20.java:266`, `l82`) | the action row and the code block, one `CodeCopyGlyph` |
+| Fade 150 ms, snap out | the alpha of the **scroll-to-bottom button** that sits beside the to-do pill (`yfy.java:3873`, drawn by `yfy.r`, `generic_button_scroll_to_bottom`). It was first read as the todo pill's own fade | not applied: the ↓ button is the G23 work (`mobile-native-chat-list-edges.tsx`). The todo pill itself does not animate in the app |
+| Expand + fade 250 ms, exit none | `AnimatedVisibility` of the **queued-message area** (`bv20.java:2259`, its content is `jiz`, `Queued(...)`). It was first read as the turn edits card's "Show N more"; that class (`h130`) calls no animation at all | not applied: the queue box is `MobileNativeChatQueue.tsx`. The turn edits rows do not animate in the app |
 | Stream smoothing | `StreamSmoothingConfig` defaults: tick 33 ms, 800-char markdown groups, fade-in off (200 ms), catch-up lag 250 ms at 80 to 600 chars/s, rate easing 250 ms, reveal within 450 ms; remote flag `android_chat_stream_smoothing` (`c0x.java`) | **not applied.** The structured lane re-parses a growing reply's Markdown on every change; a 33 ms tick would do that thirty times a second on the main thread, and there is no way to measure the frame cost off the phone (`mobile-markdown-streaming-cost.test.ts` guards the same cost). The numbers are in the spec for a pass that can measure |
 
 Sheets keep the 0.9.139 motion the user chose (`sheet-motion-0-9-139.test.tsx`); row enter animations
-match the app's (none). Every self-starting motion above reads `useReducedMotion` and is listed in
+match the app's (none). The one self-starting motion above reads `useReducedMotion` and is listed in
 `ui/reduced-motion-sites.test.ts`.
 
 ### 3.4 Composer

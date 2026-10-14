@@ -7,15 +7,16 @@ import {
   COPY_CHECK_HOLD_MS,
   COPY_ICON_TINT_MS,
   STREAM_SMOOTHING,
-  TODO_PILL_FADE_MS,
-  TURN_EDITS_EXPAND_MS,
+  QUEUED_MESSAGES_EXPAND_MS,
+  SCROLL_BUTTON_BESIDE_PILL_FADE_MS,
   agentPulseAlpha,
   claudeEase
 } from './claude-motion-spec'
 
 // The numbers are the Claude Android app's (1.261009.20): cu2.java:1071 for the
-// agent pulse, yfy.java:3873 for the todo pill, bv20.java:2259 for the turn
-// edits rows, fa20.java:266 for the copy glyph, c0x.java for stream smoothing.
+// agent pulse (the offset's meaning in uts.java:22-30), yfy.java:3873 for the
+// scroll button beside the to-do pill, bv20.java:2259 for the queued-message
+// area, fa20.java:266 for the copy glyph, c0x.java for stream smoothing.
 
 /** An independent cubic-bezier reference: sample the curve densely and take the
  *  y of the sample whose x is nearest. Nothing shared with claudeEase's solver. */
@@ -42,11 +43,11 @@ describe('the Claude app motion numbers', () => {
       toAlpha: 0.55,
       legMs: 1200,
       phases: 5,
-      fastForwardMs: 240
+      startDelayMs: 240
     })
     expect(AGENT_PULSE_PERIOD_MS).toBe(2400)
-    expect(TODO_PILL_FADE_MS).toBe(150)
-    expect(TURN_EDITS_EXPAND_MS).toBe(250)
+    expect(SCROLL_BUTTON_BESIDE_PILL_FADE_MS).toBe(150)
+    expect(QUEUED_MESSAGES_EXPAND_MS).toBe(250)
     expect(COPY_ICON_TINT_MS).toBe(300)
     expect(COPY_CHECK_HOLD_MS).toBe(2000)
     expect(STREAM_SMOOTHING).toEqual({
@@ -88,7 +89,34 @@ describe('the easing curve cubic-bezier(0.4, 0, 0.2, 1)', () => {
   })
 })
 
+/** The app's infinite-repeat spec, ported line by line from `uts.a` (uts.java:22-30), with the
+ *  tween's own curve on top: the play position for `elapsed + offset` (nothing played while that
+ *  is not positive), alternating direction each leg (Reverse). The offset is `i * -240`, as
+ *  cu2.java:1071 builds it. */
+function appPulseAlpha(elapsedMs: number, index: number): number {
+  const leg = 1200
+  const offset = index * -240
+  const shifted = elapsedMs + offset
+  let position = 0
+  if (shifted > 0) {
+    const legsDone = Math.floor(shifted / leg)
+    position = legsDone % 2 === 0 ? shifted - legsDone * leg : (legsDone + 1) * leg - shifted
+  }
+  return 1 + (0.55 - 1) * referenceEase(position / leg)
+}
+
 describe('the agent pulse', () => {
+  it.each([0, 1, 2, 3, 4])(
+    'plays what the app’s repeat spec plays for pulse %s, at every sampled time',
+    (index) => {
+      for (const at of [
+        0, 100, 239, 240, 480, 600, 1199, 1200, 1500, 2399, 2400, 3000, 5000, 9999
+      ]) {
+        expect(agentPulseAlpha(at, index)).toBeCloseTo(appPulseAlpha(at, index), 3)
+      }
+    }
+  )
+
   it('rests at full alpha, falls to 0.55 after 1200 ms and is back at full after 2400 ms', () => {
     expect(agentPulseAlpha(0, 0)).toBe(1)
     expect(agentPulseAlpha(1200, 0)).toBeCloseTo(0.55, 10)
@@ -100,13 +128,22 @@ describe('the agent pulse', () => {
     expect(agentPulseAlpha(300, 0)).toBeCloseTo(agentPulseAlpha(2100, 0), 10)
   })
 
-  it('runs each phase 240 ms ahead of the one before it, for all five', () => {
+  it('starts each phase 240 ms after the one before it, holding at full alpha until then', () => {
     for (let phase = 1; phase < 5; phase += 1) {
-      expect(agentPulseAlpha(0, phase)).toBeCloseTo(agentPulseAlpha(240 * phase, 0), 10)
-      expect(agentPulseAlpha(700, phase)).toBeCloseTo(agentPulseAlpha(700 + 240 * phase, 0), 10)
+      const delay = 240 * phase
+      expect(agentPulseAlpha(0, phase)).toBe(1)
+      expect(agentPulseAlpha(delay, phase)).toBe(1)
+      for (const after of [100, 700, 1200, 1900, 2500]) {
+        expect(agentPulseAlpha(delay + after, phase)).toBeCloseTo(agentPulseAlpha(after, 0), 10)
+      }
     }
-    // Phase 1 has already left full alpha when phase 0 is only starting.
-    expect(agentPulseAlpha(0, 1)).toBeLessThan(agentPulseAlpha(0, 0))
+    // Phase 1 is still at full alpha when phase 0 has already begun to fall.
+    expect(agentPulseAlpha(100, 1)).toBeGreaterThan(agentPulseAlpha(100, 0))
+  })
+
+  it('rests at full alpha before the pulses start', () => {
+    expect(agentPulseAlpha(-500, 0)).toBe(1)
+    expect(agentPulseAlpha(-1, 3)).toBe(1)
   })
 
   it('shares five pulses between any number of agents: the sixth agent follows the first', () => {

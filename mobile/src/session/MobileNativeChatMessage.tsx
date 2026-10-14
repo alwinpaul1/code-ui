@@ -78,8 +78,10 @@ function Bubble({
       onPress={user ? onToggle : undefined}
       onLongPress={onHold}
       delayLongPress={HOLD_FOR_MENU_MS}
-      accessibilityRole="button"
-      accessibilityLabel="Sent prompt"
+      // A label replaces what a screen reader reads inside the bubble. A sent prompt has always
+      // carried one; a waiting message keeps its words and Queued line to be read.
+      accessibilityRole={user ? 'button' : undefined}
+      accessibilityLabel={user ? 'Sent prompt' : undefined}
       accessibilityHint={onHold ? 'Hold for options' : undefined}
     >
       {children}
@@ -204,6 +206,15 @@ function MobileNativeChatMessageImpl({
   // its exit plays out, and the words are kept until their sheet has left the screen.
   const [menu, setMenu] = useState<'idle' | 'open' | 'closed'>('idle')
   const [selecting, setSelecting] = useState<{ text: string; open: boolean } | null>(null)
+  // The list recycles this instance for other messages, and what was opened belongs to the one it
+  // was opened on: a menu or a sheet is dropped the moment another message is bound here, so it
+  // neither follows to the next prompt nor opens by itself when a prompt comes back.
+  const [openedOn, setOpenedOn] = useState(message.id)
+  if (openedOn !== message.id) {
+    setOpenedOn(message.id)
+    setMenu('idle')
+    setSelecting(null)
+  }
   // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
   const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
   const renderVisual = message.role === 'assistant' ? transcriptVisuals : undefined

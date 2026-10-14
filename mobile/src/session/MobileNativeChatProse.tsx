@@ -182,6 +182,13 @@ function HostImageChip({
 }) {
   // Mounted on the first hold, and kept so its exit plays out.
   const [menu, setMenu] = useState<'idle' | 'open' | 'closed'>('idle')
+  // The list recycles this instance for other pictures: the menu belongs to the file it was
+  // opened on, and is dropped when another is bound here.
+  const [openedOn, setOpenedOn] = useState(hostPath)
+  if (openedOn !== hostPath) {
+    setOpenedOn(hostPath)
+    setMenu('idle')
+  }
   const opens = !desktopPaste && hostPath && onOpenFile ? hostPath : undefined
   return (
     <>

@@ -34,10 +34,8 @@ const MOTION_SITES = [
   // The live caption above the recording row comes and goes as words arrive.
   'session/MobileNativeChatDictationCaption.tsx',
   // The Claude app's motion in the transcript (claude-motion-spec.ts): a running workflow's dot
-  // pulses on its own, a todo pill that arrives fades in, and the rows "Show more" reveals grow.
-  'session/use-agent-pulse-style.ts',
-  'session/MobileNativeChatSessionBar.tsx',
-  'session/MobileNativeChatTurnEditsCard.tsx'
+  // pulses on its own.
+  'session/use-agent-pulse-style.ts'
 ]
 
 const HOOK_IMPORT = /import \{[^}]*\buseReducedMotion\b[^}]*\} from '[^']*use-reduced-motion'/
@@ -63,6 +61,6 @@ describe('reduced motion, app-wide', () => {
   })
 
   it('lists the sites it guards, so an emptied list cannot pass', () => {
-    expect(MOTION_SITES.length).toBeGreaterThanOrEqual(15)
+    expect(MOTION_SITES.length).toBeGreaterThanOrEqual(13)
   })
 })
