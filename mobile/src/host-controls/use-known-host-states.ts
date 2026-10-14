@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MacHostAction } from './mac-host-commands'
 import {
+  cachedHostStateForRender,
   expectedHostStateForRender,
   expectedStateAfterAction,
   expireHostExpectations,
@@ -19,8 +20,8 @@ export function connectedAtOf(client: RpcClient | undefined): number | null {
 
 /**
  * What the phone knows about each host between opens of its menu: the last answer,
- * and after an action that finished OK, the state that action left behind, which the
- * next open draws at once instead of "Checking" (mac-host-expected-state.ts).
+ * and after an action that finished OK, the state that action left behind. The next
+ * open draws either at once instead of "Checking" (mac-host-expected-state.ts).
  *
  * Per host, and tied to one connection: a host whose link drops forgets it, and so
  * does a host that reconnected without the drop ever being rendered (the connection
@@ -108,9 +109,17 @@ export function useKnownHostStates(clients: { hostId: string; client: RpcClient;
     })
   }, [])
 
-  /** The state to draw at once for `hostId` on `client`'s connection, or null. */
-  const expectedFor = (hostId: string | null, client: RpcClient | undefined): MacHostState | null =>
-    hostId ? expectedHostStateForRender(known[hostId], connectedAtOf(client)) : null
+  const connectedAtFor = (hostId: string) =>
+    connectedAtOf(clients.find((entry) => entry.hostId === hostId)?.client)
 
-  return { recordProbe, recordAction, actionStarted, actionFailed, expectedFor }
+  /** The state to draw at once for `hostId` on its current connection, or null. */
+  const expectedFor = (hostId: string | null): MacHostState | null =>
+    hostId ? expectedHostStateForRender(known[hostId], connectedAtFor(hostId)) : null
+
+  /** What was last learnt about `hostId` on its current connection, to draw while this
+   *  open's probe is out, or null (cachedHostStateForRender). */
+  const cachedFor = (hostId: string | null): MacHostState | null =>
+    hostId ? cachedHostStateForRender(known[hostId], connectedAtFor(hostId)) : null
+
+  return { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, cachedFor }
 }

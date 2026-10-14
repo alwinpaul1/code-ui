@@ -14,9 +14,10 @@ import { UNKNOWN_MAC_HOST_STATE, type MacHostState, type MacLockState } from './
  * Why two minutes: it covers "do one thing, reopen, do the next", the flow that was
  * reported, and stays shorter than the shortest display idle timer a desktop ships
  * with (macOS on battery: two minutes), the likeliest thing to change the host on its
- * own. Past it the menu asks behind "Checking" again, as it always did. A stale row
- * inside it costs one tap that does nothing (Wake on a display already awake), and
- * the probe that still runs on every open replaces the rows within seconds anyway.
+ * own. Past it the menu draws what it last knew, as after any probe, with the lock
+ * unasserted (cachedHostStateForRender). A stale row costs one tap that does nothing
+ * (Wake on a display already awake), and the probe that still runs on every open
+ * replaces the rows within seconds anyway.
  */
 export const EXPECTED_HOST_STATE_FRESH_MS = 120_000
 
@@ -27,8 +28,9 @@ export type KnownHostState = {
   connectedAt: number | null
   /** When this was last learnt. Older than the window, it is no base for an action. */
   at: number
-  /** Until when the menu may draw it without asking first: set only by an action that
-   *  finished OK, never by a probe alone, so a first open still says "Checking". */
+  /** Until when the menu may draw it as the action left it, Unlock included after
+   *  our own Lock: set only by an action that finished OK, never by a probe alone.
+   *  Outside it the menu still draws what is known, through cachedHostStateForRender. */
   drawUntil: number | null
   /** The lock is 'locked' because a Lock finished OK, not because a probe said so. */
   lockedByAction: boolean
@@ -62,6 +64,53 @@ export function expectedHostStateForRender(
   connectedAt: number | null
 ): MacHostState | null {
   return known && known.drawUntil !== null && known.connectedAt === connectedAt ? known.state : null
+}
+
+/**
+ * What the menu draws at once, before this open's probe has answered, from what an
+ * earlier probe or action on the same connection learnt; null when nothing is known
+ * on this connection, and the menu says "Checking".
+ *
+ * Why: every open threw the last answer away and hid the rows behind one disabled
+ * "Checking the Mac…" row, at a different sheet height, for as long as the host took
+ * to open a shell and answer, on a Mac and on a PC alike (the user, 2026-10-14). The
+ * probe still runs on every open and replaces these rows when it answers.
+ *
+ * The lock is never drawn 'locked' from here. Unlock types the password into whatever
+ * is in front on the Mac (mac-host-sheet-actions.ts), so it follows only what the Mac
+ * said on this open, or an expectation inside its window after our own Lock. An
+ * unknown lock draws Lock alone, which does nothing to a Mac that is locked already.
+ */
+export function cachedHostStateForRender(
+  known: KnownHostState | undefined,
+  connectedAt: number | null
+): MacHostState | null {
+  if (!known || known.connectedAt !== connectedAt) {
+    return null
+  }
+  return known.state.lock === 'locked' ? { ...known.state, lock: 'unknown' } : known.state
+}
+
+/** Whether a probe learnt nothing at all: it timed out, was refused or could not parse. */
+export function isUnknownHostState(state: MacHostState): boolean {
+  return state.lock === 'unknown' && state.display === 'unknown' && state.mute === 'unknown'
+}
+
+/** What the open menu draws: an action's live expectation (already holding this
+ *  open's probe), else this open's answer, unless it learnt nothing (a timeout, a
+ *  refused tab) while something is known, else what is known, else "Checking". */
+export function hostStateToDraw(
+  expected: MacHostState | null,
+  probed: MacHostState | null,
+  cached: MacHostState | null
+): MacHostState | 'checking' {
+  if (expected) {
+    return expected
+  }
+  if (probed && !(cached && isUnknownHostState(probed))) {
+    return probed
+  }
+  return cached ?? probed ?? 'checking'
 }
 
 /** Stops drawing every expectation whose window has run out; the same object when
@@ -147,7 +196,8 @@ export function expectedStateAfterAction(args: {
 }
 
 /** What the phone knows once a probe answered: laid over a live expectation, or on
- *  its own, where it is only the base the next action builds on (never drawn). */
+ *  its own. A probe that learnt nothing keeps what this connection already knew: it
+ *  is no evidence the host changed, and the next open still draws the last rows. */
 export function knownAfterProbe(args: {
   known: KnownHostState | undefined
   probed: MacHostState
@@ -157,6 +207,9 @@ export function knownAfterProbe(args: {
   const { known, probed, connectedAt, now } = args
   if (drawableExpectedHostState(known, connectedAt, now) !== null && known) {
     return { ...mergeProbeIntoExpected(known, probed), at: now }
+  }
+  if (isUnknownHostState(probed) && known && known.connectedAt === connectedAt) {
+    return known
   }
   return { state: probed, connectedAt, at: now, drawUntil: null, lockedByAction: false }
 }
