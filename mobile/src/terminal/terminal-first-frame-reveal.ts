@@ -31,9 +31,17 @@ export type TerminalFirstFrameRevealReason =
   | 'fit-retrying'
   | 'desktop-mode'
   | 'resized'
+  /** A server resize in desktop mode. Shows a pane like 'resized' does, except
+   *  one put back under the cover for a phone frame (coverTerminalUntilPhoneFrame). */
+  | 'resized-desktop'
   | 'stream-ended'
   | 'engine-error'
   | 'timeout'
+
+/** A server resize in desktop mode does not show a pane covered for a phone frame. */
+export function serverResizeRevealReason(displayMode: unknown): TerminalFirstFrameRevealReason {
+  return displayMode === 'desktop' ? 'resized-desktop' : 'resized'
+}
 
 /** Reveals once the pane has DRAWN its frame: init() is posted, not painted,
  *  and lifting the cover in the same tick showed the blank WebView for as long
@@ -56,9 +64,15 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
   )
   const revealedRef = useRef<Set<string>>(new Set())
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const awaitingPhoneFrameRef = useRef<Set<string>>(new Set())
 
   const revealTerminalFirstFrame = useCallback(
     (handle: string, reason: TerminalFirstFrameRevealReason) => {
+      // A pane covered for a phone frame stays covered through desktop-mode ones.
+      if (awaitingPhoneFrameRef.current.has(handle) && (reason === 'resized-desktop' || reason === 'desktop-mode')) {
+        return
+      }
+      awaitingPhoneFrameRef.current.delete(handle)
       const timer = timersRef.current.get(handle)
       if (timer) {
         clearTimeout(timer)
@@ -91,6 +105,28 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
     [revealTerminalFirstFrame]
   )
 
+  /**
+   * Covers a shown pane again until the host draws it at phone width.
+   *
+   * HOME keeps the pane subscribed while the view switch hands the PTY back to
+   * the desk, and the host's desktop-width `resized` lands in the pane while
+   * the app is away. Coming back, that frame was on screen until the resume's
+   * 'auto' reflowed it (2026-10-14). The view switch covers on the way out and
+   * arms the timeout on the way back (armTerminalFirstFrameRevealTimeout), so
+   * no timer can lift the cover while the app is in the background.
+   */
+  const coverTerminalUntilPhoneFrame = useCallback((handle: string) => {
+    const timer = timersRef.current.get(handle)
+    if (timer) {
+      clearTimeout(timer)
+      timersRef.current.delete(handle)
+    }
+    awaitingPhoneFrameRef.current.add(handle)
+    if (revealedRef.current.delete(handle)) {
+      setRevealedTerminalHandles(new Set(revealedRef.current))
+    }
+  }, [])
+
   // Why: a subscribe turned away by its gates (the WebView never came up, the
   // relay is down) arms nothing, and the WebView's own error and Reload sit
   // under the cover; the tab on screen is never covered past the timeout.
@@ -113,6 +149,7 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
   return {
     revealedTerminalHandles,
     revealTerminalFirstFrame,
-    armTerminalFirstFrameRevealTimeout
+    armTerminalFirstFrameRevealTimeout,
+    coverTerminalUntilPhoneFrame
   }
 }

@@ -14,7 +14,7 @@ import {
 } from './mobile-terminal-viewport-resubscribe'
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
 import type { MobileDisplayMode } from './mobile-session-route-types'
-import { revealTerminalAfterPaint } from '../terminal/terminal-first-frame-reveal'
+import { revealTerminalAfterPaint, serverResizeRevealReason } from '../terminal/terminal-first-frame-reveal'
 import { deferSubscribeUntilPhoneMode } from './terminal-phone-mode-before-subscribe'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 
@@ -320,7 +320,7 @@ export function useMobileSessionTerminalSubscription(
               getTerminalRef(handle)?.resize(cols, rows)
             }
             // The host laid the screen out for this pane: the frame to keep.
-            revealTerminalAfterPaint(getTerminalRef(handle), handle, 'resized', revealTerminalFirstFrame)
+            revealTerminalAfterPaint(getTerminalRef(handle), handle, serverResizeRevealReason(data.displayMode), revealTerminalFirstFrame)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode
               // Why: same-mode frames must keep the Map identity, or every stream pass re-renders the whole route.

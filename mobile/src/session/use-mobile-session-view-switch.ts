@@ -33,6 +33,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
   const { activeHandle, sessionTabs, setDisplayMode, nativeChatController } = scope
   const { isTabChatView, toggleTabChatView, showNativeChat, activeChatEligible } = nativeChatController
   const { activeSessionTabId, requestLeaveSession, phoneModeClaimedHandlesRef } = scope
+  const { coverTerminalUntilPhoneFrame, armTerminalFirstFrameRevealTimeout } = scope
   const setDisplayModeRef = useRef(setDisplayMode)
   setDisplayModeRef.current = setDisplayMode
 
@@ -243,6 +244,9 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       if (state === 'active') {
         const handle = activeHandleStateRef.current
         if (handle && mobileVisibleTerminalDisplayMode(handle, showNativeChatStateRef.current) === 'auto') {
+          // The cover put on below lifts on the retake's phone frame, or this
+          // timeout; armed only now so nothing lifts it while the app is away.
+          armTerminalFirstFrameRevealTimeout(handle)
           reclaimHandle(handle)
         }
         return
@@ -250,11 +254,15 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       // Snapshot first: releasing removes the handle from the same set.
       const driven = Array.from(drivenHandlesRef.current)
       for (const handle of driven) {
+        // The hand-back resizes the still-subscribed pane to the desk's width
+        // while the app is away; covered first, that frame is never seen, and
+        // coming back shows the pane at phone width (2026-10-14).
+        coverTerminalUntilPhoneFrame(handle)
         releaseHandle(handle)
       }
     })
     return () => subscription.remove()
-  }, [reclaimHandle, releaseHandle])
+  }, [armTerminalFirstFrameRevealTimeout, coverTerminalUntilPhoneFrame, reclaimHandle, releaseHandle])
 
   // Measured: switching to another tab left the desk at 51 columns too. The
   // switch nulls activeHandle before the effect above runs, so the handle the
