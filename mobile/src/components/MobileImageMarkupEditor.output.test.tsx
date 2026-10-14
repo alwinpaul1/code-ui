@@ -146,6 +146,7 @@ vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 
 import { ThemeProvider } from '../theme/theme-context'
 import { openImageMarkup, peekImageMarkup, resetImageMarkupForTests, type ImageMarkupResult } from '../session/image-markup-store'
+import { openImagePreview, peekImagePreview, resetImagePreviewForTests } from '../session/image-preview-store'
 import { MobileImageMarkupEditor } from './MobileImageMarkupEditor'
 
 const fixture = (name: string): string =>
@@ -375,5 +376,23 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     await pressDone()
     await finishFlatten()
     expect(done).toHaveLength(1)
+  })
+})
+
+// 2026-10-14: the editor sometimes never appeared after the preview's pencil, because the preview's
+// Modal was dismissed in the same tick the editor's was shown. The pencil now leaves the preview up
+// (ImagePreviewModal.test.tsx), and the editor closes it here, once its own window is on screen.
+describe('opening from the full-screen preview', () => {
+  afterEach(() => resetImagePreviewForTests())
+
+  it('closes the preview it was opened over only once its own window has shown', async () => {
+    openImagePreview('file:///a.png', 'a photo', 0, () => {})
+    await openOn(OPAQUE_PHOTO, 'dark')
+    const modal = renderer!.root.find((node) => (node.type as unknown) === 'Modal')
+    expect(peekImagePreview()).not.toBeNull()
+
+    await act(async () => modal.props.onShow())
+    expect(peekImagePreview()).toBeNull()
+    expect(peekImageMarkup()).not.toBeNull()
   })
 })

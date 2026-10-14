@@ -4,6 +4,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import {
   closeImagePreview,
   openImagePreview,
+  peekImagePreview,
   resetImagePreviewForTests
 } from '../session/image-preview-store'
 import { ImagePreviewModal } from './ImagePreviewModal'
@@ -81,7 +82,12 @@ describe('the fullscreen preview\'s edit pencil', () => {
     expect(order).toEqual(['Close', 'Edit image'])
   })
 
-  it('closes the preview and opens the markup editor when the pencil is tapped', () => {
+  // 2026-10-14: the editor sometimes never appeared, and only a second try (back out, tap the
+  // photo, tap the pencil) opened it. The pencil closed this Modal and opened the editor's in the
+  // same tick, and Android can drop a dialog shown while another is being dismissed. The preview now
+  // stays up under the editor; the editor closes it once its own window is on screen
+  // (MobileImageMarkupEditor.output.test.tsx).
+  it('opens the markup editor over the preview, leaving the preview up until the editor shows', () => {
     const onEdit = vi.fn()
     openImagePreview('file:///a.png', 'a photo', 0, onEdit)
     renderer = render()
@@ -92,16 +98,7 @@ describe('the fullscreen preview\'s edit pencil', () => {
       pencil[0]!.props.onPress()
     })
     expect(onEdit).toHaveBeenCalledTimes(1)
-
-    // The viewer's own store is now closed — a second render sees nothing.
-    act(() => {
-      renderer!.update(
-        <ThemeProvider initialPreference="dark">
-          <ImagePreviewModal />
-        </ThemeProvider>
-      )
-    })
-    expect(renderer!.toJSON()).toBeNull()
+    expect(peekImagePreview()).not.toBeNull()
   })
 
   it('still closes on the X with an edit handle present, without firing it', () => {

@@ -159,9 +159,10 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     tap(pressables(screenNow, 'Edit image')[0])
 
     expect(onEditAttachment).toHaveBeenCalledExactlyOnceWith('img-1', 'file:///a.jpg')
-    // The viewer gives way to the editor rather than sitting under it.
-    expect(viewer(screenNow)).toBeNull()
-    expect(peekImagePreview()).toBeNull()
+    // The viewer stays up until the editor's own window has shown, then gives way to it
+    // (MobileImageMarkupEditor closes it from onShow): closing it in the same tick let Android
+    // drop the editor's window (2026-10-14).
+    expect(peekImagePreview()).not.toBeNull()
   })
 
   it.each(SCHEMES)('closes back to the composer with the chip as it was (%s)', (scheme) => {

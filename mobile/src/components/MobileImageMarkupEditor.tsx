@@ -12,6 +12,7 @@ import { runOnJS } from 'react-native-reanimated'
 import Svg, { Image as SvgImage, Path } from 'react-native-svg'
 import { Check, Redo2, Undo2, X } from 'lucide-react-native'
 import { closeImageMarkup, peekImageMarkup, useImageMarkup } from '../session/image-markup-store'
+import { closeImagePreview } from '../session/image-preview-store'
 import { loadMarkupImageSize } from './markup-image-size'
 import { encodeMarkupOutput, loadMarkupSourceTraits } from './markup-image-output'
 import { markupOutputFormat } from '../session/image-markup-format'
@@ -270,6 +271,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       animationType="fade"
       statusBarTranslucent
       onRequestClose={handleClose}
+      // The preview's pencil leaves the preview up so the two Modals never swap in one tick
+      // (Android dropped this window when they did, 2026-10-14); it gives way once this one shows.
+      onShow={closeImagePreview}
     >
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       {/* Own gesture root: a Modal is a separate native window on Android,

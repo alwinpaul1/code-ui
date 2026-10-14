@@ -103,11 +103,11 @@ export function ImagePreviewModal({
             <View style={{ flexDirection: 'row', gap: space.sm }}>
             {preview.onEdit ? (
               <Pressable
-                onPress={() => {
-                  const onEdit = preview.onEdit
-                  closeImagePreview()
-                  onEdit?.()
-                }}
+                // Not closed here: dismissing this Modal in the same tick the
+                // editor's is shown let Android drop the editor's window, and
+                // only a second try opened it (2026-10-14). The editor closes
+                // this preview once its own window is up.
+                onPress={() => preview.onEdit?.()}
                 hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel="Edit image"
