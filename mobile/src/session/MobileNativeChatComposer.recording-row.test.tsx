@@ -337,7 +337,7 @@ describe('while the take is transcribing', () => {
 describe.each(['light', 'dark'] as const)('the recording row’s colours in %s', (scheme) => {
   const colors = scheme === 'dark' ? darkColors : lightColors
 
-  it('draws Cancel and Stop in the composer’s control circle with the ink glyph, Send in the accent circle', async () => {
+  it('draws Cancel and Stop in the composer’s control circle with the ink glyph, Send in the composer’s clay circle', async () => {
     await render({ micActive: true }, scheme)
     for (const label of ['Cancel', 'Stop dictation']) {
       expect(flat(button(label).props.style), label).toMatchObject({
@@ -352,8 +352,8 @@ describe.each(['light', 'dark'] as const)('the recording row’s colours in %s',
     const square = button('Stop dictation').findByType('Square' as never)
     expect(square.props.fill).toBe(colors.text)
     expect(square.props.color).toBe(colors.text)
-    expect(flat(button('Send dictation').props.style)).toMatchObject({ width: 36, height: 36, backgroundColor: colors.accent })
-    expect(button('Send dictation').findByType('ArrowUp' as never).props.color).toBe(colors.onAccent)
+    expect(flat(button('Send dictation').props.style)).toMatchObject({ width: 36, height: 36, backgroundColor: colors.composerSend })
+    expect(button('Send dictation').findByType('ArrowUp' as never).props.color).toBe(colors.composerSendGlyph)
   })
 
   it('writes "Transcribing…" in the secondary ink', async () => {

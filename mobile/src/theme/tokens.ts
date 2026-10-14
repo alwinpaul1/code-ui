@@ -103,15 +103,26 @@ export type ThemeColors = {
   /** A pressed composer button or model pill: `pl7.K`, the ramp step above
    *  the hairlines (2026-10-13). */
   composerControlPressed: string
-  /** The model pill in the composer. Light is `pl7.x0`, as decompiled for the
-   *  model chip (`md6.a`). Dark is SAMPLED, not decompiled: the user's
-   *  screenshot of 2026-10-13 shows the pill at about (84, 84, 82), lighter
-   *  than the x0 white-at-8% the 1.261009.20 decompile names for it, so the
-   *  installed app draws it lighter than that build did. */
+  /** The model pill in the composer: `pl7.x0`, as `md6.a` fills the model chip, the same
+   *  tone as + and the mic. Dark was a sampled (84, 84, 82) from a screenshot of 2026-10-13
+   *  until 2026-10-14, when the user's screen recording of the same app showed the pill and
+   *  the + at one grey (47 and 47 over the composer's 30), agreeing with the decompile. */
   composerPill: string
-  /** The model pill's label and chevron. Primary text: `textSecondary` read
-   *  3.7:1 on the dark pill, under the 4.5:1 a 12 sp label needs. */
+  /** The model pill's label: primary text, as `md6.a` draws the model name in `pl7.O`. */
   composerPillText: string
+  /** The + and mic glyphs: `pl7.P`, the colour `yg9.e` passes its plain icon buttons
+   *  (#383835 light, #C3C2B7 dark; 1.261009.20, 2026-10-14). */
+  composerIcon: string
+  /** Send's fill: `pl7.e`, the clay `yg9.f` gives its container (#C6613F light, #D97757
+   *  dark). The app's own value, a step off `accent`, which other screens keep. */
+  composerSend: string
+  /** Send's arrow: `pl7.H`, white in both schemes (dark `accent` pairs with a dark
+   *  `onAccent`; Claude's Send does not). */
+  composerSendGlyph: string
+  /** Send with nothing to send: `yg9.f` takes the fill and the arrow each to 40% (`hb10.n`),
+   *  not the button as a group. */
+  composerSendDisabled: string
+  composerSendGlyphDisabled: string
   /** The text caret in every field (`cursorColor`). The Claude app's
    *  composer passes `pl7.Q` as its TextFieldColors cursorColor
    *  (colorScheme.onSurfaceVariant, `g96` via `krz.k`), the same muted tone as
@@ -171,6 +182,11 @@ export const lightColors: ThemeColors = {
   composerControlPressed: '#E7E6E1',
   composerPill: '#F0EFEC',
   composerPillText: '#1E1C19',
+  composerIcon: '#383835',
+  composerSend: '#C6613F',
+  composerSendGlyph: '#FFFFFF',
+  composerSendDisabled: 'rgba(198, 97, 63, 0.4)',
+  composerSendGlyphDisabled: 'rgba(255, 255, 255, 0.4)',
   caret: '#7B7974'
 }
 
@@ -226,9 +242,14 @@ export const darkColors: ThemeColors = {
   composerPlaceholder: '#97958D',
   composerControl: 'rgba(255, 255, 255, 0.08)',
   composerControlPressed: '#454442',
-  // Sampled from the user's screenshot, see the token doc.
-  composerPill: '#545452',
+  // `pl7.x0`, the + and mic tone (see the token doc).
+  composerPill: 'rgba(255, 255, 255, 0.08)',
   composerPillText: '#F8F8F6',
+  composerIcon: '#C3C2B7',
+  composerSend: '#D97757',
+  composerSendGlyph: '#FFFFFF',
+  composerSendDisabled: 'rgba(217, 119, 87, 0.4)',
+  composerSendGlyphDisabled: 'rgba(255, 255, 255, 0.4)',
   caret: '#97958D'
 }
 

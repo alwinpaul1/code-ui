@@ -1,18 +1,18 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
-import { darkColors, lightColors, type as typeScale } from '../theme/tokens'
+import { darkColors, lightColors } from '../theme/tokens'
 import { paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-transcript'
 
 // The composer's text and its button row, against the Claude app on the same phone (the user's
 // screenshots, 2026-10-11):
 //
-// 1. Air. Claude leaves 11 dp between the typed text and the top of its buttons (+, model pill,
-//    mic, send: 8 dp text padding + 3 dp in its 42 dp row, from the decompiled app 1.261009.20,
-//    docs/claude-app-implementation-notes.md); Code UI left 6 (the input's 4 dp bottom padding and 2 dp above a 36 dp button
+// 1. Air. Claude leaves 16 dp between the typed text and the top of its buttons (+, model pill,
+//    mic, send), measured on the user's screen recording of the app 1.261009.20 on 2026-10-14
+//    (it read 11 dp from the decompile until then; G37 in docs/claude-app-parity-gaps.md); Code UI left 6 (the input's 4 dp bottom padding and 2 dp above a 36 dp button
 //    centred in the row), so a multi-line draft ran down onto the row and a caret drag could land
 //    on a button.
-// 2. The box. Claude shows 1 to 6 lines, then scrolls. The input capped at 150 dp: 12 dp top padding, 4 bottom, 22 dp lines, so the cap
+// 2. The box. Claude shows 1 to 6 lines, then scrolls. The input capped at 150 dp: 12 dp top padding, 4 bottom, 22 dp lines (now 16, 8, 24), so the cap
 //    fell 2 dp into a seventh line and a cut line showed at the bottom of a full box.
 // 3. Dictating. While the phone recogniser spoke into the composer, the input's own text went
 //    transparent and a second, absolutely positioned Text drew the words over it
@@ -117,7 +117,8 @@ async function rerender(scheme: 'light' | 'dark', value: string, extra: Extra = 
 
 const input = (): ReactTestInstance => renderer!.root.find((node) => (node.type as unknown) === 'TextInput')
 const inputStyle = () => flat(input().props.style)
-const LINE = typeScale.body.lineHeight + 1
+/** The Claude app's 17 sp at 1.4, on whole dp (G37). */
+const LINE = 24
 const MAX_LINES = 6
 
 /** From the input's last line to the top of the row's buttons: the input's bottom padding, the
@@ -139,9 +140,11 @@ for (const scheme of ['light', 'dark'] as const) {
   const palette = scheme === 'dark' ? darkColors : lightColors
 
   describe(`the composer's text keeps clear of its buttons, as the Claude app's does (${scheme})`, () => {
-    it("leaves Claude's 11 dp between the last line of text and the top of the buttons", async () => {
+    it("leaves Claude's 16 dp between the last line of text and the top of the buttons", async () => {
+      // Measured on the user's recording of the app, 2026-10-14: 46 px at 2.8125 px/dp from the
+      // caret's foot to the buttons' top. It was 11, from an earlier reading of the decompile.
       await render(scheme, 'Please check this and send')
-      expect(airAboveButtons()).toBe(11)
+      expect(airAboveButtons()).toBe(16)
     })
 
     it('fits one line exactly when empty, and caps at exactly six whole lines with no cut seventh', async () => {

@@ -410,11 +410,11 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 
 | Claude app | Code UI | Class |
 |---|---|---|
-| Shell, text field, button row, one-row collapse | `MobileNativeChatComposer.tsx` | **In progress** |
-| Placeholder "Type / for commands" (idle), "Queue a message…" (busy) | "Reply, @files, /commands" / "Queue a message…" (`use-mobile-native-chat-input-lock.ts`) | **In progress** (composer look) |
-| **Stop** in the trailing slot, replacing Send (`pl7.x0` fill; a 36 dp ring stroke 1 while stopping) | Stop in the chrome row (`MobileNativeChatChromeRow.tsx`) | **In progress** (composer look); confirm it is in scope |
+| Shell, text field, button row | `MobileNativeChatComposer.tsx` | **Match** (2026-10-14, the spec table below); one-row collapse still missing |
+| Placeholder "Type / for commands" (idle), "Queue a message…" (busy) | the same (`use-mobile-native-chat-input-lock.ts`) | **Match** (2026-10-14) |
+| **Stop** in the trailing slot, replacing Send (`pl7.x0` fill, `stop` outline in `pl7.O`; a 36 dp ring stroke 1 in the content colour while stopping) | the same (`MobileNativeChatSendSlot.tsx`) | **Match** (2026-10-14) |
 | **Mode chip** in the leading group: a pill with an icon (Manual = hand, Accept edits = code, Plan = scroll, Auto = lightning) and a label | mode only inside the attach sheet's "Permission" row (`MobileNativeChatAttachSheet.tsx`) | **Missing** (G4) |
-| Model chip: model name + effort, a 36 dp pill, ≤220 dp | model pill in the composer and the header | Match-ish; look **in progress** |
+| Model chip: model name + effort, a 36 dp pill, 16 dp sides, ≤220 dp, 13 / 400, no chevron; the effort in `pl7.P` | model pill (`MobileNativeChatSessionOptionRows.tsx` `Pill`) | **Match** except the effort is not drawn muted (one label string) |
 | Attach sheet "Add context": Camera / Photos / Files tiles (12 dp, `pl7.q`, 1 dp border); a limit line | `MobileNativeChatAttachSheet.tsx` with the same three | Match |
 | Select mode: Manual, Accept edits, Plan, Auto with descriptions and per-mode colours (Accept edits `#9747FF`, Plan `#006666`, Auto clay); **Bypass never listed**; "Not available for the selected model" | `MobilePermissionModeSheet.tsx` (lists bypass when available) | **Differs** (G5) |
 | Model sheet with an **Effort row** inside, "Other models", "Update Claude Code…" for models too new for the CLI | `MobileNativeChatSessionOptionPickers.tsx` ("More models") | **Differs** (G5) |
@@ -423,6 +423,47 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Attachment chips 96 dp; remove at 18 dp; spinner while uploading; red failed pill; reorder | `MobileNativeChatAttachmentChips.tsx` | **In progress** (thumbnails) |
 | Voice: mic, hold-to-talk behind a flag, waveform, "Transcribing…" | `src/dictation/*`, toggle or hold in `app/voice-settings.tsx` | Match-ish |
 | Key strip | none in the Claude app | Code UI extra (needed for a TUI) |
+
+
+#### G37 composer spec (2026-10-14)
+
+Claude Android 1.261009.20. "Decompiled" cites jadx sources; "measured" is the
+user's screen recording of the app (`vid2/rec.mp4`, 1080 × 2316, dark, keyboard
+up), at 2.8125 px/dp: the 36 dp buttons measure 100 to 101 px. Video
+compression costs about ±0.5 dp. Pinned in light and dark by
+`MobileNativeChatComposer.claude-geometry.test.tsx`.
+
+| Part | Claude | Source | Code UI before | Code UI now |
+|---|---|---|---|---|
+| Card to screen sides | 16 dp | measured 45 px | 12 (`space.md`) | 16 (`space.lg`) |
+| Card to keyboard top | 16 dp | measured 46 px | 12 | 16 |
+| Corner radius | 24 dp | `o530` `en7.b(..).j`; measured | 24 | 24 |
+| Hairline | 0.5 dp `pl7.x` | `p54.K` | 1 dp | 0.5 dp |
+| Fill | `pl7.p` at 96% | `p54.M` | same | same |
+| Shadow | blur 8, black 10%, y 2 | `p54.L` → `an7.c` | none | `boxShadow: 0px 2px 8px rgba(0,0,0,0.1)` |
+| Text | 17 / 400 / 1.4 | `aj1`; caret measured 67 px = 23.8 dp | 16 / 22 | 17 / 24 |
+| Text inset | 13 dp sides | `aj1`; measured 37 px to the caret | 16 | 13 |
+| Card top to first line | 16 dp (8 shell + 8 field) | `o530` `rrb.Q(.., 8)`; measured 46 px | 1 + 12 | 0.5 + 16 |
+| Last line to buttons | 16 dp | measured 46 px (the decompile read gave 11) | 9 + 2 = 11 | 8 + 8 = 16 |
+| Lines | 1 to 6, then scrolls | `aj1` | same | same (cap 168 dp) |
+| Buttons to card sides and foot | 8 dp | `ai9` `N0(8)`; measured 22 to 23 px | 8 sides, 10 foot | 8 |
+| Gap between buttons | 8 dp | measured 23 px (+ to pill, mic to Stop) | 4 (8 before Send) | 8 |
+| Button | 36 dp circle, 48 dp touch | `yg9` `ixv.p(36)`, `ixv.k(48)` | 36, no touch slop | 36 (touch target not widened) |
+| + glyph | 12.8 dp across, `pl7.P` | measured; `yg9.e` colour | lucide 20, `textSecondary` | lucide 22, `composerIcon` |
+| Mic glyph | 20 dp `microphone`, `pl7.P` (#383835 / #C3C2B7) | `yg9.e` → `d(.., P, 20)`; measured 12 × 16.4 dp | 19, `textSecondary` | 20, `composerIcon` |
+| + / mic fill | `pl7.x0` | measured 47 on the 30 card | `composerControl` | same |
+| Send fill | `pl7.e` #C6613F / #D97757 | `yg9.f` (`bb8:162`); `r59.b`, `r59.a` | `accent` #C96442 / #D9825F | `composerSend` |
+| Send arrow | `pl7.H` white, about 11 dp | `yg9.f`, `f83` case 3; measured | 19, `onAccent` (dark #1A1917) | 18, `composerSendGlyph` #FFFFFF |
+| Send disabled | fill and arrow each at 40% | `yg9.f` `hb10.n(.., 0.4)` | whole button at opacity 0.4 | `composerSendDisabled`, `composerSendGlyphDisabled` |
+| Stop | `pl7.x0` fill, `stop` outline in `pl7.O`, 14 dp square | `yg9.g` (`bb8:209`), `sg4`; measured | filled red square 14 | outline `Square` 17, stroke 2, `text` |
+| Stopping ring | 36 dp, stroke 1, content colour | `sg4` `khp.a(36, .., 1)` | `danger` | `text` |
+| Model chip | 36 tall, 16 sides, ≤220, 13 / 400, no chevron, `pl7.x0` | `md6.a`; measured 116 dp wide, 16.7 dp to the text | 30 tall, 10 sides, ≤190, 12 semibold, chevron, dark #545452 | 36, 16, ≤220, 13 regular, no chevron, dark `pl7.x0` |
+| Placeholder | "Type / for commands"; "Queue a message…" while working | `ccr_input_placeholder_existing_session(_queue)` | "Reply, @files, /commands" | the Claude strings |
+
+Still differs: the one-row collapse; the chip's effort word is not muted
+(`pl7.P`); Anthropic Sans is Instrument Sans here; the 48 dp touch target. The
+recording row (`MobileNativeChatDictationRow.tsx`) takes the action row's 8 dp
+padding on all sides and Send's colours.
 
 ### 3.5 Status line, tasks, subagents
 
@@ -520,7 +561,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G34 | P2 | Session list rows: state mark (Waiting amber / Working pulsing / Failed / New blue / Quiet ring), status second line, trailing time, state filter; **replace the hardcoded hex in `AgentSpinner.tsx` with theme tokens** | Differs | L | I | |
 | G35 | P2 | Header menu: Copy branch, Background tasks, Rename, Copy session ID | Missing | S | A | |
 | G36 | P3 | Launcher widget "Code shortcuts" (New session, Search) | Missing | M | I | |
-| G37 | P1 | Composer look, Stop placement, one-row collapse, placeholder, queue look | — | — | — | in progress |
+| G37 | P1 | Composer look, Stop placement, one-row collapse, placeholder, queue look | Look, Stop and placeholder match (2026-10-14, spec below); one-row collapse and queue look open | — | — | in progress |
 | G38 | P2 | Thumbnails, viewer, markup | — | — | — | in progress |
 | G39 | P2 | Background tasks titles and Stop | — | — | — | in progress |
 

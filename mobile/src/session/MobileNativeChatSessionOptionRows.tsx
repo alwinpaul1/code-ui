@@ -2,7 +2,7 @@
 // beside it so the card file stays about layout and apply wiring.
 
 import { Pressable, Switch, View } from 'react-native'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -53,9 +53,12 @@ export function Pill({
         // than push those off the right edge.
         flexShrink: 1,
         minWidth: 0,
-        maxWidth: 190,
-        height: 30,
-        paddingHorizontal: space.sm + 2,
+        // The Claude app's model chip (`md6.a`, 1.261009.20): 36 dp tall, 16 dp each side, at most
+        // 220 dp. No chevron; the recording of 2026-10-14 measures 16.7 dp from its edge to the
+        // first letter and 17 dp from the last.
+        maxWidth: 220,
+        height: 36,
+        paddingHorizontal: space.lg,
         borderRadius: radius.pill,
         backgroundColor: pressed && !disabled ? colors.composerControlPressed : colors.composerPill,
         opacity: disabled ? 0.6 : 1
@@ -64,9 +67,10 @@ export function Pill({
       disabled={disabled}
       hitSlop={6}
     >
+      {/* `jn7.H`: 13 / 400 / 1.4. */}
       <Txt
-        variant="caption"
-        weight="semibold"
+        variant="label"
+        weight="regular"
         tone={disabled ? 'muted' : 'primary'}
         numberOfLines={1}
         ellipsizeMode="tail"
@@ -74,7 +78,6 @@ export function Pill({
       >
         {label}
       </Txt>
-      <ChevronDown size={12} color={disabled ? colors.textMuted : colors.composerPillText} />
     </Pressable>
   )
 }

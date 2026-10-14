@@ -144,15 +144,20 @@ type Props = {
   onStop?: () => void
 }
 
-/** Claude-app style composer: a rounded card with the text field on top and a
- *  single action row beneath (attach, model, mic, send). */
-/** The input's padding. The bottom one is the air above the button row: with the 2 dp the row
- *  leaves above a 36 dp button, 11 dp from the last line of text to the buttons, the Claude app's
- *  own figure (1.261009.20, decompiled: 8 dp text padding + 3 dp in its 42 dp row;
- *  docs/claude-app-implementation-notes.md, "The composer"). It was 4 + 2, and a caret drag hit
- *  the buttons (the user's screenshots, 2026-10-11). */
-const COMPOSER_INPUT_PAD_TOP = 12
-const COMPOSER_INPUT_PAD_BOTTOM = 9
+/** The Claude app's composer, 1.261009.20 (the spec table is G37 in docs/claude-app-parity-gaps.md).
+ *  Decompiled, then measured on the user's screen recording of the app (1080 px at 2.8125 px/dp):
+ *  the shell pads 8 dp above its content (`o530.b`) and the field 8 more (`aj1`), so the first line
+ *  starts 16 dp under the card's top edge (46 px); its caret spans 67 px, the 23.8 dp line of
+ *  17 sp at 1.4. From that line's foot to the buttons is 16 dp again (46 px): the field's 8 plus
+ *  the row's 8 here. The buttons sit 8 dp from the card's sides and foot and 8 dp apart.
+ *  Until 2026-10-14 this was 12 / 9 above a 2 dp row gap, 11 dp of air from an earlier reading of
+ *  the decompile (8 + 3 in a 42 dp row) that the recording does not bear out. */
+const COMPOSER_INPUT_PAD = { top: 16, bottom: 8, side: 13 }
+const [COMPOSER_ROW_PAD, COMPOSER_BUTTON] = [8, 36]
+/** 17 sp at 1.4 (`aj1`), on whole dp. */
+const COMPOSER_TYPE = { fontSize: 17, lineHeight: 24 }
+/** `p54.L`: the card's shadow, blur 8, black at 10%, 2 dp down. */
+const COMPOSER_SHADOW = '0px 2px 8px rgba(0, 0, 0, 0.1)'
 /** Whole lines the input shows before it scrolls, 1 to 6 as in the Claude app. Its height is
  *  padding plus whole lines, so a full box never shows a cut line at its foot (the 150 dp cap fell
  *  2 dp into a seventh). */
@@ -160,6 +165,8 @@ const COMPOSER_INPUT_MAX_LINES = 6
 /** Lines of draft left in view while the `/` or `@` menu is up. */
 const COMPOSER_INPUT_LINES_WITH_MENU = 2
 
+/** Claude-app style composer: a rounded card with the text field on top and a
+ *  single action row beneath (attach, model, mic, send). */
 export function MobileNativeChatComposer({
   value,
   onChangeText,
@@ -198,7 +205,7 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
-  placeholder = 'Reply, @files, /commands',
+  placeholder = 'Type / for commands',
   filePaths = NO_FILE_PATHS,
   onNeedFiles,
   skills = NO_SKILLS,
@@ -211,7 +218,7 @@ export function MobileNativeChatComposer({
   stopping = false,
   onStop
 }: Props): React.JSX.Element {
-  const { colors, fonts, radius, space, type } = useTheme()
+  const { colors, fonts, radius, space } = useTheme()
   const [cursor, setCursor] = useState(() => value.length)
   useEffect(() => {
     onComposerCursor?.(cursor)
@@ -344,18 +351,14 @@ export function MobileNativeChatComposer({
 
   const iconButton = {
     flexShrink: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: COMPOSER_BUTTON,
+    height: COMPOSER_BUTTON,
+    borderRadius: COMPOSER_BUTTON / 2,
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   }
-  const composerType = {
-    fontFamily: fonts.regular,
-    fontSize: type.body.size + 1,
-    lineHeight: type.body.lineHeight + 1
-  }
-  const inputPads = COMPOSER_INPUT_PAD_TOP + COMPOSER_INPUT_PAD_BOTTOM
+  const composerType = { fontFamily: fonts.regular, ...COMPOSER_TYPE }
+  const inputPads = COMPOSER_INPUT_PAD.top + COMPOSER_INPUT_PAD.bottom
   const inputMaxHeight = inputPads + COMPOSER_INPUT_MAX_LINES * composerType.lineHeight
   const inputMaxHeightWithMenu = inputPads + COMPOSER_INPUT_LINES_WITH_MENU * composerType.lineHeight
   // Placed once per dictation result (composer-input-box.ts).
@@ -372,17 +375,22 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View
-        style={{ paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md }}
+        // 16 dp from the screen's sides and 16 dp above the keyboard (or the navigation bar), as
+        // the recording measures the Claude app's card (45 px and 46 px).
+        style={{ paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.lg }}
         testID="native-chat-composer-inset"
       >
         <View
           style={{
-            borderWidth: 1,
+            // `p54.K`: a 0.5 dp hairline. `en7.b(..).j`: 24 dp corners.
+            borderWidth: 0.5,
             borderColor: focused ? colors.composerBorderFocused : colors.composerBorder,
             borderRadius: radius.xl,
-            // The Claude app's composer surface (tokens.ts, 2026-10-13); a
-            // shadow under it read as a smudge, so none.
+            // The Claude app's composer surface (tokens.ts, 2026-10-13), now near-opaque, with
+            // the app's own soft shadow. The shadow came off in 2026-09 while the card was
+            // see-through glass, where it read as a smudge; the card is no longer glass.
             backgroundColor: colors.composerFill,
+            boxShadow: COMPOSER_SHADOW,
             overflow: 'hidden'
           }}
           testID="native-chat-composer"
@@ -441,9 +449,9 @@ export function MobileNativeChatComposer({
                 minHeight: inputPads + composerType.lineHeight,
                 color: colors.text,
                 ...composerType,
-                paddingHorizontal: space.lg,
-                paddingTop: COMPOSER_INPUT_PAD_TOP,
-                paddingBottom: COMPOSER_INPUT_PAD_BOTTOM
+                paddingHorizontal: COMPOSER_INPUT_PAD.side,
+                paddingTop: COMPOSER_INPUT_PAD.top,
+                paddingBottom: COMPOSER_INPUT_PAD.bottom
               }}
               value={value}
               onChangeText={onChangeText}
@@ -473,15 +481,16 @@ export function MobileNativeChatComposer({
           <Animated.View style={dictationRow.actionsStyle} {...dictationRow.hiddenWhileUp}>
           <View
             style={{
-              minHeight: 48,
+              minHeight: COMPOSER_BUTTON + 2 * COMPOSER_ROW_PAD,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: space.xs,
+              gap: COMPOSER_ROW_PAD,
               // Why: one flexible child (the model pill) and fixed icon buttons;
               // without this the row grows past the composer and clips send.
               flexWrap: 'nowrap',
-              paddingHorizontal: space.sm,
-              paddingBottom: space.sm
+              paddingHorizontal: COMPOSER_ROW_PAD,
+              paddingTop: COMPOSER_ROW_PAD,
+              paddingBottom: COMPOSER_ROW_PAD
             }}
             testID="native-chat-composer-actions"
           >
@@ -548,7 +557,8 @@ export function MobileNativeChatComposer({
                 {micShowsStop ? (
                   <Square pointerEvents="none" size={16} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
                 ) : (
-                  <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
+                  // `yg9.e`: a 20 dp microphone in `pl7.P`.
+                  <Mic pointerEvents="none" size={20} color={colors.composerIcon} strokeWidth={2} />
                 )}
               </Pressable>
             ) : null}
@@ -563,7 +573,7 @@ export function MobileNativeChatComposer({
           </View>
           </Animated.View>
           {dictationRow.available ? (
-            <MobileNativeChatDictationLayer row={dictationRow} level={micLevel} padding={space.sm} iconButton={iconButton} />
+            <MobileNativeChatDictationLayer row={dictationRow} level={micLevel} padding={COMPOSER_ROW_PAD} iconButton={iconButton} />
           ) : null}
           </View>
         </View>

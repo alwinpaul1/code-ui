@@ -77,7 +77,8 @@ export function MobileNativeChatAttachButton({
         onPress={opensSheet ? openSheet : onAttachImage}
         disabled={disabled}
       >
-        <Plus size={20} color={colors.textSecondary} strokeWidth={2} />
+        {/* The app's + draws 12.8 dp across in the recording of 2026-10-14; lucide's does at 22. In `pl7.P`. */}
+        <Plus size={22} color={colors.composerIcon} strokeWidth={2} />
       </Pressable>
       {onAttachFile ? (
         <MobileNativeChatAttachSheet
