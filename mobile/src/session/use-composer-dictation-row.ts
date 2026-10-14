@@ -101,9 +101,9 @@ export function useComposerDictationRow({
     return fieldHeight.value < 0
       ? { opacity: 1 - p }
       : { opacity: 1 - p, height: fieldHeight.value * (1 - p) }
-  })
-  const actionsStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, Math.max(0, swap.value)) }))
-  const layerStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, swap.value)) }))
+  }, [swap, fieldHeight])
+  const actionsStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, Math.max(0, swap.value)) }), [swap])
+  const layerStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, swap.value)) }), [swap])
   const onFieldLayout = (event: LayoutChangeEvent): void => {
     fieldHeight.value = event.nativeEvent.layout.height
   }

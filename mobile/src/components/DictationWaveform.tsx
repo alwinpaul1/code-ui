@@ -138,6 +138,6 @@ function WaveformBarView({
       backgroundColor: bar.voiced ? voicedColor : silentColor,
       transform: [{ translateX: bar.x }, { translateY: bar.y }]
     }
-  })
+  }, [index, history, clock, width, voicedColor, silentColor])
   return <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0 }, style]} />
 }

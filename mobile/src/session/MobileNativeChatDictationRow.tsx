@@ -88,8 +88,8 @@ export function MobileNativeChatDictationRow({
       ? target
       : withTiming(target, { duration: DICTATION_CENTRE_CROSSFADE_MS, easing: Easing.out(Easing.cubic) })
   }, [centre, phase, reducedMotion, transcribing])
-  const waveformStyle = useAnimatedStyle(() => ({ opacity: 1 - centre.value }))
-  const labelStyle = useAnimatedStyle(() => ({ opacity: centre.value }))
+  const waveformStyle = useAnimatedStyle(() => ({ opacity: 1 - centre.value }), [centre])
+  const labelStyle = useAnimatedStyle(() => ({ opacity: centre.value }), [centre])
 
   const busy = (which: Exclude<DictationRowEnding, null>): boolean => transcribing && ending === which
   const dimmed = (which: Exclude<DictationRowEnding, null>): boolean => transcribing && ending !== which
