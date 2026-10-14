@@ -44,8 +44,7 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
-vi.mock('react-native-reanimated', async () => {
-  const { SHEET_SPEC } = await import('./sheet-spec')
+vi.mock('react-native-reanimated', () => {
   function makeShared(key: string, initial: number) {
     let value = initial
     return {
@@ -67,15 +66,7 @@ vi.mock('react-native-reanimated', async () => {
     // The drawer holds its list at its top while the sheet is dragged (use-bottom-drawer-drag.ts).
     useAnimatedRef: () => ({ current: null }),
     scrollTo: () => {},
-    // Since 2026-10-14 the open (and so the hand-back's re-assert) is the app's
-    // sheet spring (sheet-spec.ts), so a spring to 1 counts as an enter too.
-    // The scrim's own spring does not: it is not the sheet's transform.
-    withSpring: (to: number, config?: unknown) => {
-      if (config !== SHEET_SPEC.motion.scrim) {
-        withTimingCalls.push({ to, duration: undefined })
-      }
-      return to
-    },
+    withSpring: (to: number) => to,
     withTiming: (to: number, config?: { duration?: number }) => {
       withTimingCalls.push({ to, duration: config?.duration })
       return to

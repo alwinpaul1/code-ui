@@ -13,7 +13,6 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
   interpolate,
@@ -34,15 +33,21 @@ import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 import { useDrawerEnterGate } from './use-drawer-enter-gate'
-import { SHEET_SPEC, sheetColors, sheetShowsHandle } from './sheet-spec'
+import { sheetColors, sheetShowsHandle } from './sheet-spec'
 
+const SHOW_DURATION = 180
 // Why: a sheet enters from just below its own bottom edge, not from a whole
-// window below. Travelling the window height left a 280 dp sheet under the
-// edge of a 956 dp window for most of its open, so the + sheet looked slow to
-// open (reported 2026-09-26). The margin keeps the Android elevation shadow
-// out of sight at the start. The open itself is the Claude app's sheet spring
-// (SHEET_SPEC.motion.open, 2026-10-14), no longer a 180 ms timing.
+// window below. Travelling the window height on an ease-in-out curve left a
+// 280 dp sheet under the edge of a 956 dp window until 111 ms into its 180 ms
+// open, so the + sheet looked slow to open (reported 2026-09-26). The margin
+// keeps the Android elevation shadow out of sight at the start.
 const ENTER_TRAVEL_MARGIN = 24
+/** Decelerating: most of the travel happens in the first frames, the way an
+ *  entering sheet should move, instead of Reanimated's default ease-in-out. */
+function enterEasing(t: number): number {
+  'worklet'
+  return 1 - (1 - t) ** 3
+}
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -89,8 +94,6 @@ export function MountedBottomDrawer({
   // The sheet's own laid-out height; 0 until its first layout, when the only
   // distance known to be off screen is the whole window.
   const sheetLayoutHeight = useSharedValue(0)
-  // The scrim fades on a spring of its own, as the app's does (sheet-spec.ts).
-  const scrim = useSharedValue(0)
   useKeyboardDismissedOnOpen(visible && dismissKeyboardOnOpen)
   // Why: fill mode needs the keyboard inset in React layout (not only the
   // reanimated translate) so height shrinks as the sheet lifts and the top
@@ -99,14 +102,14 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
+  // The sheet's static look is the Claude app's (sheet-spec.ts); its motion is 0.9.139's.
   const sheetColor = sheetColors(colors)
   const styles = useThemedStyles(bottomDrawerStyles)
-  // `null` (not yet known) runs full motion. In practice the answer is already
-  // cached by the home screen's spinners before any sheet opens. Under reduced
-  // motion the sheet does not travel (see drawerStyle) and `progress` rides
-  // the effects spring, so it is a fade.
+  // Why: read at style time only. `null` (not yet known) runs full motion: the
+  // enter effect below is left exactly as recorded, so nothing here can add a
+  // `withTiming(1)` the window hand-back test counts. In practice the answer
+  // is already cached by the home screen's spinners before any sheet opens.
   const reduceMotion = useReducedMotion() === true
-  const openSpring = reduceMotion ? SHEET_SPEC.motion.reducedOpen : SHEET_SPEC.motion.open
   // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
   // transforms below) is unchanged, so phone behavior stays identical.
@@ -121,14 +124,13 @@ export function MountedBottomDrawer({
     onHidden,
     restore: () => restoreRef.current()
   })
-  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, openingShare, translateY, progress, scrim, close: requestClose })
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, openingShare, translateY, progress, close: requestClose })
   const drag = useBottomDrawerDrag({
     expandable,
     hasList: contentScrollable && dragContentToDismiss,
     screenHeight,
     translateY,
     progress,
-    scrim,
     sheet,
     close: requestClose
   })
@@ -149,7 +151,7 @@ export function MountedBottomDrawer({
   // device: an unchanged or nudged style lands on the stale native binding), so the
   // remount is what repaints; the writes below keep the shared values authoritative
   // for the fresh view, which matters because the drawer swap (166ms) hands back
-  // before the enter spring has settled.
+  // before the 180ms enter animation has finished.
   const [windowEpoch, setWindowEpoch] = useState(0)
   const wasInteractiveRef = useRef(interactive)
   useEffect(() => {
@@ -159,7 +161,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = sheet.restingOffset
-    progress.value = withSpring(1, openSpring)
+    progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -170,8 +172,7 @@ export function MountedBottomDrawer({
   const enterGate = useDrawerEnterGate({
     windowAlreadyShown: insideModalHost,
     enter: () => {
-      progress.value = withSpring(1, openSpring)
-      scrim.value = withSpring(1, SHEET_SPEC.motion.scrim)
+      progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     }
   })
   const showSheet = () => {
@@ -196,7 +197,6 @@ export function MountedBottomDrawer({
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
-      scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
       progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
@@ -286,7 +286,6 @@ export function MountedBottomDrawer({
     // A close the parent refuses comes back through `restore`, which plays at
     // once because both signals have arrived by then.
     enterGate.cancel()
-    scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
     progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
       if (finished) {
         runOnJS(requestClose)()
@@ -357,8 +356,8 @@ export function MountedBottomDrawer({
     // Fades only as the sheet is dragged below its opening height; an
     // expandable sheet stands `openingOffset` down at rest.
     const dragFade = interpolate(translateY.value - openingOffset, [0, 300], [1, 0], Extrapolation.CLAMP)
-    return { opacity: scrim.value * dragFade }
-  }, [scrim, translateY, openingOffset])
+    return { opacity: progress.value * dragFade }
+  }, [progress, translateY, openingOffset])
 
   // Why: an expandable sheet at its opening height stands with its bottom
   // (and the inset padding that keeps rows off the gesture bar) below the

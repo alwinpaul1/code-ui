@@ -1,43 +1,37 @@
 import type { ThemeColors } from '../theme/tokens'
-import type { AnimatedSpringConfig } from '../ui/alert/alert-motion'
+import { DRAWER_SPRING } from './drawer-spring'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
-// One bottom sheet, after the Claude Android app (com.anthropic.claude
+// One bottom sheet LOOK, after the Claude Android app (com.anthropic.claude
 // 1.261009.20, decompiled 2026-10-14). Every sheet there goes through one
 // wrapper (xhv.java:1514) around Material 3's ModalBottomSheet
-// (ywi.java:1899), so every sheet has the same corners, ground, grabber,
-// scrim and motion. Code UI had two families that disagreed on all five
-// (BottomDrawer: 24 dp corners in code over 16 dp in its stylesheet, 180 ms
-// timed open; DraggableDetailSheet: 24 dp, its own 36×4 grabber). Both read
-// this file now, and sheet-spec.test.tsx keeps any sheet from drifting off it.
+// (ywi.java:1899), so every sheet has the same corners, ground, grabber and
+// scrim. Code UI's sheets (BottomDrawer, DraggableDetailSheet, the queue
+// editor) take those from this file, and sheet-spec.test.tsx keeps any sheet
+// from drifting off it.
+//
+// MOTION IS A DELIBERATE DEVIATION. The app opens and settles its sheets on
+// M3 springs (below, for reference). Code UI ported them on 2026-10-14 and the
+// user rejected the result the same day ("Dont do this"; "We need it smooth
+// same as we have in latest release"): a spring from rest showed nothing on
+// the open's first frame. So every sheet moves exactly as in 0.9.139
+// (237ce4dca): `SHEET_SPEC.motion` records those values, and the tests pin
+// them.
 
-/** A spring the way Compose states one: damping ratio and stiffness, at unit
- *  mass (`spring(dampingRatio, stiffness)`, hay.A in the decompile). Named
- *  mass on purpose: Reanimated 4 merges a config over a default whose mass is
- *  4 (spring-mass-census.test.ts). */
+/** A spring the way Compose states one: damping ratio and stiffness at unit mass. */
 export type ComposeSpring = { dampingRatio: number; stiffness: number }
 
-/** c = 2 · ζ · √(k · m) at m = 1, the conversion Compose's SpringSimulation uses. */
-export function springFromComposeParams({ dampingRatio, stiffness }: ComposeSpring): AnimatedSpringConfig {
-  if (!(stiffness > 0) || !(dampingRatio > 0)) {
-    throw new Error(`spring needs a positive ratio and stiffness, got ${dampingRatio} / ${stiffness}`)
-  }
-  const mass = 1
-  return { stiffness, damping: 2 * dampingRatio * Math.sqrt(stiffness * mass), mass }
-}
-
-/** Material 3's standard motion scheme, as the app ships it (syl.java:6-11). */
+/** Material 3's standard motion scheme, as the Claude app ships it
+ *  (syl.java:6-11). REFERENCE ONLY: Code UI's sheets do not use it (see above).
+ *  The app shows and settles a sheet on DefaultSpatial and hides it on
+ *  FastEffects (e230.java:74-91); its scrim fades on DefaultEffects
+ *  (ywi.java:2168). */
 export const M3_STANDARD_MOTION = {
-  /** syl.b: DefaultSpatial. The sheet's show, and its settle after a drag (e230.java:74-91). */
   defaultSpatial: { dampingRatio: 0.9, stiffness: 700 },
-  /** syl.c: FastSpatial. */
   fastSpatial: { dampingRatio: 0.9, stiffness: 1400 },
-  /** syl.d: SlowSpatial. */
   slowSpatial: { dampingRatio: 0.9, stiffness: 300 },
-  /** syl.e: DefaultEffects. The scrim's alpha, "ScrimAlphaAnimation" (ywi.java:2168). */
   defaultEffects: { dampingRatio: 1, stiffness: 1600 },
-  /** syl.f: FastEffects. The sheet's hide (e230.java:78). */
   fastEffects: { dampingRatio: 1, stiffness: 3800 },
-  /** syl.g: SlowEffects. */
   slowEffects: { dampingRatio: 1, stiffness: 800 }
 } as const satisfies Record<string, ComposeSpring>
 
@@ -81,19 +75,20 @@ export const SHEET_SPEC = {
     paddingHorizontal: 6,
     paddingVertical: 5.5
   },
+  /** Code UI's sheet motion, unchanged from 0.9.139 (see the note at the top). */
   motion: {
-    /** The sheet's show (and a refused close's return). */
-    open: springFromComposeParams(M3_STANDARD_MOTION.defaultSpatial),
-    /** The sheet coming to rest after a drag (anchoredDraggable, same spring). */
-    settle: springFromComposeParams(M3_STANDARD_MOTION.defaultSpatial),
-    /** The scrim's fade in and out, a spring of its own (ywi.java:2168). */
-    scrim: springFromComposeParams(M3_STANDARD_MOTION.defaultEffects),
-    /** Reduced motion: the sheet does not travel; it fades on the effects spring. */
-    reducedOpen: springFromComposeParams(M3_STANDARD_MOTION.defaultEffects),
-    /** The hide, as a timing: FastEffects (ζ 1, k 3800) is critically damped
-     *  and is within 0.1% of rest at 150 ms, and the close lifecycle hangs off
-     *  this animation's completion callback, which every close test plays. */
-    hideMs: 150
+    /** The open, and a refused close's return: a timing. BottomDrawer eases
+     *  it out (cubic); the tool-detail sheet uses Reanimated's default curve.
+     *  Under reduced motion BottomDrawer fades on the same timing and the
+     *  tool-detail sheet appears at once. */
+    openMs: 180,
+    /** The hide (the backdrop, the Back key, the X, a parent's close). */
+    hideMs: BOTTOM_DRAWER_HIDE_DURATION_MS,
+    /** The settle after a drag: ratio 1 at a 0.31 s response (drawer-spring.ts). */
+    settle: DRAWER_SPRING,
+    /** The scrim has no motion of its own: its opacity follows the sheet's
+     *  open progress (and fades as the sheet is dragged down). */
+    scrimFollowsOpen: true
   }
 } as const
 

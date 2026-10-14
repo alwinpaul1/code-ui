@@ -18,7 +18,8 @@ import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { draggableDetailSheetStyles as styles } from './draggable-detail-sheet-styles'
-import { SHEET_SPEC, sheetColors, sheetShowsHandle } from './sheet-spec'
+import { DRAWER_SPRING } from './drawer-spring'
+import { sheetColors, sheetShowsHandle } from './sheet-spec'
 import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
@@ -32,7 +33,8 @@ import {
 // resists rather than following the finger 1:1 — the same rubber-band touch
 // BottomDrawer uses, so both sheets feel like one family.
 const RUBBER_BAND_FACTOR = 0.25
-const HIDE_DURATION_MS = SHEET_SPEC.motion.hideMs
+const SHOW_DURATION_MS = 180
+const HIDE_DURATION_MS = 150
 const TOP_SCROLL_EPSILON = 1
 const TOP_GAP = 24
 const MIN_DISMISS_DURATION_MS = 120
@@ -102,8 +104,6 @@ function MountedDraggableDetailSheet({
   const translateY = useSharedValue(0)
   const dragStartOffset = useSharedValue(0)
   const progress = useSharedValue(0)
-  // The scrim fades on a spring of its own, as the app's does (sheet-spec.ts).
-  const scrim = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
   const contentDragStartY = useSharedValue(0)
   const contentDragCanDismiss = useSharedValue(false)
@@ -112,6 +112,7 @@ function MountedDraggableDetailSheet({
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
+  // The sheet's static look is the Claude app's (sheet-spec.ts); its motion is 0.9.139's.
   const sheetColor = sheetColors(colors)
   const reduceMotion = useReducedMotion() === true
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
@@ -130,10 +131,7 @@ function MountedDraggableDetailSheet({
     translateY.value = collapsedOffset
     scrollOffsetY.value = 0
     setSnap('default')
-    // The app's sheet spring; under reduced motion the sheet does not travel
-    // (sheetStyle) and `progress` is a fade on the effects spring.
-    progress.value = withSpring(1, reduceMotion ? SHEET_SPEC.motion.reducedOpen : SHEET_SPEC.motion.open)
-    scrim.value = withSpring(1, SHEET_SPEC.motion.scrim)
+    progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
   }
   const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, onHidden, restore: showSheet })
 
@@ -143,7 +141,6 @@ function MountedDraggableDetailSheet({
     } else if (leftScreenRef.current) {
       onHidden()
     } else {
-      scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
       progress.value = withTiming(0, { duration: HIDE_DURATION_MS }, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
@@ -166,13 +163,12 @@ function MountedDraggableDetailSheet({
     // rest up to its full-height position in one frame before it slid down.
     // The exit's own travel is the whole sheet height, so it clears the
     // screen from wherever the sheet stands.
-    scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
     progress.value = withTiming(0, { duration: HIDE_DURATION_MS }, (finished) => {
       if (finished) {
         runOnJS(requestClose)()
       }
     })
-  }, [progress, scrim, requestClose, visible])
+  }, [progress, requestClose, visible])
 
   // The seam every session sheet takes since upstream #22308: the hardware key natively, and a
   // claim on the shell's key inside the page. This sheet is the fork's own, so upstream's sweep
@@ -212,9 +208,6 @@ function MountedDraggableDetailSheet({
           MAX_DISMISS_DURATION_MS
         )
         translateY.value = withTiming(fullHeight, { duration })
-        // The scrim leaves with the sheet: left at 1, a close the parent refuses
-        // brought the sheet back under a scrim that snapped on in one frame.
-        scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
         progress.value = withTiming(0, { duration }, (finished) => {
           if (finished) {
             runOnJS(requestClose)()
@@ -222,7 +215,7 @@ function MountedDraggableDetailSheet({
         })
         return
       }
-      translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, SHEET_SPEC.motion.settle)
+      translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, DRAWER_SPRING)
       runOnJS(setSnap)(outcome)
     }
     const scroll = Gesture.Native()
@@ -269,7 +262,7 @@ function MountedDraggableDetailSheet({
           contentDragCanDismiss.value = false
           contentDragStartY.value = 0
           if (translateY.value !== 0) {
-            translateY.value = withSpring(0, SHEET_SPEC.motion.settle)
+            translateY.value = withSpring(0, DRAWER_SPRING)
           }
           return
         }
@@ -306,8 +299,8 @@ function MountedDraggableDetailSheet({
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, fullHeight], [1, 0], Extrapolation.CLAMP)
-    return { opacity: scrim.value * dragFade }
-  }, [scrim, translateY, fullHeight])
+    return { opacity: progress.value * dragFade }
+  }, [progress, translateY, fullHeight])
 
   const handle = (
     <GestureDetector gesture={handlePanGesture}>

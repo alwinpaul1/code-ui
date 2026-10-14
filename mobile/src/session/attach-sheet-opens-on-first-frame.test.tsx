@@ -54,8 +54,8 @@ vi.mock('lucide-react-native', () => ({
 // A timing's curve is Reanimated's own default when the caller names none
 // (Easing.inOut(Easing.quad), react-native-reanimated/src/animation/timing.ts).
 // A spring is the closed-form damped oscillator for the config it is given,
-// starting at rest, which is how the open starts (since 2026-10-14 the open is
-// the Claude app's sheet spring, sheet-spec.ts).
+// starting at rest (kept so a spring open would be played back truthfully;
+// the open is a timing, see the 2026-10-14 note below).
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
   type Timing = { timing: true; to: number; duration: number; easing: (t: number) => number }
@@ -240,34 +240,25 @@ async function frameAt(scheme: 'light' | 'dark', ms: number): Promise<void> {
   })
 }
 
-// 2026-10-14: the open moved from a 180 ms ease-out-cubic timing to the Claude
-// app's own sheet spring (Material 3 DefaultSpatial, ζ 0.9 / k 700,
-// sheet-spec.ts). A spring starts from rest, so its first frame moves less
-// than the cubic's did: 7.5% of the travel at 16.7 ms, which the 24 dp
-// below-edge margin still hides, then 23% at 33 ms and 71% at 90 ms. The pins
-// below were moved to that curve on purpose (they were "on screen at the first
-// frame, > 10%" and "> 75% at 90 ms"); what they still refuse is the
-// 2026-09-26 defect, a sheet that travels the whole window and is mostly below
-// the edge halfway through its open.
+// 2026-10-14: the Claude-app port briefly opened sheets on Claude's own spring
+// (M3 DefaultSpatial, ζ 0.9 / k 700), which starts from rest and showed
+// nothing on the first frame. The user chose the old open speed over Claude's
+// spring the same day ("Dont do this"), so the open is the 180 ms timing again
+// (SHEET_SPEC.motion.openMs) and these 2026-09-26 pins are back at their
+// original thresholds. Reverting to the spring fails both.
 describe.each(['light', 'dark'] as const)('the Add context sheet in %s mode', (scheme) => {
-  it('is on screen within two frames of the + tap', async () => {
+  it('is on screen from the first frame after the + tap', async () => {
     await tapPlus(scheme)
-    await frameAt(scheme, 2 * FRAME_MS)
-    expect(onScreenHeight(), 'nothing of the sheet showed in the first two frames of its open').toBeGreaterThan(
+    await frameAt(scheme, FRAME_MS)
+    expect(onScreenHeight(), 'nothing of the sheet showed on the first frame of its open').toBeGreaterThan(
       SHEET_HEIGHT * 0.1
     )
   })
 
-  it('is mostly up 90 ms into its open, not still below the screen', async () => {
+  it('is mostly up halfway through its open, not still below the screen', async () => {
     await tapPlus(scheme)
     await frameAt(scheme, 90)
-    expect(onScreenHeight()).toBeGreaterThan(SHEET_HEIGHT * 0.65)
-  })
-
-  it('rests fully open once the open has run', async () => {
-    await tapPlus(scheme)
-    await frameAt(scheme, 1000)
-    expect(onScreenHeight()).toBe(SHEET_HEIGHT)
+    expect(onScreenHeight()).toBeGreaterThan(SHEET_HEIGHT * 0.75)
   })
 
   // The Claude app's sheet ground, pl7.q = `chatBg` (sheet-spec.ts, 2026-10-14; `bgPanel` before).
@@ -335,9 +326,7 @@ describe.each(['light', 'dark'] as const)(
       const heights = await playOpen()
       const steps = heights.slice(1).map((height, index) => height - heights[index]!)
       // The steepest frame of the open's own curve, over the sheet's own travel
-      // (280 dp + the 24 dp margin), was about 3 x 8.3/180 x 304 = 42 dp at
-      // 120 Hz on the old cubic timing; the sheet spring's peak speed is lower
-      // (about 27 dp a frame, 2026-10-14).
+      // (280 dp + the 24 dp margin), is about 3 x 8.3/180 x 304 = 42 dp at 120 Hz.
       expect(Math.max(...steps), `frame-by-frame on-screen heights: ${heights.map(Math.round).join(', ')}`).toBeLessThan(50)
     })
 
