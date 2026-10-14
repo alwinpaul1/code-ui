@@ -24,7 +24,7 @@ function tsxFiles(directory: string): string[] {
     if (entry.isDirectory()) {
       return tsxFiles(path)
     }
-    return entry.name.endsWith('.tsx') && !/\.test\.tsx$/.test(entry.name) ? [path] : []
+    return entry.name.endsWith('.tsx') && !entry.name.endsWith('.test.tsx') ? [path] : []
   })
 }
 
@@ -38,7 +38,13 @@ function textInputFields(): FieldReport[] {
   for (const root of ROOTS) {
     for (const path of tsxFiles(join(MOBILE, root))) {
       const source = readFileSync(path, 'utf8')
-      const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+      const file = ts.createSourceFile(
+        path,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX
+      )
       const visit = (node: ts.Node): void => {
         if (
           (ts.isJsxSelfClosingElement(node) || ts.isJsxOpeningElement(node)) &&

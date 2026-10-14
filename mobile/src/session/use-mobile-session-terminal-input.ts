@@ -51,7 +51,8 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     showToast,
     getTerminalRef,
     hostQueryReplyInputSupportedRef,
-    hostPlatformRef
+    hostPlatformRef,
+    releaseLiveInputKeyboard
   } = scope
   const toggleLiveInput = useCallback(() => {
     if (!activeHandle) {
@@ -63,6 +64,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
     } else {
       clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef)
+      releaseLiveInputKeyboard()
       liveInputRef.current?.blur()
     }
   }, [activeHandle, clearPendingLiveInputCommit, toggleTerminalLiveInput])

@@ -49,8 +49,8 @@ describe('terminal live input affordance', () => {
     // No keyboard icon or "Live" indicator; focus only tints the border.
     expect(block).not.toContain('KeyboardIcon')
     expect(block).toContain('borderColor: liveFocused ? colors.accent : colors.border')
-    expect(block).toContain('onFocus={() => setLiveFocused(true)}')
-    expect(block).toContain('onBlur={() => setLiveFocused(false)}')
+    expect(block).toMatch(/onFocus=\{\(\) => \{\s*setLiveFocused\(true\)\s*handleLiveInputFocus\(\)/)
+    expect(block).toMatch(/onBlur=\{\(\) => \{\s*setLiveFocused\(false\)[\s\S]*?handleLiveInputBlur\(\)/)
     expect(terminalRuntimeSource).toContain('useTerminalLiveInputFocus({')
     expect(nativeChatSource).toContain('useMobileSendCompletionGeneration({')
     expect(nativeChatSource).toContain('onBlur: resetLiveInputFocus')

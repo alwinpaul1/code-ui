@@ -41,7 +41,8 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     showToast,
     clearTerminalCache,
     handleAccessoryKey,
-    clearSessionTabActionSheetKeyboardListener
+    clearSessionTabActionSheetKeyboardListener,
+    releaseLiveInputKeyboard
   } = scope
   const clipboard = useClipboardWriter()
   const clipboardContents = useClipboardReader().contents
@@ -117,6 +118,8 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     }
     setSelectModeActive(active)
     if (active) {
+      // Select mode puts the keyboard away; the live field must not take it back.
+      releaseLiveInputKeyboard()
       Keyboard.dismiss()
     }
   }, [])

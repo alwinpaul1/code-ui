@@ -51,6 +51,7 @@ function createHarness(initialProps: HarnessProps): {
   function Harness(props: HarnessProps): null {
     handlers = useTerminalLiveInputFocus({
       ...props,
+      isAnyTextFieldFocused: () => false,
       keyboardHeight: props.keyboardHeight ?? 0
     })
     return null

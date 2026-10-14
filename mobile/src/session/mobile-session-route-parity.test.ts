@@ -141,7 +141,10 @@ const HEAD_MAIN_HOOK_SHA256 = '215ec61bda891e9cbb8874e97794b58023f68a81f8356cba5
 // 2026-10-13: the controller's useMobileSessionNotificationTab call (a bare call, bound to nothing).
 // 2026-10-14: the dictation hook binds anthropicDictation and hold (useDictationHoldMode) where the
 // five hold-mode useCallbacks were bound; useMobileNativeChatInputLease's argument was rewrapped.
-const HEAD_HOOK_BINDING_SHA256 = '1e042d5654732c074309c4219206e0396ada58771becd01bf693f279342ec1cd'
+// 2026-10-14: the terminal runtime binds armLiveInputKeyboardClaim, handleLiveInputBlur,
+// handleLiveInputFocus, releaseLiveInputKeyboard and reportLiveInputScreenFocus from
+// useTerminalLiveInputFocus (the live field takes back a keyboard no field holds).
+const HEAD_HOOK_BINDING_SHA256 = 'a20a7c139bc4844939b26f72b9e1eee12fa42ba004781c25c7a1401499ef89c5'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -150,8 +153,11 @@ const HEAD_HOOK_BINDING_SHA256 = '1e042d5654732c074309c4219206e0396ada58771becd0
 // armTerminalFirstFrameRevealTimeout (the first-frame cover). Same 84 callbacks.
 // 79 since 2026-10-14: startDictation, cancelDictation, handleDictationToggle,
 // handleDictationPressIn and handleDictationPressOut moved into useDictationHoldMode.
+// 2026-10-14: the runtime focus effect reports screen focus (reportLiveInputScreenFocus), and
+// toggleLiveInput, dismissSoftwareKeyboard, the tab action sheet and handleSelectionMode call
+// releaseLiveInputKeyboard before they put the keyboard away. Same callback count.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '1074687d14bfcfbbeb1ab558068ebca7578e2e4ca0b21d3ede4b96c28d5ad212'
+  '1a49a687496192053ca6ffa36a44032451c57122f140fea972c366f2f76fdf2a'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -255,7 +261,8 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // first frame may be shown (stream ended, desktop mode, server resize, the fit pass's verdict);
 // revealTerminalAfterPaint waits on the WebView's awaitReady before it lifts the cover.
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
-const HEAD_CALLBACK_BODY_SHA256 = '3799e8ea810753e1442513d0e6b6dfb51400fa9785389d13048fc0193cc8662e'
+// 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
+const HEAD_CALLBACK_BODY_SHA256 = '4ddcefb0a4e5331f929417279801872c192ef9af90c75fd44eb22c1bed8a8fba'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -509,7 +516,9 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // app's screen background). Same host record COUNT (96); only those style expressions moved.
 // Colour-only, checked: with `colors.chatBg` read back as `colors.bg` the records hash to the old
 // 8e496f53… exactly.
-const HEAD_HOST_JSX_SHA256 = 'ee3d1340f7a00a8f029e43b68a967ea48e11cfbdf0f5cc2e574c2512bfcd8f04'
+// 2026-10-14: every TextInput passes cursorColor={colors.caret}, and the dock live field's
+// onFocus / onBlur also call handleLiveInputFocus / handleLiveInputBlur.
+const HEAD_HOST_JSX_SHA256 = 'aa75133a961d99b340038d28b533e354b1b74ed6341e1984469fba2423ac0428'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
