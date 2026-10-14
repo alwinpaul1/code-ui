@@ -401,6 +401,26 @@ describe('an account whose sign-in died (review of 2026-10-14)', () => {
     expect(await fetchAnthropicCredential()).toBeNull()
     expect((await readCredential())?.accessToken).toBe('alive')
   })
+
+  // Review of 2026-10-14: any 400/401/403 marked the sign-in dead for good, so one 403 from a
+  // WAF challenge or a captive portal signed the only account out. Only OAuth's own answer for a
+  // spent or revoked refresh token, `invalid_grant` (RFC 6749 5.2), says the sign-in is dead.
+  it('keeps the sign-in when one refresh is refused by something other than an invalid_grant', async () => {
+    fake.store.set('anthropic-dictation-oauth-v2', JSON.stringify({ accessToken: 'alive', refreshToken: 'alive-refresh', expiresAt: 0 }))
+    await listAccounts()
+    vi.stubGlobal('fetch', async () => ({
+      ok: false,
+      status: 403,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <')
+      },
+      text: async () => '<html>Just a moment...</html>'
+    }))
+    expect(await fetchAnthropicCredential()).toBeNull()
+
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ access_token: 'renewed', refresh_token: 'r2', expires_in: 3600 }) }))
+    expect((await fetchAnthropicCredential())?.accessToken).toBe('renewed')
+  })
 })
 
 describe('a sign-in whose profile read hangs (review of 2026-10-14)', () => {

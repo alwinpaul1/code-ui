@@ -250,6 +250,17 @@ export function refreshAccessToken(credential: StoredCredential): Promise<Stored
   return run
 }
 
+/** The OAuth `error` code of a refused token request, or null when the body is not OAuth's. */
+async function oauthErrorOf(res: { json: () => Promise<unknown> }): Promise<string | null> {
+  try {
+    const body: unknown = await res.json()
+    const error = body && typeof body === 'object' ? (body as { error?: unknown }).error : undefined
+    return typeof error === 'string' ? error : null
+  } catch {
+    return null
+  }
+}
+
 async function refreshOnce(credential: StoredCredential): Promise<StoredCredential> {
   // JSON with the scopes, as Claude Code 2.1.296 refreshes.
   const res = await fetch(TOKEN_URL, {
@@ -263,12 +274,16 @@ async function refreshOnce(credential: StoredCredential): Promise<StoredCredenti
     })
   })
   if (!res.ok) {
-    if (res.status === 400 || res.status === 401 || res.status === 403) {
+    // Only OAuth's own answer for a spent or revoked refresh token, `invalid_grant` (RFC 6749
+    // 5.2), marks the sign-in dead. A 403 from a WAF challenge or a captive portal is a refusal
+    // of this request, not of the token, and the next refresh may well succeed.
+    const reason = await oauthErrorOf(res)
+    if (reason === 'invalid_grant') {
       await markRefreshRefused(credential).catch((error: unknown) => {
         console.warn(`[anthropic-auth] the refused sign-in could not be marked: ${error instanceof Error ? error.message : String(error)}`)
       })
     }
-    throw new Error(`Token refresh failed (${res.status})`)
+    throw new Error(`Token refresh failed (${res.status}${reason ? `: ${reason}` : ''})`)
   }
   const raw = parseTokenResponse(await res.json())
   const refreshed: StoredCredential = {
