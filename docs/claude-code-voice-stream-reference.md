@@ -11,6 +11,10 @@ Headers: Authorization: Bearer <token>
          x-app: cli
          anthropic-client-platform: <platform>
          x-config-keyterms: <comma-list>   (optional)
+         (no Origin: the server refuses a socket that carries one with
+          "WebSocket connection origin is not allowed", permission_error.
+          React Native's Android WebSocket always adds one, so the phone opens
+          this socket through mobile/modules/orca-voice-socket instead.)
 
 Query params:
   encoding=linear16
