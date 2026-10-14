@@ -28,6 +28,21 @@ describe('dictation inserted at the caret', () => {
     expect(joinDictationAtCursor('keep', ' this', '')).toBe('keep this')
   })
 
+  // The Claude app (1.261009.20, `ox20.e`): a space after the spoken words only when the next
+  // character is neither whitespace nor one of ,.;:!?)]}. Dictating before "." or ")" left
+  // "word ." in Code UI.
+  it('puts no space between the spoken words and punctuation that follows the caret', () => {
+    for (const mark of [',', '.', ';', ':', '!', '?', ')', ']', '}']) {
+      expect(joinDictationAtCursor('fix the', `${mark} then ship`, 'login bug')).toBe(
+        `fix the login bug${mark} then ship`
+      )
+    }
+    expect(paintSpokenAtCursor('(see', ')', 'the logs', 'logs').text).toBe('(see the logs)')
+    // Any other character still gets its space, as before.
+    expect(joinDictationAtCursor('fix the', 'bug', 'login')).toBe('fix the login bug')
+    expect(joinDictationAtCursor('fix the', '"bug"', 'login')).toBe('fix the login "bug"')
+  })
+
   it('splits the open phrase from the finished words, and puts the caret after the spoken words', () => {
     expect(paintSpokenAtCursor('hello', ' world', 'there', 'there')).toEqual({
       before: 'hello ',
