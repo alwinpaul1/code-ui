@@ -66,15 +66,20 @@ export function codeGlyphSize(glyphSp: number): number {
 export function CodeCopyGlyph({
   copied,
   glyphSp,
+  sizeDp,
   color,
   copiedColor
 }: {
   copied: boolean
-  glyphSp: number
   color: string
   copiedColor: string
-}) {
-  const size = codeGlyphSize(glyphSp)
+} & (
+  // In sp, as the code block sizes it, or in dp where a surface keeps a fixed size that does
+  // not follow the system font (the chat's action row, MobileNativeChatTurnActions).
+  | { glyphSp: number; sizeDp?: undefined }
+  | { sizeDp: number; glyphSp?: undefined }
+)) {
+  const size = sizeDp ?? codeGlyphSize(glyphSp)
   const Glyph: CodeGlyph = copied ? Check : Copy
   const progress = useSharedValue(0)
   const reduced = useReducedMotion()

@@ -380,7 +380,8 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 |---|---|---|---|
 | User card | 12 dp radius, fill `pl7.w0`, hairline, 12×14 padding, 15 sp | `mobile-native-chat-message-styles.ts` | **In progress** (typography and colours) |
 | Assistant prose | `zv.d` 17/400/1.5, Anthropic Sans | `MobileNativeChatProse.tsx`, 15/22 | **In progress** |
-| Assistant action row | Copy, Read aloud, thumbs; 36 dp icons in `pl7.Q` | one Copy per turn | **Differs** (no read aloud: G31) |
+| Assistant action row | Copy, Read aloud, thumbs; 36 dp icons in `pl7.Q`; Copy becomes a check tinted `ad5.K` (300 ms tween, back after 2000 ms; `fa20.a`) | one Copy per turn, resting in `pl7.Q` (`composerPlaceholder`), a check tinted `codeBlockCopied` for 2 s with the 300 ms tween, a 40 dp touch target (2026-10-14). **The size stays the user's: a 14 icon in a padding of 4, fixed in dp (2026-10-11)**, and the row stays under the words while work runs | **Differs** (size by the user's choice; no read aloud: G31) |
+| Message hold (a sent prompt): M3 menu "Copy message", "Select text"; on a waiting message "Send now", "Undo send" first (`gv20`) | a hold opens the menu in Code UI's sheet look (2026-10-14): Copy message (as typed), Select text (the whole message selectable in a sheet), and Undo send on a waiting message. **No Send now**: Claude Code delivers a queued message between tool calls on its own, no key makes it sooner. A reply keeps its in-place selection (user, 2026-10-09) | **Match** (rows the terminal can carry out) |
 | Thinking | a row like a finished tool run: `extendedThinking` icon + "Thought process" (15/400, muted); a tap opens a sheet with the text as Markdown; **never inline** | inline text with a side rail, folded past 600 characters (`MobileNativeChatReasoningNote.tsx`); terminal Claude tabs get none (Orca role bug) | **Differs** (G1). Terminal tabs: **impossible** until Orca emits `reasoning` |
 | Tool-run row | sentence, shimmer, pill, chevron | `MobileNativeChatToolRun*.tsx` | Match; shimmer **in progress** |
 | Run sheet | sentence title, child rows | `MobileNativeChatRunSheet.tsx` | Match |
@@ -401,10 +402,28 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Init / resume card | cloud container steps | n/a | **Impossible** (cloud only) |
 | Next-prompt suggestion | ghost text in the empty composer plus a caret pill; a tap fills | none | **Missing** (G28). Readable only if Claude Code paints it in the TUI input |
 | Code block | 12 dp clip; header at least 40 sp in `pl7.s`, label (fence language, first letter capital, else "Code") in mono, Copy then Expand (36 sp buttons, 20 sp glyphs, 40 dp targets); body `pl7.r`, 16 dp, one line per source line, no numbers; Expand opens a sheet (close cross, "Code" / "Python code", Copy; the code full width); wrap per setting (default off) | `MobileMarkdownCodeBlock.tsx`, `MobileMarkdownCodeHeader.tsx`, `MobileMarkdownCodeSheet.tsx`, numbers in `code-block-spec.ts` | **Match** (2026-10-14), except wrap has no setting yet (G8) |
-| Inline file links | file-path code becomes a link; long-press: Open / Copy file name / Copy relative path | none found | **Missing** (G20) |
+| Inline file links | file-path code becomes a link; long-press: path header over Open / Copy file name / Copy relative path (`xt20`, `dqh`); a tap on a file Claude sent asks "Open %1$s?", on a file not on the device says "%1$s isn't on this device. Ask Claude to send the file to open it here." (`g94`, `yv8`) | tap opens the file from the desktop (links existed already). The menu is built (`MobileNativeChatFileLinkSheet.tsx`) and reachable from the chip that names a picture the phone cannot show. **Not reachable from a reply's own links:** the chat draws a reply's prose in one native TextView (`modules/orca-native-prose`) whose only link event is a tap, and a hold on a link in a selectable Text starts Android's own selection, so a JS hold handler there needs a Kotlin `onLinkLongPress` and a phone check. The app's "Open?" dialog and "isn't on this device" line are for a cloud session's files and are not adopted: a path that will not open already says why (`mobile-file-tap-failure.ts`) | **Partly** (G20) |
 | Artifacts | cards and chips | n/a | **Impossible** (claude.ai artifacts) |
 | Pending row | 50% alpha + "Sending" until the ack | full opacity, no label | **Differs** (S2) |
 | Queued row | 80% width, italic, tap moves it back | queue box from the screen (`MobileNativeChatQueue.tsx`) | **In progress** |
+
+### Transcript motion (2026-10-14)
+
+The Claude app's numbers for the transcript's motion are pinned in `session/claude-motion-spec.ts`
+(each with its source line) and tested in `claude-motion-spec.test.ts`. Easing is `k8d.a`,
+cubic-bezier(0.4, 0, 0.2, 1), the default of every `hay.E` tween that names none.
+
+| Motion | Claude (1.261009.20) | Code UI |
+|---|---|---|
+| Agent pulse | alpha 1.0 to 0.55, tween 1200 ms, Reverse, five pulses shared by every cell, each started `i * -240` ms in (`cu2.java:1071`; read as a fast-forward, inferred from Compose's packed `StartOffset`) | the workflow card's status dot, pulse 0 (`use-agent-pulse-style.ts`); the other four phases are in the spec for the agent grid (G32) |
+| Todo pill | alpha 1 on a 150 ms tween when it appears, snap when it goes; an animated value starts at its target, so a pill present when the screen opens does not fade (`yfy.java:3873`) | `MobileNativeChatSessionBar.tsx`: a plan that arrives while the screen is open fades in, one already there does not, closing the card brings the pill back at once |
+| Turn edits "Show more" | `expandVertically` + `fadeIn`, both 250 ms; exit None (`bv20.java:2259`) | the rows past the folded three (`MobileNativeChatTurnEditsCard.tsx`), measured in place; Show less drops them at once |
+| Copy glyph | colour tween 300 ms to `ad5.K`, check held 2000 ms (`fa20.java:266`, `l82`) | the action row and the code block, one `CodeCopyGlyph` |
+| Stream smoothing | `StreamSmoothingConfig` defaults: tick 33 ms, 800-char markdown groups, fade-in off (200 ms), catch-up lag 250 ms at 80 to 600 chars/s, rate easing 250 ms, reveal within 450 ms; remote flag `android_chat_stream_smoothing` (`c0x.java`) | **not applied.** The structured lane re-parses a growing reply's Markdown on every change; a 33 ms tick would do that thirty times a second on the main thread, and there is no way to measure the frame cost off the phone (`mobile-markdown-streaming-cost.test.ts` guards the same cost). The numbers are in the spec for a pass that can measure |
+
+Sheets keep the 0.9.139 motion the user chose (`sheet-motion-0-9-139.test.tsx`); row enter animations
+match the app's (none). Every self-starting motion above reads `useReducedMotion` and is listed in
+`ui/reduced-motion-sites.test.ts`.
 
 ### 3.4 Composer
 
@@ -473,7 +492,7 @@ padding on all sides and Send's colours.
 | Background tasks sheet | `MobileBackgroundTasksSheet.tsx` | **In progress** (titles, Stop) |
 | Finished shell row → "Show output" sheet (Loading / No output captured / Output truncated / Retry) | none | **Missing** (G27) |
 | "View transcript" opens the Agent call's tool sheet with its nested "Tool calls (N)" | removed from the card 2026-10-10; `MobileSubagentTranscriptModal.tsx` from run-sheet agent rows | **Differs** (G29) |
-| Workflow card with an agent grid (≤24 squares, 8 dp) and phases | none | **Missing** (P3, G32) |
+| Workflow card with an agent grid (≤24 squares, 8 dp) and phases | the card exists with phases; its status dot pulses while the workflow runs as the app's does (alpha 1.0 to 0.55, 1200 ms, `claude-motion-spec.ts`, 2026-10-14). No grid: the app draws its cells under each phase and the phone is never told which agent is in which | **Differs** (P3, G32) |
 | ↓ button | `mobile-native-chat-list-edges.tsx` | **In progress** (threshold) |
 
 ### 3.6 Settings
@@ -544,7 +563,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G17 | P2 | Compacted marker wording "Compacted conversation · saved N tokens" when the figure is known | Differs | S | B | |
 | G18 | P2 | Code block: Expand action, 40 dp header, wrap that follows the setting | Done 2026-10-14 | S | E | done 2026-10-14: the card, its Copy (check for 2 s, glyph tint 300 ms) and Expand, and the sheet (spec and sources in `code-block-spec.ts`). Wrap follows the G8 setting. The line-number gutter on the card is gone (the app draws none); the file reader keeps its own |
 | G19 | P2 | Read sheet: line-numbered viewer, "Showing N of M lines (truncated)", **Load full file** via `files.read`, Render for .md | Differs | M | F | |
-| G20 | P2 | Inline file links: tap opens the file viewer; long-press Open / Copy file name / Copy relative path | Missing | M | E | |
+| G20 | P2 | Inline file links: tap opens the file viewer; long-press Open / Copy file name / Copy relative path | Partly 2026-10-14 | M | E | menu and its names in `MobileNativeChatFileLinkSheet.tsx`, `mobile-native-chat-file-link.ts`; mounted on the picture chip. Left: a reply's own links (native prose: needs a Kotlin `onLinkLongPress` and a phone check) |
 | G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Done 2026-10-14 | M | G | Reply: `session-reply-*.ts` (written to the chat outbox first, the drainer sends it; a lost link keeps the words; terminal tabs only). Deny with comment: `claude-permission-comment-send.ts`, Claude Code only (Down to the No row, Tab, the words, Enter, each read back; frames in `fixtures/claude-screen-permission-amend-2.1.299.txt`). Approve withheld: `permission-notification-approve-gate.ts`. Left: the comment for a plan review and for Codex; a structured session's Reply |
 | G22 | P3 | Two notification toggles (updates vs permission requests) | Done 2026-10-14 | S | G | `notification-categories.ts`, rows on `app/notifications.tsx` |
 | G23 | P1 | ↓ arrow threshold, running-row shimmer | — | — | — | in progress |
@@ -556,7 +575,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G29 | P3 | "View transcript" on an agent task opens that Agent call's sheet with "Tool calls (N)" | Differs | S | F | |
 | G30 | P3 | Edit an earlier message / rewind on terminal tabs via Claude Code's rewind menu, matched exactly or refused | Differs | L | H | |
 | G31 | P3 | Read aloud under assistant messages, with on-device TTS (the Claude app uses Anthropic's voice service) | Missing | M | E | |
-| G32 | P3 | Workflow card with an agent grid and phases | Missing | L | F | |
+| G32 | P3 | Workflow card with an agent grid and phases | Differs | L | F | phases and the pulsing dot exist; the grid needs per-agent phase data the phone is not given |
 | G33 | P3 | Auto mode opt-in dialog the first time Auto is picked | Missing | S | C | |
 | G34 | P2 | Session list rows: state mark (Waiting amber / Working pulsing / Failed / New blue / Quiet ring), status second line, trailing time, state filter; **replace the hardcoded hex in `AgentSpinner.tsx` with theme tokens** | Differs | L | I | |
 | G35 | P2 | Header menu: Copy branch, Background tasks, Rename, Copy session ID | Missing | S | A | |

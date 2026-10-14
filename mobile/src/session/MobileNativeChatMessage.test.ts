@@ -60,12 +60,19 @@ vi.mock('lucide-react-native', () => ({
   SquareChevronRight: 'SquareChevronRight',
   SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
+  TextCursor: 'TextCursor',
   Undo2: 'Undo2',
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+// A hold on a sent prompt opens its menu in a drawer; this one is a bare shell.
+vi.mock('../components/BottomDrawer', async () => {
+  const { BottomDrawerDouble } = await import('./user-message-menu.test-support')
+  return { BottomDrawer: BottomDrawerDouble }
+})
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { holdThenChoose, sentPromptBubble } from './user-message-menu.test-support'
 import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
@@ -128,22 +135,28 @@ describe('MobileNativeChatMessage', () => {
   })
 
   // 2026-09-21, the user: "automatic copy on long hold on user send prompts
-  // instead of long hold and copy button". A hold on a sent prompt now copies
-  // the whole prompt and tints the bubble, the way the agent's Copy control
-  // does; nothing to select, nothing to tap after. The bubble's text is
-  // therefore no longer a selection target — a selectable Text would take the
-  // hold for Android's own selection and the copy would never fire. The
-  // agent's prose keeps its selection (2026-09-12).
-  it('copies the whole prompt on a hold, and confirms it on the bubble', async () => {
+  // instead of long hold and copy button". A hold on a sent prompt copied the
+  // whole prompt at once. It opens the Claude app's message menu now (Copy
+  // message, Select text; MobileNativeChatMessage.user-menu.test.tsx), and
+  // Copy message copies the whole prompt and tints the bubble, the way the
+  // agent's Copy control does. The bubble's text is still not a selection
+  // target — a selectable Text would take the hold for Android's own selection
+  // and the menu would never open; Select text is where the words are
+  // selected. The agent's prose keeps its selection (2026-09-12).
+  it('opens a menu on a hold, and Copy message copies the whole prompt and confirms it on the bubble', async () => {
     const clipboard = await import('expo-clipboard')
+    vi.mocked(clipboard.setStringAsync).mockClear()
     const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
-    const bubble = tree.root.findByProps({ accessibilityLabel: 'Sent prompt' })
+    const bubble = sentPromptBubble(tree.root)
     expect(bubble.props.delayLongPress).toBe(400)
+    expect(bubble.props.accessibilityHint).toMatch(/hold for options/i)
     act(() => {
       bubble.props.onLongPress()
     })
+    // Opening the menu copies nothing.
+    expect(clipboard.setStringAsync).not.toHaveBeenCalled()
+    await holdThenChoose(tree.root, 'Copy message')
     expect(clipboard.setStringAsync).toHaveBeenCalledWith('run the full gate')
-    expect(bubble.props.accessibilityHint).toMatch(/hold to copy/i)
   })
 
   // 2026-09-28, the user: "Why i copy text markdown things come ** ** '''
@@ -200,9 +213,7 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Task:** run `npm test` and report' }]), {
       promptsAsMarkdown: true
     })
-    act(() => {
-      tree.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onLongPress()
-    })
+    await holdThenChoose(tree.root, 'Copy message')
     expect(clipboard.setStringAsync).toHaveBeenCalledWith('Task: run npm test and report')
   })
 
@@ -277,7 +288,10 @@ describe('MobileNativeChatMessage', () => {
     const queued = render(userMessage([{ type: 'text', text: 'record' }]), {
       onCancelQueued: vi.fn()
     })
-    expect(queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })).toHaveLength(0)
+    // A waiting message takes no tap (nothing to disclose), only the hold that opens its menu.
+    const [waiting] = queued.root.findAllByProps({ accessibilityLabel: 'Sent prompt' })
+    expect(waiting!.props.onPress).toBeUndefined()
+    expect(waiting!.props.onLongPress).toBeTypeOf('function')
     expect(queued.root.findAllByProps({ accessibilityLabel: 'Copy prompt' })).toHaveLength(0)
   })
 

@@ -9,6 +9,7 @@ import {
   TRANSCRIPT_MARKDOWN_TYPOGRAPHY
 } from '../components/mobile-markdown-prose-scale'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
+import { MobileNativeChatFileLinkSheet } from './MobileNativeChatFileLinkSheet'
 import { userTextDrawsAsMarkdown } from './mobile-native-chat-user-markdown'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import {
@@ -64,11 +65,12 @@ export function Prose({
   const ownMarkdown = useMemo(() => ownText !== null && userTextDrawsAsMarkdown(ownText), [ownText])
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt && !ownMarkdown) {
-      // Not selectable, on purpose: a hold on a sent prompt copies the whole
-      // prompt (MobileNativeChatMessage's Bubble, 2026-09-21), and a selectable
-      // Text would take that hold for Android's own selection first. The
-      // 2026-09-12 complaint — a hold on their own bubble did nothing — is
-      // answered by the copy now, not by selection.
+      // Not selectable, on purpose: a hold on a sent prompt opens its menu
+      // (MobileNativeChatMessage's Bubble: Copy message, Select text), and a
+      // selectable Text would take that hold for Android's own selection
+      // first. The 2026-09-12 complaint — a hold on their own bubble did
+      // nothing — is answered by the menu, and by the sheet Select text opens
+      // for the reader who wants part of the words.
       return (
         <Text
           style={[
@@ -92,7 +94,7 @@ export function Prose({
         renderVisual={visuals}
         textScale={fontScale}
         // A path in the user's own words stays words: a link would take the
-        // hold that copies the prompt, and the tap that opens its controls.
+        // hold that opens the prompt's menu, and the tap that opens its controls.
         onOpenFile={ownMarkdown ? undefined : onOpenFile}
         identity={identity}
         typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
@@ -102,8 +104,8 @@ export function Prose({
         typed={ownMarkdown}
       />
     )
-    // The user's own bubble copies on a hold, as the plain line does, so the
-    // document must not take that hold for a selection. False here turns
+    // The user's own bubble opens its menu on a hold, as the plain line does,
+    // so the document must not take that hold for a selection. False here turns
     // selection off in its Texts where the document can; on Android the Texts
     // stay selectable (that is what keeps a selection through a scroll) and
     // only the document's native root hears it, and stops a hold from
@@ -146,16 +148,51 @@ export function Prose({
     // stand-in names no file at all. A transcript path alone cannot make those
     // bytes available on the phone; don't expose an action that only produces
     // a path error. A real URI above still wins.
-    const desktopPaste = isDesktopImageRef(block)
-    const hostPath = block.path
     return (
+      <HostImageChip
+        hostPath={block.path}
+        desktopPaste={isDesktopImageRef(block)}
+        label={block.alt}
+        fontScale={fontScale}
+        onOpenFile={onOpenFile}
+        styles={styles}
+      />
+    )
+  }
+  return null
+}
+
+/** A picture the phone cannot show, as a chip naming it. A tap opens its file on the desktop; a
+ *  hold opens the file link menu (Open, Copy file name, Copy relative path), as the Claude app's
+ *  does for an inline file link. A desktop paste has no file to open or copy a name of. */
+function HostImageChip({
+  hostPath,
+  desktopPaste,
+  label,
+  fontScale,
+  onOpenFile,
+  styles
+}: {
+  hostPath: string | undefined
+  desktopPaste: boolean
+  label: string | undefined
+  fontScale: number
+  onOpenFile?: (relativePath: string) => void
+  styles: ChatMessageStyles
+}) {
+  // Mounted on the first hold, and kept so its exit plays out.
+  const [menu, setMenu] = useState<'idle' | 'open' | 'closed'>('idle')
+  const opens = !desktopPaste && hostPath && onOpenFile ? hostPath : undefined
+  return (
+    <>
       <Pressable
-        onPress={!desktopPaste && hostPath && onOpenFile ? () => onOpenFile(hostPath) : undefined}
+        onPress={opens && onOpenFile ? () => onOpenFile(opens) : undefined}
+        onLongPress={opens ? () => setMenu('open') : undefined}
+        delayLongPress={400}
         disabled={desktopPaste}
         accessibilityRole={desktopPaste ? 'image' : 'button'}
-        accessibilityLabel={
-          desktopPaste ? 'Image on Desktop. Preview unavailable.' : (block.alt ?? 'Attached image')
-        }
+        accessibilityLabel={desktopPaste ? 'Image on Desktop. Preview unavailable.' : (label ?? 'Attached image')}
+        accessibilityHint={opens ? 'Hold for options' : undefined}
         style={styles.imageChip}
       >
         <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
@@ -163,9 +200,16 @@ export function Prose({
           {desktopPaste ? 'Image on Desktop' : 'Image'}
         </Text>
       </Pressable>
-    )
-  }
-  return null
+      {opens && onOpenFile && menu !== 'idle' ? (
+        <MobileNativeChatFileLinkSheet
+          visible={menu === 'open'}
+          pathText={opens}
+          onOpen={onOpenFile}
+          onClose={() => setMenu('closed')}
+        />
+      ) : null}
+    </>
+  )
 }
 
 /** What a placeholder says when tapped. */

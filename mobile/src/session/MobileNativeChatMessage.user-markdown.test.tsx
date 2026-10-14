@@ -82,7 +82,11 @@ vi.mock('lucide-react-native', () => {
   })
 })
 vi.mock('../components/pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
-vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
+// A hold on a sent prompt opens its menu in a drawer; this one is a bare shell.
+vi.mock('../components/BottomDrawer', async () => {
+  const { BottomDrawerDouble } = await import('./user-message-menu.test-support')
+  return { BottomDrawer: BottomDrawerDouble }
+})
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({
   MobileNativeChatToolDetailSheet: 'MobileNativeChatToolDetailSheet'
@@ -105,6 +109,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, fontFamily, lightColors } from '../theme/tokens'
 import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { holdThenChoose } from './user-message-menu.test-support'
 
 const PASTED = [
   'The diagnosis holds up: the problem was 56 `node` processes using 34 GB, not Orca itself. These steps make the fix enforced rather than something each agent has to remember.',
@@ -245,10 +250,10 @@ describe('a sent prompt written in Markdown', () => {
     expect(contrastRatio(colors.accentText, colors.userBubble)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('copies the raw Markdown on a hold, and nothing in the bubble takes the hold for a selection', () => {
+  it('copies the raw Markdown from the menu a hold opens, and nothing in the bubble takes the hold for a selection', async () => {
     const root = render(userMessage(PASTED))
     const bubble = bubbleOf(root, 'light')!
-    act(() => bubble.props.onLongPress())
+    await holdThenChoose(root, 'Copy message')
     expect(mocks.clipboard).toEqual([PASTED])
     expect(texts(bubble).filter((node) => node.props.selectable === true)).toEqual([])
   })
@@ -334,7 +339,7 @@ describe('a sent prompt written in Markdown', () => {
       expect(texts(root).map(words)).toContain(text)
     })
 
-    it('leaves a file name and a path in a Markdown prompt plain, so a hold on them still copies', () => {
+    it('leaves a file name and a path in a Markdown prompt plain, so a hold on them still opens the prompt’s menu', () => {
       const root = render(userMessage('see `run.py` at src/app/index.ts, then **go**'), 'light', {
         onOpenFile: () => undefined
       })

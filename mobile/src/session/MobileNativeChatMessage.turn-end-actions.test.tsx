@@ -129,10 +129,15 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('the actions under an agent message in a %s session', (scheme, palette) => {
-  it('draw once, after the last block of the turn: Copy, in the theme\'s muted ink', () => {
+  // The glyph rests in the Claude app's muted tone `pl7.Q` (composerPlaceholder), as its action row
+  // tints it, not the theme's text-muted (2026-10-14; MobileNativeChatMessage.copy-check.test.tsx).
+  // The copy glyph is drawn twice, the resting one and the tint laid over it.
+  it('draw once, after the last block of the turn: Copy, in the Claude app\'s muted tone', () => {
     const root = render(TOOLS_THEN_PROSE, scheme, { endsTurn: true })
     expect(copyControls(root)).toHaveLength(1)
-    expect(copyControls(root)[0]!.find((node) => String(node.type) === 'Copy').props.color).toBe(palette.textMuted)
+    expect(copyControls(root)[0]!.findAll((node) => String(node.type) === 'Copy')[0]!.props.color).toBe(
+      palette.composerPlaceholder
+    )
   })
 
   // 2026-10-11: the Claude app has no arrow to the start of a reply, under a finished reply or a

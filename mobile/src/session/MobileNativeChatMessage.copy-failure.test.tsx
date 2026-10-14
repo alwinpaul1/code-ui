@@ -59,6 +59,7 @@ vi.mock('../platform/haptics', () => ({
 }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
+  Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   Copy: 'Copy',
@@ -67,14 +68,21 @@ vi.mock('lucide-react-native', () => ({
   SquareChevronRight: 'SquareChevronRight',
   SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
+  TextCursor: 'TextCursor',
   Undo2: 'Undo2',
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+// A hold on a sent prompt opens its menu in a drawer; this one is a bare shell.
+vi.mock('../components/BottomDrawer', async () => {
+  const { BottomDrawerDouble } = await import('./user-message-menu.test-support')
+  return { BottomDrawer: BottomDrawerDouble }
+})
 
 import * as Clipboard from 'expo-clipboard'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { holdThenChoose } from './user-message-menu.test-support'
 
 const prompt: NativeChatMessage = {
   id: 'u1',
@@ -112,10 +120,9 @@ function render(message: NativeChatMessage, preference: 'light' | 'dark' = 'ligh
   return renderer!
 }
 
+// A hold on a sent prompt opens the Claude app's menu; Copy message is the row that copies.
 async function hold(tree: ReactTestRenderer): Promise<void> {
-  await act(async () => {
-    tree.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onLongPress()
-  })
+  await holdThenChoose(tree.root, 'Copy message')
 }
 
 async function pressCopy(tree: ReactTestRenderer): Promise<void> {

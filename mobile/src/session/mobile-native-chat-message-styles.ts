@@ -57,8 +57,7 @@ export function makeChatMessageStyles(
       flexDirection: 'row',
       justifyContent: 'flex-start',
       gap: space.xs,
-      marginBottom: 2,
-      opacity: 0.8
+      marginBottom: 2
     },
     controlButton: {
       padding: 4

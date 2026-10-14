@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ScrollView, View } from 'react-native'
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { ChevronDown, FilePen, FilePlus2 } from 'lucide-react-native'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
@@ -7,6 +8,8 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
+import { useReducedMotion } from '../ui/use-reduced-motion'
+import { claudeEase, TURN_EDITS_EXPAND_MS } from './claude-motion-spec'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import {
   fileBaseName,
@@ -21,6 +24,54 @@ import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 
 export const TURN_EDITS_REVIEW = 'Review'
+
+/**
+ * The rows past the folded three, as the Claude app brings them in
+ * (bv20.java:2259): they grow to their height and fade in over 250 ms on
+ * cubic-bezier(0.4, 0, 0.2, 1) (`expandVertically` plus `fadeIn`), and leave
+ * on no transition at all, which here is simply being unmounted by Show less.
+ *
+ * The rows are measured where they sit, in a view of its own that does not
+ * take part in the card's layout, and the card's frame grows to that height.
+ * Until they are measured the frame is 0 high and clear, so they never show at
+ * full size for a frame first. With motion reduced they are an ordinary view.
+ * An entrance does not wait for the OS to say whether motion is reduced
+ * (use-reduced-motion.ts), so an unknown answer plays it.
+ */
+function ExpandingRows({ children }: { children: ReactNode }) {
+  const reduced = useReducedMotion()
+  const [measured, setMeasured] = useState<number | null>(null)
+  const progress = useSharedValue(reduced === true ? 1 : 0)
+  useEffect(() => {
+    if (reduced === true) {
+      cancelAnimation(progress)
+      progress.value = 1
+      return
+    }
+    if (measured !== null && progress.value < 1) {
+      progress.value = withTiming(1, { duration: TURN_EDITS_EXPAND_MS, easing: claudeEase })
+    }
+  }, [reduced, measured, progress])
+  const frame = useAnimatedStyle(
+    () => ({ height: measured === null ? 0 : measured * progress.value, opacity: progress.value, overflow: 'hidden' }),
+    // Named so the mapper has inputs where no Babel closure is written (the web bundle).
+    [progress, measured]
+  )
+  if (reduced === true) {
+    return <View testID="turn-edits-expand">{children}</View>
+  }
+  return (
+    <Animated.View testID="turn-edits-expand" style={frame}>
+      <View
+        testID="turn-edits-expand-content"
+        style={{ position: 'absolute', left: 0, right: 0, top: 0 }}
+        onLayout={(event) => setMeasured(event.nativeEvent.layout.height)}
+      >
+        {children}
+      </View>
+    </Animated.View>
+  )
+}
 
 /** "Show 2 more" (`ccr_turn_edits_show_more`), or "Show less". */
 export function turnEditsToggleLabel(hidden: number, open: boolean): string {
@@ -63,7 +114,8 @@ export function MobileNativeChatTurnEditsCard({
   const title = turnEditsTitle(files)
   const stat = turnEditsStat(files)
   const several = files.length > 1
-  const listed = several ? (showAll ? files : files.slice(0, TURN_EDITS_FOLDED_ROWS)) : []
+  const folded = several ? files.slice(0, TURN_EDITS_FOLDED_ROWS) : []
+  const extra = several && showAll ? files.slice(TURN_EDITS_FOLDED_ROWS) : []
   const hidden = files.length - TURN_EDITS_FOLDED_ROWS
   const rowStyle = {
     flexDirection: 'row',
@@ -72,6 +124,22 @@ export function MobileNativeChatTurnEditsCard({
     paddingHorizontal: space.md,
     paddingVertical: space.sm
   } as const
+  const fileRow = (file: TurnEditedFile) => {
+    const Icon = file.created ? FilePlus2 : FilePen
+    return (
+      <View
+        key={file.path}
+        testID="turn-edits-file"
+        style={[rowStyle, { borderTopWidth: 1, borderTopColor: colors.border }]}
+      >
+        <Icon size={14} color={colors.textMuted} strokeWidth={2} />
+        <Txt variant="caption" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {fileBaseName(file.path)}
+        </Txt>
+        {file.stat ? <ToolRunDiffChip stat={file.stat} styles={styles} /> : null}
+      </View>
+    )
+  }
   return (
     <View
       testID="turn-edits-card"
@@ -110,22 +178,12 @@ export function MobileNativeChatTurnEditsCard({
           </Txt>
         </PressScale>
       </View>
-      {listed.map((file) => {
-        const Icon = file.created ? FilePlus2 : FilePen
-        return (
-          <View
-            key={file.path}
-            testID="turn-edits-file"
-            style={[rowStyle, { borderTopWidth: 1, borderTopColor: colors.border }]}
-          >
-            <Icon size={14} color={colors.textMuted} strokeWidth={2} />
-            <Txt variant="caption" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {fileBaseName(file.path)}
-            </Txt>
-            {file.stat ? <ToolRunDiffChip stat={file.stat} styles={styles} /> : null}
-          </View>
-        )
-      })}
+      {folded.map(fileRow)}
+      {extra.length > 0 ? (
+        // Keyed by the rows it holds: the list recycles a card's cell for another turn, and a
+        // height measured for other rows would clip or pad these.
+        <ExpandingRows key={`${extra.length}:${extra[0]?.path}`}>{extra.map(fileRow)}</ExpandingRows>
+      ) : null}
       {several && hidden > 0 ? (
         <PressScale
           accessibilityRole="button"
