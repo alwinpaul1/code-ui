@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
 import { useMobileSessionScreenState } from './use-mobile-session-screen-state'
 import { useMobileSessionTerminalRuntime } from './use-mobile-session-terminal-runtime'
@@ -59,6 +60,14 @@ export function useMobileSessionController() {
     terminalSubscription,
     useMobileSessionTerminalStreamDisplay(terminalSubscription)
   )
+  // A drawn subscribe asks for phone mode first (terminal-phone-mode-before-subscribe.ts).
+  // Never from the background: the desk has been handed its width back, and a
+  // re-subscribe there must not take it again (the resume retakes it).
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  terminalStreamDisplay.phoneModeClaimRef.current = (handle) =>
+    AppState.currentState === 'active'
+      ? terminalStreamDisplay.setDisplayMode(handle, 'auto')
+      : Promise.resolve(false)
   const terminalList = Object.assign(
     terminalStreamDisplay,
     useMobileSessionTerminalList(terminalStreamDisplay)

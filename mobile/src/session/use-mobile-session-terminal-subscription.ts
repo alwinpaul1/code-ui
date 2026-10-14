@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import { consumeAgentHudBeacons } from './agent-hud-beacon'
 import { noteAttachSnapshot } from './claude-startup-frame-snapshot'
@@ -15,6 +15,7 @@ import {
 import { updateTerminalCwdFromStreamEvent } from './mobile-session-route-helpers'
 import type { MobileDisplayMode } from './mobile-session-route-types'
 import { revealTerminalAfterPaint } from '../terminal/terminal-first-frame-reveal'
+import { deferSubscribeUntilPhoneMode } from './terminal-phone-mode-before-subscribe'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 
 /** Derived from constants, so it is read once rather than on every subscribe. */
@@ -52,6 +53,8 @@ export function useMobileSessionTerminalSubscription(
     revealTerminalFirstFrame,
     armTerminalFirstFrameRevealTimeout
   } = scope
+  // A subscribe deferred behind the phone-mode claim resumes through the current callback.
+  const subscribeToTerminalRef = useRef<(handle: string) => void>(() => {})
   const subscribeToTerminal = useCallback(
     (handle: string) => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -86,6 +89,11 @@ export function useMobileSessionTerminalSubscription(
         }
         if (!webReadyHandlesRef.current.has(handle)) {
           logSkippedGate('webview-not-ready')
+          return
+        }
+        // A drawn terminal asks for phone mode first, or a host left in desktop mode answers at desktop width.
+        if (deferSubscribeUntilPhoneMode(handle, scope, () => subscribeToTerminalRef.current(handle))) {
+          logSkippedGate('awaiting-phone-mode')
           return
         }
       }
@@ -349,6 +357,8 @@ export function useMobileSessionTerminalSubscription(
       armTerminalFirstFrameRevealTimeout
     ]
   )
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  subscribeToTerminalRef.current = subscribeToTerminal
   return {
     subscribeToTerminal
   }

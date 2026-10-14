@@ -125,7 +125,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // dictation hook and moves its five hold-mode useCallbacks into useDictationHoldMode
 // (use-dictation-hold-mode.ts), which is not expanded.
 // 309 since 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
-const HEAD_MAIN_HOOK_SHA256 = '3a444b978216539f89693b80b29c8db1fddb29134ff03708658206e08dd603c6'
+const HEAD_MAIN_HOOK_SHA256 = 'RECOMPUTE'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -476,7 +476,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 683 since 2026-10-14 (later): '/voice-settings' and 'Sign in to Anthropic to dictate', the
 // mic's sign-in gate.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a1b6a113a128f3d098e93faca99e163482410d99c0c68221469a72a62ad4ebaa'
+  'RECOMPUTE'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1081,7 +1081,9 @@ describe('mobile session route extraction parity', () => {
     // dictation hook, and its five hold-mode useCallbacks moved into useDictationHoldMode, which
     // is not expanded.
     // 309 since 2026-10-14 (later): requireAnthropicSignIn, the mic's sign-in gate.
-    expect(main.hooks).toHaveLength(309)
+    // 311 since 2026-10-14: the subscription's useRef for the deferred subscribe, and the
+    // foundation's two phone-mode refs (terminal-phone-mode-before-subscribe.ts).
+    expect(main.hooks).toHaveLength(312)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1224,7 +1226,10 @@ describe('mobile session route extraction parity', () => {
     // 681 since 2026-10-14: the Anthropic voice_stream dictation's engine checks ('anthropic'
     // twice), its 'en' language and 'live' mode.
     // 683 since 2026-10-14 (later): the sign-in gate's route and toast.
-    expect(strings).toHaveLength(683)
+    // 684 since 2026-10-14: the subscribe's 'awaiting-phone-mode' gate, and the controller's
+    // 'auto' claim wired into it with its 'active' foreground check
+    // (terminal-phone-mode-before-subscribe.ts).
+    expect(strings).toHaveLength(686)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

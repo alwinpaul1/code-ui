@@ -32,7 +32,22 @@ import type { MobileSessionPanelRouteActionsModel } from './use-mobile-session-p
 export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActionsModel) {
   const { activeHandle, sessionTabs, setDisplayMode, nativeChatController } = scope
   const { isTabChatView, toggleTabChatView, showNativeChat, activeChatEligible } = nativeChatController
-  const { activeSessionTabId, requestLeaveSession } = scope
+  const { activeSessionTabId, requestLeaveSession, phoneModeClaimedHandlesRef } = scope
+  const setDisplayModeRef = useRef(setDisplayMode)
+  setDisplayModeRef.current = setDisplayMode
+
+  // Handing a terminal back to the desk leaves the host in desktop mode for it,
+  // so the next drawn subscribe must ask for phone mode again before it goes
+  // out (terminal-phone-mode-before-subscribe.ts). Every 'desktop' this screen
+  // sends goes through here; the manual phone/desktop toggle does not, so a
+  // Desktop pick is not undone by the fit pass's re-subscribe.
+  const handBack = useCallback(
+    (handle: string): Promise<boolean> => {
+      phoneModeClaimedHandlesRef.current.delete(handle)
+      return setDisplayModeRef.current(handle, 'desktop')
+    },
+    [phoneModeClaimedHandlesRef]
+  )
 
   const handleForTab = useCallback(
     (tabId: string): string | null => {
@@ -54,17 +69,22 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       const handle = handleForTab(tabId)
       if (isTabChatView(tabId, agent)) {
         if (handle) {
-          await setDisplayMode(handle, 'auto')
+          // Claimed: the terminal's subscribe need not ask again. Marked first
+          // so a hand-back while the request is out is not undone by it.
+          phoneModeClaimedHandlesRef.current.add(handle)
+          if (!(await setDisplayMode(handle, 'auto'))) {
+            phoneModeClaimedHandlesRef.current.delete(handle)
+          }
         }
         toggleTabChatView(tabId, agent)
         return
       }
       toggleTabChatView(tabId, agent)
       if (handle) {
-        void setDisplayMode(handle, 'desktop')
+        void handBack(handle)
       }
     },
-    [handleForTab, isTabChatView, sessionTabs, setDisplayMode, toggleTabChatView]
+    [handBack, handleForTab, isTabChatView, phoneModeClaimedHandlesRef, sessionTabs, setDisplayMode, toggleTabChatView]
   )
 
   // Hardware back / back gesture: from the terminal view of a tab that has a
@@ -118,7 +138,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       return
     }
     if (want === 'desktop') {
-      void setDisplayMode(activeHandle, want)
+      void handBack(activeHandle)
       return
     }
     // Phone width is retried: the answer used to be discarded, and nothing else
@@ -139,7 +159,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
         activeHandleStateRef.current !== handle ||
         showNativeChatStateRef.current
     })
-  }, [activeHandle, setDisplayMode, showNativeChat])
+  }, [activeHandle, handBack, showNativeChat])
 
   // Why: asking for phone dims is also the presence-lock take-floor gesture, so
   // a terminal this route drove leaves the desk showing "Your phone is in
@@ -156,8 +176,6 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
       void rememberHeldFloor(activeHandle)
     }
   }, [activeHandle, showNativeChat])
-  const setDisplayModeRef = useRef(setDisplayMode)
-  setDisplayModeRef.current = setDisplayMode
   const activeHandleStateRef = useRef(activeHandle)
   activeHandleStateRef.current = activeHandle
   const showNativeChatStateRef = useRef(showNativeChat)
@@ -183,7 +201,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
     }
     driven.delete(handle)
     void releaseFloorUntilAccepted({
-      release: () => setDisplayModeRef.current(handle, 'desktop'),
+      release: () => handBack(handle),
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       isReclaimed: () =>
         !routeClosedRef.current &&
@@ -191,7 +209,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
         activeHandleStateRef.current === handle &&
         !showNativeChatStateRef.current
     }).then((accepted) => (accepted ? forgetHeldFloor(handle) : undefined))
-  }, [])
+  }, [handBack])
 
   /** Ask for phone dims again, and record that we are driving this handle.
    *
@@ -201,8 +219,17 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
    *  request never goes out. */
   const reclaimHandle = useCallback((handle: string) => {
     drivenHandlesRef.current.add(handle)
-    void setDisplayModeRef.current(handle, 'auto')
-  }, [])
+    // Marked before the request, so a hand-back while it is out (the app
+    // leaving again inside one round trip) unmarks it for good; a refusal
+    // unmarks it too, since the host may still be in desktop mode.
+    const claimed = phoneModeClaimedHandlesRef.current
+    claimed.add(handle)
+    void setDisplayModeRef.current(handle, 'auto').then((accepted) => {
+      if (!accepted) {
+        claimed.delete(handle)
+      }
+    })
+  }, [phoneModeClaimedHandlesRef])
 
   // Measured: HOME left the desk at 51 columns indefinitely. Backgrounding
   // unmounts nothing, so without this nothing ever hands the floor back.
@@ -262,7 +289,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
         drivingNow: driving ? [driving] : []
       })) {
         void releaseFloorUntilAccepted({
-          release: () => setDisplayModeRef.current(handle, 'desktop'),
+          release: () => handBack(handle),
           wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
           isReclaimed: () => activeHandleStateRef.current === handle
         }).then((accepted) => (accepted ? forgetHeldFloor(handle) : undefined))
