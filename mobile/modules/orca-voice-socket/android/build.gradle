@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcavoicesocket'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcavoicesocket'
+}
+
+dependencies {
+  // OkHttp comes with it: react-android declares okhttp3 as an `api` dependency
+  // (ReactAndroid/build.gradle.kts), the same OkHttp React Native's own WebSocket runs on, so
+  // this adds no artifact to the APK.
+  implementation 'com.facebook.react:react-android'
+  testImplementation 'junit:junit:4.13.2'
+}

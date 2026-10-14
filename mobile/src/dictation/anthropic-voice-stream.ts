@@ -12,7 +12,13 @@
  *     noData timer resets on any message after CloseStream.
  *   - KeepAlive is sent on connect and every 8 s.
  *   - TranscriptError is handled and promotes any pending interim.
+ *
+ * The socket under it is voice-socket.ts's: on Android an OkHttp socket with no Origin header
+ * (React Native's adds one, and voice_stream refuses it), elsewhere the JavaScript WebSocket.
  */
+
+import type { VoiceSocket } from './voice-socket'
+import { openVoiceSocket } from './voice-socket-opener'
 
 export type VoiceStreamCallbacks = {
   readonly onTranscript?: (text: string, isFinal: boolean) => void
@@ -63,7 +69,7 @@ function apiErrorMessage(msg: Record<string, unknown>): string | null {
 }
 
 export class AnthropicVoiceStream {
-  private ws: WebSocket | null = null
+  private ws: VoiceSocket | null = null
   private callbacks: VoiceStreamCallbacks | null
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null
   /** The last text from any Interim or Text message. */
@@ -106,49 +112,37 @@ export class AnthropicVoiceStream {
     ].join('&')
     const url = `${BASE_URL}${PATH}?${params}`
 
-    const headers = { headers: { Authorization: `Bearer ${accessToken}`, ...CLIENT_HEADERS } }
-    // @ts-expect-error — RN WebSocket supports 3 args; the DOM typedef does not.
-    this.ws = new WebSocket(url, undefined, headers)
-    this.ws.binaryType = 'arraybuffer'
-
-    this.ws.onopen = () => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(KEEPALIVE_JSON)
-      }
-      this.keepAliveTimer = setInterval(() => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          this.ws.send(KEEPALIVE_JSON)
+    const headers = { Authorization: `Bearer ${accessToken}`, ...CLIENT_HEADERS }
+    this.ws = openVoiceSocket(url, headers, {
+      onOpen: () => {
+        this.ws?.sendText(KEEPALIVE_JSON)
+        this.keepAliveTimer = setInterval(() => {
+          this.ws?.sendText(KEEPALIVE_JSON)
+        }, KEEPALIVE_INTERVAL_MS)
+        this.callbacks?.onReady?.()
+      },
+      onMessage: (text) => this.handleMessage(text),
+      onError: (message) => {
+        this.promoteInterim('ws error')
+        if (!this.done) {
+          // The socket's own reason when it gave one (OkHttp's, or the HTTP status of a refused upgrade).
+          this.callbacks?.onError?.(
+            new Error(`Voice stream connection error${message ? `: ${message}` : ''}`)
+          )
         }
-      }, KEEPALIVE_INTERVAL_MS)
-      this.callbacks?.onReady?.()
-    }
-
-    this.ws.onmessage = (event: WebSocketMessageEvent) => {
-      if (typeof event.data === 'string') {
-        this.handleMessage(event.data)
+      },
+      onClose: (code, reason) => {
+        this.clearKeepAlive()
+        this.promoteInterim('ws close')
+        this.resolveFinalize('ws_close')
+        // Codes 1000 and 1005 are normal closes — do not fire onError.
+        if (!this.done && code !== 1000 && code !== 1005) {
+          const detail = reason ? ` — ${reason}` : ''
+          this.callbacks?.onError?.(new Error(`Connection closed: code ${code}${detail}`))
+        }
+        this.callbacks?.onClose?.()
       }
-    }
-
-    this.ws.onerror = () => {
-      this.promoteInterim('ws error')
-      if (!this.done) {
-        this.callbacks?.onError?.(new Error('Voice stream connection error'))
-      }
-    }
-
-    this.ws.onclose = (event: WebSocketCloseEvent) => {
-      this.clearKeepAlive()
-      this.promoteInterim('ws close')
-      this.resolveFinalize('ws_close')
-      // Codes 1000 and 1005 are normal closes — do not fire onError.
-      if (!this.done && event.code !== 1000 && event.code !== 1005) {
-        const reason = event.reason ? ` — ${event.reason}` : ''
-        this.callbacks?.onError?.(
-          new Error(`Connection closed: code ${event.code}${reason}`)
-        )
-      }
-      this.callbacks?.onClose?.()
-    }
+    })
   }
 
   /** Send a chunk of raw PCM audio to the server. */
@@ -156,9 +150,7 @@ export class AnthropicVoiceStream {
     if (this.closeStreamSent) {
       return
     }
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(pcm)
-    }
+    this.ws?.sendBinary(pcm)
   }
 
   /**
@@ -189,9 +181,7 @@ export class AnthropicVoiceStream {
       }
       // Send CloseStream on next tick (matches CLI).
       setTimeout(() => {
-        if (this.ws?.readyState === WebSocket.OPEN) {
-          this.ws.send(CLOSESTREAM_JSON)
-        }
+        this.ws?.sendText(CLOSESTREAM_JSON)
       }, 0)
     })
   }
@@ -325,16 +315,8 @@ export class AnthropicVoiceStream {
   private teardownSocket(): void {
     this.clearKeepAlive()
     this.clearFinalizeTimers()
-    if (this.ws) {
-      try {
-        this.ws.onclose = null
-        this.ws.onerror = null
-        this.ws.onmessage = null
-        this.ws.close()
-      } catch {
-        // Already gone.
-      }
-      this.ws = null
-    }
+    const socket = this.ws
+    this.ws = null
+    socket?.close()
   }
 }
