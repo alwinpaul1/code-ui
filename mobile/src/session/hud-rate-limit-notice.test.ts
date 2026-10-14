@@ -230,23 +230,70 @@ describe('where the figures come from', () => {
     expect(rows.map((row) => row.usedPercent)).toEqual([100, 73])
   })
 
-  it('falls back to the host feed when the beacon carries no limit (an API-key session, or one that has not replied yet)', () => {
+  const fullSession: ProviderRateLimits = {
+    provider: 'claude',
+    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_791_678_000_000, resetDescription: null },
+    weekly: null,
+    updatedAt: 0,
+    error: null,
+    status: 'ok'
+  }
+
+  it('does not ask the host feed about a Claude session whose own beacon carries no limit (an API-key session)', () => {
+    // Claude Code leaves `rate_limits` out of the payload for a session with no subscription window.
+    // The host's feed is for the account Orca is signed in with, which is not that session's: a
+    // "Limit reached" from it would be about another login, and could not be closed.
     const bare = parseAgentHudBeaconPayload(RECORDED.replace(/ h5=\S+/, '').replace(/ d7=\S+/, ''), 0)
-    const hostSays: ProviderRateLimits = {
-      provider: 'claude',
-      session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_791_678_000_000, resetDescription: null },
-      weekly: null,
-      updatedAt: 0,
-      error: null,
-      status: 'ok'
-    }
-    const rows: RateLimitWindowReading[] = hudRateLimitWindows(bare, hostSays)
+    expect(hudRateLimitWindows(bare, fullSession)).toEqual([])
+  })
+
+  it('asks the host feed when there is no beacon to ask: a hand-started tab, or a host with no flag', () => {
+    const rows: RateLimitWindowReading[] = hudRateLimitWindows(null, fullSession)
     expect(rows).toEqual([{ name: 'Session', usedPercent: 100, windowMinutes: 300, resetsAt: SESSION_RESETS }])
     expect(rateLimitNotice({ windows: rows, agent: 'claude', now: RECORDING_TIME })).toMatchObject({ kind: 'reached' })
   })
 
+  it('asks the host feed for Codex even with its beacon in hand: that beacon never carries a limit', () => {
+    const codex = parseAgentHudBeaconPayload('CUIHUD1 agent=codex sid=thread-1 model=gpt-6-astra effort=high used=22147 win=258400', 0)
+    expect(codex?.limits).toEqual([])
+    expect(hudRateLimitWindows(codex, { ...fullSession, provider: 'codex' })).toHaveLength(1)
+  })
+
   it('reads nothing from no beacon and no feed', () => {
     expect(hudRateLimitWindows(null, null)).toEqual([])
+  })
+})
+
+describe('which window speaks when two are close', () => {
+  const close = (session: number, weekly: number) => [
+    { name: 'Session', usedPercent: session, windowMinutes: null, resetsAt: SESSION_RESETS },
+    { name: 'Weekly', usedPercent: weekly, windowMinutes: null, resetsAt: WEEKLY_RESETS }
+  ]
+
+  it('is the 5-hour window for Claude Code, which checks it first, whatever the week says', () => {
+    // 91% of the 5 hours with 3 hours gone; 96% of a week 47% gone. Both tiers fire; Claude Code's
+    // `Nm` walks five_hour before seven_day and names the first.
+    const notice = rateLimitNotice({ windows: close(91, 96), agent: 'claude', now: (SESSION_RESETS - 3 * HOUR) * 1000 })
+    expect(notice?.key).toBe(`approaching:session:${SESSION_RESETS / 60}`)
+  })
+
+  it('is the fuller window for Codex, which warns on each by its own use', () => {
+    const notice = rateLimitNotice({ windows: close(80, 90), agent: 'codex', now: RECORDING_TIME })
+    expect(notice?.key).toBe(`approaching:weekly:${WEEKLY_RESETS / 60}`)
+  })
+})
+
+describe('a dismissal and the two sources', () => {
+  it('holds when the beacon and the host feed state the same reset a second apart', () => {
+    const at = (resetsAt: number) =>
+      rateLimitNotice({
+        windows: [{ name: 'Weekly', usedPercent: 76, windowMinutes: null, resetsAt }],
+        agent: 'claude',
+        now: RECORDING_TIME
+      })
+    expect(at(WEEKLY_RESETS)?.key).toBe(at(WEEKLY_RESETS + 1)?.key)
+    // A reset a week on is another cycle.
+    expect(at(WEEKLY_RESETS)?.key).not.toBe(at(WEEKLY_RESETS + WEEK)?.key)
   })
 })
 

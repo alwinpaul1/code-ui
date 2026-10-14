@@ -254,6 +254,28 @@ describe('the connected banner', () => {
     expect(words(drawer).some((text) => text.startsWith('73% · resets in'))).toBe(true)
   })
 
+  it('does not open the usage sheet by itself when a notice comes back after the one that opened it went', () => {
+    const update = (controller: MobileSessionController) =>
+      act(() =>
+        renderer!.update(
+          <ThemeProvider initialPreference="light">
+            <MobileNativeChatRateLimitBanner controller={controller} />
+          </ThemeProvider>
+        )
+      )
+    const full = controllerFor(windowsFor('100:1791678000', '73:1791997200'))
+    mount(full)
+    act(() => host('rate-limit-view-usage').props.onPress())
+    expect(renderer!.root.findAll((node) => (node.type as unknown) === 'BottomDrawer')).toHaveLength(1)
+    // The window resets (or the beacon dies): no notice, and the sheet that listed it goes with it.
+    update(controllerFor([]))
+    expect(renderer!.toJSON()).toBeNull()
+    // The limit is reached again: the banner is back and the sheet is shut, as the user left it.
+    update(full)
+    expect(words()[0]).toBe('Limit reached')
+    expect(renderer!.root.findAll((node) => (node.type as unknown) === 'BottomDrawer')).toHaveLength(0)
+  })
+
   it('stays closed once closed, across a remount, until the limit is a new one', () => {
     const near = controllerFor(windowsFor('20:1791678000', '76:1791997200'))
     mount(near)

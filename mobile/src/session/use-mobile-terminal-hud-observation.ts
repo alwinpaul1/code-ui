@@ -32,6 +32,10 @@ const HUD_POLL_MS = 5_000
  *  pills waited a whole idle poll after a chat opened over a relay still
  *  settling (2026-10-09). */
 export const HUD_FIRST_READ_RETRY_MS = 1_000
+/** How long the reads of a watch may be silent before a `/context` table found after them has no
+ *  stamp: six idle polls (HUD_POLL_MS), so no table is called new across a stall it could have been
+ *  painted inside. */
+const CONTEXT_READ_GAP_MS = 30_000
 
 /**
  * While chat covers a terminal, read its screen for live controls and queued
@@ -164,6 +168,7 @@ export function useMobileTerminalHudObservation(args: {
     let inFlight = false
     /** A read of the live screen has come back for this watch. */
     let landed = false
+    let lastLandedAt = 0
     const read = async (): Promise<TerminalHudObservation | null> => {
       const handle = handleRef.current
       if (!handle || inFlight) {
@@ -203,8 +208,11 @@ export function useMobileTerminalHudObservation(args: {
           return null
         }
         // A table already on the screen at the watch's first read was painted before the phone
-        // looked, at a time it cannot name (use-held-context-report.ts).
-        const firstOfWatch = !landed
+        // looked, at a time it cannot name (use-held-context-report.ts). So was one found after a
+        // gap in the reads: a relay that stalled, or an app the system paused, for CONTEXT_READ_GAP_MS.
+        const readAt = Date.now()
+        const firstOfWatch = !landed || readAt - lastLandedAt > CONTEXT_READ_GAP_MS
+        lastLandedAt = readAt
         landed = true
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw)

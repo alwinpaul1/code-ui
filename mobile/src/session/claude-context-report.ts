@@ -103,12 +103,18 @@ export function parseTokenCount(text: string): number | null {
 const COUNT_SOURCE = String.raw`~?[\d.,]+[kKmM]?`
 /** The grid glyphs, the legend's own marker, and the "⎿" in front of the heading. */
 const LEAD = /^[\s⎿⛁⛀⛶⛝]+/u
-const HEADING = /^Context Usage$/
+/** How Claude Code opens the table: the command's echo, then "⎿  Context Usage" with the marker in the
+ *  third column. A copy of a table in a tool's output or a reply has the marker nested or the echo of
+ *  another command above it, and is not this session's. */
+const COMMAND_ECHO = /^❯\s+\/context(?:\s+all)?$/
+const HEADING_ROW = /^ {2}⎿ {2}Context Usage$/u
 const TOTALS = new RegExp(String.raw`^(${COUNT_SOURCE})\s*/\s*(${COUNT_SOURCE})\s+tokens\s*\((\d{1,3})%\)$`)
 const MODEL_ID = /^(claude-[\w.-]+)$/
 const LEGEND_START = /^Estimated usage by category$/
-const LEGEND_ROW = new RegExp(String.raw`^(.+?):\s*(${COUNT_SOURCE})(?:\s+tokens?)?(?:\s*\(([\d.]+)%\))?$`)
-const WRAPPED_PERCENT = /^(?:tokens?\s+)?\(([\d.]+)%\)$/
+// A deferred row is printed with a space for its glyph and "N/A" for its percent (the 2.1.296 legend
+// builder: `O.isDeferred ? "N/A" : ...`), so the percent is a number or N/A.
+const LEGEND_ROW = new RegExp(String.raw`^(.+?):\s*(${COUNT_SOURCE})(?:\s+tokens?)?(?:\s*\((?:([\d.]+)%|(N/A))\))?$`)
+const WRAPPED_PERCENT = /^(?:tokens?\s+)?\((?:([\d.]+)%|(N\/A))\)$/
 const SECTION_HEADER = /^(MCP tools|Memory files|Custom agents|Skills)\s+·\s*(.*)$/
 const SUMMARY_ROW = new RegExp(String.raw`^\d+\s+(?:tools?|agents?|skills?|files?)\s+·\s+${COUNT_SOURCE}\s+tokens$`)
 const NAMED_ROW = new RegExp(String.raw`^(.+?):\s*(${COUNT_SOURCE})\s+tokens$`)
@@ -116,14 +122,16 @@ const TREE_ROW = /^[├└]\s+(.*)$/u
 /** The table is indented under "⎿ "; anything flush to the left after it is the conversation again. */
 const BLOCK_INDENT = 5
 
-function kindOf(name: string): ContextCategoryKind {
+/** The three kinds the binary names (`FYr`: "Free space", "Autocompact buffer" or, with auto-compact
+ *  off, "Compact buffer", and a row flagged deferred). A deferred row prints (N/A) for its percent. */
+function kindOf(name: string, deferred: boolean): ContextCategoryKind {
   if (/^free space$/i.test(name)) {
     return 'free'
   }
-  if (/^auto-?compact buffer$/i.test(name)) {
+  if (/^(?:auto-?)?compact buffer$/i.test(name)) {
     return 'buffer'
   }
-  return /\(deferred\)$/i.test(name) ? 'deferred' : 'used'
+  return deferred || /\(deferred\)$/i.test(name) ? 'deferred' : 'used'
 }
 
 function indentOf(line: string): number {
@@ -144,8 +152,8 @@ function detailRow(content: string): ContextDetailRow {
 
 export function readClaudeContextReport(lines: readonly string[]): ClaudeContextReport | null {
   let heading = -1
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    if (HEADING.test((lines[index] ?? '').replace(LEAD, ''))) {
+  for (let index = lines.length - 1; index >= 1; index -= 1) {
+    if (HEADING_ROW.test((lines[index] ?? '').trimEnd()) && COMMAND_ECHO.test((lines[index - 1] ?? '').trim())) {
       heading = index
       break
     }
@@ -195,28 +203,30 @@ export function readClaudeContextReport(lines: readonly string[]): ClaudeContext
         continue
       }
       const row = LEGEND_ROW.exec(text)
-      if (!row) {
-        continue
+      const tokens = row ? parseTokenCount(row[2]!) : null
+      if (!row || tokens === null) {
+        // A row that is not a category (its name wrapped, its count wrapped away): the table is not
+        // whole, and a bar drawn without it would be wrong.
+        return null
       }
       let percent = row[3]
-      if (percent === undefined) {
+      let notApplicable = row[4] !== undefined
+      if (percent === undefined && !notApplicable) {
         // The percent can wrap onto the next row ("(2.4%)", or "tokens (0.1%)" when the row broke
         // before the word).
         const next = WRAPPED_PERCENT.exec(body(lines[index + 1]))
         if (next) {
           percent = next[1]
+          notApplicable = next[2] !== undefined
           index += 1
         }
       }
-      const tokens = parseTokenCount(row[2]!)
-      if (tokens !== null) {
-        categories.push({
-          name: row[1]!,
-          tokens,
-          percent: percent === undefined ? null : Number(percent),
-          kind: kindOf(row[1]!)
-        })
-      }
+      categories.push({
+        name: row[1]!,
+        tokens,
+        percent: percent === undefined ? null : Number(percent),
+        kind: kindOf(row[1]!, notApplicable)
+      })
       continue
     }
     const header = SECTION_HEADER.exec(text)

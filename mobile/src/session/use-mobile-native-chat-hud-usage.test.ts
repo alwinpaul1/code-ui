@@ -148,6 +148,19 @@ describe('the usage windows the HUD hands the banner', () => {
     ])
   })
 
+  it('are none for a Claude session whose own beacon carries no limit, whatever the host feed says (an API-key session)', () => {
+    beacon(RECORDED.replace(/ h5=\S+/, '').replace(/ d7=\S+/, ''))
+    fakes.accounts = hostFeed({
+      provider: 'claude',
+      session: window(100, 300, 1_791_678_000_000),
+      weekly: null,
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    })
+    expect(render({ agent: 'claude', sessionId: RECORDED_SESSION }).limits).toEqual([])
+  })
+
   it('are the host\'s feed for Codex, whose beacon carries no limit', () => {
     fakes.accounts = hostFeed(null, {
       provider: 'codex',

@@ -188,7 +188,8 @@ describe('the bar at sizes the real screens do not reach', () => {
         categories: [
           { name: 'Messages', tokens: 10_000, percent: 1, kind: 'used' },
           { name: 'Free space', tokens: 990_000, percent: 99, kind: 'free' },
-          { name: 'MCP tools (deferred)', tokens: 241_600, percent: 24.2, kind: 'deferred' }
+          // Claude Code prints (N/A) for a deferred row, so the parser reads no percent for it.
+          { name: 'MCP tools (deferred)', tokens: 241_600, percent: null, kind: 'deferred' }
         ]
       })
     )

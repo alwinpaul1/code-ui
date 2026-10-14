@@ -13,11 +13,13 @@ import { hudLimitsFromRateLimits } from './hud-rate-limits'
  *     the launch script has written them as `h5=` and `d7=` since the HUD began
  *     (agent-hud-launch-args.ts; docs/mobile-agent-hud.md "The payload"). They are read, not added:
  *     no beacon field is new, so the frame-size and splice rules are untouched. It is the agent's own
- *     statement about this session, repainted on every status-line beat, so it outranks the host feed.
- *  2. The host's `accounts.subscribe` windows (hud-rate-limits.ts), for the agents whose beacon has no
- *     limits: Codex (its notify beacon carries tokens and a window, never a limit), and a Claude tab
- *     with no beacon yet or whose payload held no `rate_limits` (an API-key session, or one that has
- *     not had its first reply).
+ *     statement about this session, repainted on every status-line beat, so a Claude beacon decides
+ *     alone, one with no `rate_limits` included (an API-key session, or one not yet replied).
+ *  2. The host's `accounts.subscribe` windows (hud-rate-limits.ts), where there is no Claude beacon to
+ *     ask: Codex (its notify beacon carries tokens and a window, never a limit), and a Claude tab with
+ *     no beacon (hand-started, a Windows host, not yet beaconed). The feed is for the account Orca is
+ *     signed in with, which a session on another login is not using, hence not a fallback for a
+ *     Claude beacon that states none.
  *  3. Not used: the Anthropic sessions API's `rate_limit_event`. It is the only source of "now using
  *     usage credits" (`isUsingOverage`) and of the server's own `allowed_warning` word, but it exists
  *     only for a session registered with Anthropic, which a local tab usually is not. Batch 8 owns it.
@@ -38,8 +40,10 @@ import { hudLimitsFromRateLimits } from './hud-rate-limits'
  *    `RATE_LIMIT_WARNING_THRESHOLDS = [50, 75, 90, 95]` percent used, the 50 only for a Plus or Team
  *    plan's 5-hour window. 75 is the first tier for every plan, so a window is "approaching" from 75%.
  *
- * "REACHED" is the same for both: 100%. Codex's own check is `percent == 100.0`, and Claude Code's
- * status line states 100 once it has refused a request.
+ * "REACHED" is the same for both: 100%. Codex's own check is `percent == 100.0`. Claude Code 2.1.296
+ * builds the status line's `used_percentage` as `round(utilization * 1000) / 10` (`fMt`), so a full
+ * window reads 100, and the launch script floors it to a whole number (99.9 is 99). A full window was
+ * not seen live: the recorded payload's windows were at 20% and 73%.
  *
  * A window whose reset has passed is not read: the figure is the last one the agent saw, and the
  * agent's own docs say to expire anything built from it by `resetsAt`.
@@ -162,6 +166,12 @@ export function formatRateLimitResets(resetsAt: number, now: number): string {
     : `Resets ${date.toLocaleDateString('en-GB', { weekday: 'long' })} at ${clock}`
 }
 
+/** A reset as part of a notice's key: to the minute, so the beacon's exact second and the host feed's
+ *  rounding of the same reset are one cycle, and a dismissal made on one source holds on the other. */
+function resetCycle(resetsAt: number | null): string {
+  return resetsAt === null ? 'none' : String(Math.round(resetsAt / 60))
+}
+
 function subtitleFor(resetsAt: number | null, now: number): string {
   return resetsAt === null ? RATE_LIMIT_TRY_AGAIN_LATER : formatRateLimitResets(resetsAt, now)
 }
@@ -204,7 +214,7 @@ export function rateLimitNotice(input: {
       title: RATE_LIMIT_TITLES.reached,
       subtitle: subtitleFor(binding.reading.resetsAt, now),
       dismissible: false,
-      key: `reached:${binding.kind}:${binding.reading.resetsAt ?? 'none'}`
+      key: `reached:${binding.kind}:${resetCycle(binding.reading.resetsAt)}`
     }
   }
   const close = live
@@ -213,7 +223,13 @@ export function rateLimitNotice(input: {
         ? claudeApproaching(entry.kind, entry.reading.usedPercent, entry.reading.resetsAt, nowSeconds)
         : agent === 'codex' && entry.reading.usedPercent >= CODEX_APPROACHING_PERCENT
     )
-    .sort((a, b) => b.reading.usedPercent - a.reading.usedPercent)[0]
+    // Claude Code names the first window that fires and walks the 5 hours before the week (`Nm`
+    // over `Zw`); Codex warns on each window by its own use, so the fuller one speaks.
+    .sort((a, b) =>
+      isClaude(agent) && a.kind !== b.kind
+        ? (a.kind === 'session' ? -1 : 1)
+        : b.reading.usedPercent - a.reading.usedPercent
+    )[0]
   if (!close) {
     return null
   }
@@ -222,16 +238,25 @@ export function rateLimitNotice(input: {
     title: RATE_LIMIT_TITLES.approaching,
     subtitle: subtitleFor(close.reading.resetsAt, now),
     dismissible: true,
-    key: `approaching:${close.kind}:${close.reading.resetsAt ?? 'none'}`
+    key: `approaching:${close.kind}:${resetCycle(close.reading.resetsAt)}`
   }
 }
 
-/** The windows a notice reads: the beacon's when it states any, else the host feed's. */
+/**
+ * The windows a notice reads.
+ *
+ * A Claude beacon is the session's own statement and decides alone, a missing `rate_limits` included:
+ * Claude Code leaves it out of the payload for a session with no subscription window (an API key), and
+ * the host's feed is for the account Orca is signed in with, so "Limit reached" from it would be about
+ * another login and could not be closed. With no beacon to ask (a hand-started tab, a Windows host, a
+ * tab that has not beaconed yet) and for Codex, whose beacon never carries a limit, the host's feed is
+ * the source.
+ */
 export function hudRateLimitWindows(
   beacon: AgentHudBeacon | null,
   accounts: ProviderRateLimits | null
 ): RateLimitWindowReading[] {
-  if (beacon && beacon.limits.length > 0) {
+  if (beacon && (beacon.agent === 'claude' || beacon.limits.length > 0)) {
     return beacon.limits.map((limit) => ({ ...limit, windowMinutes: null }))
   }
   return hudLimitsFromRateLimits(accounts).map((row) => ({ ...row }))

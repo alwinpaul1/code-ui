@@ -2106,8 +2106,10 @@ are untouched, and the phone never runs a command in the user's terminal to get 
 
 **The rate-limit banner** (`MobileNativeChatRateLimitBanner.tsx`, rules in `hud-rate-limit-notice.ts`).
 The windows are the beacon's `h5=<pct>:<epoch>` and `d7=` (Claude Code's `rate_limits.five_hour` and
-`.seven_day`, in the payload above since the HUD began), else the host's `accounts.subscribe` rows, which
-are the only source for Codex. The recorded 2.1.296 payload is
+`.seven_day`, in the payload above since the HUD began); a Claude beacon decides alone, one with no
+`rate_limits` included (an API-key session has none, and the host's feed is for the account Orca is signed
+in with, not that login). With no Claude beacon, and for Codex, the source is the host's `accounts.subscribe`
+rows. The recorded 2.1.296 payload is
 `fixtures/claude-busy-lead-tasks-2.1.296/beacon-payloads.txt` (`h5=20:1791678000 d7=73:1791997200`).
 "Approaching" is each agent's own rule, read from its code and not guessed:
 
@@ -2132,7 +2134,13 @@ tools · 631 tokens"). It wraps with the pane: at 80 columns the percent of a ro
 48 nearly every row does. Real captures at 130, 110, 80 and 48 columns and with `/context all` are in
 `fixtures/claude-context-2.1.300/`. A table is read only with its heading, its totals and a Free space row
 on screen and its rows adding up to the window; a table scrolled half off, or with a row lost to a wrapped
-name, reads nothing. Memory files is a category row only: no per-file section was printed with a 2.5 KB
+name, reads nothing. The table must open as Claude Code opens it: the row `❯ /context` (or `/context all`),
+then `  ⎿  Context Usage` with the marker in the third column; a copy of a table in a tool's output or a
+reply has the marker nested or no such echo above it and is not read (a real `! sed` over a saved table
+is `fixtures/claude-context-2.1.300/context-quoted-by-a-tool-130-cols.txt`). A row that cannot be read
+refuses the whole table. With auto-compact off the buffer row is named "Compact buffer"; a deferred row
+is printed with a space for its glyph and `(N/A)` for its percent (from the 2.1.296 renderer, not a live
+capture). Memory files is a category row only: no per-file section was printed with a 2.5 KB
 CLAUDE.md and a CLAUDE.local.md in the project. The table is held per tab, terminal and session
 (`use-held-context-report.ts`, under the sticky HUD's key) after it scrolls away, stamped with when the
 phone saw it printed, or unstamped when it was already on the screen as the phone began to look.

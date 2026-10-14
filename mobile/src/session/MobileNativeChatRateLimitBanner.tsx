@@ -170,6 +170,11 @@ export function MobileNativeChatRateLimitBanner({
   const [usageOpen, setUsageOpen] = useState(false)
   const notice = rateLimitNotice({ windows, agent: chat.nativeChatAgent ?? null, now })
   if (notice === null || dismissed.has(notice.key)) {
+    // The sheet lists the windows of a notice that is gone; shut, so it does not open itself over the
+    // next one (the pill row does the same for its hint).
+    if (usageOpen) {
+      setUsageOpen(false)
+    }
     return null
   }
   return (

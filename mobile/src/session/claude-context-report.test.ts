@@ -185,6 +185,7 @@ describe('refusing what is not a whole table', () => {
 
   it('reads the one-row table: a heading, its totals and a free-space row alone', () => {
     const report = readClaudeContextReport([
+      '❯ /context',
       '  ⎿  Context Usage',
       '     ⛶ ⛶ ⛶ ⛶ ⛶   claude-haiku-5-5',
       '     ⛶ ⛶ ⛶ ⛶ ⛶   0/200k tokens (0%)',
@@ -198,6 +199,102 @@ describe('refusing what is not a whole table', () => {
   it('takes the latest table when two are on screen', () => {
     const twice = [...WRAPPED_48.slice(0, 40), ...WIDE.slice(0, 40)]
     expect(readClaudeContextReport(twice)?.usedTokens).toBe(32_800)
+  })
+})
+
+// Found by the review of this batch, each against a real Claude Code 2.1.300 screen or the renderer's
+// own code (the binary's `FYr` names the three kinds of row, and its legend builder prints a deferred
+// row with a space for its glyph and "N/A" for its percent).
+describe('rows Claude Code prints in other sessions than the first captures', () => {
+  const AUTO_COMPACT_OFF = read('context-130-cols-auto-compact-off.txt')
+
+  it('reads the buffer of a session with auto-compact off, which Claude Code calls "Compact buffer"', () => {
+    // `DISABLE_AUTO_COMPACT=1`: the autocompact row is named without "Auto" and sits before Free space.
+    const report = readClaudeContextReport(AUTO_COMPACT_OFF)
+    expect(report?.categories.find((category) => category.name === 'Compact buffer')).toEqual({
+      name: 'Compact buffer',
+      tokens: 3000,
+      percent: 0.3,
+      kind: 'buffer'
+    })
+    expect(report?.categories.filter((category) => category.kind === 'used').map((category) => category.name)).toEqual([
+      'System prompt',
+      'System tools',
+      'Custom agents',
+      'Memory files',
+      'Skills',
+      'Messages'
+    ])
+  })
+
+  it('reads a deferred row as Claude Code builds it: a space for its glyph and (N/A) for its percent', () => {
+    const withDeferred = WIDE.flatMap((line) =>
+      line.includes('⛁ Memory files: 23 tokens')
+        ? [line, `${line.slice(0, line.indexOf('⛁ Memory files'))}  MCP tools (deferred): 241.6k tokens (N/A)`]
+        : [line]
+    )
+    const report = readClaudeContextReport(withDeferred)
+    expect(report?.categories.find((category) => category.name === 'MCP tools (deferred)')).toEqual({
+      name: 'MCP tools (deferred)',
+      tokens: 241_600,
+      percent: null,
+      kind: 'deferred'
+    })
+  })
+
+  it('reads a deferred row whose (N/A) wrapped to the next line, as at 80 columns', () => {
+    const wrapped = WRAPPED_80.flatMap((line) =>
+      line.includes('⛁ Memory files: 23 tokens')
+        ? [line, `${line.slice(0, line.indexOf('⛁ Memory files'))}  MCP tools (deferred): 241.6k tokens`, '     (N/A)']
+        : [line]
+    )
+    expect(
+      readClaudeContextReport(wrapped)?.categories.find((category) => category.name === 'MCP tools (deferred)')?.kind
+    ).toBe('deferred')
+  })
+})
+
+describe('a table that is not this session\'s /context', () => {
+  it('is not read from a copy of one a tool printed (a real `! sed` over a saved table, 2.1.300)', () => {
+    // The heading is "⎿  ⎿  Context Usage": the tool result's own marker, then the copy's. The
+    // conversation had never run /context; Claude Code's reply to the copy says what it is.
+    expect(readClaudeContextReport(read('context-quoted-by-a-tool-130-cols.txt'))).toBeNull()
+  })
+
+  it('is not read without the command that printed it on the row above its heading', () => {
+    // The real table with its "❯ /context" echo row gone: a heading alone does not say who painted it.
+    expect(readClaudeContextReport(WIDE.filter((line) => !line.startsWith('❯ /context')))).toBeNull()
+  })
+
+  it('is read for `/context all` and for the command typed in a pane Claude Code wrapped', () => {
+    expect(readClaudeContextReport(ALL)).not.toBeNull()
+    expect(readClaudeContextReport(WRAPPED_48)).not.toBeNull()
+  })
+
+  it('is not read from a reply that quotes the table in a code block', () => {
+    const reply = [
+      '❯ what is in my context',
+      '⏺ It looks like this:',
+      '  ```',
+      ...WIDE.slice(7, 24).map((line) => `  ${line}`),
+      '  ```'
+    ]
+    expect(readClaudeContextReport(reply)).toBeNull()
+  })
+})
+
+describe('a legend row the parser cannot read', () => {
+  it('refuses the whole table rather than drawing it without that row', () => {
+    // The row's count wrapped away from its name, so it reads as nothing, and 10 tokens are small
+    // enough to leave the sum inside its tolerance. A bar built from the rows that did read is not
+    // this session's.
+    const split = WRAPPED_80.flatMap((line) =>
+      line.includes('⛁ Messages: 10 tokens')
+        ? [line.replace(' 10 tokens (0.0%)', ''), '     10 tokens (0.0%)']
+        : [line]
+    )
+    expect(split.some((line) => line.endsWith('⛁ Messages:'))).toBe(true)
+    expect(readClaudeContextReport(split)).toBeNull()
   })
 })
 

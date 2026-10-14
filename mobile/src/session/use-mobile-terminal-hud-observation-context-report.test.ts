@@ -62,6 +62,42 @@ describe('the /context table, as a screen read returns it', () => {
     expect(hud.contextReport).toMatchObject({ firstRead: false, report: { usedTokens: 32_800 } })
   })
 
+  it('is returned as found, not as new, when the reads before it were 45 s behind: the phone cannot say when it was painted', async () => {
+    // A relay that stalled, or an app the system paused: the table may have been painted at any point
+    // in the gap, and "Updated just now" over it would be a claim the phone cannot back.
+    let stalled = false
+    const sendRequest = vi.fn(async () => {
+      if (stalled) {
+        throw new Error('Request timed out: terminal.read')
+      }
+      return screen(sendRequest.mock.calls.length === 1 ? IDLE : TABLE)
+    })
+    await mount(sendRequest)
+    expect(hud.contextReport).toBeNull()
+    // Every read for the next 45 s fails; the first after that finds the table.
+    stalled = true
+    await advance(45_000)
+    stalled = false
+    await advance(1_000)
+    expect(hud.contextReport).toMatchObject({ firstRead: true })
+  })
+
+  it('is returned as new when the reads before it were a few seconds behind, as a slow poll is', async () => {
+    let stalled = false
+    const sendRequest = vi.fn(async () => {
+      if (stalled) {
+        throw new Error('Request timed out: terminal.read')
+      }
+      return screen(sendRequest.mock.calls.length === 1 ? IDLE : TABLE)
+    })
+    await mount(sendRequest)
+    stalled = true
+    await advance(10_000)
+    stalled = false
+    await advance(1_000)
+    expect(hud.contextReport).toMatchObject({ firstRead: false })
+  })
+
   it('goes with the screen: a read after it has scrolled away returns none (the hold is use-held-context-report.ts)', async () => {
     const sendRequest = vi.fn().mockResolvedValueOnce(screen(IDLE)).mockResolvedValueOnce(screen(TABLE)).mockResolvedValue(screen(IDLE))
     await mount(sendRequest)
