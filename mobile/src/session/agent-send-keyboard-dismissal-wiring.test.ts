@@ -84,7 +84,7 @@ describe('terminal send keyboard dismissal wiring', () => {
     // onSubmitEditing under an open composition; native reaches it through the editor action.
     const slice = sourceSlice(
       commandDockSource,
-      'ref={bindLiveInputField}',
+      'ref={bindLiveField}',
       'importantForAutofill="no"'
     )
     expect(slice).toContain('onSubmitEditing={submitLiveInput}')
@@ -125,7 +125,7 @@ describe('terminal send keyboard dismissal wiring', () => {
   it('keeps buffered Return focused until accepted-agent dismissal runs', () => {
     const slice = sourceSlice(
       commandDockSource,
-      'ref={bindCommandField}',
+      'ref={bindBufferedField}',
       'onSubmitEditing={() => void handleSend()}'
     )
     expect(slice).toContain('blurOnSubmit={false}')

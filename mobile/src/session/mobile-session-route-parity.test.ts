@@ -530,7 +530,10 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 8e496f53… exactly.
 // 2026-10-14: every TextInput passes cursorColor={colors.caret}, and the dock live field's
 // onFocus / onBlur also call handleLiveInputFocus / handleLiveInputBlur.
-const HEAD_HOST_JSX_SHA256 = 'aa75133a961d99b340038d28b533e354b1b74ed6341e1984469fba2423ac0428'
+// 2026-10-14 (later, 0.9.141 report): the dock's two TextInputs take their refs through
+// bindLiveField / bindBufferedField (each arms the keyboard claim on the field's native
+// mount), and the buffered field gains onFocus / onBlur. Only the dock's host JSX moved.
+const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96eac241a8c495bf84'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
