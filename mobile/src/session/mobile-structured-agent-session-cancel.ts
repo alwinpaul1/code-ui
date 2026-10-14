@@ -8,6 +8,7 @@ import {
   type StructuredAgentSessionMutate,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
+import { STOP_FAILED_MESSAGE } from './native-chat-stop-words'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
@@ -41,7 +42,10 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const current = stateRef.current
   const turnId = activeStructuredAgentSessionTurnId(current.items)
   if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
-    onSendError('Stop not sent')
+    console.warn(
+      `[stop] no live turn to stop (${!client ? 'no client' : !sessionId ? 'no session' : !enabled ? 'not enabled' : current.fence === null ? 'no runtime fence' : 'no active turn'})`
+    )
+    onSendError(STOP_FAILED_MESSAGE)
     return false
   }
   // Check the capability before fields enter the fingerprint.
@@ -102,7 +106,7 @@ async function sendStop(input: {
   } else if (result.status === 'refused') {
     input.onSendError(result.message)
   } else if (result.status === 'failed') {
-    input.onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
+    input.onSendError(result.message === 'Request not sent' ? STOP_FAILED_MESSAGE : result.message)
   }
   return false
 }

@@ -178,6 +178,20 @@ for (const [scheme, colors] of SCHEMES) {
       }
     })
 
+    it('reaches 48 dp of touch from each 36 dp button, as the app’s `ixv.k(48)` does', async () => {
+      // The 36 dp circles took touches only on their own 36 dp, so a thumb that landed a
+      // finger-width off a button hit the card. `hitSlop` 6 on every side makes the 48.
+      await renderComposer(scheme, { value: 'hi' })
+      for (const label of ['Attach image', 'Dictate', 'Send message']) {
+        expect(pressable(label).props.hitSlop, label).toBe(6)
+      }
+    })
+
+    it('reaches 48 dp of touch from Stop too, the button that takes Send’s slot', async () => {
+      await renderComposer(scheme, { canStop: true })
+      expect(pressable('Stop the agent').props.hitSlop).toBe(6)
+    })
+
     it('lays the recording row on the action row’s buttons, with the same 8 dp all round', async () => {
       await act(async () => {
         renderer = create(
@@ -205,6 +219,10 @@ for (const [scheme, colors] of SCHEMES) {
       expect([row.paddingTop, row.paddingBottom]).toEqual([8, 8])
       const send = flat(pressable('Send dictation').props.style)
       expect(send.backgroundColor).toBe(colors.composerSend)
+      // The recording row's buttons are the same 36 dp circles, with the same 48 dp of touch.
+      for (const label of ['Cancel', 'Stop dictation', 'Send dictation']) {
+        expect(pressable(label).props.hitSlop, label).toBe(6)
+      }
     })
 
     it('draws the + 22, the mic 20 in the icon tone, and Send’s white arrow on the clay fill', async () => {

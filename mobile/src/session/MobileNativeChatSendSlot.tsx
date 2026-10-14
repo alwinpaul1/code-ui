@@ -2,6 +2,7 @@ import { Pressable, View, type ViewStyle } from 'react-native'
 import { ArrowUp, Square } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
+import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 
 /**
  * The composer's trailing button: Send, or Stop while a turn runs and nothing
@@ -33,6 +34,7 @@ export function MobileNativeChatSendSlot({
   if (showStop) {
     return (
       <Pressable focusable={false}
+        hitSlop={COMPOSER_BUTTON_HIT_SLOP}
         accessibilityLabel="Stop the agent"
         accessibilityRole="button"
         // Never disabled while stopping: the Claude app keeps it live and
@@ -65,6 +67,7 @@ export function MobileNativeChatSendSlot({
   }
   return (
     <PressScale focusable={false}
+      hitSlop={COMPOSER_BUTTON_HIT_SLOP}
       accessibilityLabel="Send message"
       accessibilityRole="button"
       accessibilityState={{ disabled: !canSend }}

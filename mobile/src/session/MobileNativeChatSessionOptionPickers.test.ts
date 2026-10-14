@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
@@ -205,11 +205,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       liveModel: { model: 'opus', label: 'Opus 5 (1M context)', effort: 'xhigh' }
     })
     expect(pill('Model').props.accessibilityLabel).toBe('Model, Opus 5 Extra')
-    const labels = renderer!.root
-      .findAll((node) => node.type === 'Text')
-      .map((node) => (node.props as { children?: unknown }).children)
-    expect(labels).toContain('Opus 5 Extra')
-    expect(labels).not.toContain('Sonnet 5 High')
+    // Read off the screen, the chip says "Opus 5 Extra": the name, then the effort in its own
+    // Text, muted (MobileNativeChatSessionOptionRows.effort-word.test.tsx pins the tones).
+    const spoken = (node: ReactTestInstance | string): string =>
+      typeof node === 'string' ? node : node.children.map(spoken).join('')
+    expect(spoken(pill('Model'))).toBe('Opus 5 Extra')
+    expect(spoken(pill('Model'))).not.toContain('Sonnet 5 High')
   })
 
   it('falls back to the snapshot only while the agent has said nothing', () => {

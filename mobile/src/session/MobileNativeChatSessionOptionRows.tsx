@@ -1,7 +1,7 @@
 // The pill and choice-row primitives the session-option card is built from, kept
 // beside it so the card file stays about layout and apply wiring.
 
-import { Pressable, Switch, View } from 'react-native'
+import { Pressable, Switch, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -28,11 +28,15 @@ export function SessionOptionCaption({ children }: { children: string }): React.
 
 export function Pill({
   label,
+  effort = null,
   accessibleName,
   disabled,
   onPress
 }: {
   label: string
+  /** The effort the agent stated, drawn after the label in the muted tone the Claude app uses
+   *  (`pl7.P` against the name's `pl7.O`). Part of the same line: it ellipsizes with the label. */
+  effort?: string | null
   accessibleName: string
   disabled: boolean
   onPress: () => void
@@ -76,7 +80,17 @@ export function Pill({
         ellipsizeMode="tail"
         style={disabled ? { flexShrink: 1 } : { flexShrink: 1, color: colors.composerPillText }}
       >
-        {label}
+        {effort ? (
+          // Nested, not a sibling: the chip is one line that breaks and ellipsizes as one, and the
+          // word inherits the label's face and size. A disabled chip is muted whole. With no
+          // effort the label stays the Text's one plain string child.
+          <>
+            {label}
+            <Text style={{ color: disabled ? colors.textMuted : colors.composerIcon }}>{` ${effort}`}</Text>
+          </>
+        ) : (
+          label
+        )}
       </Txt>
     </Pressable>
   )

@@ -591,7 +591,10 @@
             // handed to the waveform so a chunk's level skips React.
             // 2026-10-14 (caption): +6, the `dictationCaption` prop, its destructure, the import
             // and the caption above the card (MobileNativeChatDictationCaption.tsx).
-            "max": 468,
+            // 2026-10-14 (mode chip): +4. The chip's mount in the leading group (one line, and
+            // the import) and the mic's touch slop (one line, and the import). Whether it draws,
+            // and what it says, is MobileNativeChatModeChip.tsx's.
+            "max": 472,
             "skipBlankLines": true,
             "skipComments": true
           }

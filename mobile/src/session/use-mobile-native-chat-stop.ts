@@ -5,6 +5,7 @@ import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+import { STOP_FAILED_MESSAGE } from './native-chat-stop-words'
 
 const ESCAPE = String.fromCharCode(27)
 const CTRL_C = String.fromCharCode(3)
@@ -73,7 +74,11 @@ export function useMobileNativeChatStop(args: {
     const tap = latestStopRef.current
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
-      onSendError('Stop not sent (terminal not ready)')
+      // The words are the Claude app's; this line is where the cause goes.
+      console.warn(
+        `[stop] no terminal to stop (${!client ? 'no client' : !handle ? 'no terminal handle' : 'input lease not held'})`
+      )
+      onSendError(STOP_FAILED_MESSAGE)
       onVerdict?.(false)
       return
     }
@@ -99,6 +104,11 @@ export function useMobileNativeChatStop(args: {
     let sawAccepted = false
     let sawUnknown = false
     let sawRejected = false
+    /** The first thing that went wrong, for the one log line a failed Stop leaves. */
+    let firstCause: string | null = null
+    const noteCause = (cause: string): void => {
+      firstCause ??= cause
+    }
     const reportIfSettled = (): void => {
       if (pending === 0) {
         settle(sawAccepted)
@@ -112,9 +122,10 @@ export function useMobileNativeChatStop(args: {
         return
       }
       // Why: an ack lost after the frame was written (or a logical cutover) may
-      // still have stopped the agent — a definite "not sent" would invite a second
+      // still have stopped the agent — a definite "couldn't stop" would invite a second
       // Escape into changed state. Mirrors the cancel/answer wording.
-      onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
+      console.warn(`[stop] ${sawUnknown ? 'unconfirmed' : 'not sent'}: ${firstCause ?? 'no cause recorded'}`)
+      onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : STOP_FAILED_MESSAGE)
     }
     const sendKey = (text: string): void => {
       const activeRoute = activeRouteRef.current
@@ -128,6 +139,7 @@ export function useMobileNativeChatStop(args: {
         // route moved on has no reply coming to report it otherwise. Settle it
         // here, since Grok's lone Ctrl+C has no pacing timer to do it later.
         sawRejected = true
+        noteCause('the route changed before the key was written')
         reportIfSettled()
         return
       }
@@ -135,6 +147,7 @@ export function useMobileNativeChatStop(args: {
       const timeoutMs = deadline - Date.now()
       if (timeoutMs <= 0) {
         sawRejected = true
+        noteCause('the send budget ran out before the key was written')
         pending -= 1
         reportIfSettled()
         return
@@ -149,8 +162,8 @@ export function useMobileNativeChatStop(args: {
               ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
               : {})
           },
-          // Why: without this the call parks indefinitely on reconnect, so "Stop not
-          // sent" never appears and a stale Escape can land minutes later — into a
+          // Why: without this the call parks indefinitely on reconnect, so the failure
+          // never gets said and a stale Escape can land minutes later — into a
           // composer that by then holds fresh text.
           { timeoutMs, budgetSpansConnect: true }
         )
@@ -159,11 +172,13 @@ export function useMobileNativeChatStop(args: {
             sawAccepted = true
           } else {
             sawRejected = true
+            noteCause('the host did not accept the key')
           }
         })
         // Why: disconnect can race either fire-and-forget Escape; record one verdict
         // instead of leaking an unhandled RPC rejection.
         .catch((error: unknown) => {
+          noteCause(error instanceof Error ? error.message : String(error))
           if (isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)) {
             sawUnknown = true
           } else {

@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { MobileNativeChatAttachSheet } from './MobileNativeChatAttachSheet'
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 
 /** The composer's + and the Add context sheet it opens.
  *
@@ -66,6 +67,7 @@ export function MobileNativeChatAttachButton({
     <>
       <Pressable
         focusable={false}
+        hitSlop={COMPOSER_BUTTON_HIT_SLOP}
         accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
         style={({ pressed }) => [
           iconButtonStyle,

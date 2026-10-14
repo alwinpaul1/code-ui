@@ -112,7 +112,7 @@ describe('a Stop tap that did nothing says so', () => {
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('says Stop is unconfirmed when the lease drops under an Escape whose ack is lost', async () => {
@@ -143,7 +143,7 @@ describe('a Stop tap that did nothing says so', () => {
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it("says Grok's Ctrl+C was not sent when the lease drops under it", async () => {
@@ -156,7 +156,7 @@ describe('a Stop tap that did nothing says so', () => {
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('still reports a Stop the chat has moved away from, for the toast to carry', async () => {
@@ -168,7 +168,7 @@ describe('a Stop tap that did nothing says so', () => {
     await settleAll(() => settle[0]!(reply(false)))
 
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('still reports a Stop whose chat closed before the host answered', async () => {
@@ -181,7 +181,7 @@ describe('a Stop tap that did nothing says so', () => {
     await settleAll(() => settle[0]!(reply(false)))
 
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('says Stop was not sent when the tap lands on a callback from before the lease dropped', async () => {
@@ -196,7 +196,7 @@ describe('a Stop tap that did nothing says so', () => {
     // Nothing was written, so nothing is left to report it but this.
     expect(sendRequest).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   // Second review (2026-09-25): Claude's verdict came from its 80 ms timer;
@@ -212,7 +212,7 @@ describe('a Stop tap that did nothing says so', () => {
 
     expect(sendRequest).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   // Second review (2026-09-25): a tap turned away before it wrote anything is
@@ -228,7 +228,7 @@ describe('a Stop tap that did nothing says so', () => {
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent (terminal not ready)')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('stays quiet when the lease drops after an Escape landed', async () => {
@@ -262,6 +262,6 @@ describe('a Stop tap that did nothing says so', () => {
     // The first tap's Escape and the second tap's two Escapes all went out.
     expect(sendRequest).toHaveBeenCalledTimes(3)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 })

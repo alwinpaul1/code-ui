@@ -324,7 +324,7 @@ SSE stream as `control_response` with the same `request_id`.
 |---|---|---|---|
 | Send a prompt | POST events, `user` event (1.1) | `terminal.send` with Enter after a verified clear | Yes, done (section 1) |
 | Attachments | upload to `{org}/upload`, referenced by `file_uuid` | `clipboard.*Upload` to a desktop temp file, pasted as a bracketed path | Yes, done |
-| Stop | `interrupt`, no reply awaited; failure "Couldn't stop the session. Try again." | Escape twice, 80 ms apart (`use-mobile-native-chat-stop.ts`); structured lane `agentSession.cancel` | Yes. Missing: the failure snackbar, and Stop re-enabling on failure (gap G24) |
+| Stop | `interrupt`, no reply awaited; failure "Couldn't stop the session. Try again." | Escape twice, 80 ms apart (`use-mobile-native-chat-stop.ts`); structured lane `agentSession.cancel` | Yes. Done 2026-10-14 (G24): a Stop that failed, or an agent still working 10 s after it, says "Couldn't stop the session. Try again." on both lanes and Stop is live again; the cause is one `[stop] …` log line. An ack lost after the Escape went keeps "Stop unconfirmed — check chat before retrying", because it may have worked |
 | Allow once / Always allow / Deny | `control_response` with `behavior`, `updatedInput`, `updatedPermissions`, `message: "Denied by user"` | the option's digit key after a screen re-read (`mobile-native-chat-permission-send.ts`) | Yes, done |
 | Deny with comment | deny with `message` (notification inline reply) | "Send back" exists for plans only | Yes, by typing into the TUI's "No, and tell Claude…" option (gap G21) |
 | AskUserQuestion | allow with `updatedInput.answers` | paced key groups (`mobile-native-chat-answer-stepping.ts`) | Yes, done |
@@ -413,8 +413,9 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Shell, text field, button row | `MobileNativeChatComposer.tsx` | **Match** (2026-10-14, the spec table below); one-row collapse still missing |
 | Placeholder "Type / for commands" (idle), "Queue a message…" (busy) | the same (`use-mobile-native-chat-input-lock.ts`) | **Match** (2026-10-14) |
 | **Stop** in the trailing slot, replacing Send (`pl7.x0` fill, `stop` outline in `pl7.O`; a 36 dp ring stroke 1 in the content colour while stopping) | the same (`MobileNativeChatSendSlot.tsx`) | **Match** (2026-10-14) |
-| **Mode chip** in the leading group: a pill with an icon (Manual = hand, Accept edits = code, Plan = scroll, Auto = lightning) and a label | mode only inside the attach sheet's "Permission" row (`MobileNativeChatAttachSheet.tsx`) | **Missing** (G4) |
-| Model chip: model name + effort, a 36 dp pill, 16 dp sides, ≤220 dp, 13 / 400, no chevron; the effort in `pl7.P` | model pill (`MobileNativeChatSessionOptionRows.tsx` `Pill`) | **Match** except the effort is not drawn muted (one label string) |
+| Closed or ended session: the composer gives way to "This session can't take new messages." (`ccr_session_closed_composer_notice`) | none. Nothing Code UI holds says a session ended: a tab's agent type outlives its process by about 30 minutes (`mobile-native-chat-send-claim.ts`), a dead PTY is dropped from the stream and the composer reads "Waiting for terminal…", and the structured wire has no ended state | **Not drawn, by design** (checked 2026-10-14): a guess would hide a working composer. Needs a signal from the host (the tab gone from the snapshot, or the PTY's exit) |
+| **Mode chip** in the leading group: a pill with an icon (Manual = hand, Accept edits = code, Plan = scroll, Auto = lightning) and a label | `MobileNativeChatModeChip.tsx`, right after the +: 36 dp circle, 16 × 4 padding, 20 dp icon, 13 / 400 label, `composerControl` fill, 40% disabled, "Change mode"; opens the Select mode sheet. Drawn only on a Claude tab whose screen stated a mode, never on Codex; the attach sheet's row stays | **Match** (G4, 2026-10-14; not yet seen on a device). Two open points: it draws only for a mode a footer stated (`manual` from "manual mode on", not a bare `default`, which the badge path also returns when agent rows push the mode row out of the footer), so a Manual session whose footer paints no row shows no chip; and with the context ring drawn, the chip and the model chip do not both fit a 384 dp row whole (Yoga model: "Opus 5.5 Extra" 88 to 52 dp, "Manual" 44 to 14 dp), so both truncate |
+| Model chip: model name + effort, a 36 dp pill, 16 dp sides, ≤220 dp, 13 / 400, no chevron; the effort in `pl7.P` | model pill (`MobileNativeChatSessionOptionRows.tsx` `Pill`) | **Match** (2026-10-14: the agent's stated effort is a nested Text in `composerIcon`, `pl7.P`, after the name in `composerPillText`) |
 | Attach sheet "Add context": Camera / Photos / Files tiles (12 dp, `pl7.q`, 1 dp border); a limit line | `MobileNativeChatAttachSheet.tsx` with the same three | Match |
 | Select mode: Manual, Accept edits, Plan, Auto with descriptions and per-mode colours (Accept edits `#9747FF`, Plan `#006666`, Auto clay); **Bypass never listed**; "Not available for the selected model" | `MobilePermissionModeSheet.tsx` (lists bypass when available) | **Differs** (G5) |
 | Model sheet with an **Effort row** inside, "Other models", "Update Claude Code…" for models too new for the CLI | `MobileNativeChatSessionOptionPickers.tsx` ("More models") | **Differs** (G5) |
@@ -448,7 +449,7 @@ compression costs about ±0.5 dp. Pinned in light and dark by
 | Lines | 1 to 6, then scrolls | `aj1` | same | same (cap 168 dp) |
 | Buttons to card sides and foot | 8 dp | `ai9` `N0(8)`; measured 22 to 23 px | 8 sides, 10 foot | 8 |
 | Gap between buttons | 8 dp | measured 23 px (+ to pill, mic to Stop) | 4 (8 before Send) | 8 |
-| Button | 36 dp circle, 48 dp touch | `yg9` `ixv.p(36)`, `ixv.k(48)` | 36, no touch slop | 36 (touch target not widened) |
+| Button | 36 dp circle, 48 dp touch | `yg9` `ixv.p(36)`, `ixv.k(48)` | 36, no touch slop | 36, `hitSlop` 6 on every side for 48 (2026-10-14; `composer-touch-target.ts`) |
 | + glyph | 12.8 dp across, `pl7.P` | measured; `yg9.e` colour | lucide 20, `textSecondary` | lucide 22, `composerIcon` |
 | Mic glyph | 20 dp `microphone`, `pl7.P` (#383835 / #C3C2B7) | `yg9.e` → `d(.., P, 20)`; measured 12 × 16.4 dp | 19, `textSecondary` | 20, `composerIcon` |
 | + / mic fill | `pl7.x0` | measured 47 on the 30 card | `composerControl` | same |
@@ -460,8 +461,7 @@ compression costs about ±0.5 dp. Pinned in light and dark by
 | Model chip | 36 tall, 16 sides, ≤220, 13 / 400, no chevron, `pl7.x0` | `md6.a`; measured 116 dp wide, 16.7 dp to the text | 30 tall, 10 sides, ≤190, 12 semibold, chevron, dark #545452 | 36, 16, ≤220, 13 regular, no chevron, dark `pl7.x0` |
 | Placeholder | "Type / for commands"; "Queue a message…" while working | `ccr_input_placeholder_existing_session(_queue)` | "Reply, @files, /commands" | the Claude strings |
 
-Still differs: the one-row collapse; the chip's effort word is not muted
-(`pl7.P`); Anthropic Sans is Instrument Sans here; the 48 dp touch target. The
+Still differs: the one-row collapse; Anthropic Sans is Instrument Sans here. The
 recording row (`MobileNativeChatDictationRow.tsx`) takes the action row's 8 dp
 padding on all sides and Send's colours.
 
@@ -505,7 +505,7 @@ All **in progress** (thumbnails and markup). The values are in
 | Claude app | Code UI | Class |
 |---|---|---|
 | Start: snackbar "Session started in a new worktree at …" | New Tab / New worktree | Differs (a different model) |
-| Stop: no confirmation; on failure Stop re-enables and "Couldn't stop the session. Try again." | Escape ×2; no failure message | **Differs** (G24) |
+| Stop: no confirmation; on failure Stop re-enables and "Couldn't stop the session. Try again." | Escape ×2; the failure and the still-working case say the Claude words (2026-10-14) | **Match** (G24) |
 | Archive (with a dialog) / Delete (with a dialog) / Rename (a dialog) | Close tab; Rename | Differs |
 | Rewind: edit and retry | structured lane only | **Differs** (G30) |
 | Resume a past session | Agent History (`src/agent-history/*`) | Match by another path |
@@ -528,7 +528,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G1 | P1 | Thinking as a "Thought process" row that opens a Markdown sheet, never inline | Differs | M | B | |
 | G2 | P1 | Typography and colours of every row | — | — | — | in progress |
 | G3 | P1 | Status line: elapsed · tokens · thinking word escalation · "thought for Ns" · rotating verb. **Needs the user's decision**: they asked for "Working" only. Tokens and elapsed time come from the beacon (Claude's status-line payload carries `cost.total_duration_ms` and token totals) | Differs | M | D | |
-| G4 | P1 | Mode chip in the composer's leading group (icon + label) | Missing | S | — | fold into the in-progress composer work |
+| G4 | P1 | Mode chip in the composer's leading group (icon + label) | Done 2026-10-14 | S | — | `MobileNativeChatModeChip.tsx` |
 | G5 | P2 | Mode sheet icons, colours and descriptions; drop Bypass from the list; Effort row inside the model sheet; "Not available for the selected model" | Differs | S | C | |
 | G6 | P1 | Session bar above the composer: "Open diff" pill (+A −R, opens review) and todo pill "N/M tasks" with a ring | Missing | M | C | |
 | G7 | P2 | Slash popup look (mono 15 link-blue names, ≤240 dp, hairline, 150 ms animation) | Differs | S | C | |
@@ -548,7 +548,7 @@ on every screen, **P2** common flows, **P3** rare. "Batch" refers to section 5.
 | G21 | P2 | Notifications: inline **Reply** on a finished notification (through the outbox send path); **Deny with comment** on a permission notification (the TUI's "No, and tell Claude what to do differently" option); withhold Approve for AskUserQuestion, ExitPlanMode and destructive tools | Missing | M | G | |
 | G22 | P3 | Two notification toggles (updates vs permission requests) | Differs | S | G | |
 | G23 | P1 | ↓ arrow threshold, running-row shimmer | — | — | — | in progress |
-| G24 | P2 | Stop failure: re-enable Stop and say "Couldn't stop the session. Try again." when the agent is still working after Escape | Missing | S | D | |
+| G24 | P2 | Stop failure: re-enable Stop and say "Couldn't stop the session. Try again." when the agent is still working after Escape | Done 2026-10-14 | S | D | |
 | G25 | P3 | Context window card in the transcript for `/context` output (categories, MCP tools, memory files, agents) | Missing | M | F | |
 | G26 | P3 | Peer message row "Received message from <name>" plus a "Message" sheet ("From: <name>"); reject spoofed names | Differs | S | B | |
 | G27 | P3 | Background shell "Show output" sheet. Needs proof that Orca's file read reaches the task output file; otherwise impossible | Missing | M | F | |

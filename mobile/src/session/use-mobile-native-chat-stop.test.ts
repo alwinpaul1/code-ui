@@ -91,13 +91,13 @@ describe('useMobileNativeChatStop', () => {
     })
 
     expect(onSendError).toHaveBeenCalledOnce()
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it.each([
     ['RPC failure', { ok: false, error: { code: 'stale', message: 'stale' } }],
     ['non-accepted send', { ok: true, result: { send: { accepted: false } } }]
-  ])('reports Stop not sent after a resolved %s', async (_case, response) => {
+  ])('says it could not stop after a resolved %s', async (_case, response) => {
     sendRequest.mockResolvedValue(response)
     await render(true, 'stream-1')
 
@@ -105,7 +105,7 @@ describe('useMobileNativeChatStop', () => {
     await act(async () => vi.runAllTimersAsync())
 
     expect(onSendError).toHaveBeenCalledOnce()
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it.each([
