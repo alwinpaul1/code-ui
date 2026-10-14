@@ -73,7 +73,7 @@ export function MobileNativeChatDictationCaption({
   const outerStyle = useAnimatedStyle(() => {
     const p = Math.min(1, Math.max(0, progress.value))
     return { height: fullHeight * p, opacity: p }
-  }, [fullHeight])
+  }, [progress, fullHeight])
 
   return (
     <Animated.View
