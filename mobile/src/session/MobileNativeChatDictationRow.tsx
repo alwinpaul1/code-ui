@@ -51,6 +51,7 @@ const ROW_GAP = 12
 export function MobileNativeChatDictationRow({
   phase,
   ending,
+  sendBlocked = false,
   level,
   onCancel,
   onStop,
@@ -59,6 +60,9 @@ export function MobileNativeChatDictationRow({
 }: {
   phase: DictationRowPhase
   ending: DictationRowEnding
+  /** The composer's send would refuse now: Send greys, as the composer's Send does, rather than
+   *  stop the take and drop the send without a word. Stop and Cancel stay. */
+  sendBlocked?: boolean
   level: number
   onCancel: () => void
   onStop: () => void
@@ -151,11 +155,14 @@ export function MobileNativeChatDictationRow({
         focusable={false}
         accessibilityLabel="Send dictation"
         accessibilityRole="button"
-        accessibilityState={{ disabled: transcribing, busy: busy('send') }}
-        disabled={transcribing}
+        accessibilityState={{ disabled: transcribing || sendBlocked, busy: busy('send') }}
+        disabled={transcribing || sendBlocked}
         style={[
           iconButton,
-          { backgroundColor: colors.accent, opacity: dimmed('send') ? DICTATION_BUTTON_DISABLED_OPACITY : 1 }
+          {
+            backgroundColor: colors.accent,
+            opacity: dimmed('send') || (sendBlocked && !busy('send')) ? DICTATION_BUTTON_DISABLED_OPACITY : 1
+          }
         ]}
         onPress={onSend}
       >
@@ -185,6 +192,7 @@ export function MobileNativeChatDictationLayer({
     up: boolean
     phase: DictationRowPhase
     ending: DictationRowEnding
+    sendBlocked: boolean
     layerStyle: StyleProp<AnimatedStyle<ViewStyle>>
     cancel: () => void
     stop: () => void
@@ -219,6 +227,7 @@ export function MobileNativeChatDictationLayer({
       <MobileNativeChatDictationRow
         phase={row.phase}
         ending={row.ending}
+        sendBlocked={row.sendBlocked}
         level={level}
         onCancel={row.cancel}
         onStop={row.stop}

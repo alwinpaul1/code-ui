@@ -337,7 +337,8 @@ export function MobileNativeChatComposer({
 
   // While a take runs the field and the action row give way to the recording row.
   const dictationRow = useComposerDictationRow({
-    micActive, micTranscribing, onCancelDictation, onStopDictation, sendNow: () => void handleSend()
+    micActive, micTranscribing, onCancelDictation, onStopDictation, sendNow: () => void handleSend(),
+    sendSurfaceId, sendBlocked: disabled || sending || sessionOptionDispatching || hasFailedChip
   })
   const { micShowsStop } = dictationRow
 

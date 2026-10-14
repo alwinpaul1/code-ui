@@ -569,12 +569,13 @@
             // 2026-10-12: +3 for `keyboardUp` (the prop, its destructure, the
             // hook call): the composer claims an open keyboard no field holds
             // (use-composer-keeps-keyboard.ts). The logic lives there.
-            // 2026-10-14: +29 for the Claude app's recording row: three props, the
+            // 2026-10-14: +30 for the Claude app's recording row: three props, the
             // fold wrapper round the field, the action area that stacks the action
             // row and the recording layer, and the hook call. The state, the send
-            // after the take and the swap are use-composer-dictation-row.ts; the
+            // after the take, the send-blocked grey and the swap are
+            // use-composer-dictation-row.ts; the
             // row is MobileNativeChatDictationRow.tsx.
-            "max": 458,
+            "max": 459,
             "skipBlankLines": true,
             "skipComments": true
           }

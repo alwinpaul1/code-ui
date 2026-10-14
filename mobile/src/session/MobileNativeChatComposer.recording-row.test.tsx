@@ -81,6 +81,8 @@ function flat(style: unknown, pressed = false): Record<string, unknown> {
 }
 
 type Take = {
+  surface?: string
+  disabled?: boolean
   value?: string
   micActive?: boolean
   micTranscribing?: boolean
@@ -100,11 +102,12 @@ function element(take: Take, scheme: 'light' | 'dark'): React.JSX.Element {
         value={take.value ?? ''}
         onChangeText={vi.fn()}
         onSend={handlers.onSend}
-        sendSurfaceId="tab-a"
+        sendSurfaceId={take.surface ?? 'tab-a'}
         getSendCompletionGeneration={() => 0}
         getComposerEditGeneration={() => 0}
         onAttachImage={vi.fn()}
         onMicPress={vi.fn()}
+        disabled={take.disabled ?? false}
         micActive={take.micActive ?? false}
         micTranscribing={take.micTranscribing ?? false}
         micLevel={take.micLevel ?? 0}
@@ -266,6 +269,27 @@ describe('the recording row’s buttons', () => {
     await act(async () => button('Stop dictation').props.onPress())
     await rerender({ value: 'just words', micActive: false })
     expect(handlers.onSend).not.toHaveBeenCalled()
+  })
+})
+
+describe('Send dictation never sends somewhere else, and never fails silently', () => {
+  // Review of 2026-10-14: the composer is shared across chat tabs, so a Send tapped in one tab and
+  // a switch while the words finished sent the other tab's draft to the other tab.
+  it('drops the pending send when the composer moves to another chat before the take ends', async () => {
+    await render({ value: 'for tab a', micActive: true })
+    await act(async () => button('Send dictation').props.onPress())
+    await rerender({ value: 'for tab a', micTranscribing: true })
+    await rerender({ surface: 'tab-b', value: 'tab b draft', micTranscribing: false })
+    expect(handlers.onSend).not.toHaveBeenCalled()
+  })
+
+  // Review of 2026-10-14: the composer's send refuses while input is locked, so the row's Send
+  // stopped the take and dropped the send without a word. It is greyed there, as Send is.
+  it('greys Send dictation while the composer cannot send, and keeps Stop', async () => {
+    await render({ value: 'fix', micActive: true, disabled: true })
+    expect(button('Send dictation').props.disabled).toBe(true)
+    expect(flat(button('Send dictation').props.style).opacity).toBe(DICTATION_BUTTON_DISABLED_OPACITY)
+    expect(button('Stop dictation').props.disabled).toBeFalsy()
   })
 })
 

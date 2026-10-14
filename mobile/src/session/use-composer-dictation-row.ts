@@ -23,7 +23,9 @@ export function useComposerDictationRow({
   micTranscribing,
   onCancelDictation,
   onStopDictation,
-  sendNow
+  sendNow,
+  sendSurfaceId,
+  sendBlocked
 }: {
   micActive: boolean
   micTranscribing: boolean
@@ -31,6 +33,10 @@ export function useComposerDictationRow({
   onStopDictation?: () => void
   /** The composer's own send, run once a take ended by Send dictation has its last words in. */
   sendNow: () => void
+  /** The chat the composer serves. A send pending for one chat is dropped if it moves to another. */
+  sendSurfaceId: string
+  /** The composer's send would refuse now (input locked, a failed chip, a send already out). */
+  sendBlocked: boolean
 }) {
   const reducedMotion = useReducedMotion() === true
   const available = onCancelDictation !== undefined && onStopDictation !== undefined
@@ -43,9 +49,12 @@ export function useComposerDictationRow({
         : 'off'
   const up = phase !== 'off'
   const [ending, setEnding] = useState<DictationRowEnding>(null)
-  const sendWhenEndedRef = useRef(false)
+  // The chat a pending Send dictation was tapped in; null when none is pending.
+  const sendWhenEndedRef = useRef<string | null>(null)
   const sendNowRef = useRef(sendNow)
   sendNowRef.current = sendNow
+  const surfaceRef = useRef(sendSurfaceId)
+  surfaceRef.current = sendSurfaceId
 
   const stop = (): void => {
     setEnding('stop')
@@ -55,12 +64,12 @@ export function useComposerDictationRow({
   // dictation, `kcw.f` → `bdg`/`f86`: a pending-send flag, then the stop). Sending at the tap
   // would drop whatever the engine had not finished.
   const send = (): void => {
-    sendWhenEndedRef.current = true
+    sendWhenEndedRef.current = sendSurfaceId
     setEnding('send')
     onStopDictation?.()
   }
   const cancel = (): void => {
-    sendWhenEndedRef.current = false
+    sendWhenEndedRef.current = null
     setEnding(null)
     onCancelDictation?.()
   }
@@ -71,8 +80,10 @@ export function useComposerDictationRow({
       return
     }
     setEnding(null)
-    if (sendWhenEndedRef.current) {
-      sendWhenEndedRef.current = false
+    const pendingFor = sendWhenEndedRef.current
+    sendWhenEndedRef.current = null
+    // Only into the chat it was tapped in: the composer is shared across chat tabs.
+    if (pendingFor !== null && pendingFor === surfaceRef.current) {
       sendNowRef.current()
     }
   }, [up])
@@ -104,6 +115,7 @@ export function useComposerDictationRow({
       accessibilityElementsHidden: up
     },
     available,
+    sendBlocked,
     phase,
     up,
     ending,
