@@ -133,11 +133,35 @@ export function diffBaseline(current, baseline) {
   }
 }
 
+// The test program's tsc needs about 3.7 GB resident (measured 2026-10-14). The runner's default
+// Node heap is smaller, and on CI that day tsc aborted with exit 134. Heap above the measured peak,
+// not a cap: tsc takes only what it uses.
+export const TSC_HEAP_MB = 6144
+
+export function tscNodeArgs(entry, args) {
+  return [`--max-old-space-size=${TSC_HEAP_MB}`, entry, ...args]
+}
+
+// tsc exits 0, 1 or 2 when it finished (2: errors). Anything else, or a signal, means it died
+// part-way and its output names no program: say that, rather than reading the empty --listFiles
+// as "every test file is outside the program".
+export function assertTscCompleted(result) {
+  if (result.signal === null && [0, 1, 2].includes(result.status)) {
+    return
+  }
+  const how = result.signal ? `signal ${result.signal}` : `exit ${result.status}`
+  const tail = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim().split('\n').slice(-5).join('\n')
+  throw new Error(
+    `tsc did not finish (${how}), so the census has no program to read. Exit 134 or SIGABRT is ` +
+      `usually Node running out of heap: TSC_HEAP_MB is ${TSC_HEAP_MB}.${tail ? `\n${tail}` : ''}`
+  )
+}
+
 // Run tsc's JS entry on this Node rather than the node_modules/.bin shim, which is a POSIX shell
 // script: on Windows the shim is tsc.CMD and an extensionless path gets .exe appended.
 function runTsc(root, args) {
   const entry = createRequire(import.meta.url).resolve('typescript/lib/tsc.js')
-  const result = spawnSync(process.execPath, [entry, ...args], {
+  const result = spawnSync(process.execPath, tscNodeArgs(entry, args), {
     cwd: root,
     encoding: 'utf8',
     shell: false,
@@ -146,6 +170,7 @@ function runTsc(root, args) {
   if (result.error) {
     throw result.error
   }
+  assertTscCompleted(result)
   return result
 }
 

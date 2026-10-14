@@ -3,14 +3,41 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 // Only the pure functions are under test; the tsc spawn is proven end to end by CI.
 import {
+  assertTscCompleted,
   diffBaseline,
   diffCensus,
   hasTsNocheckDirective,
   parseBaseline,
   parseFailingFiles,
   parseProgramTestFiles,
-  TESTS_OUTSIDE_PROGRAM
+  TESTS_OUTSIDE_PROGRAM,
+  TSC_HEAP_MB,
+  tscNodeArgs
 } from './check-tests-typecheck-ratchet.mjs'
+
+// CI on 2026-10-14 (runs 38647780468 and 38653446327): the test program's tsc outgrew the runner's
+// default Node heap and aborted (exit 134). The census read the empty output as "2288 test files
+// are outside the program", which named every file and not the crash. Measured on the Mac that
+// day: 3.7 GB resident uncapped, and a 2048 MB heap aborts it.
+describe('the tsc run behind the census', () => {
+  it('gives tsc more heap than the test program needs, not the runner default', () => {
+    expect(TSC_HEAP_MB).toBeGreaterThanOrEqual(6144)
+    expect(tscNodeArgs('/x/tsc.js', ['--noEmit'])).toEqual([`--max-old-space-size=${TSC_HEAP_MB}`, '/x/tsc.js', '--noEmit'])
+  })
+
+  it('says tsc crashed, and how, instead of calling every test file unchecked', () => {
+    expect(() => assertTscCompleted({ status: 134, signal: null, stdout: '', stderr: 'FATAL ERROR: Reached heap limit' })).toThrow(
+      /tsc did not finish \(exit 134\)[\s\S]*heap/
+    )
+    expect(() => assertTscCompleted({ status: null, signal: 'SIGKILL', stdout: '', stderr: '' })).toThrow(/tsc did not finish \(signal SIGKILL\)/)
+  })
+
+  it('accepts a run that finished, with or without type errors', () => {
+    for (const status of [0, 1, 2]) {
+      expect(() => assertTscCompleted({ status, signal: null, stdout: '', stderr: '' })).not.toThrow()
+    }
+  })
+})
 
 describe('the failing-file parser', () => {
   it('names each file once however many errors it carries', () => {
