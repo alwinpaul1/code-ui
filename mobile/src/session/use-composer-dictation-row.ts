@@ -7,6 +7,7 @@ import {
   type DictationRowEnding,
   type DictationRowPhase
 } from './MobileNativeChatDictationRow'
+import { composerFieldFoldStyle, nextComposerFieldHeight } from './composer-field-fold'
 
 /**
  * The composer's half of the recording row (MobileNativeChatDictationRow.tsx): which phase the
@@ -96,16 +97,11 @@ export function useComposerDictationRow({
   // The field's own height, measured inside the fold; -1 until the first layout, so the first
   // frame is not drawn at zero height.
   const fieldHeight = useSharedValue(-1)
-  const fieldStyle = useAnimatedStyle(() => {
-    const p = Math.min(1, Math.max(0, swap.value))
-    return fieldHeight.value < 0
-      ? { opacity: 1 - p }
-      : { opacity: 1 - p, height: fieldHeight.value * (1 - p) }
-  }, [swap, fieldHeight])
+  const fieldStyle = useAnimatedStyle(() => composerFieldFoldStyle(swap.value, fieldHeight.value), [swap, fieldHeight])
   const actionsStyle = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, Math.max(0, swap.value)) }), [swap])
   const layerStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, swap.value)) }), [swap])
   const onFieldLayout = (event: LayoutChangeEvent): void => {
-    fieldHeight.value = event.nativeEvent.layout.height
+    fieldHeight.value = nextComposerFieldHeight(fieldHeight.value, event.nativeEvent.layout.height, swap.value)
   }
 
   return {
