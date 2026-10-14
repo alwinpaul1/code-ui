@@ -102,11 +102,13 @@ describe('the final-newline and line-endings rows', () => {
         truncated: diff.truncated
       },
       filteredCount: 1,
+      emptyReason: 'no-changes',
       listRef: { current: null },
       screenState: { kind: 'ready' } as never,
       staleCommentIds: new Set<string>(),
       onAddNote: () => undefined,
       onEditNote: () => undefined,
+      onDeleteNote: () => undefined,
       onRetry: undefined
     })
   }

@@ -2,7 +2,8 @@ import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
-import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
+import { REVIEW_FILTERS } from '../session/mobile-diff-review-screen-model'
+import { MobileDiffQueuedChip } from './MobileDiffQueuedChip'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
@@ -17,6 +18,8 @@ type Props = {
   worktreeLabel: string
   onBack: () => void
   onOpenActions: () => void
+  /** The queued comments chip: opens where the unsent notes are sent from. */
+  onOpenQueuedNotes: () => void
   onOpenPRSidebar: () => void
   onSelectFilter: (filter: MobileDiffReviewQueueFilter) => void
 }
@@ -32,6 +35,7 @@ export function MobileDiffReviewHeader({
   worktreeLabel,
   onBack,
   onOpenActions,
+  onOpenQueuedNotes,
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
@@ -86,9 +90,7 @@ export function MobileDiffReviewHeader({
         <Text style={styles.progressText}>
           {reviewedCount}/{queueLength} reviewed
         </Text>
-        <Text style={styles.progressText}>
-          {mobileReviewCountLabel(unsentCount, 'unsent note', 'unsent notes')}
-        </Text>
+        <MobileDiffQueuedChip count={unsentCount} onPress={onOpenQueuedNotes} />
       </View>
       <FlatList
         data={REVIEW_FILTERS}

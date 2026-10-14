@@ -104,7 +104,7 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       justifyContent: 'space-between',
       alignItems: 'center',
       gap: spacing.md,
-      marginBottom: spacing.md
+      marginBottom: spacing.sm
     },
     drawerTitle: {
       color: colors.text,
@@ -116,6 +116,13 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       fontSize: typography.metaSize,
       marginTop: 2
     },
+    // "Line N" over the field: 13 sp muted, `jn7.H` in `pl7.Q` (`px20.d`, com.anthropic.claude
+    // 1.261009.20).
+    composerCaption: {
+      color: colors.composerPlaceholder,
+      fontSize: 13,
+      lineHeight: 18
+    },
     composerInput: {
       minHeight: 112,
       borderRadius: radii.input,
@@ -123,9 +130,10 @@ export function mobileDiffReviewControlStyles({ colors }: Theme) {
       borderColor: colors.border,
       backgroundColor: colors.bgPanel,
       color: colors.text,
-      // Through the seam, as the commit bar is: 14px focuses into a zoomed page on iOS.
-      fontSize: TEXT_INPUT_FONT_SIZE,
-      lineHeight: 20,
+      // The app's field is 17 sp (`jn7.B`). Through the seam, as the commit bar is, so the page
+      // never draws it under what the platform needs: 14px focuses into a zoomed page on iOS.
+      fontSize: Math.max(TEXT_INPUT_FONT_SIZE, 17),
+      lineHeight: 24,
       padding: spacing.md,
       textAlignVertical: 'top'
     },

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
-import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { useKeyboardAvoidingPadding } from '../platform/keyboard-occlusion'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { ActionSheetAction } from './ActionSheetModal'
@@ -185,24 +184,7 @@ function NoteComposerDrawer({ controller }: Props) {
         style={keyboardPadding > 0 ? { paddingBottom: keyboardPadding } : undefined}
       >
         <View style={styles.composerHeader}>
-          <View>
-            <Text style={styles.drawerTitle}>
-              {composer?.mode === 'edit' ? 'Edit Note' : 'Add Note'}
-            </Text>
-            <Text style={styles.drawerSubtitle}>
-              {composer?.mode === 'create' && composer.lineNumber > 0
-                ? `Line ${composer.lineNumber}`
-                : 'File note'}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={controller.closeComposer}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel note"
-          >
-            <X size={18} color={colors.text} strokeWidth={2.2} />
-          </Pressable>
+          <Text style={styles.composerCaption}>{composerCaption(composer)}</Text>
         </View>
         <TextInput
           cursorColor={colors.caret}
@@ -211,14 +193,15 @@ function NoteComposerDrawer({ controller }: Props) {
           onChangeText={controller.setComposerBody}
           multiline
           autoFocus
-          placeholder="Review note"
-          placeholderTextColor={colors.textMuted}
-          accessibilityLabel={composerLabel(composer)}
+          placeholder="Tell Claude what to change"
+          placeholderTextColor={colors.composerPlaceholder}
+          accessibilityLabel={composerFieldLabel(composer)}
         />
         <View style={styles.drawerButtonRow}>
           {composer?.mode === 'edit' ? (
             <DeleteNoteButton onPress={controller.deleteComment} />
           ) : null}
+          <CancelNoteButton onPress={controller.closeComposer} />
           <SaveNoteButton controller={controller} composer={composer} />
         </View>
       </KeyboardAvoidingView>
@@ -226,12 +209,26 @@ function NoteComposerDrawer({ controller }: Props) {
   )
 }
 
-function composerLabel(
-  composer: { mode: 'create'; lineNumber: number } | { mode: 'edit'; comment: DiffComment } | null
-): string {
-  return composer?.mode === 'create' && composer.lineNumber > 0
-    ? `Save note on line ${composer.lineNumber}`
-    : 'Review note'
+type Composer = ReturnType<typeof useMobileDiffReviewController>['composer']
+
+/** The line a composer is for: a note on a line, or on the whole file when it has none. */
+function composerLine(composer: Composer): number {
+  if (composer?.mode === 'edit') {
+    return composer.comment.lineNumber
+  }
+  return composer?.lineNumber ?? 0
+}
+
+/** "Line N" over the field, `diff_comment_line_caption`; a file note has no line to name. */
+function composerCaption(composer: Composer): string {
+  const line = composerLine(composer)
+  return line > 0 ? `Line ${line}` : 'File note'
+}
+
+/** What a screen reader calls the field, `diff_comment_field_label`. */
+function composerFieldLabel(composer: Composer): string {
+  const line = composerLine(composer)
+  return line > 0 ? `Comment on line ${line}` : 'File note'
 }
 
 function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
@@ -242,10 +239,24 @@ function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
       style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
       onPress={() => void onPress()}
       accessibilityRole="button"
-      accessibilityLabel="Delete note"
+      accessibilityLabel="Delete comment"
     >
       <Trash2 size={14} color={colors.danger} strokeWidth={2.2} />
       <Text style={styles.destructiveText}>Delete</Text>
+    </Pressable>
+  )
+}
+
+function CancelNoteButton({ onPress }: { onPress: () => void }) {
+  const styles = useThemedStyles(mobileDiffReviewStyles)
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Cancel comment"
+    >
+      <Text style={styles.secondaryButtonText}>Cancel</Text>
     </Pressable>
   )
 }
@@ -255,11 +266,13 @@ function SaveNoteButton({
   composer
 }: {
   controller: ReturnType<typeof useMobileDiffReviewController>
-  composer: ReturnType<typeof useMobileDiffReviewController>['composer']
+  composer: Composer
 }) {
   const disabled = controller.composerBody.trim().length === 0
   const { colors } = useTheme()
   const styles = useThemedStyles(mobileDiffReviewStyles)
+  // `diff_comment_add_button` for a comment that is new, `diff_comment_save_button` for an edit.
+  const label = composer?.mode === 'edit' ? 'Save comment' : 'Add comment'
   return (
     <Pressable
       style={({ pressed }) => [
@@ -270,10 +283,10 @@ function SaveNoteButton({
       disabled={disabled}
       onPress={() => void controller.saveComposer()}
       accessibilityRole="button"
-      accessibilityLabel={composerLabel(composer)}
+      accessibilityLabel={label}
     >
       <Check size={14} color={colors.bg} strokeWidth={2.2} />
-      <Text style={styles.primaryButtonText}>Save</Text>
+      <Text style={styles.primaryButtonText}>{label}</Text>
     </Pressable>
   )
 }

@@ -1,15 +1,18 @@
 // The rows a long diff folds into, and the footer of a cut one, as the diff review and the
 // branch-diff drawer draw them, in both themes.
 //
-// A folded run ("2,896 unchanged lines") and the cut row are not lines of the file: they are drawn
-// as their own muted band, with no line number and nothing to tap, so no review note can land on
-// them. The footer of a cut diff says what it left out instead of only that it cut something.
+// A folded run and the cut row are not lines of the file: they are drawn as their own band, with no
+// line number and nothing to tap, so no review note can land on them. The review draws the fold as
+// the Claude app's fold row, "+2,896 lines" on the app's blue (`jlc.e`, com.anthropic.claude
+// 1.261009.20); the cap's lines are not in the rows, so unlike the app's it has nothing to open.
+// The footer of a cut diff says what it left out instead of only that it cut something.
 
 import { createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
+import { mobileDiffPaletteForScheme } from '../source-control/mobile-diff-claude-palette'
 import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
 import { buildMobileDiffHunks } from '../session/mobile-diff-hunks'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
@@ -38,8 +41,13 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
+  ChevronUp: 'ChevronUp',
   MessageSquare: 'MessageSquare',
+  Pencil: 'Pencil',
   RefreshCw: 'RefreshCw',
+  Trash2: 'Trash2',
+  UnfoldVertical: 'UnfoldVertical',
   X: 'X'
 }))
 vi.mock('../ui/tap-target', () => ({ tapTargetHitSlop: () => undefined }))
@@ -114,7 +122,7 @@ describe('folded and cut rows of a long diff', () => {
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)(
-    'draws a folded run in review as a muted band nobody can note on (%s)',
+    'draws a folded run in review as a fold row nobody can note on or open (%s)',
     (scheme, palette) => {
       const folded = plain(foldedDiff().lines)[0]!
       render(
@@ -123,18 +131,22 @@ describe('folded and cut rows of a long diff', () => {
           comments: [],
           staleCommentIds: new Set<string>(),
           active: false,
+          gutterWidth: 37,
           onAddNote: () => undefined,
-          onEditNote: () => undefined
+          onEditNote: () => undefined,
+          onDeleteNote: () => undefined
         }),
         scheme
       )
 
-      const text = textNode('2,896 unchanged lines')
+      const text = textNode('+2,896 lines')
       expect(text).toBeDefined()
-      expect(flatStyle(text!.props.style).color).toBe(palette.textMuted)
-      expect(
-        flatStyle(renderer!.root.findAllByType('View' as never)[0]!.props.style).backgroundColor
-      ).toBe(palette.bgSunken)
+      expect(flatStyle(text!.props.style).color).toBe(palette.composerPlaceholder)
+      const blues = mobileDiffPaletteForScheme(scheme)
+      const views = renderer!.root.findAllByType('View' as never)
+      expect(views.some((view) => flatStyle(view.props.style).backgroundColor === blues.gapBg)).toBe(
+        true
+      )
       expect(renderer!.root.findAllByType('Pressable' as never)).toHaveLength(0)
     }
   )
@@ -157,11 +169,13 @@ describe('folded and cut rows of a long diff', () => {
           truncated: diff.truncated
         },
         filteredCount: 1,
+        emptyReason: 'no-changes',
         listRef: { current: null },
         screenState: { kind: 'ready' } as never,
         staleCommentIds: new Set<string>(),
         onAddNote: () => undefined,
         onEditNote: () => undefined,
+        onDeleteNote: () => undefined,
         onRetry: undefined
       }),
       scheme
