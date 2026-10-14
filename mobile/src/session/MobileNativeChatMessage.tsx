@@ -34,6 +34,8 @@ import {
 } from './MobileNativeChatNoticeRow'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
+import { takeUserUploads } from './mobile-native-chat-file-mentions'
+import { MobileNativeChatUploadCardRow } from './MobileNativeChatFileCard'
 
 /** A finger held this long is a copy, not a tap: Android's own long-press
  *  timeout, the one the chat's scroll gate already keys on. */
@@ -237,7 +239,12 @@ function MobileNativeChatMessageImpl({
   // the terminal, which shows the true order). The user's own messages still
   // get a soft bubble so they stand apart from agent prose.
   // A roster the row can draw replaces the frozen sentence the host wrote beside it (#26125).
-  const drawn = drawnNativeChatBlocks(message.blocks)
+  // A prompt's uploads leave its text for their own row of cards above the
+  // bubble, as the Claude app draws them; the bubble keeps only the words.
+  const { cards: uploads, blocks: drawn } = isUser
+    ? takeUserUploads(drawnNativeChatBlocks(message.blocks))
+    : { cards: [], blocks: drawnNativeChatBlocks(message.blocks) }
+  const uploadsOnly = uploads.length > 0 && drawn.length === 0 && !onCancelQueued
   const segments = splitTurnIntoSegments(drawn)
   // Still needed whole: the active call is chosen across the turn, and whether
   // any work ran at all decides the settled-tools rule below. A call with its
@@ -337,7 +344,9 @@ function MobileNativeChatMessageImpl({
   return (
     <>
       <View style={[styles.row, isUser && styles.rowUser]}>
-        <Bubble
+        {uploads.length > 0 ? <MobileNativeChatUploadCardRow cards={uploads} onOpen={onOpenFile} /> : null}
+        {/* A prompt that was only uploads has no words to hold. */}
+        {uploadsOnly ? null : <Bubble
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           onCopy={hasProse ? handleCopy : undefined}
@@ -348,7 +357,7 @@ function MobileNativeChatMessageImpl({
               // No line beside the agent's own words, interim or final
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
-                {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
+                {groupProseBlocks(segment.blocks).map((group, index, groups) => (
                   // Air between a picture and the caption under it, and
                   // between pictures that follow each other.
                   <View
@@ -424,7 +433,7 @@ function MobileNativeChatMessageImpl({
           ) : (
             sentPromptControls
           )}
-        </Bubble>
+        </Bubble>}
         {isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
           <MobileNativeChatTurnEditsCard
             files={turnEdits}

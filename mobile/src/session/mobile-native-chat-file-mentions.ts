@@ -1,3 +1,6 @@
+import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
+
 /**
  * Claude Code 2.1.281 records a file dropped or dragged into its own prompt as
  * `@"<absolute path>"`, inline in the user turn's text — verified against
@@ -17,8 +20,18 @@
 
 /** Leading horizontal whitespace (not a newline) goes with the marker, the
  *  same way an `[Image #N]` marker takes its leading space with it — otherwise
- *  the caption keeps a stray double space where the mention sat. */
-const FILE_MENTION_PATTERN = /[^\S\r\n]*@"(\/[^"\n]+)"/g
+ *  the caption keeps a stray double space where the mention sat. The closing
+ *  quote must end the mention (space, line end or punctuation after it): a
+ *  path with a quote inside, `@"/a"b.pdf"`, has no recorded shape, so it
+ *  stays the text it is instead of becoming a card named after half of it. */
+const FILE_MENTION_PATTERN = /[^\S\r\n]*@"(\/[^"\n]+)"(?=\s|$|[,.;:!?)])/g
+
+/** Orca's own note for a file the phone attached (buildMobileNativeChatFileNotes
+ *  in mobile-native-chat-file-attachment.ts), one whole line: the file's real
+ *  name, then the `.png` upload container it travelled in. A line cut short
+ *  or reworded is not this note and stays text. */
+const ATTACHED_FILE_NOTE =
+  /^Attached file "(.+)" is on this machine at (\S.*?)\. The \.png extension is only the upload container; (?:move it to a path ending in "[^"\n]*"|rename it) before reading it\.$/
 
 /** Claude Code's own upload id: eight lowercase hex characters and a dash,
  *  stamped in front of the original name when it copies a dropped file into
@@ -34,6 +47,9 @@ export type FileMentionCard = {
   /** Upper-case, for the card's badge ("MP4", "PDF"); empty when the file
    *  carries no extension. */
   ext: string
+  /** `path` is Orca's `.png` upload container, not the file under its own
+   *  name: reading it as what its name says would read the wrong type. */
+  container?: true
 }
 
 function baseName(path: string): string {
@@ -83,4 +99,78 @@ export function parseFileMentionText(text: string): {
     return { cards, caption: text }
   }
   return { cards, caption: text.replace(FILE_MENTION_PATTERN, '').trim() }
+}
+
+/** One line of Orca's attachment note as a card, or null when the line is
+ *  not that note, whole. */
+function attachedFileNoteCard(line: string): FileMentionCard | null {
+  const match = ATTACHED_FILE_NOTE.exec(line)
+  if (!match) {
+    return null
+  }
+  const { stem, ext } = splitExtension(match[1]!)
+  return { path: match[2]!, name: stem, ext, container: true }
+}
+
+/** A text's uploads in reading order (Orca puts its notes first) and the
+ *  words left once they are gone. */
+function uploadsInText(text: string): { cards: FileMentionCard[]; caption: string } {
+  const lines = text.split('\n')
+  const noted = lines.map(attachedFileNoteCard)
+  const notes = noted.filter((card): card is FileMentionCard => card !== null)
+  const rest = notes.length > 0 ? lines.filter((_, index) => noted[index] === null).join('\n').trim() : text
+  const mentions = parseFileMentionText(rest)
+  return { cards: [...notes, ...mentions.cards], caption: mentions.caption }
+}
+
+/**
+ * A sent prompt's uploads, taken out of its text so they can be drawn as the
+ * Claude app draws them: a row of cards above the bubble, with only the words
+ * inside it (m330.java:7339, com.anthropic.claude 1.261009.20). Both forms
+ * reach the transcript: Claude Code's `@"<path>"` mention for a file dropped
+ * into its prompt, and Orca's "Attached file …" note for one the phone sent.
+ * A text block left with no words is dropped; every other block stays where
+ * it was. With no upload the blocks come back as given.
+ */
+export function takeUserUploads(blocks: readonly NativeChatBlock[]): {
+  cards: FileMentionCard[]
+  blocks: readonly NativeChatBlock[]
+} {
+  const cards: FileMentionCard[] = []
+  const kept: NativeChatBlock[] = []
+  for (const block of blocks) {
+    if (!isTextBlock(block)) {
+      kept.push(block)
+      continue
+    }
+    const found = uploadsInText(block.text)
+    if (found.cards.length === 0) {
+      kept.push(block)
+      continue
+    }
+    cards.push(...found.cards)
+    if (found.caption) {
+      kept.push({ ...block, text: found.caption })
+    }
+  }
+  return { cards, blocks: cards.length > 0 ? kept : blocks }
+}
+
+/** Plain-text files the reader shows as text when read by host path. The
+ *  other readable kinds come from classifyMobileArtifact. */
+const TEXT_EXTENSIONS = new Set(['txt', 'log', 'json', 'csv', 'tsv', 'yaml', 'yml', 'xml', 'ts', 'tsx', 'js', 'jsx', 'py', 'sh'])
+
+/**
+ * Whether a tap on the card can open the file on the phone: the chat's file
+ * opener resolves an absolute host path to a read grant, and the reader
+ * shows an image, a PDF, Markdown, HTML or text from one. A grant is never
+ * streamed as media (mobile-file-media.ts), so a recording has no way to
+ * play, and an unknown type would land on "binary file": neither gets a tap.
+ * Orca's note names a `.png` container, never the file itself.
+ */
+export function uploadOpensOnPhone(card: FileMentionCard): boolean {
+  if (card.container || !card.ext) {
+    return false
+  }
+  return classifyMobileArtifact(card.path) !== 'other' || TEXT_EXTENSIONS.has(card.ext.toLowerCase())
 }

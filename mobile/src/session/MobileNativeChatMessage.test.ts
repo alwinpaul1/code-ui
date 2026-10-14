@@ -848,8 +848,8 @@ describe('MobileNativeChatMessage', () => {
         {},
         ...([] as unknown[]).concat(card.props.style).flat(Infinity).filter(Boolean)
       )
-      expect(cardStyle.backgroundColor).toBe(colors.bgRaised)
-      expect(cardStyle.backgroundColor).not.toBe(other.bgRaised)
+      expect(cardStyle.backgroundColor).toBe(colors.attachmentCardFill)
+      expect(cardStyle.backgroundColor).not.toBe(other.attachmentCardFill)
     })
   })
 })

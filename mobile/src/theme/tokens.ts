@@ -119,6 +119,13 @@ export type ThemeColors = {
   /** The + and mic glyphs: `pl7.P`, the colour `yg9.e` passes its plain icon buttons
    *  (#383835 light, #C3C2B7 dark; 1.261009.20, 2026-10-14). */
   composerIcon: string
+  /** An uploaded file's card above the user's message (`f0f.f`, com.anthropic.claude
+   *  1.261009.20): fill `pl7.p`, Material `surface` (#FFFFFF / #20201F), opaque. */
+  attachmentCardFill: string
+  /** Its 1 dp border and its badge's hairline: `pl7.w`, ink or bone at 30%. */
+  attachmentCardBorder: string
+  /** Its name and badge text: `pl7.P` (#383835 / #C3C2B7). */
+  attachmentCardText: string
   /** Send's fill: `pl7.e`, the clay `yg9.f` gives its container (#C6613F light, #D97757
    *  dark). The app's own value, a step off `accent`, which other screens keep. */
   composerSend: string
@@ -190,6 +197,9 @@ export const lightColors: ThemeColors = {
   composerPill: '#F0EFEC',
   composerPillText: '#1E1C19',
   composerIcon: '#383835',
+  attachmentCardFill: '#FFFFFF',
+  attachmentCardBorder: 'rgba(30, 30, 29, 0.3)',
+  attachmentCardText: '#383835',
   composerSend: '#C6613F',
   composerSendGlyph: '#FFFFFF',
   composerSendDisabled: 'rgba(198, 97, 63, 0.4)',
@@ -254,6 +264,9 @@ export const darkColors: ThemeColors = {
   composerPill: 'rgba(255, 255, 255, 0.08)',
   composerPillText: '#F8F8F6',
   composerIcon: '#C3C2B7',
+  attachmentCardFill: '#20201F',
+  attachmentCardBorder: 'rgba(225, 224, 217, 0.3)',
+  attachmentCardText: '#C3C2B7',
   composerSend: '#D97757',
   composerSendGlyph: '#FFFFFF',
   composerSendDisabled: 'rgba(217, 119, 87, 0.4)',

@@ -2,47 +2,89 @@ import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 
-/** A file Claude Code recorded as an `@"<path>"` mention (docs/claude-app-
- *  parity.md item 9): a card the same footprint as an image tile, so the two
- *  sit at a matching height when a message carries both, with the extension
- *  badge above the name — the Claude app's own layout. Kept out of
- *  `mobile-native-chat-message-styles.ts`, which is already at its line cap. */
-const CARD_WIDTH = 132
-const CARD_MIN_HEIGHT = 176
+/**
+ * A file card as the Claude app draws one (com.anthropic.claude 1.261009.20,
+ * decompiled): `f0f.f` lays it out as a 96 dp square (`kvc(96)` at
+ * m330.java:6350), clipped to `bn7.h` (16 dp), a 1 dp border in `pl7.w`, fill
+ * `pl7.p`, 8 dp padding; the extension badge at the top start, a weighted
+ * spacer, the name at the bottom. The badge (`f0f.g`, hvc case 10) is a
+ * Surface in `bn7.d` (8 dp) with a hairline `pl7.w` border, the extension
+ * upper-cased in `jn7.L` (11 / 550 / 16.5) with 6 x 2 dp padding, one line.
+ * The name (`f0f.c`) is `jn7.H` (13 / 400 / 18.2) in `pl7.P`, start-aligned,
+ * at most three lines.
+ *
+ * One departure: the card is wider than 96. Instrument Sans sets a recording
+ * name about a fifth wider than Anthropic Sans, so in 80 dp of text a
+ * 40-character name ("Screen_Recording_20261014_133056_Code_UI") took four
+ * lines and was cut, where the Claude app fits it in three. 100 dp of text
+ * fits it in three (priced with the font's own advances in
+ * MobileNativeChatMessage.test.ts). The height stays the app's 96, which is
+ * the badge and three lines of name with no empty space under them.
+ *
+ * Kept out of `mobile-native-chat-message-styles.ts`, which is at its line cap.
+ */
+const CARD_WIDTH = 116
+const CARD_HEIGHT = 96
 
 export function makeFileCardStyles(theme: Theme) {
-  const { colors, radius, space } = theme
+  const { colors, fonts } = theme
   return StyleSheet.create({
+    /** The cards above a prompt: one row, end-aligned, 8 dp apart, scrolling
+     *  sideways when there are more than fit (m330.java:7339-7344). */
+    uploadRow: {
+      flexGrow: 1,
+      justifyContent: 'flex-end',
+      gap: 8
+    },
+    uploadScroll: {
+      alignSelf: 'stretch',
+      flexGrow: 0,
+      marginBottom: 8
+    },
+    /** The agent's sent files inside its reply: the same cards, wrapping. */
     row: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: space.sm
+      gap: 8
     },
     card: {
       width: CARD_WIDTH,
-      minHeight: CARD_MIN_HEIGHT,
-      borderRadius: radius.lg,
+      height: CARD_HEIGHT,
+      borderRadius: 16,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bgRaised,
-      padding: space.md,
-      gap: space.sm,
-      alignItems: 'flex-start'
+      borderColor: colors.attachmentCardBorder,
+      backgroundColor: colors.attachmentCardFill,
+      padding: 8,
+      overflow: 'hidden'
+    },
+    pressed: {
+      opacity: 0.7
     },
     badge: {
       alignSelf: 'flex-start',
-      borderRadius: radius.pill,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bgPanel,
-      paddingHorizontal: space.sm + 2,
-      paddingVertical: 4
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.attachmentCardBorder,
+      backgroundColor: colors.attachmentCardFill,
+      paddingHorizontal: 6,
+      paddingVertical: 2
     },
     badgeText: {
-      color: colors.textSecondary
+      fontFamily: fonts.semibold,
+      fontSize: 11,
+      lineHeight: 16.5,
+      letterSpacing: 0,
+      color: colors.attachmentCardText
+    },
+    spacer: {
+      flex: 1
     },
     name: {
-      color: colors.text
+      fontFamily: fonts.regular,
+      fontSize: 13,
+      lineHeight: 18.2,
+      letterSpacing: 0,
+      color: colors.attachmentCardText
     }
   })
 }
