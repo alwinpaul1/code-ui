@@ -15,6 +15,7 @@ import {
   NATIVE_CHAT_ATTACHMENT_LIMIT,
   NATIVE_CHAT_ATTACHMENT_LIMIT_LINE
 } from './mobile-native-chat-image-attachment'
+import { PERMISSION_MODE_ICONS, permissionModeTint } from './permission-mode-appearance'
 
 /** The mode row's title, caption and label. A Codex tab (agentMode set) names
  *  its own Plan/Default mode: Codex has no permission mode, and its footer
@@ -69,6 +70,12 @@ export function MobileNativeChatAttachSheet({
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
   const modeRow = modeRowText(agentMode, permissionMode ?? null)
+  // The row's glyph is the Select mode sheet's own for the mode read, in its colour. With no mode
+  // read, or on a Codex tab (whose Plan/Default pair is not a Claude permission mode), it stays
+  // the plain bolt in the text colour: a coloured glyph would name a mode nobody stated.
+  const shownMode = agentMode ? null : (permissionMode ?? null)
+  const ModeIcon = shownMode ? PERMISSION_MODE_ICONS[shownMode] : Zap
+  const modeIconColor = shownMode ? permissionModeTint(colors, shownMode) : colors.text
   const full = attachmentCount >= NATIVE_CHAT_ATTACHMENT_LIMIT
   // The Claude app's tile icons (the user's screenshot, 2026-10-13): a camera,
   // a picture, and a document with an up arrow, not a paperclip.
@@ -190,7 +197,7 @@ export function MobileNativeChatAttachSheet({
               backgroundColor: colors.bgRaised
             }}
           >
-            <Zap size={18} color={colors.text} strokeWidth={1.8} />
+            <ModeIcon size={18} color={modeIconColor} strokeWidth={1.8} />
           </View>
           <View style={{ flex: 1 }}>
             <Txt variant="label" weight="semibold">

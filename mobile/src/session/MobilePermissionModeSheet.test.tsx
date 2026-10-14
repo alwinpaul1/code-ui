@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // row; Auto is refused with "Not available for the selected model" when the
 // running model is a Claude 3, or a Claude 4 up to 4.5.
 
-type Action = { label: string; hint?: string; selected?: boolean; disabled?: boolean; closeBeforePress?: boolean }
+type Action = {
+  label: string
+  hint?: string
+  selected?: boolean
+  disabled?: boolean
+  closeBeforePress?: boolean
+  renderIcon?: () => ReactElement<{ size: number; color: string }>
+}
 const sheetProps = vi.hoisted(() => [] as { message?: string; actions: Action[] }[])
 
 vi.mock('../components/ActionSheetModal', () => ({
@@ -16,8 +23,11 @@ vi.mock('../components/ActionSheetModal', () => ({
     return null
   }
 }))
+vi.mock('react-native', () => ({ useColorScheme: () => 'light' }))
 vi.mock('lucide-react-native', () => new Proxy({}, { get: (_t, name) => (typeof name === 'string' ? name : undefined), has: () => true }))
 
+import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 import type { TerminalPermissionMode } from './mobile-terminal-hud-parse'
 
@@ -28,16 +38,22 @@ afterEach(() => {
   sheetProps.length = 0
 })
 
-function open(current: TerminalPermissionMode | null, runningModel?: string | null) {
+function open(
+  current: TerminalPermissionMode | null,
+  runningModel?: string | null,
+  scheme: 'light' | 'dark' = 'light'
+) {
   act(() => {
     renderer = create(
-      createElement(MobilePermissionModeSheet, {
-        visible: true,
-        current,
-        runningModel,
-        onSelect: () => {},
-        onClose: () => {}
-      })
+      <ThemeProvider initialPreference={scheme}>
+        <MobilePermissionModeSheet
+          visible
+          current={current}
+          runningModel={runningModel}
+          onSelect={() => {}}
+          onClose={() => {}}
+        />
+      </ThemeProvider>
     )
   })
   return sheetProps.at(-1)!
@@ -84,5 +100,61 @@ describe('the Select mode sheet', () => {
   it('never locks the row a session is already in', () => {
     const auto = open('auto', 'claude-sonnet-4-5').actions.find((a) => a.label === 'Auto')!
     expect(auto).toMatchObject({ disabled: false, selected: true })
+  })
+})
+
+// The user, 2026-10-14: the sheet's icons are the Claude app's colourful ones. `ky20.i` draws
+// each row's glyph (24 dp, `au0.Large` by default in `tzh.e`) tinted by the row's mode colour,
+// and falls back to the plain content colour when the row is not open (`rrh` case 1, rrh.java:
+// 52-59). The tint is the mode's, not the selection's: the selected row keeps it.
+describe.each<['light' | 'dark', ThemeColors]>([
+  ['light', lightColors],
+  ['dark', darkColors]
+])('the Select mode sheet icons, %s', (scheme, colors) => {
+  const ROWS: [string, string, string][] = [
+    ['Manual', 'Hand', colors.modeManual],
+    ['Accept edits', 'Code', colors.modeAcceptEdits],
+    ['Plan', 'ScrollText', colors.modePlan],
+    ['Auto', 'Zap', colors.modeAuto]
+  ]
+
+  it.each(ROWS)('draws %s as a 24 dp %s in its mode colour', (label, glyph, tint) => {
+    const row = open('manual', null, scheme).actions.find((a) => a.label === label)!
+    const icon = row.renderIcon!()
+    expect(String(icon.type)).toBe(glyph)
+    expect(icon.props).toMatchObject({ size: 24, color: tint })
+  })
+
+  it('gives each row its own colour, so the four are told apart at a glance', () => {
+    const tints = open('manual', null, scheme).actions.map((a) => a.renderIcon!().props.color)
+    expect(new Set(tints).size).toBe(4)
+  })
+
+  it('keeps a row’s colour when it is the selected one, and marks only that row', () => {
+    for (const [mode, label, tint] of [
+      ['manual', 'Manual', colors.modeManual],
+      ['acceptEdits', 'Accept edits', colors.modeAcceptEdits],
+      ['plan', 'Plan', colors.modePlan],
+      ['auto', 'Auto', colors.modeAuto]
+    ] as const) {
+      const actions = open(mode, null, scheme).actions
+      expect(actions.filter((a) => a.selected).map((a) => a.label), mode).toEqual([label])
+      expect(actions.find((a) => a.selected)!.renderIcon!().props.color, mode).toBe(tint)
+    }
+  })
+
+  it('marks Manual for a bare default, the way the sheet already read it', () => {
+    expect(open('default', null, scheme).actions.filter((a) => a.selected).map((a) => a.label)).toEqual(['Manual'])
+  })
+
+  it('draws a refused Auto row in the plain muted tone, not the clay', () => {
+    const auto = open('manual', 'claude-sonnet-4-5', scheme).actions.find((a) => a.label === 'Auto')!
+    expect(auto.disabled).toBe(true)
+    expect(auto.renderIcon!().props.color).toBe(colors.textMuted)
+  })
+
+  it('still draws Auto in the clay when the session is already in it on an old model', () => {
+    const auto = open('auto', 'claude-sonnet-4-5', scheme).actions.find((a) => a.label === 'Auto')!
+    expect(auto.renderIcon!().props.color).toBe(colors.modeAuto)
   })
 })
