@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
+import Animated from 'react-native-reanimated'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { Mic, Square } from 'lucide-react-native'
@@ -22,6 +23,8 @@ import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
 import { MobileNativeChatSendSlot } from './MobileNativeChatSendSlot'
+import { MobileNativeChatDictationLayer } from './MobileNativeChatDictationRow'
+import { useComposerDictationRow } from './use-composer-dictation-row'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
@@ -85,8 +88,17 @@ type Props = {
   /** Runs before `onSend`: ends live dictation so the sent words do not come back. */
   onBeforeSend?: () => void
   micActive?: boolean
-  /** Microphone level 0..1 while `micActive`; shows the voice bars. */
+  /** Microphone level 0..1 while `micActive`; drives the waveform (the voice bars without the
+   *  recording row). */
   micLevel?: number
+  /** The take has stopped listening and its words are being finished. */
+  micTranscribing?: boolean
+  /** With `onStopDictation`, turns on the recording row while dictating: the field and the
+   *  action row give way to Cancel / waveform / Stop / Send, as in the Claude app. Discards the
+   *  take's words. */
+  onCancelDictation?: () => void
+  /** Ends the take and keeps its words in the field. */
+  onStopDictation?: () => void
   /** What the app's own dictation last wrote. In the render that brings a new one, if `value` is
    *  its text, the caret goes to its `caret`. */
   dictationPaint?: DictationPaint | null
@@ -172,6 +184,9 @@ export function MobileNativeChatComposer({
   onBeforeSend,
   micActive = false,
   micLevel = 0,
+  micTranscribing = false,
+  onCancelDictation,
+  onStopDictation,
   dictationPaint = null,
   onComposerCursor,
   contextWindow = null,
@@ -320,6 +335,12 @@ export function MobileNativeChatComposer({
     }
   }
 
+  // While a take runs the field and the action row give way to the recording row.
+  const dictationRow = useComposerDictationRow({
+    micActive, micTranscribing, onCancelDictation, onStopDictation, sendNow: () => void handleSend()
+  })
+  const { micShowsStop } = dictationRow
+
   const iconButton = {
     flexShrink: 0,
     width: 36,
@@ -387,8 +408,17 @@ export function MobileNativeChatComposer({
               close moved the EditText to another parent. Android drops focus
               on that move while the keyboard stays up, and keys typed after
               `@` or `/` went nowhere until a tap (device, 2026-09-26). */}
+          {/* While the recording row is up the field folds away, as the Claude app's does
+              (use-composer-dictation-row.ts). It stays mounted, and focused if it was, so the
+              keyboard does not drop. */}
+          <Animated.View
+            style={[{ overflow: 'hidden' }, dictationRow.fieldStyle]}
+            {...dictationRow.hiddenWhileUp}
+            testID="native-chat-composer-field"
+          >
           <View
             collapsable={false}
+            onLayout={dictationRow.onFieldLayout}
             style={
               suggestions.length > 0
                 ? { maxHeight: inputMaxHeightWithMenu, overflow: 'hidden', justifyContent: 'flex-end' }
@@ -437,6 +467,9 @@ export function MobileNativeChatComposer({
               textAlignVertical="top"
             />
           </View>
+          </Animated.View>
+          <View testID="native-chat-composer-action-area">
+          <Animated.View style={dictationRow.actionsStyle} {...dictationRow.hiddenWhileUp}>
           <View
             style={{
               minHeight: 48,
@@ -487,14 +520,15 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={{ flex: 1, minWidth: 0 }} />
-            {micActive ? <VoiceLevelBars level={micLevel} /> : null}
+            {micActive && !dictationRow.available ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
               <Pressable focusable={false}
-                accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}
+                // Under the recording row the mic stays the plain mic: the row has the Stop.
+                accessibilityLabel={micShowsStop ? 'Stop dictation' : 'Dictate'}
                 style={({ pressed }) => [
                   iconButton,
                   {
-                    backgroundColor: micActive
+                    backgroundColor: micShowsStop
                       ? colors.dangerSoft
                       : pressed
                         ? colors.composerControlPressed
@@ -510,7 +544,7 @@ export function MobileNativeChatComposer({
               >
                 {/* The icon swaps on press; as the page's touch target, its removal would send
                     touchend to a detached node and lose the release. */}
-                {micActive ? (
+                {micShowsStop ? (
                   <Square pointerEvents="none" size={16} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
                 ) : (
                   <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
@@ -525,6 +559,11 @@ export function MobileNativeChatComposer({
               onSend={() => void handleSend()}
               iconButton={iconButton}
             />
+          </View>
+          </Animated.View>
+          {dictationRow.available ? (
+            <MobileNativeChatDictationLayer row={dictationRow} level={micLevel} padding={space.sm} iconButton={iconButton} />
+          ) : null}
           </View>
         </View>
       </View>

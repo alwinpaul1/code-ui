@@ -76,6 +76,8 @@ export function MobileSessionActiveContent({
     composerCursorRef,
     handleDictationToggle,
     finishDictationForSend,
+    cancelDictation,
+    stopDictation,
     handleDictationPressIn,
     handleDictationPressOut,
     readMarkdownTab,
@@ -353,8 +355,13 @@ export function MobileSessionActiveContent({
         images={nativeChatImages}
         onMicPress={handleDictationToggle}
         onBeforeSend={finishDictationForSend}
-        micActive={dictation.isRecording}
+        // From the tap, as the Claude app's toolbar comes up: a take that is still opening the
+        // microphone is a take, and Cancel or Stop ends it.
+        micActive={dictation.isStarting || dictation.isRecording}
         micLevel={(dictation as { level?: number }).level ?? 0}
+        micTranscribing={dictation.isProcessing}
+        onCancelDictation={() => cancelDictation()}
+        onStopDictation={stopDictation}
         dictationPaint={dictationPaint}
         onComposerCursor={(cursor) => {
           composerCursorRef.current = cursor

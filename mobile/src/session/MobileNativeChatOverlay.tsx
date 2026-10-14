@@ -80,6 +80,9 @@ type Props = {
   onBeforeSend?: () => void
   micActive: boolean
   micLevel?: number
+  micTranscribing?: boolean
+  onCancelDictation?: () => void
+  onStopDictation?: () => void
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
   /** Steps the terminal to a permission mode (the mode sheet's pick). */
@@ -123,6 +126,9 @@ export function MobileNativeChatOverlay({
   onBeforeSend,
   micActive,
   micLevel,
+  micTranscribing,
+  onCancelDictation,
+  onStopDictation,
   dictationPaint,
   onComposerCursor,
   onSelectPermissionMode,
@@ -487,6 +493,9 @@ export function MobileNativeChatOverlay({
         onBeforeSend={onBeforeSend}
         micActive={micActive}
         micLevel={micLevel}
+        micTranscribing={micTranscribing}
+        onCancelDictation={onCancelDictation}
+        onStopDictation={onStopDictation}
         dictationPaint={dictationPaint}
         onComposerCursor={onComposerCursor}
         contextWindow={controller.nativeChatContextWindow}

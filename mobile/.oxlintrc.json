@@ -512,7 +512,10 @@
             // Orca #26071's chat visuals need one line here: the structured
             // lane's visual source handed to the chat view, whose provider
             // gives its rows the renderer (MobileNativeChatVisual.tsx).
-            "max": 401,
+            // 2026-10-14: 410. The recording row's three props (`micTranscribing`,
+            // `onCancelDictation`, `onStopDictation`) in the type, the destructure
+            // and the hand-off to the chat view; the row is MobileNativeChatDictationRow.tsx.
+            "max": 410,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -566,7 +569,12 @@
             // 2026-10-12: +3 for `keyboardUp` (the prop, its destructure, the
             // hook call): the composer claims an open keyboard no field holds
             // (use-composer-keeps-keyboard.ts). The logic lives there.
-            "max": 429,
+            // 2026-10-14: +29 for the Claude app's recording row: three props, the
+            // fold wrapper round the field, the action area that stacks the action
+            // row and the recording layer, and the hook call. The state, the send
+            // after the take and the swap are use-composer-dictation-row.ts; the
+            // row is MobileNativeChatDictationRow.tsx.
+            "max": 458,
             "skipBlankLines": true,
             "skipComments": true
           }

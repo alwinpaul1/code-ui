@@ -25,7 +25,12 @@ const MOTION_SITES = [
   'onboarding/NotificationOnboardingPreview.tsx',
   '../app/mobile-onboarding.tsx',
   // The alert keeps its own (spring | crossfade) vocabulary over the shared hook.
-  'ui/alert/use-alert-motion.ts'
+  'ui/alert/use-alert-motion.ts',
+  // Dictation: the waveform scrolls by itself; the composer's swap to the recording row and the
+  // row's centre crossfade run when a take changes state, not under a finger.
+  'components/DictationWaveform.tsx',
+  'session/MobileNativeChatDictationRow.tsx',
+  'session/use-composer-dictation-row.ts'
 ]
 
 const HOOK_IMPORT = /import \{[^}]*\buseReducedMotion\b[^}]*\} from '[^']*use-reduced-motion'/

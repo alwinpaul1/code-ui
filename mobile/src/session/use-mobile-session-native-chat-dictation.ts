@@ -213,6 +213,7 @@ export function useMobileSessionNativeChatDictation(
     dictation, dictationPaint, composerCursorRef,
     startDictation: hold.startDictation,
     cancelDictation: hold.cancelDictation,
+    stopDictation: hold.stopDictation,
     handleDictationToggle: hold.handleToggle,
     finishDictationForSend: () => hold.cancelDictation(true),
     handleDictationPressIn: hold.handlePressIn,

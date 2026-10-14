@@ -141,6 +141,12 @@ export type MobileNativeChatViewProps = {
   onBeforeSend?: () => void
   micActive?: boolean
   micLevel?: number
+  /** The take stopped listening and its words are being finished ("Transcribing…"). */
+  micTranscribing?: boolean
+  /** The recording row's Cancel: ends the take and discards its words. */
+  onCancelDictation?: () => void
+  /** The recording row's Stop (and Send, which stops first): ends the take, keeps its words. */
+  onStopDictation?: () => void
   /** Open phrase of a live take, painted lighter than the finished words. */
   dictationPaint?: DictationPaint | null
   /** Caret in the composer, so a take inserts there instead of at the end. */

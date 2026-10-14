@@ -635,7 +635,10 @@ const HEAD_HOST_JSX_SHA256 = 'aa75133a961d99b340038d28b533e354b1b74ed6341e198446
 // 2026-10-13 (later): <TerminalPaneView> is handed `revealed`, so a pane stays covered until its
 // first kept frame, and `onEngineError`, so the WebView's error and Reload are never covered.
 // Same records; only that record moved.
-const HEAD_LEAF_JSX_SHA256 = 'b1e0ab929c240f525d7e4f19a075769bd0dc3072474ec435a3fd5030f0cccc01'
+// 2026-10-14: the chat overlay's micActive reads isStarting too, and it is handed
+// `micTranscribing`, `onCancelDictation` and `onStopDictation` for the recording row. Same
+// records; only the overlay's moved.
+const HEAD_LEAF_JSX_SHA256 = '5b2e7c428492f5b241a8fdb1ab86ffeb8b5921546f6cfb87740212b3b89bc0b6'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
