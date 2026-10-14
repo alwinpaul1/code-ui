@@ -17,7 +17,7 @@ import { useMobileNativeChatSessionOptionController } from './use-mobile-native-
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
 import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'
-import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend, withoutAskDraftRestore, withoutAskRetry } from './agent-image-share-ask'
+import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useCcrSessionImages } from './use-ccr-session-images'; import { useCcrSessionModel } from './use-ccr-session-model'; import { preferCcrModelPair } from './ccr-session-model'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend, withoutAskDraftRestore, withoutAskRetry } from './agent-image-share-ask'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
@@ -208,6 +208,8 @@ export function useMobileNativeChatController(
   const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeLive.model, beacon: hudLiveBeacon?.modelId != null, beaconHandle: activeHandle, beaconStoredAt: hudObservation?.modelId && hudObservation.modelId !== hudLiveBeacon?.modelId ? null : (hudLiveBeacon?.receivedAt ?? null), liveEffort: claudeLive.effort, agentWorking: nativeChatAgentWorking, messages: nativeChatSession.messages, transcriptPath: activeChatResolution?.transcriptPath ?? null, rowsSettled: nativeChatSession.status === 'ready', screenStatement: screenModelStatement })
   // A model command written after the beacon last heard is newer than it (a switch made while the phone was away).
   const claudeReported = claudeReportedOverLive(claudeLive, transcriptModel.fallback)
+  // Anthropic's copy of the session (Remote Control on): the model/effort it reports, used when fresh and newer than the beacon (ccr-session-model.ts), and the pictures the desktop cannot send (use-ccr-session-images.ts).
+  const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, messages: nativeChatSession.messages, epoch: lastConnectedAt }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, messages: nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
   const isCodexChat = activeChatResolution?.agent === 'codex', isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has
   // stated there name WHICH shell ended (the only source of that on a
@@ -389,7 +391,7 @@ export function useMobileNativeChatController(
         : null,
     terminalHandleRef: activeHandleRef,
     messages: nativeChatSession.messages,
-    localPreviews: chatImagePreviewsByMessageIdLocal
+    localPreviews: chatImagePreviewsByMessageIdLocal, remote: ccrImages
   })
   useMobilePermissionRefresh(reportedNativeChatPermission, refreshTerminalHud)
   const codexModel = useCodexCurrentModel(
@@ -614,7 +616,7 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: liveHud.context, nativeChatContextUsedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: liveHud.context, nativeChatContextUsedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null, nativeChatLiveModel: claudeModelPillPair(preferCcrModelPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, ccrModel, hudLiveBeacon?.receivedAt ?? null), transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }

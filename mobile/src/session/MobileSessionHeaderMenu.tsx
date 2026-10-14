@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { TextInputModal } from '../components/TextInputModal'
 import { useClipboardWriter } from '../platform/clipboard'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
+import { MobileCcrImagesSelfTest } from './MobileCcrImagesSelfTest'
 import { sessionHeaderMenuActions } from './session-header-menu'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionHeaderMenu } from './use-session-header-menu'
@@ -43,6 +44,7 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
   // what was typed whenever its default changes, and the live title can move
   // under it (a first worktree.show, or a worktreesChanged event).
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [checkingImages, setCheckingImages] = useState(false)
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -60,8 +62,10 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
         onOpenBackgroundTasks={() => sessionMenu.openBackgroundTasks?.()}
         onRename={() => setRenaming(worktreeName)}
         onCopySessionId={() => void actions.copySessionId()}
+        onCheckSessionImages={() => setCheckingImages(true)}
         onClose={() => setShowHeaderMoreActions(false)}
       />
+      <MobileCcrImagesSelfTest visible={checkingImages} onClose={() => setCheckingImages(false)} />
       {/* The Claude app's Rename dialog, in its words. The name is the
           workspace's own display name, which is the header's title. */}
       <TextInputModal

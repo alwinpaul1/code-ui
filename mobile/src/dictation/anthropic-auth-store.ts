@@ -9,6 +9,10 @@ const STORE_KEY = 'anthropic-dictation-oauth-v2'
 const PRE_SCOPES_STORE_KEY = 'anthropic-dictation-oauth'
 const VERIFIER_KEY = 'anthropic-dictation-pkce-verifier'
 const STATE_KEY = 'anthropic-dictation-oauth-state'
+/** The organization the sign-in acts for, read once from the profile endpoint
+ *  (session/ccr-session-pipeline.ts). It belongs to the account that signed in,
+ *  so a sign-out or a new sign-in deletes it. */
+const ORG_STORE_KEY = 'anthropic-ccr-org-v1'
 
 // Production OAuth endpoints (from Claude Code 2.1.296).
 const AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize'
@@ -192,6 +196,8 @@ export async function exchangeCode(
   }
   const credential = parseTokenResponse(await res.json())
   await storeCredential(credential)
+  // A new sign-in may be another account: its organization is asked again.
+  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
   return credential
@@ -264,6 +270,34 @@ export async function clearCredential(): Promise<void> {
   await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
+  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
+}
+
+export type StoredOrganization = { readonly accountUuid: string; readonly organizationUuid: string }
+
+/** The cached organization of the signed-in account, or null when none is
+ *  kept or what is kept is not that shape. */
+export async function readStoredOrganization(): Promise<StoredOrganization | null> {
+  const raw = await SecureStore.getItemAsync(ORG_STORE_KEY).catch(() => null)
+  if (!raw) {
+    return null
+  }
+  try {
+    const data = JSON.parse(raw) as Partial<StoredOrganization>
+    return typeof data.accountUuid === 'string' && data.accountUuid && typeof data.organizationUuid === 'string' && data.organizationUuid
+      ? { accountUuid: data.accountUuid, organizationUuid: data.organizationUuid }
+      : null
+  } catch {
+    return null
+  }
+}
+
+export async function storeOrganization(organization: StoredOrganization): Promise<void> {
+  await SecureStore.setItemAsync(ORG_STORE_KEY, JSON.stringify(organization))
+}
+
+export async function clearStoredOrganization(): Promise<void> {
+  await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
 }
 
 /**
