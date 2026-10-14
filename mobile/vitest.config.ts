@@ -65,6 +65,10 @@ export default defineConfig({
     // inherit this process's environment either way, and the terminal-ancestor check runs in the
     // global setup, in this process, before any worker starts.
     pool: 'threads',
+    // Why: on 2026-10-14 five agents each ran this suite at once with a worker per core, and 56
+    // node processes held 34 GB on a 16 GB Mac until it crashed. Two workers by default; the
+    // lead session's single full run may raise it with VITEST_MAX_WORKERS when nothing else runs.
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || 2,
     environment: 'node',
     // Why: the tty sandbox (a ps that sees nothing, every tty override on a temp
     // file) is set before any worker starts; see vitest.global-setup.ts.
