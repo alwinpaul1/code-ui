@@ -14,7 +14,8 @@ export const DRAWER_ENTER_FALLBACK_MS = 250
  * sheet. On Android that commit is also what builds the Modal's Dialog window
  * (on the UI thread, at mount) and only then reports the sheet's height to JS
  * (`onLayout`, a later JS task, behind whatever the keyboard leaving just
- * queued). The 180 ms curve ran on regardless: it spent its steep first frames
+ * queued). The open (then a 180 ms timing; the sheet spring since 2026-10-14)
+ * ran on regardless: it spent its steep first frames
  * before the window drew anything, and it ran with the whole window height as
  * its travel, because a sheet that has never laid out has no height. When the
  * height did arrive the travel shrank by two thirds in one frame and the sheet

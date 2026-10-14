@@ -1,5 +1,6 @@
 import { Platform, StyleSheet } from 'react-native'
 import { spacing } from '../theme/mobile-theme'
+import { SHEET_SPEC } from './sheet-spec'
 
 /** Structural layout only — colour comes from `useTheme()` at render time
  *  (light/dark are both required states; a literal here would freeze one). */
@@ -24,8 +25,8 @@ export const draggableDetailSheetStyles = StyleSheet.create({
     alignItems: 'center'
   },
   sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: SHEET_SPEC.radius,
+    borderTopRightRadius: SHEET_SPEC.radius,
     width: '100%',
     overflow: 'hidden',
     ...Platform.select({
@@ -40,20 +41,21 @@ export const draggableDetailSheetStyles = StyleSheet.create({
   },
   handleHitArea: {
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
+    paddingHorizontal: SHEET_SPEC.handle.paddingHorizontal,
+    paddingVertical: SHEET_SPEC.handle.paddingVertical
   },
   handle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    opacity: 0.4
+    width: SHEET_SPEC.handle.width,
+    height: SHEET_SPEC.handle.height,
+    borderRadius: SHEET_SPEC.handle.borderRadius
   },
   // Left, as the Claude app's tool sheet has it (2026-09-26 screenshots).
+  // 12 in from the edges, not 8: the 44 dp corner (SHEET_SPEC.radius) clips
+  // what sits nearer the corner than that.
   closeButton: {
     position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
+    top: spacing.md,
+    left: spacing.md,
     padding: spacing.xs,
     zIndex: 1
   },

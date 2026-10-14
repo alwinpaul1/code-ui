@@ -15,8 +15,14 @@ export type ThemeColors = {
   bgRaised: string
   /** Inset wells: code, inputs. */
   bgSunken: string
-  /** Scrim behind drawers. */
+  /** Scrim behind the right drawer and a few in-page dims. Bottom sheets use
+   *  `sheetScrim` (sheet-spec.ts). */
   bgOverlay: string
+  /** Scrim behind every bottom sheet: Material 3's default, the scheme's
+   *  `scrim` (black) at 32%, as the Claude app's ModalBottomSheet draws it in
+   *  both schemes (com.anthropic.claude 1.261009.20, ywi.java:2049 and
+   *  krz.java:4967, 2026-10-14). */
+  sheetScrim: string
   /** The composer dock over the chat: the conversation shows through, as in
    *  the Claude app (2026-09-13). */
   bgDock: string
@@ -126,6 +132,7 @@ export const lightColors: ThemeColors = {
   bgRaised: '#EAE7DE',
   bgSunken: '#ECE9E1',
   bgOverlay: 'rgba(30, 28, 25, 0.42)',
+  sheetScrim: 'rgba(0, 0, 0, 0.32)',
   bgDock: 'rgba(243, 241, 234, 0.72)',
   bgPanelGlass: 'rgba(251, 250, 246, 1)',
   border: '#E1DDD2',
@@ -180,6 +187,7 @@ export const darkColors: ThemeColors = {
   bgRaised: '#2B2925',
   bgSunken: '#161513',
   bgOverlay: 'rgba(0, 0, 0, 0.55)',
+  sheetScrim: 'rgba(0, 0, 0, 0.32)',
   bgDock: 'rgba(26, 25, 23, 0.72)',
   bgPanelGlass: 'rgba(33, 31, 28, 1)',
   border: '#332F2A',

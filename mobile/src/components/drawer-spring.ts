@@ -1,7 +1,8 @@
 import { type AnimatedSpringConfig, springFromAppleParams } from '../ui/alert/alert-motion'
 
-// How a drawer or sheet settles on a rest after a drag: the bottom drawer,
-// its expandable form, the tool detail sheet and the right drawer.
+// How the right drawer settles on a rest after a drag. Bottom sheets left it
+// on 2026-10-14 for the Claude app's own sheet spring (SHEET_SPEC.motion.settle,
+// Material 3 DefaultSpatial, sheet-spec.ts); sheet-spec.test.tsx keeps them off it.
 //
 // Stated the way Apple states a spring, ratio 1 (no overshoot), at the
 // response the old triplet {damping 28, stiffness 400} had at unit mass:

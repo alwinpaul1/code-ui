@@ -13,11 +13,14 @@ import { Check, Trash2, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Txt } from '../ui/Txt'
 import { useTheme } from '../theme/theme-context'
+import { SHEET_SPEC, sheetColors } from '../components/sheet-spec'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 
 export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEditor | null }) {
   const { colors, space, radius, type, fonts } = useTheme()
   const insets = useSafeAreaInsets()
+  // The one sheet spec (sheet-spec.ts): this sheet's corners, ground and scrim.
+  const sheet = sheetColors(colors)
   const inputRef = useRef<TextInput>(null)
   if (!editor) {
     return null
@@ -46,16 +49,16 @@ export function MobileNativeChatQueueEditor({ editor }: { editor?: InlineQueueEd
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.bgOverlay }}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: sheet.scrim }}
       >
         <View
           style={{
             maxHeight: '90%',
             paddingTop: space.sm,
             paddingBottom: Math.max(insets.bottom, space.lg),
-            backgroundColor: colors.bgPanel,
-            borderTopLeftRadius: radius.xl,
-            borderTopRightRadius: radius.xl,
+            backgroundColor: sheet.container,
+            borderTopLeftRadius: SHEET_SPEC.radius,
+            borderTopRightRadius: SHEET_SPEC.radius,
             borderWidth: 1,
             borderColor: colors.border
           }}

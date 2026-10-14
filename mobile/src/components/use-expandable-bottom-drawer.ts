@@ -8,7 +8,7 @@ import {
   settleExpandableSheet,
   type ExpandableSheetSettle
 } from './bottom-drawer-expandable'
-import { DRAWER_SPRING } from './drawer-spring'
+import { SHEET_SPEC } from './sheet-spec'
 
 const DISMISS_DURATION_MS = 220
 
@@ -65,7 +65,7 @@ export function useExpandableBottomDrawer(args: {
       }
       const toFull = settle === 'full'
       listScrolls.value = toFull
-      translateY.value = withSpring(toFull ? 0 : expandableSheetOpeningOffset(heights), DRAWER_SPRING)
+      translateY.value = withSpring(toFull ? 0 : expandableSheetOpeningOffset(heights), SHEET_SPEC.motion.settle)
       runOnJS(setExpanded)(toFull)
       return settle
     }

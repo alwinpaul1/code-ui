@@ -13,7 +13,7 @@ import {
   type SharedValue
 } from 'react-native-reanimated'
 import type { ExpandableSheetSettle } from './bottom-drawer-expandable'
-import { DRAWER_SPRING } from './drawer-spring'
+import { SHEET_SPEC } from './sheet-spec'
 
 const DISMISS_THRESHOLD = 80
 // Why: negative translateY (pulling up) is damped with a rubber-band factor
@@ -108,7 +108,7 @@ export function useBottomDrawerDrag(args: {
           }
         })
       } else {
-        translateY.value = withSpring(0, DRAWER_SPRING)
+        translateY.value = withSpring(0, SHEET_SPEC.motion.settle)
       }
     }
     const followFinger = (translationY: number) => {
@@ -150,7 +150,7 @@ export function useBottomDrawerDrag(args: {
           contentDragCanDismiss.value = false
           contentDragStartY.value = 0
           if (translateY.value !== 0) {
-            translateY.value = withSpring(0, DRAWER_SPRING)
+            translateY.value = withSpring(0, SHEET_SPEC.motion.settle)
           }
           return
         }

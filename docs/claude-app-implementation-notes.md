@@ -411,6 +411,42 @@ field `aj1`, placeholder `ib8`, custom measure policies `ai9` (button row) and
   plus at the top 64 dp for the floating header and an animated extra (0,
   36 dp, or a measured banner height).
 
+## 8. Bottom sheets (Phase 1 of the UI port, 2026-10-14)
+
+Every sheet in the app goes through one wrapper (`xhv.java:1514`) around
+Material 3's `ModalBottomSheet` (`ywi.java:1899`). Verified in the
+1.261009.20 decompile:
+
+- **Shape**: top corners **44 dp**, `oiv.b = mfs.d(44, 44, 0, 0)`
+  (`oiv.java:9`).
+- **Colours**: `SheetColors(container, content, grabber, titleBarButton)`
+  (`shv.java:38`) built by `oiv.c` (`oiv.java:24-39`): container **`pl7.q`**
+  (#F9F9F7 / #151515, Code UI `chatBg`), content **`pl7.O`** (#131313 /
+  #F9F9F7, nearest `text`), grabber **`pl7.x`** (#1E1E1D / #E1E0D9 at 15%,
+  Code UI `composerBorder`).
+- **Grabber**: padding `oiv.h` = 6 dp sides, 5.5 dp top and bottom
+  (`oiv.java:15`), then a **36 × 5 dp** bar (`oiv.i`, `oiv.java:16`) clipped
+  to a circle, filled with the grabber colour (`wu20.java:928`). It is passed
+  only when the sheet state's anchors include **PartiallyExpanded**
+  (`okv.e()`, `xhv.java:1469-1477`); a full-only sheet has none.
+- **Scrim**: the call passes no scrim, so M3's default applies: the scheme's
+  `scrim` at **32%** (`ywi.java:2049`). The app's scheme sets `scrim` to
+  black in both modes (`krz.java:4967`, slot 29 = `z49.b`). Code UI token
+  `sheetScrim`.
+- **Motion** (M3 standard scheme, `syl.java:6-11`): show and drag settle on
+  **DefaultSpatial** (ζ 0.9, k 700), hide on **FastEffects** (ζ 1, k 3800)
+  (`e230.java:74-91`); the scrim's alpha on **DefaultEffects** (ζ 1, k 1600),
+  "ScrimAlphaAnimation" (`ywi.java:2168`). Default max width 640 dp
+  (`ywi.java:2054`).
+
+Code UI: `mobile/src/components/sheet-spec.ts` holds all of it;
+`mounted-bottom-drawer.tsx`, `DraggableDetailSheet.tsx` and
+`MobileNativeChatQueueEditor.tsx` read it, and `sheet-spec.test.tsx` pins it
+in both schemes and refuses a new sheet that styles its own corners or reaches
+for `bgOverlay`. Under reduced motion the sheet does not travel and fades on
+DefaultEffects. The hide stays a 150 ms timing (FastEffects is within 0.1% of
+rest by then) because the close lifecycle hangs off its completion callback.
+
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.
