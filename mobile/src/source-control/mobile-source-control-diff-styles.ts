@@ -1,11 +1,14 @@
 import { StyleSheet } from 'react-native'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import type { Theme } from '../theme/theme-context'
+import { mobileDiffPaletteForScheme } from './mobile-diff-claude-palette'
 
 /** Empty-state, retry, and committed-diff-preview drawer styles, built from the live theme so
  *  the panel reads in light and in dark. Split from the main source-control stylesheet to stay
  *  under the line limit. Callers take it through `sourceControlStyles`'s merge. */
-export function diffStyles({ colors }: Theme) {
+export function diffStyles({ colors, scheme }: Theme) {
+  // The review's own row tints, so one diff reads the same on both screens that draw it.
+  const palette = mobileDiffPaletteForScheme(scheme)
   return StyleSheet.create({
     state: {
       flex: 1,
@@ -94,10 +97,10 @@ export function diffStyles({ colors }: Theme) {
       paddingHorizontal: spacing.xs
     },
     diffLineAdd: {
-      backgroundColor: colors.diffAddBg
+      backgroundColor: palette.addBg
     },
     diffLineDelete: {
-      backgroundColor: colors.diffDelBg
+      backgroundColor: palette.delBg
     },
     diffLineNumber: {
       width: 40,
