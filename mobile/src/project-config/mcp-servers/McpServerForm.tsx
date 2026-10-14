@@ -22,6 +22,7 @@ export function McpServerForm({
   return (
     <View style={styles.form}>
       <TextInput
+        cursorColor={colors.caret}
         style={styles.input}
         value={form.name}
         onChangeText={(name) => onChange({ ...form, name })}
@@ -45,6 +46,7 @@ export function McpServerForm({
       </View>
       {form.isRemote ? (
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={form.url}
           onChangeText={(url) => onChange({ ...form, url })}
@@ -55,6 +57,7 @@ export function McpServerForm({
       ) : (
         <>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.input}
             value={form.command}
             onChangeText={(command) => onChange({ ...form, command })}
@@ -63,6 +66,7 @@ export function McpServerForm({
             autoCapitalize="none"
           />
           <TextInput
+            cursorColor={colors.caret}
             style={styles.input}
             value={form.argsText}
             onChangeText={(argsText) => onChange({ ...form, argsText })}
@@ -71,6 +75,7 @@ export function McpServerForm({
             autoCapitalize="none"
           />
           <TextInput
+            cursorColor={colors.caret}
             style={[styles.input, styles.multiline]}
             value={form.envText}
             onChangeText={(envText) => onChange({ ...form, envText })}

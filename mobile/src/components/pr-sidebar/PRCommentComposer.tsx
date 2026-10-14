@@ -53,6 +53,7 @@ export function PRCommentComposer({
   return (
     <View style={styles.container}>
       <TextInput
+        cursorColor={colors.caret}
         style={styles.input}
         value={body}
         onChangeText={setBody}

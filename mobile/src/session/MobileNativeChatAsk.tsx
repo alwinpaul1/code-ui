@@ -276,6 +276,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
         />
         {otherSelected ? (
           <TextInput
+            cursorColor={colors.caret}
             style={{
               backgroundColor: colors.bgRaised,
               borderWidth: 1,

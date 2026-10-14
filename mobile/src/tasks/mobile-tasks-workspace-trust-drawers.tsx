@@ -46,6 +46,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Name</Text>
               <TextInput
+                cursorColor={colors.caret}
                 style={styles.input}
                 value={workspaceSparseDraft.name}
                 onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
@@ -59,6 +60,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionTitle}>Directories</Text>
               <TextInput
+                cursorColor={colors.caret}
                 style={[styles.input, styles.bodyInput, styles.monoInput]}
                 value={workspaceSparseDraft.directoriesText}
                 onChangeText={(directoriesText) =>

@@ -32,6 +32,7 @@ export function MobileBrowserAddressField({
   return (
     <View style={fieldStyles.field}>
       <TextInput
+        cursorColor={colors.caret}
         style={addressStyles.input}
         value={value}
         onChangeText={onChangeText}

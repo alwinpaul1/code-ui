@@ -111,6 +111,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                 {isEditingComment ? (
                   <>
                     <TextInput
+                      cursorColor={colors.caret}
                       style={[styles.input, styles.commentInput]}
                       value={projectEditingCommentDraft}
                       onChangeText={setProjectEditingCommentDraft}
@@ -159,6 +160,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                           </TasksButton>
                         ) : null}
                         <TextInput
+                          cursorColor={colors.caret}
                           style={[styles.input, styles.replyInput]}
                           value={itemReplyDrafts[commentId] ?? ''}
                           onChangeText={(next) =>

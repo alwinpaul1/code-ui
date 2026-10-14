@@ -261,6 +261,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
                   }}
                 >
                   <TextInput
+                    cursorColor={colors.caret}
                     style={{
                       flex: 1,
                       height: 40,

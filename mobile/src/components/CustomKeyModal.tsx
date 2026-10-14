@@ -314,6 +314,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Key</Text>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.keyInput}
               value={shortcutKey.length === 1 ? shortcutKey.toUpperCase() : ''}
               onChangeText={handleShortcutKeyInput}
@@ -388,6 +389,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
           <View style={styles.macroForm}>
             <Text style={styles.fieldLabel}>Label</Text>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.fieldInput}
               value={macroLabel}
               onChangeText={setMacroLabel}
@@ -398,6 +400,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
             />
             <Text style={styles.fieldLabel}>Command</Text>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.fieldInput}
               value={macroText}
               onChangeText={setMacroText}

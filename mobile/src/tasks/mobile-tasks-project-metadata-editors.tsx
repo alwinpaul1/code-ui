@@ -191,6 +191,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
       <View style={styles.detailSection}>
         <Text style={styles.detailSectionTitle}>Title</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={projectTitleDraft}
           onChangeText={setProjectTitleDraft}
@@ -212,6 +213,7 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
       <View style={styles.detailSection}>
         <Text style={styles.detailSectionTitle}>Description</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={[styles.input, styles.bodyInput]}
           value={projectBodyDraft}
           onChangeText={setProjectBodyDraft}

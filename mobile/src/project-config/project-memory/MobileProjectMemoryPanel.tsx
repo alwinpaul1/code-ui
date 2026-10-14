@@ -146,6 +146,7 @@ function ProjectMemoryEditor({
       ) : (
         <>
           <TextInput
+            cursorColor={colors.caret}
             style={styles.editor}
             value={state.content}
             onChangeText={setContent}

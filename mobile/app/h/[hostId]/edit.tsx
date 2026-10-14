@@ -198,6 +198,7 @@ export default function EditHostScreen() {
 
             <Text style={styles.label}>Name</Text>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.input}
               accessibilityLabel="Name"
               value={name}
@@ -214,6 +215,7 @@ export default function EditHostScreen() {
 
             <Text style={styles.label}>Address</Text>
             <TextInput
+              cursorColor={colors.caret}
               style={styles.input}
               accessibilityLabel="Address"
               value={address}

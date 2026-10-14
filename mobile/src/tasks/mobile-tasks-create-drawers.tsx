@@ -150,6 +150,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
 
         <Text style={styles.fieldLabel}>Title</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={createTitle}
           onChangeText={setCreateTitle}
@@ -161,6 +162,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
 
         <Text style={styles.fieldLabel}>Description</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={[styles.input, styles.bodyInput]}
           value={createBody}
           onChangeText={setCreateBody}
@@ -259,6 +261,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
       <View style={styles.createForm}>
         <Text style={styles.fieldLabel}>Personal API key</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={linearApiKeyDraft}
           onChangeText={(next) => {

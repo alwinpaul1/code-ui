@@ -145,6 +145,7 @@ function PRTitle({
     return (
       <View style={composerStyles.container}>
         <TextInput
+          cursorColor={colors.caret}
           style={composerStyles.input}
           value={draft}
           onChangeText={setDraft}

@@ -236,6 +236,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
             ))
           )}
           <TextInput
+            cursorColor={colors.caret}
             style={[styles.input, styles.stackedInput]}
             value={linearSubIssueTitle}
             onChangeText={setLinearSubIssueTitle}

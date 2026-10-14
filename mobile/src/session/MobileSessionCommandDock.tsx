@@ -106,6 +106,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               here instantly while each keystroke streams to the PTY; the terminal
               echo arrives one relay round trip later. Enter clears the field. */}
           <TextInput
+            cursorColor={colors.caret}
             ref={bindLiveInputField}
             style={{
               flex: 1,
@@ -170,6 +171,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           }}
         >
           <TextInput
+            cursorColor={colors.caret}
             ref={bindCommandField}
             // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
             key={

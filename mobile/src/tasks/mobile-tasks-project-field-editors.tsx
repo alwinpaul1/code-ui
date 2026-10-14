@@ -129,6 +129,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
             ) : (
               <>
                 <TextInput
+                  cursorColor={colors.caret}
                   style={styles.input}
                   value={draftValue}
                   onChangeText={(next) =>

@@ -46,6 +46,7 @@ export function AgentHistoryFilterBar({
       </View>
       <View style={styles.searchRow}>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.searchInput}
           value={query}
           onChangeText={onChangeQuery}

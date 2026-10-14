@@ -100,6 +100,7 @@ export function SmartWorkspaceSourceField({
         // same composer.name the source drawer docks — focus handoff keeps the
         // string continuous even though native focus moves to the docked field.
         <TextInput
+          cursorColor={colors.caret}
           style={[styles.input, disabled && styles.disabled]}
           value={composer.name}
           onChangeText={composer.setName}

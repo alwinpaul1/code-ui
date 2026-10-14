@@ -112,6 +112,7 @@ export function GitHubPrFileDiff({
             {commentLine !== undefined ? (
               <>
                 <TextInput
+                  cursorColor={colors.caret}
                   style={[styles.input, styles.replyInput]}
                   value={commentDrafts[draftKey] ?? ''}
                   onChangeText={(next) => onCommentDraftChange(draftKey, next)}

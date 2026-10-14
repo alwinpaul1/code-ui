@@ -397,6 +397,7 @@ export function MobileNativeChatComposer({
             testID="native-chat-composer-input-fold"
           >
             <TextInput
+              cursorColor={colors.caret}
               ref={textInputRef}
               // One text layer, capped at whole lines and scrolling inside its box. Until
               // 2026-10-11 dictation turned this text transparent and drew the words in an

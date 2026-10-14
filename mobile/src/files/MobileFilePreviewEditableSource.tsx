@@ -3,7 +3,7 @@ import { Text, TextInput, View } from 'react-native'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
 import { textOffsetForLineColumn } from './mobile-file-preview-line-column'
 import { filePreviewStyles } from './mobile-file-preview-styles'
-import { useThemedStyles } from '../theme/theme-context'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 type Props = {
   title: string
@@ -21,6 +21,7 @@ export function MobileFilePreviewEditableSource({
   onDraftChange
 }: Props) {
   const styles = useThemedStyles(filePreviewStyles)
+  const { colors } = useTheme()
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''
@@ -42,6 +43,7 @@ export function MobileFilePreviewEditableSource({
     <View style={styles.editContainer}>
       {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
       <TextInput
+        cursorColor={colors.caret}
         style={styles.editInput}
         value={draftContent}
         onChangeText={onDraftChange}

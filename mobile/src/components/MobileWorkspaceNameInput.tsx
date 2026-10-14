@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { TextInput, type TextInputProps } from 'react-native'
+import { useTheme } from '../theme/theme-context'
 
 const MOBILE_WORKSPACE_NAME_FOCUS_DELAY_MS = 220
 
@@ -13,6 +14,7 @@ export function MobileWorkspaceNameInput({
   focusKey,
   ...props
 }: MobileWorkspaceNameInputProps) {
+  const { colors } = useTheme()
   const inputRef = useRef<TextInput>(null)
 
   useEffect(() => {
@@ -31,6 +33,7 @@ export function MobileWorkspaceNameInput({
 
   return (
     <TextInput
+      cursorColor={colors.caret}
       ref={inputRef}
       placeholder="Workspace name"
       autoCapitalize="none"

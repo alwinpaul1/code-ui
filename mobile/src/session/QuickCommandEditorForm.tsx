@@ -89,6 +89,7 @@ export function QuickCommandEditorForm({
       <View style={styles.field}>
         <Text style={styles.label}>Label</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={styles.input}
           value={draft.label}
           onChangeText={(label) => onChange({ label })}
@@ -129,6 +130,7 @@ export function QuickCommandEditorForm({
       <View style={styles.field}>
         <Text style={styles.label}>{isAgent ? 'Prompt' : 'Command Text'}</Text>
         <TextInput
+          cursorColor={colors.caret}
           style={[styles.input, styles.textarea, !isAgent && styles.mono]}
           value={isAgent ? draft.prompt : draft.command}
           onChangeText={(text) => onChange(isAgent ? { prompt: text } : { command: text })}

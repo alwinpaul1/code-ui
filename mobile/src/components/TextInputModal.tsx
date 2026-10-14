@@ -75,6 +75,7 @@ export function TextInputModal({
       </View>
 
       <TextInput
+        cursorColor={colors.caret}
         style={{
           backgroundColor: colors.bgPanel,
           color: colors.text,
