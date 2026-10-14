@@ -24,6 +24,7 @@ import { useMobileMarkdownBlocks } from './use-mobile-markdown-blocks'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
+import { EMPHASIS_NONE, emphasisStyle, nestedEmphasis, type EmphasisAround } from './mobile-markdown-emphasis'
 import { listMarker } from './mobile-markdown-list-marker'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
@@ -87,6 +88,9 @@ type Props = {
    *  #26071), each as a block of its own between the prose runs around it. Without it, a
    *  directive line is ordinary text. Must be referentially stable (this component is memoized). */
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
+  /** The text is a person's own, a sent prompt: each newline is a line break and each line
+   *  keeps its indent, and it is not read as HTML, so `<Text>` and `&amp;` draw as typed. */
+  typed?: boolean
 }
 
 const MAX_TABLE_ROWS = 40
@@ -162,7 +166,9 @@ function renderInline(
   onOpenFile: ((pathText: string) => void) | undefined,
   /** How the Text this lands in cuts its code spans into pills, from its own
    *  measured lines (use-markdown-code-pill-runs.ts). */
-  pills: CodePillRun
+  pills: CodePillRun,
+  /** The emphasis this text is already inside, so a nested span keeps it. */
+  around: EmphasisAround = EMPHASIS_NONE
 ): ReactNode[] {
   const parts: ReactNode[] = []
   pills.noteSource(text)
@@ -256,20 +262,16 @@ function renderInline(
       }
     } else if (token.startsWith('~~')) {
       parts.push(
-        <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
-        </Text>
-      )
-    } else if (match.group === BOLD_TOKEN_GROUP) {
-      parts.push(
-        <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+        <Text key={key} style={around ? [emphasisStyle(styles, around), styles.strike] : styles.strike}>
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, around)}
         </Text>
       )
     } else {
+      const mark = match.group === BOLD_TOKEN_GROUP ? 2 : 1
+      const inside = nestedEmphasis(around, mark === 2)
       parts.push(
-        <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile, pills)}
+        <Text key={key} style={emphasisStyle(styles, inside)}>
+          {renderInline(styles, token.slice(mark, -mark), onOpenFile, pills, inside)}
         </Text>
       )
     }
@@ -291,7 +293,8 @@ function MobileMarkdownInner({
   identity,
   typography = DEFAULT_MARKDOWN_TYPOGRAPHY,
   widthKey,
-  renderVisual
+  renderVisual,
+  typed
 }: Props) {
   // `false` while the chat scrolls (chat-text-selectable-context.ts). Where the document's native
   // root guards holds (Android), the Texts stay selectable and only the root hears it: switching
@@ -316,7 +319,7 @@ function MobileMarkdownInner({
   const [nativeWidth, setNativeWidth] = useState(() => (nativeProse ? lastNativeProseWidth(widthKey, textScale) : 0))
   // Not trimmed whole: the first line's indent can make it code.
   const text = markdownDocumentSource(content)
-  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined)
+  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined, typed)
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
   // why the line height is not simply `(size + 8) * scale`.
   const proseScale = markdownProseScale(typography.prose.fontSize, textScale, typography.prose.lineHeight)

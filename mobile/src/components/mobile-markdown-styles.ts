@@ -102,6 +102,14 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
     italic: {
       fontStyle: 'italic'
     },
+    /** A bold span inside an italic one, or the reverse. Each nested span is a Text
+     *  that gets a face of its own (instrument-sans-text.ts), so it has to name
+     *  both: the semibold file asking for italic is the semibold italic file. */
+    boldItalic: {
+      fontFamily: fonts.semibold,
+      fontStyle: 'italic',
+      color: colors.text
+    },
     strike: {
       textDecorationLine: 'line-through'
     },

@@ -24,7 +24,7 @@
 import { marked, type Token, type Tokens } from 'marked'
 import { quoteBlocks } from './mobile-markdown-quote-blocks'
 import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
-import { breakProse, reflowProse } from './mobile-markdown-prose-fill'
+import { breakProse, reflowProse, typedProse } from './mobile-markdown-prose-fill'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -357,6 +357,9 @@ function outsideFences(source: string): string {
 export const MOBILE_MARKDOWN_PARSE_CACHE_CAP = 48
 
 const parsedBySource = new Map<string, MobileMarkdownBlock[]>()
+/** The same documents read as a person's own typing (`typed`): the same
+ *  source parses to other blocks, so it is not the same entry. */
+const parsedTyped = new Map<string, MobileMarkdownBlock[]>()
 
 /**
  * What the parser returns is CACHED BY SOURCE TEXT, and the returned array must
@@ -373,31 +376,36 @@ const parsedBySource = new Map<string, MobileMarkdownBlock[]>()
  * Eviction renews on READ, not only on write. A plain FIFO drops whatever has
  * been in longest, which on a chat is the message being read right now; the
  * sticky HUD hold had exactly this defect the same day.
+ *
+ * `typed` reads a person's own text, a sent prompt: each newline is a line
+ * break and each line keeps its indent (typedProse). The caller does not run
+ * it through the HTML pass either, so `<Text>` and `&amp;` stay as typed.
  */
-export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
-  const cached = parsedBySource.get(content)
+export function parseMobileMarkdown(content: string, typed = false): MobileMarkdownBlock[] {
+  const cache = typed ? parsedTyped : parsedBySource
+  const cached = cache.get(content)
   if (cached) {
-    parsedBySource.delete(content)
-    parsedBySource.set(content, cached)
+    cache.delete(content)
+    cache.set(content, cached)
     return cached
   }
-  const blocks = readMobileMarkdown(content)
+  const blocks = readMobileMarkdown(content, typed ? typedProse : reflowProse)
   if (content) {
-    if (parsedBySource.size >= MOBILE_MARKDOWN_PARSE_CACHE_CAP) {
+    if (cache.size >= MOBILE_MARKDOWN_PARSE_CACHE_CAP) {
       // Map iterates in insertion order, so the first key is the least recently
       // read. A streamed reply is a fresh miss every tick and would otherwise
       // keep every intermediate draft of the session alive.
-      const oldest = parsedBySource.keys().next()
+      const oldest = cache.keys().next()
       if (!oldest.done) {
-        parsedBySource.delete(oldest.value)
+        cache.delete(oldest.value)
       }
     }
-    parsedBySource.set(content, blocks)
+    cache.set(content, blocks)
   }
   return blocks
 }
 
-function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
+function readMobileMarkdown(content: string, reflow: (text: string) => string): MobileMarkdownBlock[] {
   const source = content.replace(/\r\n?/g, '\n')
   let tokens: Token[]
   try {
@@ -415,5 +423,5 @@ function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
     // prose, with its lines intact.
     return source.trim() ? [{ type: 'paragraph', text: inlineBreaksAsNewlines(source.replace(/\n+$/, '')) }] : []
   }
-  return toBlocks(tokens)
+  return toBlocks(tokens, reflow)
 }

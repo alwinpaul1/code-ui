@@ -191,9 +191,10 @@ export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
 }
 
 /**
- * A lead's Markdown prompt in a user bubble, in the transcript's size and
- * code face, its blocks a whole blank line apart as the bubble always drew
- * them (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09).
+ * A Markdown prompt in a user bubble, a lead's or the user's own written in
+ * it (userTextDrawsAsMarkdown), in the transcript's size and code face, its
+ * blocks a whole blank line apart as the bubble always drew them
+ * (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09).
  */
 export const TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY,

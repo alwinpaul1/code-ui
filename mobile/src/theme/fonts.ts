@@ -1,8 +1,12 @@
 import {
   InstrumentSans_400Regular,
+  InstrumentSans_400Regular_Italic,
   InstrumentSans_500Medium,
+  InstrumentSans_500Medium_Italic,
   InstrumentSans_600SemiBold,
+  InstrumentSans_600SemiBold_Italic,
   InstrumentSans_700Bold,
+  InstrumentSans_700Bold_Italic,
   useFonts
 } from '@expo-google-fonts/instrument-sans'
 import { installInstrumentSansText } from './instrument-sans-text'
@@ -21,7 +25,9 @@ export { fontFamily, type FontWeight } from './tokens'
 // The root layout imports this module before the tree paints.
 installInstrumentSansText()
 
-/** Loads the four Instrument Sans faces and the one code face. Only the root
+/** Loads the four upright and four italic Instrument Sans faces and the one
+ *  code face. The italic ones are what `fontStyle: 'italic'` draws in
+ *  (instrument-sans-text.ts). Only the root
  *  layout calls this; every other module reads the family names from
  *  `tokens.ts`.
  *
@@ -42,6 +48,10 @@ export function useAppFonts(): [boolean, Error | null] {
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
     InstrumentSans_700Bold,
+    InstrumentSans_400Regular_Italic,
+    InstrumentSans_500Medium_Italic,
+    InstrumentSans_600SemiBold_Italic,
+    InstrumentSans_700Bold_Italic,
     JetBrainsMono_400Regular
   })
 }
