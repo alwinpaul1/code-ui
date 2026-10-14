@@ -29,7 +29,8 @@ export function pendingSendDimmed(delivery: OutboxDelivery | undefined): boolean
  * No label: the "Sending" caption was removed on 2026-10-10 ("why showing sending, that's not
  * good") and stays out until the user decides otherwise. The dim alone is the Claude app's look.
  * Opacity, not a colour, so it reads the same in Light, Dark and System. Always a View, dimmed or
- * not, so the row is not remounted when its send is taken.
+ * not, so the row is not remounted when its send is taken, and always a native one, so its views
+ * are not moved either.
  */
 export function MobileNativeChatPendingDim({
   delivery,
@@ -38,7 +39,15 @@ export function MobileNativeChatPendingDim({
   delivery: OutboxDelivery | undefined
   children: ReactNode
 }): React.JSX.Element {
-  return <View style={pendingSendDimmed(delivery) ? styles.dimmed : styles.plain}>{children}</View>
+  // Its own native view dimmed or not (collapsable={false}). At full opacity a plain View forms
+  // no stacking context on Android and is flattened, so the ack moved every native view of the
+  // row out of the dim and into the list cell, one by one: the move react-native#57800 suspects
+  // and that a user bubble must never see (mobile-native-chat-user-bubble-native-parent.test.tsx).
+  return (
+    <View style={pendingSendDimmed(delivery) ? styles.dimmed : styles.plain} collapsable={false}>
+      {children}
+    </View>
+  )
 }
 
 const styles = StyleSheet.create({

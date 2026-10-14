@@ -60,7 +60,19 @@ function Bubble({
   children: ReactNode
 }) {
   if (!user) {
-    return <View style={style}>{children}</View>
+    // Its own native view on Android, always. A View with only a fill and no
+    // stacking context is a childless box there: Fabric mounts what it draws
+    // one by one into the list cell beside it, so a queued prompt's bubble was
+    // an empty filled rectangle with its words, its document and its controls
+    // mounted next to it. That is the shape of the blank bubble seen over the
+    // running turn's rows on 2026-10-14; the mount fault that left it there
+    // was not caught. Always, not only with a fill: the copied tint must not
+    // flip it.
+    return (
+      <View style={style} collapsable={false}>
+        {children}
+      </View>
+    )
   }
   return (
     <Pressable
