@@ -80,6 +80,7 @@ function scopeFor(state: SessionState): MobileSessionPanelRouteActionsModel {
       }
     ],
     setDisplayMode: calls.setDisplayMode,
+    phoneModeClaimedHandlesRef: { current: new Set<string>() },
     requestLeaveSession: () => calls.requestLeaveSession(),
     nativeChatController: {
       isTabChatView: () => state.showNativeChat,

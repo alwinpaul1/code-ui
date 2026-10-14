@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react'
 import { resetAgentHudBeacons } from './agent-hud-beacon'
 import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
+import type { PhoneModeClaim } from './terminal-phone-mode-before-subscribe'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -28,6 +29,12 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     clearNativeChatInputLease,
     showNativeChatRef
   } = scope
+  // Phone mode is claimed before a drawn subscribe, once per visit
+  // (terminal-phone-mode-before-subscribe.ts). The claim is the display-mode
+  // request the controller wires in; the set is what this screen has claimed
+  // and not yet handed back.
+  const phoneModeClaimRef = useRef<PhoneModeClaim | null>(null)
+  const phoneModeClaimedHandlesRef = useRef<Set<string>>(new Set())
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
   }, [])
@@ -115,7 +122,9 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     unsubscribeTerminal,
     unsubscribeTerminalRef,
     clearTerminalCache,
-    measureViewportOnce
+    measureViewportOnce,
+    phoneModeClaimRef,
+    phoneModeClaimedHandlesRef
   }
 }
 

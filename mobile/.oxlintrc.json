@@ -79,7 +79,10 @@
             // the stream ending, a desktop-mode frame, a server resize and the fit
             // pass's verdict each say the pane may be shown, the last three once the
             // WebView has drawn the frame (revealTerminalAfterPaint).
-            "max": 320,
+            // 2026-10-14: 327. A drawn subscribe waits for the phone-mode claim
+            // once per visit (terminal-phone-mode-before-subscribe.ts): the import,
+            // the gate and the ref it resumes through.
+            "max": 327,
             "skipBlankLines": true,
             "skipComments": true
           }

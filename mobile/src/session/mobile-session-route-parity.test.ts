@@ -124,7 +124,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // 308 since 2026-10-14: the Anthropic voice_stream dictation adds useAnthropicDictation to the
 // dictation hook and moves its five hold-mode useCallbacks into useDictationHoldMode
 // (use-dictation-hold-mode.ts), which is not expanded.
-const HEAD_MAIN_HOOK_SHA256 = '215ec61bda891e9cbb8874e97794b58023f68a81f8356cba5efd5b9b6d8aa11c'
+const HEAD_MAIN_HOOK_SHA256 = '610c47ac9fe98ec85cfe359fc3ed04229b6f459f9003499f2ce6229f42ad560f'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -141,7 +141,7 @@ const HEAD_MAIN_HOOK_SHA256 = '215ec61bda891e9cbb8874e97794b58023f68a81f8356cba5
 // 2026-10-13: the controller's useMobileSessionNotificationTab call (a bare call, bound to nothing).
 // 2026-10-14: the dictation hook binds anthropicDictation and hold (useDictationHoldMode) where the
 // five hold-mode useCallbacks were bound; useMobileNativeChatInputLease's argument was rewrapped.
-const HEAD_HOOK_BINDING_SHA256 = '1e042d5654732c074309c4219206e0396ada58771becd01bf693f279342ec1cd'
+const HEAD_HOOK_BINDING_SHA256 = '92d7fc935571e61b3efb3cc48e29a97db08643f72844dcb3ebdc0e2a364436e5'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -255,7 +255,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // first frame may be shown (stream ended, desktop mode, server resize, the fit pass's verdict);
 // revealTerminalAfterPaint waits on the WebView's awaitReady before it lifts the cover.
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
-const HEAD_CALLBACK_BODY_SHA256 = '3799e8ea810753e1442513d0e6b6dfb51400fa9785389d13048fc0193cc8662e'
+const HEAD_CALLBACK_BODY_SHA256 = 'bd417dd4889be05b0bf43769778deb476e6a43e302aa88c021e4b82b7b3bcf24'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -463,7 +463,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // its 'en' language and 'live' mode join. The send gate's 'chat' stays in the dictation hook
 // (targetIsChat), so a send ends only a chat take.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '00d82ea213d0f6131e3896317420bb6878103be4b03e95da44c65aac9102932e'
+  'a1072203985c93c1857cb424499da98ea8b3f436e4775f8db9a7d38b97fe0bd7'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1064,7 +1064,9 @@ describe('mobile session route extraction parity', () => {
     // 308 since 2026-10-14: the Anthropic voice_stream dictation. useAnthropicDictation joins the
     // dictation hook, and its five hold-mode useCallbacks moved into useDictationHoldMode, which
     // is not expanded.
-    expect(main.hooks).toHaveLength(308)
+    // 311 since 2026-10-14: the subscription's useRef for the deferred subscribe, and the
+    // foundation's two phone-mode refs (terminal-phone-mode-before-subscribe.ts).
+    expect(main.hooks).toHaveLength(311)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1204,7 +1206,10 @@ describe('mobile session route extraction parity', () => {
     // 671 since 2026-10-13: the chat overlay's `ptyTab` reads the active tab's 'terminal' type.
     // 681 since 2026-10-14: the Anthropic voice_stream dictation's engine checks ('anthropic'
     // twice), its 'en' language and 'live' mode.
-    expect(strings).toHaveLength(681)
+    // 684 since 2026-10-14: the subscribe's 'awaiting-phone-mode' gate, and the controller's
+    // 'auto' claim wired into it with its 'active' foreground check
+    // (terminal-phone-mode-before-subscribe.ts).
+    expect(strings).toHaveLength(684)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

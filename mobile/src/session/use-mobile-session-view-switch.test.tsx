@@ -75,6 +75,7 @@ function mountViewSwitch(
   setDisplayMode: ReturnType<typeof vi.fn> = vi.fn(async () => true),
   overrides: Record<string, unknown> = {}
 ) {
+  const phoneModeClaimedHandlesRef = { current: new Set<string>() }
   const scope = {
     activeHandle,
     sessionTabs: [
@@ -89,6 +90,7 @@ function mountViewSwitch(
       }
     ],
     setDisplayMode,
+    phoneModeClaimedHandlesRef,
     nativeChatController: {
       isTabChatView: () => false,
       toggleTabChatView: vi.fn(),
@@ -109,6 +111,13 @@ function mountViewSwitch(
   })
   return {
     setDisplayMode,
+    phoneModeClaimedHandlesRef,
+    rerender(next: Record<string, unknown>) {
+      Object.assign(scope, next)
+      act(() => {
+        renderer.update(createElement(Probe))
+      })
+    },
     unmount() {
       act(() => {
         renderer.unmount()
@@ -295,5 +304,85 @@ describe('hardware back inside the session', () => {
     })
     expect(requestLeaveSession).toHaveBeenCalledTimes(1)
     unmount()
+  })
+})
+
+// 2026-10-14: "Also all terminals in flashes and changes to mobile." Every
+// 'desktop' the phone sends leaves the host in desktop mode for that PTY, so
+// the claim the subscribe relies on must be forgotten with it, or the next
+// visit subscribes straight into a desktop-width frame
+// (terminal-phone-mode-before-subscribe.ts).
+describe('the phone-mode claim a drawn subscribe waits on', () => {
+  it('is forgotten when the phone switches to another tab and hands the terminal back', () => {
+    const probe = mountViewSwitch('term-1')
+    probe.phoneModeClaimedHandlesRef.current.add('term-1')
+
+    probe.rerender({ activeHandle: 'term-2' })
+
+    expect(probe.setDisplayMode).toHaveBeenCalledWith('term-1', 'desktop')
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
+  })
+
+  it('is forgotten when the app goes to the background, and kept again once phone mode is retaken', async () => {
+    const probe = mountViewSwitch('term-1')
+    probe.phoneModeClaimedHandlesRef.current.add('term-1')
+
+    act(() => {
+      appState.go('background')
+    })
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
+
+    await act(async () => {
+      appState.go('active')
+      await Promise.resolve()
+    })
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(true)
+  })
+
+  it('stays forgotten when the app leaves again before the retake is answered', async () => {
+    let answer!: (accepted: boolean) => void
+    const setDisplayMode = vi.fn((_handle: string, mode: string) =>
+      mode === 'auto' && appState.current === 'active' && answer === undefined
+        ? new Promise<boolean>((resolve) => {
+            answer = resolve
+          })
+        : Promise.resolve(true)
+    )
+    act(() => {
+      appState.go('background')
+    })
+    const probe = mountViewSwitch('term-1', setDisplayMode)
+    act(() => {
+      appState.go('active')
+    })
+    act(() => {
+      appState.go('background')
+    })
+    await act(async () => {
+      answer(true)
+      await Promise.resolve()
+    })
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
+  })
+
+  it('is forgotten when chat covers the terminal (the desk gets its width back)', () => {
+    const probe = mountViewSwitch('term-1')
+    probe.phoneModeClaimedHandlesRef.current.add('term-1')
+
+    probe.rerender({
+      nativeChatController: { isTabChatView: () => true, toggleTabChatView: vi.fn(), showNativeChat: true }
+    })
+
+    expect(probe.setDisplayMode).toHaveBeenCalledWith('term-1', 'desktop')
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
+  })
+
+  it('is forgotten when the route closes', () => {
+    const probe = mountViewSwitch('term-1')
+    probe.phoneModeClaimedHandlesRef.current.add('term-1')
+
+    probe.unmount()
+
+    expect(probe.phoneModeClaimedHandlesRef.current.has('term-1')).toBe(false)
   })
 })
