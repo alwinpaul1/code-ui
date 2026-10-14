@@ -651,7 +651,7 @@ const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96ea
 // microphone level for the waveform. Same records; only the overlay's moved.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_LEAF_JSX_SHA256 = '76d4644be2bed694b2ee1d63a3b0e40d8c9845dd6691e022021a203e4de15b18'
+const HEAD_LEAF_JSX_SHA256 = '2ccc58a197a7dd8ae842d369d89d4216e36c3b373ef1a9bc811e4d0d8719e20f'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1287,7 +1287,9 @@ describe('mobile session route extraction parity', () => {
     // 74 later on 2026-10-11: the header's model pill text leaf is gone too.
     // 75 since 2026-10-12 (parity gap G19): the chat overlay sits in a
     // <NativeChatFileReadProvider>, what the Read sheet's Load full file reads with.
-    expect(jsx.leaf).toHaveLength(75)
+    // 76 since 2026-10-14 (parity Batch 3): the session content builds <MobileSessionPillRow controller />
+    // and hands it to the chat overlay's pill slot (the pull request, Create PR and Local changes pills).
+    expect(jsx.leaf).toHaveLength(76)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

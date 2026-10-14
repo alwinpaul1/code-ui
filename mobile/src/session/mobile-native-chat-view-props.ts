@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { LevelSource } from '../dictation/pcm-level'
 import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -226,6 +227,9 @@ export type MobileNativeChatViewProps = {
   keyboardInset?: number
   /** Terminal accessory keys shown above the composer (Tab, Shift+Tab, arrows, Esc…). */
   keyStrip?: MobileNativeChatKeyStripProps
+  /** The session pills (pull request, Create PR, Local changes), drawn in the dock right above the
+   *  session bar. The route builds them and decides when there is nothing to say. */
+  sessionPills?: ReactNode
   /** The worktree's uncommitted +/- for the session bar's diff pill; null leaves it out. */
   sessionDiff?: SessionDiffTotals | null
   /** Opens the changes, from the diff pill. */

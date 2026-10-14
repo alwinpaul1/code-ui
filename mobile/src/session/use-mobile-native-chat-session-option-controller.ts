@@ -210,7 +210,13 @@ export function useMobileNativeChatSessionOptionController(args: {
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking, reportFailure: onFailure, scopeKey }
+          ? {
+              controller: structuredController,
+              isWorking,
+              reportFailure: onFailure,
+              scopeKey,
+              openRequest
+            }
           : null
         : sessionOptions.snapshot.length > 0
           ? {

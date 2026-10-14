@@ -11,11 +11,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 type MenuProps = {
   visible: boolean
   sessionEntries?: readonly string[]
+  connection?: { text: string; connected: boolean }
   onCopyBranch?: () => void
   onOpenBackgroundTasks?: () => void
+  onChangeModel?: () => void
   onRename?: () => void
+  onArchive?: () => void
   onCopySessionId?: () => void
   onCheckSessionImages?: () => void
+}
+type ConfirmProps = {
+  visible: boolean
+  title: string
+  message?: string
+  confirmLabel?: string
+  destructive?: boolean
+  onConfirm: () => void
+  onCancel: () => void
 }
 type InputProps = {
   visible: boolean
@@ -27,7 +39,13 @@ type InputProps = {
   onSubmit: (value: string) => void
   onCancel: () => void
 }
-const captured = vi.hoisted(() => ({ menu: [] as MenuProps[], inputs: [] as InputProps[][], checks: [] as { visible: boolean; onClose: () => void }[] }))
+const captured = vi.hoisted(() => ({
+  menu: [] as MenuProps[],
+  inputs: [] as InputProps[][],
+  checks: [] as { visible: boolean; onClose: () => void }[],
+  confirms: [] as ConfirmProps[]
+}))
+const hosts = vi.hoisted(() => ({ list: [] as { id: string; name: string; endpoint: string }[] }))
 const clipboard = vi.hoisted(() => ({ writeText: vi.fn(async (_value: string) => {}) }))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
@@ -63,7 +81,13 @@ vi.mock('../components/TextInputModal', () => ({
 }))
 vi.mock('./QuickCommandsSheet', () => ({ QuickCommandsSheet: () => null }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
-vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: () => null }))
+vi.mock('../components/ConfirmModal', () => ({
+  ConfirmModal: (props: ConfirmProps) => {
+    captured.confirms.push(props)
+    return null
+  }
+}))
+vi.mock('../transport/host-store', () => ({ loadHosts: async () => hosts.list }))
 vi.mock('../components/CustomKeyModal', () => ({ CustomKeyModal: () => null }))
 vi.mock('../components/MobileDictationSetupSheet', () => ({ MobileDictationSetupSheet: () => null }))
 vi.mock('./MobileBrowserTabActionSheet', () => ({ MobileBrowserTabActionSheet: () => null }))
@@ -81,17 +105,37 @@ afterEach(() => {
   captured.menu.length = 0
   captured.inputs.length = 0
   captured.checks.length = 0
+  captured.confirms.length = 0
+  hosts.list = []
   clipboard.writeText.mockClear()
 })
 
 const ok = { id: 'set', ok: true, result: { worktree: {} }, _meta: { runtimeId: 'r' } }
 
+const agentTab = {
+  type: 'terminal',
+  id: 't1',
+  title: 'claude',
+  terminal: 'h1',
+  isActive: true,
+  launchAgent: 'claude'
+}
+const shellTab = { ...agentTab, id: 't2', title: 'zsh', launchAgent: undefined }
+
 function controller(
   showToast: (message: string) => void,
-  sendRequest: (...args: unknown[]) => Promise<unknown> = vi.fn(async () => ok)
+  sendRequest: (...args: unknown[]) => Promise<unknown> = vi.fn(async () => ok),
+  over: Record<string, unknown> = {},
+  chat: Record<string, unknown> = {}
 ) {
   const noop = () => {}
   return {
+    hostId: 'host-1',
+    connState: 'connected',
+    connectionVerdict: { kind: 'normal', label: 'Connected' },
+    visibleTabs: [agentTab, shellTab],
+    activeSessionTabId: 't1',
+    handleCloseSessionTab: vi.fn(),
     worktreeId: 'repo-1::/work/header',
     isFolderWorkspaceRoute: false,
     isFloatingWorkspaceRoute: false,
@@ -125,9 +169,14 @@ function controller(
     closeWithBulkActions: () => [],
     nativeChatController: {
       activeChatEligible: true,
+      showNativeChat: true,
       isTabChatView: () => true,
-      nativeChatSessionIdentity: { sessionId: '7f3c2b1a-0000-4000-8000-000000000000', transcriptPath: null, nestedSessionId: null }
-    }
+      requestModelSheet: vi.fn(),
+      nativeChatSessionOptions: { controller: { snapshot: [{ id: 'model', category: 'model' }] } },
+      nativeChatSessionIdentity: { sessionId: '7f3c2b1a-0000-4000-8000-000000000000', transcriptPath: null, nestedSessionId: null },
+      ...chat
+    },
+    ...over
   } as unknown as MobileSessionController
 }
 
@@ -237,5 +286,95 @@ describe('the header menu session entries, wired', () => {
       await Promise.resolve()
     })
     expect(showToast).toHaveBeenCalledWith("Couldn't rename the session", 1500)
+  })
+
+  // --- Change model, Archive and the connection line (Batch 3) ---
+
+  const archiveDialog = () => captured.confirms.findLast((props) => props.title === 'Archive session?')
+
+  it('opens the composer’s own model sheet from Change model', async () => {
+    const requestModelSheet = vi.fn()
+    await mount(controller(vi.fn(), undefined, {}, { requestModelSheet }))
+    expect(menu().sessionEntries).toContain('change-model')
+    act(() => menu().onChangeModel?.())
+    expect(requestModelSheet).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no Change model where the chat is not showing, or the agent has no model option', async () => {
+    await mount(controller(vi.fn(), undefined, {}, { showNativeChat: false }))
+    expect(menu().sessionEntries).not.toContain('change-model')
+    captured.menu.length = 0
+    await mount(controller(vi.fn(), undefined, {}, { nativeChatSessionOptions: null }))
+    expect(menu().sessionEntries).not.toContain('change-model')
+    captured.menu.length = 0
+    await mount(
+      controller(vi.fn(), undefined, {}, { nativeChatSessionOptions: { controller: { snapshot: [] } } })
+    )
+    expect(menu().sessionEntries).not.toContain('change-model')
+  })
+
+  it('asks before Archive closes the agent tab, then closes exactly that tab', async () => {
+    const handleCloseSessionTab = vi.fn()
+    await mount(controller(vi.fn(), undefined, { handleCloseSessionTab }))
+    expect(menu().sessionEntries).toContain('archive')
+    expect(archiveDialog()?.visible).toBe(false)
+    await act(async () => menu().onArchive?.())
+    const dialog = archiveDialog()!
+    expect(dialog.visible).toBe(true)
+    expect(dialog.confirmLabel).toBe('Archive')
+    expect(dialog.destructive).toBe(true)
+    // The app's Archive moves a session to its archived list; closing a tab does not, so the
+    // dialog says what it does here instead of promising a list Orca does not have.
+    expect(dialog.message).toBe('This closes the session’s tab on your computer.')
+    expect(handleCloseSessionTab).not.toHaveBeenCalled()
+    await act(async () => archiveDialog()!.onConfirm())
+    expect(handleCloseSessionTab).toHaveBeenCalledTimes(1)
+    expect(handleCloseSessionTab).toHaveBeenCalledWith(agentTab)
+  })
+
+  it('closes nothing when Archive is cancelled', async () => {
+    const handleCloseSessionTab = vi.fn()
+    await mount(controller(vi.fn(), undefined, { handleCloseSessionTab }))
+    await act(async () => menu().onArchive?.())
+    await act(async () => archiveDialog()!.onCancel())
+    expect(handleCloseSessionTab).not.toHaveBeenCalled()
+    expect(archiveDialog()?.visible).toBe(false)
+  })
+
+  it('offers no Archive on a plain shell tab or with no tab selected', async () => {
+    await mount(controller(vi.fn(), undefined, { activeSessionTabId: 't2' }))
+    expect(menu().sessionEntries).not.toContain('archive')
+    captured.menu.length = 0
+    await mount(controller(vi.fn(), undefined, { activeSessionTabId: null, visibleTabs: [] }))
+    expect(menu().sessionEntries).not.toContain('archive')
+  })
+
+  it('says Connected over a live link', async () => {
+    await mount(controller(vi.fn()))
+    expect(menu().connection).toEqual({ text: 'Connected', connected: true })
+  })
+
+  it('names the desktop to reconnect from once the phone has given up on it and knows its name', async () => {
+    hosts.list = [{ id: 'host-1', name: 'Alwin’s Mac', endpoint: 'ws://100.64.0.2:6768' }]
+    await mount(
+      controller(vi.fn(), undefined, {
+        connState: 'reconnecting',
+        connectionVerdict: { kind: 'unreachable', label: "Can't reach desktop", reason: 'stale' }
+      })
+    )
+    expect(menu().connection).toEqual({
+      text: 'Disconnected • Reconnect from Alwin’s Mac',
+      connected: false
+    })
+  })
+
+  it('says only Disconnected when the desktop’s name is not known', async () => {
+    await mount(
+      controller(vi.fn(), undefined, {
+        connState: 'reconnecting',
+        connectionVerdict: { kind: 'unreachable', label: "Can't reach desktop", reason: 'stale' }
+      })
+    )
+    expect(menu().connection).toEqual({ text: 'Disconnected', connected: false })
   })
 })

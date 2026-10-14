@@ -8,7 +8,7 @@ import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-f
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
 import { placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-point'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
-import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
+import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet } from 'react-native'; import { AgentImageShareView } from './AgentImageShareView' // the overlay's box; a refused picture's ask (agent-image-share-ask.ts)
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
@@ -110,8 +110,9 @@ type Props = {
   /** Terminal accessory keys (Tab, Shift+Tab, arrows, Esc…) rendered above the
    *  composer so TUI menus stay operable from Chat UI. */
   keyStrip?: MobileNativeChatKeyStripProps
-  /** The session bar's diff pill: the worktree's uncommitted +/-, and what opens the changes. */
-  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void
+  /** The session bar's diff pill: the worktree's uncommitted +/-, and what opens the changes.
+   *  And the session pills drawn above the bar (MobileSessionPillRow): mounted here, owned by the route. */
+  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -148,7 +149,7 @@ export function MobileNativeChatOverlay({
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset,
-  keyStrip, sessionDiff = null, onOpenDiff
+  keyStrip, sessionDiff = null, onOpenDiff, sessionPills
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   // Both halves are fresh arrays every call, and they are the `pending` dep of
@@ -536,7 +537,7 @@ export function MobileNativeChatOverlay({
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
-        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff}
+        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills}
       />
   )
   // The loaded transcript says whether a later call touched a created file,
