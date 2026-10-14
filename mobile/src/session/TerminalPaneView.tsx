@@ -71,6 +71,11 @@ export function TerminalPaneView({
       // Why: inactive terminal WebViews stay mounted to preserve xterm state,
       // while touch and visibility are disabled until the tab is active again.
       pointerEvents={active ? 'auto' : 'none'}
+      // Why: the pane keeps the WebView and its cover as its own native subviews in every state.
+      // Without this, only an inactive (opacity 0) or lifted (translateY) pane formed a stacking
+      // context on Android, so each tab switch and keyboard lift moved the terminal's views between
+      // the pane and the terminal frame that also holds the chat (chat-ground-not-under-terminal.test.tsx).
+      collapsable={false}
       style={[
         styles.terminalPane,
         keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] },

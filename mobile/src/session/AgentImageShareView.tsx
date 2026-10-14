@@ -15,7 +15,13 @@ export function AgentImageShareView({
 }) {
   return (
     <AgentImageShareContext.Provider value={share}>
-      <View style={style}>{children}</View>
+      {/* Its own native view on Android, always: a View with no stacking context is flattened, and
+          the chat's ground and every view drawn on it went loose into the terminal frame beside the
+          terminal's own views, so a mount move there could put the terminal's navy between the
+          ground and the words (0.9.146, chat-ground-not-under-terminal.test.tsx). */}
+      <View style={style} collapsable={false}>
+        {children}
+      </View>
     </AgentImageShareContext.Provider>
   )
 }
