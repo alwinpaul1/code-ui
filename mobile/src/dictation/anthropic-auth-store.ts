@@ -4,6 +4,7 @@ import * as Linking from 'expo-linking'
 
 const STORE_KEY = 'anthropic-dictation-oauth'
 const VERIFIER_KEY = 'anthropic-dictation-pkce-verifier'
+const STATE_KEY = 'anthropic-dictation-oauth-state'
 
 // Production OAuth endpoints (from Claude Code 2.1.296).
 const AUTHORIZE_URL = 'https://claude.com/cai/oauth/authorize'
@@ -47,6 +48,29 @@ function generateCodeVerifier(): string {
         out += VERIFIER_CHARS[b % VERIFIER_CHARS.length]
       }
     }
+  }
+  return out
+}
+
+const BASE64URL_CHARS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+
+/** 32 random bytes as base64url (43 characters, no padding), the shape Claude Code's state has. */
+function generateState(): string {
+  const bytes = Crypto.getRandomBytes(32)
+  let out = ''
+  let bits = 0
+  let acc = 0
+  for (const b of bytes) {
+    acc = (acc << 8) | b
+    bits += 8
+    while (bits >= 6) {
+      bits -= 6
+      out += BASE64URL_CHARS[(acc >> bits) & 63]
+    }
+  }
+  if (bits > 0) {
+    out += BASE64URL_CHARS[(acc << (6 - bits)) & 63]
   }
   return out
 }
@@ -96,16 +120,23 @@ function parseTokenResponse(data: unknown): StoredCredential {
 export async function startLogin(): Promise<string> {
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = await generateCodeChallenge(codeVerifier)
+  const state = generateState()
+  // Same parameters, in the same order, as Claude Code 2.1.296's manual login. Without `state`
+  // claude.ai answers "Invalid OAuth request: Missing state parameter" (2026-10-14), and `code=true`
+  // asks for the page that shows the code to paste back.
   const params = new URLSearchParams({
+    code: 'true',
     client_id: CLIENT_ID,
-    redirect_uri: REDIRECT_URI,
     response_type: 'code',
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES.join(' '),
     code_challenge: codeChallenge,
     code_challenge_method: 'S256',
-    scope: SCOPES.join(' ')
+    state
   })
   const url = `${AUTHORIZE_URL}?${params}`
   await SecureStore.setItemAsync(VERIFIER_KEY, codeVerifier)
+  await SecureStore.setItemAsync(STATE_KEY, state)
   await Linking.openURL(url)
   return codeVerifier
 }
@@ -120,20 +151,28 @@ export async function getSavedVerifier(): Promise<string | null> {
  * token pair. Validates the response shape before storing.
  */
 export async function exchangeCode(
-  code: string,
+  pasted: string,
   codeVerifier: string
 ): Promise<StoredCredential> {
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    client_id: CLIENT_ID,
-    code: code.trim(),
-    redirect_uri: REDIRECT_URI,
-    code_verifier: codeVerifier
-  })
+  // The callback page shows `<code>#<state>`; Claude Code splits it the same way.
+  const [code, state] = pasted.trim().split('#')
+  if (!code || !state) {
+    throw new Error('Invalid code. Make sure the full code was copied')
+  }
+  if (state !== (await SecureStore.getItemAsync(STATE_KEY))) {
+    throw new Error('This code is from a different sign-in. Tap Sign in again.')
+  }
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString()
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: CLIENT_ID,
+      code_verifier: codeVerifier,
+      state
+    })
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -144,6 +183,7 @@ export async function exchangeCode(
   const credential = parseTokenResponse(await res.json())
   await storeCredential(credential)
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
+  await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
   return credential
 }
 
@@ -156,15 +196,16 @@ export async function refreshAccessToken(
   if (!credential.refreshToken) {
     throw new Error('No refresh token')
   }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: CLIENT_ID,
-    refresh_token: credential.refreshToken
-  })
+  // JSON with the scopes, as Claude Code 2.1.296 refreshes.
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString()
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: credential.refreshToken,
+      client_id: CLIENT_ID,
+      scope: SCOPES.join(' ')
+    })
   })
   if (!res.ok) {
     throw new Error(`Token refresh failed (${res.status})`)
@@ -211,6 +252,7 @@ export async function readCredential(): Promise<StoredCredential | null> {
 export async function clearCredential(): Promise<void> {
   await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined)
   await SecureStore.deleteItemAsync(VERIFIER_KEY).catch(() => undefined)
+  await SecureStore.deleteItemAsync(STATE_KEY).catch(() => undefined)
 }
 
 /**
