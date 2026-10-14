@@ -11,6 +11,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewConfiguration
 import android.view.ViewTreeObserver
 import android.widget.TextView
 import com.facebook.react.views.view.ReactViewGroup
@@ -90,13 +91,50 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
     }
   }
 
+  // Where and when the last touch below lifted, for [isRepeatTap].
+  private var lastUpAt: Long? = null
+  private var lastUpX = 0f
+  private var lastUpY = 0f
+  private var tookRepeatTap = false
+
+  override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+    // Every touch passes here, whichever view ends up handling it, so the lift is always seen.
+    if (ev.actionMasked == MotionEvent.ACTION_UP) {
+      lastUpAt = ev.eventTime
+      lastUpX = ev.x
+      lastUpY = ev.y
+    }
+    return super.dispatchTouchEvent(ev)
+  }
+
   override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
     if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
       colors.applyBelow(this)
       // A Text mounted since the flag last changed starts long-clickable; the down comes here first.
       applyHoldSelects(this)
+      // The second touch of a double tap selects the word under it in a TextView (Editor's
+      // SelectionModifierCursorController, at ACTION_DOWN), and a reader who taps to stop a fling
+      // and touches again to scroll on makes one: single stray words lit up all over the chat
+      // (2026-10-14 17:21). The Claude app selects on a hold only, so the Texts never see it.
+      val config = ViewConfiguration.get(context)
+      if (isRepeatTap(lastUpAt, lastUpX, lastUpY, ev.eventTime, ev.x, ev.y,
+          ViewConfiguration.getDoubleTapTimeout().toLong(), config.scaledDoubleTapSlop.toFloat())) {
+        Log.i("OrcaSelectionCopy", "Kept a double tap from selecting a word")
+        tookRepeatTap = true
+        return true
+      }
     }
     return super.onInterceptTouchEvent(ev)
+  }
+
+  // A touch taken from the Texts above is not this view's either: it goes on up to the scroll view.
+  // Any other touch that lands here is handled as a React view handles it.
+  override fun onTouchEvent(event: MotionEvent): Boolean {
+    if (event.actionMasked == MotionEvent.ACTION_DOWN && tookRepeatTap) {
+      tookRepeatTap = false
+      return false
+    }
+    return super.onTouchEvent(event)
   }
 
   override fun startActionModeForChild(originalView: View?, callback: ActionMode.Callback?, type: Int): ActionMode? {
