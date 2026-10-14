@@ -125,7 +125,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // dictation hook and moves its five hold-mode useCallbacks into useDictationHoldMode
 // (use-dictation-hold-mode.ts), which is not expanded.
 // 309 since 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
-const HEAD_MAIN_HOOK_SHA256 = 'RECOMPUTE'
+const HEAD_MAIN_HOOK_SHA256 = '5411ef899e4a27184d6607502a9f8ccd6821ec71341e8349ec72ffda79c1c059'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -146,7 +146,7 @@ const HEAD_MAIN_HOOK_SHA256 = 'RECOMPUTE'
 // 2026-10-14: the terminal runtime binds armLiveInputKeyboardClaim, handleLiveInputBlur,
 // handleLiveInputFocus, releaseLiveInputKeyboard and reportLiveInputScreenFocus from
 // useTerminalLiveInputFocus (the live field takes back a keyboard no field holds).
-const HEAD_HOOK_BINDING_SHA256 = 'RECOMPUTE'
+const HEAD_HOOK_BINDING_SHA256 = '8c67cf77fdbc6a1e809e6d3049c08e4a641624cc740d4516c4a5f7a1c6a66400'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -160,7 +160,7 @@ const HEAD_HOOK_BINDING_SHA256 = 'RECOMPUTE'
 // toggleLiveInput, dismissSoftwareKeyboard, the tab action sheet and handleSelectionMode call
 // releaseLiveInputKeyboard before they put the keyboard away. Same callback count.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'RECOMPUTE'
+  'df930ae06155cacbf0bee496d5fbc476b4f84929ee65637a99d395516856bf6b'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -266,7 +266,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
 // 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
-const HEAD_CALLBACK_BODY_SHA256 = 'RECOMPUTE'
+const HEAD_CALLBACK_BODY_SHA256 = '2b9905277308385763c9557e01adbea22b42b82f470d5a01fc559dae780ae14c'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -476,7 +476,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 683 since 2026-10-14 (later): '/voice-settings' and 'Sign in to Anthropic to dictate', the
 // mic's sign-in gate.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'RECOMPUTE'
+  'e4ae456491c5a12150979876190a538ac3953eaecad55a5dba25bda471d594cf'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
