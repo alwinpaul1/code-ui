@@ -23,7 +23,7 @@ vi.mock('../ui/Button', async () => {
 })
 
 const store = vi.hoisted(() => ({
-  accounts: [] as { id: string; organizationName: string | null }[],
+  accounts: [] as ListedAccount[],
   listFails: null as Error | null,
   removeFails: null as Error | null,
   removed: [] as string[],
@@ -56,8 +56,22 @@ import { AnthropicAccountsSection, ADD_ACCOUNT_HINT } from './AnthropicAccountsS
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 
-const PERSONAL = { id: 'acct-personal', organizationName: 'Personal' }
-const WORK = { id: 'acct-work', organizationName: 'NexDash' }
+type ListedAccount = {
+  id: string
+  organizationName: string | null
+  credential: { accessToken: string; refreshToken: string; expiresAt: number }
+  refreshRefused: boolean
+}
+const signedIn = (id: string, organizationName: string | null): ListedAccount => ({
+  id,
+  organizationName,
+  credential: { accessToken: `${id}-access`, refreshToken: `${id}-refresh`, expiresAt: Date.now() + 3_600_000 },
+  refreshRefused: false
+})
+const PERSONAL = signedIn('acct-personal', 'Personal')
+const WORK = signedIn('acct-work', 'NexDash')
+/** A sign-in migrated from 0.9.146 whose token ran out with no refresh token to extend it. */
+const DEAD: ListedAccount = { id: 'pending-dead', organizationName: null, credential: { accessToken: 'dead', refreshToken: '', expiresAt: 0 }, refreshRefused: false }
 
 function stylesOf(style: unknown): Record<string, unknown>[] {
   if (Array.isArray(style)) {
@@ -157,8 +171,29 @@ describe('the accounts list', () => {
   })
 
   it('falls back to a numbered name for an account whose organization is not known', async () => {
-    store.accounts = [PERSONAL, { id: 'acct-unknown', organizationName: null }]
+    store.accounts = [PERSONAL, signedIn('acct-unknown', null)]
     expect(texts(await draw())).toContain('Account 2')
+  })
+})
+
+describe('an account whose sign-in died (review of 2026-10-14)', () => {
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('an expired account with no refresh token says signed out, not "Signed in", in the %s theme', async (scheme, palette) => {
+    store.accounts = [DEAD, WORK]
+    const root = await draw(scheme)
+
+    const all = texts(root)
+    expect(all).toContain('Signed out. Sign in to this account again.')
+    // Voice uses the account that still works, and only that one says so.
+    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual(['Signed in. Voice transcription uses this account.'])
+    expect(stylesOf(textNode(root, 'Signed out. Sign in to this account again.')!.props.style).map((s) => s.color)).toContain(palette.textSecondary)
+  })
+
+  it('a refused refresh reads as signed out once the token has run out', async () => {
+    store.accounts = [{ ...PERSONAL, credential: { ...PERSONAL.credential, expiresAt: 0 }, refreshRefused: true }]
+    expect(texts(await draw())).toContain('Signed out. Sign in to this account again.')
   })
 })
 

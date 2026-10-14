@@ -25,7 +25,7 @@ vi.mock('../host-controls/throwaway-terminal', () => ({
   }
 }))
 vi.mock('./anthropic-auth-store', () => ({
-  readCredential: async () => seen.phone,
+  readPrimaryAccount: async () => (seen.phone ? { credential: seen.phone, refreshRefused: false } : null),
   refreshAccessToken: async () => {
     throw new Error('no refresh in this test')
   }

@@ -1,8 +1,9 @@
 import {
   accountLabel,
   listAccounts,
-  readCredential as readPhoneCredential,
+  readPrimaryAccount,
   refreshAccessToken,
+  type StoredAccount,
   type StoredCredential
 } from './anthropic-auth-store'
 
@@ -26,16 +27,22 @@ const TOKEN_MARGIN_MS = 60_000
  * typically under 30 s.
  */
 export async function fetchAnthropicCredential(): Promise<AnthropicCredential | null> {
-  const phoneCred = await readPhoneCredential()
-  return phoneCred ? liveCredential(phoneCred) : null
+  const primary = await readPrimaryAccount()
+  return primary ? liveCredential(primary) : null
 }
 
-async function liveCredential(phoneCred: StoredCredential): Promise<StoredCredential | null> {
+/** The account's token, refreshed when near expiry. A refresh token the server already refused is
+ *  not spent again: the account keeps what life its access token has, then reads as signed out. */
+async function liveCredential(account: StoredAccount): Promise<StoredCredential | null> {
+  const phoneCred = account.credential
   if (!phoneCred.accessToken) {
     return null
   }
   if (phoneCred.expiresAt - Date.now() >= TOKEN_MARGIN_MS) {
     return phoneCred
+  }
+  if (account.refreshRefused) {
+    return phoneCred.expiresAt > Date.now() ? phoneCred : null
   }
   try {
     return await refreshAccessToken(phoneCred)
@@ -67,7 +74,7 @@ export async function fetchAccountCredentials(only?: string): Promise<AccountCre
     accounts.flatMap((account, index) => (only === undefined || account.id === only ? [{ account, index }] : [])).map(async ({ account, index }): Promise<AccountCredential> => {
       const label = accountLabel(account, index)
       const base = { id: account.id, label, organizationUuid: account.organizationUuid }
-      const live = await liveCredential(account.credential)
+      const live = await liveCredential(account)
       return live
         ? { ...base, accessToken: live.accessToken }
         : { ...base, accessToken: null, error: 'the sign-in expired and could not be refreshed; sign in to this account again in Voice settings' }
