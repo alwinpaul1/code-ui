@@ -13,8 +13,8 @@ export function defaultCcrPipelineDeps(): CcrPipelineDeps {
   return {
     fetch: ((url, init) => fetch(url, init)) as CcrFetch,
     accounts: {
-      list: async () =>
-        (await fetchAccountCredentials()).map((account) => ({
+      list: async (only) =>
+        (await fetchAccountCredentials(only)).map((account) => ({
           id: account.id,
           label: account.label,
           accessToken: account.accessToken,

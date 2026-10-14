@@ -205,7 +205,8 @@ export function fakeAccounts(initial: FakeAccount[]): { source: CcrAccountsSourc
   const accounts = initial.map((account) => ({ ...account }))
   const forgotten: string[] = []
   const source: CcrAccountsSource = {
-    list: async () => accounts.map((account) => ({ id: account.id, label: account.label, accessToken: account.token, organizationUuid: account.organizationUuid, error: account.error })),
+    list: async (only) =>
+      accounts.filter((account) => only === undefined || account.id === only).map((account) => ({ id: account.id, label: account.label, accessToken: account.token, organizationUuid: account.organizationUuid, error: account.error })),
     rememberProfile: async (id, profile) => {
       const account = accounts.find((candidate) => candidate.id === id)
       if (account) {

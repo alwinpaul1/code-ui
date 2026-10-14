@@ -251,10 +251,13 @@ describe('when one account cannot answer', () => {
     )
   })
 
-  it("one account's events failing leaves the other account's session matched", async () => {
+  it("one account's events failing names that account, and matches nothing rather than guess the other's session", async () => {
+    // SESSION_B could not be read, so it may share the tab's messages too: no pick, no cached mapping.
     const h = harness([defaultSide(), workSide()], { [TOKEN]: defaultRoutes({ events: { [SESSION_B]: () => reply(401, {}) } }), [WORK_TOKEN]: workRoutes() })
     const result = await runCcrImagePipeline(input(), h.deps)
-    expect(result.sessionId).toBe(SESSION_A)
+    expect(result.sessionId).toBeNull()
+    expect(ccrSessionForTab('tab-1', 1)).toBeNull()
+    expect(result.stages.at(-1)!.detail).toBe("1 of 2 Remote Control sessions could not be read, so any of them may be this tab's; not guessing")
     expect(h.lines).toContainEqual({
       ok: false,
       line: '[ccr-images] match: failed — Personal: the sign-in was refused (HTTP 401); sign in again in Voice settings (tab tab… (5))'
@@ -339,5 +342,60 @@ describe('the "Check session images" self-test, with two accounts', () => {
       'Remote Control sessions: Personal: the sign-in was refused (HTTP 401); sign in again in Voice settings'
     ])
     expect(lines.some((line) => line.ok && line.label === 'This tab’s session')).toBe(true)
+  })
+})
+
+describe('a match the phone cannot be sure of (review of 2026-10-14)', () => {
+  it('refuses to match when another session’s events could not be read, and caches nothing', async () => {
+    // One account lists two sessions. SESSION_A shares the tab's messages; SESSION_B's events answer
+    // 500, so B could have shared them too. Picking A would be a guess the cache then keeps.
+    const h = harness([defaultSide()], {
+      [TOKEN]: apiRoutes({
+        sessions: () => reply(200, sessionsReply([sessionRow(SESSION_A), sessionRow(SESSION_B)])),
+        events: {
+          [SESSION_A]: () => reply(200, eventsReply([assistantEvent(TAB_MESSAGES[0]!, 'toolu_A', '/tmp/a.png')])),
+          [SESSION_B]: () => reply(500, {})
+        }
+      })
+    })
+
+    const result = await runCcrImagePipeline(input(), h.deps)
+
+    expect(result.sessionId).toBeNull()
+    expect(ccrSessionForTab('tab-1', 1)).toBeNull()
+    expect(result.stages.at(-1)).toMatchObject({ stage: 'match', ok: false })
+    expect(result.stages.at(-1)!.detail).toContain('not guessing')
+    // The unreadable session's own reason is still logged.
+    expect(h.lines.some((entry) => !entry.ok && entry.line.includes('match: failed') && entry.line.includes('500'))).toBe(true)
+  })
+
+  it('matches a session two accounts of the same organization both list, instead of calling it ambiguous', async () => {
+    const sameOrgWork: FakeAccount = { ...workSide(), organizationUuid: ORG_UUID }
+    const tabSession = () =>
+      apiRoutes({
+        sessions: () => reply(200, sessionsReply([sessionRow(SESSION_A)])),
+        events: { [SESSION_A]: () => reply(200, eventsReply([assistantEvent(TAB_MESSAGES[0]!, 'toolu_S', '/tmp/s.png')])) }
+      })
+    const h = harness([defaultSide(), sameOrgWork], { [TOKEN]: tabSession(), [WORK_TOKEN]: tabSession() })
+
+    const result = await runCcrImagePipeline(input(), h.deps)
+
+    expect(result.sessionId).toBe(SESSION_A)
+    expect(ccrSessionForTab('tab-1', 1)).toBe(SESSION_A)
+  })
+
+  it('re-reads the model by refreshing only the account the tab matched under', async () => {
+    const h = harness([defaultSide(), workSide()], bothAnswers())
+    await runCcrImagePipeline(input(), h.deps)
+    const asked: (string | undefined)[] = []
+    const list = h.deps.accounts.list
+    h.deps.accounts.list = async (only?: string) => {
+      asked.push(only)
+      return list(only)
+    }
+
+    await refreshCcrModel('tab-1', 1, h.deps)
+
+    expect(asked).toEqual([WORK_ACCOUNT])
   })
 })

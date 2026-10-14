@@ -52,7 +52,8 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
   try {
     // The account the tab matched under answers: its token and its organization, not another's.
     const accountId = ccrAccountForTab(tabId, epoch)
-    const accounts = await deps.accounts.list()
+    // Only that account is read, so a re-read refreshes no other account's token.
+    const accounts = accountId ? await deps.accounts.list(accountId) : []
     const account = accounts.find((entry) => entry.id === accountId)
     const token = account?.accessToken ?? null
     const org = account?.organizationUuid ?? null
@@ -62,9 +63,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
         'model',
         false,
         !account
-          ? accounts.length === 0
-            ? 'not signed in to Anthropic on this phone'
-            : 'the account this tab matched under is no longer signed in'
+          ? 'the account this tab matched under is no longer signed in'
           : !token
             ? `${account.label}: ${account.error ?? 'no usable token'}`
             : 'no organization cached'

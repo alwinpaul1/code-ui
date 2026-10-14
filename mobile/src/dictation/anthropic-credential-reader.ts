@@ -58,12 +58,13 @@ export type AccountCredential = {
  * Every signed-in account with its token refreshed when near expiry, each on its own: one
  * account's refresh failing leaves it without a token and the others untouched. The sessions path
  * (session/ccr-session-default-deps.ts) reads this; dictation reads only the first account, through
- * fetchAnthropicCredential. An empty list means nobody is signed in.
+ * fetchAnthropicCredential. An empty list means nobody is signed in. With `only`, just that
+ * account is read and refreshed (the model pill re-reads one matched account, not every one).
  */
-export async function fetchAccountCredentials(): Promise<AccountCredential[]> {
+export async function fetchAccountCredentials(only?: string): Promise<AccountCredential[]> {
   const accounts = await listAccounts()
   return Promise.all(
-    accounts.map(async (account, index): Promise<AccountCredential> => {
+    accounts.flatMap((account, index) => (only === undefined || account.id === only ? [{ account, index }] : [])).map(async ({ account, index }): Promise<AccountCredential> => {
       const label = accountLabel(account, index)
       const base = { id: account.id, label, organizationUuid: account.organizationUuid }
       const live = await liveCredential(account.credential)
