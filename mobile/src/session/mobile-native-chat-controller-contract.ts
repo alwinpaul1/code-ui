@@ -4,6 +4,7 @@ import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import type { RateLimitWindowReading } from './hud-rate-limit-notice'
 import type { BeaconAgentMessage, StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
@@ -279,6 +280,9 @@ export type MobileNativeChatController = {
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
+  /** The usage windows the agent or the host states (hud-rate-limit-notice.ts), for the rate-limit
+   *  banner. Empty when no source states one. */
+  nativeChatRateLimits?: readonly RateLimitWindowReading[]
   /** Context tokens the host counted for this session, from the same status the HUD merges
    *  (`agentStatus.contextUsedTokens`); null when it sent none. With no window stated, the
    *  header shows these alone and no percentage. */

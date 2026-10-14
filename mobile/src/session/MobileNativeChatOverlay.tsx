@@ -111,8 +111,10 @@ type Props = {
    *  composer so TUI menus stay operable from Chat UI. */
   keyStrip?: MobileNativeChatKeyStripProps
   /** The session bar's diff pill: the worktree's uncommitted +/-, and what opens the changes.
-   *  And the session pills drawn above the bar (MobileSessionPillRow): mounted here, owned by the route. */
-  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode
+   *  And the session pills drawn above the bar (MobileSessionPillRow): mounted here, owned by the route.
+   *  And `notices`, the connection row and the rate-limit banner (MobileNativeChatConnectionRow,
+   *  MobileNativeChatRateLimitBanner), drawn above the pills: the same. */
+  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode; notices?: ReactNode
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -149,7 +151,7 @@ export function MobileNativeChatOverlay({
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset,
-  keyStrip, sessionDiff = null, onOpenDiff, sessionPills
+  keyStrip, sessionDiff = null, onOpenDiff, sessionPills, notices
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   // Both halves are fresh arrays every call, and they are the `pending` dep of
@@ -537,7 +539,7 @@ export function MobileNativeChatOverlay({
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
-        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills}
+        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills} notices={notices}
       />
   )
   // The loaded transcript says whether a later call touched a created file,

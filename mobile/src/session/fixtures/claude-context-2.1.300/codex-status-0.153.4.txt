@@ -1,0 +1,52 @@
+╭────────────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.153.4)                             │
+│                                                        │
+│ model:     gpt-5.6-terra xhigh   /model to change      │
+│ directory: /private/tmp/claude-501/…/scratchpad/b5/cap │
+╰────────────────────────────────────────────────────────╯
+
+  Tip: New For a limited time, Codex is included in your plan for free – let’s build together.
+
+• You have 1 usage limit reset available. Run /usage to use one.
+
+/status
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│  >_ OpenAI Codex (v0.153.4)                                                                      │
+│                                                                                                  │
+│ Visit https://chatgpt.com/codex/settings/usage for up-to-date                                    │
+│ information on rate limits and credits                                                           │
+│                                                                                                  │
+│  Model:                gpt-5.6-terra (reasoning xhigh, summaries auto)                           │
+│  Directory:            /…/b5/cap                                                                 │
+│  Permissions:          Workspace (Ask for approval)                                              │
+│  Agents.md:            <none>                                                                    │
+│  Account:              <account>          (Go)                                                   │
+│  Collaboration mode:   Default                                                                   │
+│  Session:              01a13be4-dd3f-7140-8134-2e575695312e                                      │
+│                                                                                                  │
+│  Monthly limit:        [███████████████████░] 97% left (resets 19:47 on 10 Nov)                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+› Ask Codex to do anything
+
+  gpt-5.6-terra xhigh · /…/b5/cap…                                                                  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -8,6 +8,7 @@ import {
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { readClaudeContextReport, type ContextReportRead } from './claude-context-report'
 import { readClaudeStartupFrame, type StartupFrameRead } from './claude-startup-frame'
 import { readClaudeScreenModelStatement, type ClaudeScreenModelStatement } from './claude-screen-model-statement'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
@@ -31,6 +32,10 @@ const HUD_POLL_MS = 5_000
  *  pills waited a whole idle poll after a chat opened over a relay still
  *  settling (2026-10-09). */
 export const HUD_FIRST_READ_RETRY_MS = 1_000
+/** How long the reads of a watch may be silent before a `/context` table found after them has no
+ *  stamp: six idle polls (HUD_POLL_MS), so no table is called new across a stall it could have been
+ *  painted inside. */
+const CONTEXT_READ_GAP_MS = 30_000
 
 /**
  * While chat covers a terminal, read its screen for live controls and queued
@@ -91,6 +96,10 @@ export function useMobileTerminalHudObservation(args: {
    *  model toast (claude-screen-model-statement.ts). Null until this terminal's
    *  first read since the chat began watching it, and for any agent but Claude. */
   modelStatement: ClaudeScreenModelStatement | null
+  /** The `/context` table the latest screen read shows (claude-context-report.ts), or null when it
+   *  shows none: the table scrolls away, and the hold that keeps it for the sheet is
+   *  use-held-context-report.ts. Claude tabs only. */
+  contextReport: ContextReportRead | null
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -125,6 +134,7 @@ export function useMobileTerminalHudObservation(args: {
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [startupFrame, setStartupFrame] = useState<{ handleKey: string; read: StartupFrameRead } | null>(null)
   const [modelStatement, setModelStatement] = useState<{ handleKey: string; read: ClaudeScreenModelStatement } | null>(null)
+  const [contextReport, setContextReport] = useState<{ handleKey: string; read: ContextReportRead } | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
@@ -145,6 +155,7 @@ export function useMobileTerminalHudObservation(args: {
     setSpinner(null)
     setStartupFrame(null)
     setModelStatement(null)
+    setContextReport(null)
     setDialogOptions(null)
     setDialogKind(null)
     setDialogBeforeAnswer(false)
@@ -157,6 +168,7 @@ export function useMobileTerminalHudObservation(args: {
     let inFlight = false
     /** A read of the live screen has come back for this watch. */
     let landed = false
+    let lastLandedAt = 0
     const read = async (): Promise<TerminalHudObservation | null> => {
       const handle = handleRef.current
       if (!handle || inFlight) {
@@ -195,6 +207,12 @@ export function useMobileTerminalHudObservation(args: {
         if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
           return null
         }
+        // A table already on the screen at the watch's first read was painted before the phone
+        // looked, at a time it cannot name (use-held-context-report.ts). So was one found after a
+        // gap in the reads: a relay that stalled, or an app the system paused, for CONTEXT_READ_GAP_MS.
+        const readAt = Date.now()
+        const firstOfWatch = !landed || readAt - lastLandedAt > CONTEXT_READ_GAP_MS
+        lastLandedAt = readAt
         landed = true
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw)
@@ -252,6 +270,16 @@ export function useMobileTerminalHudObservation(args: {
               : { handleKey, read: statement }
           )
         }
+        // Codex prints no category table (its /status has a context figure and windows only).
+        const table = agent === 'claude' || agent === 'openclaude' ? readClaudeContextReport(lines) : null
+        setContextReport((current) => {
+          if (table === null) {
+            return current === null ? current : null
+          }
+          return current?.handleKey === handleKey && JSON.stringify(current.read.report) === JSON.stringify(table)
+            ? current
+            : { handleKey, read: { report: table, firstRead: firstOfWatch } }
+        })
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
         setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
@@ -365,6 +393,7 @@ export function useMobileTerminalHudObservation(args: {
     spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,
     startupFrame: enabled && startupFrame?.handleKey === handleKey ? startupFrame.read : null,
     modelStatement: enabled && modelStatement?.handleKey === handleKey ? modelStatement.read : null,
+    contextReport: enabled && contextReport?.handleKey === handleKey ? contextReport.read : null,
     permissionDismissed
   }
 }

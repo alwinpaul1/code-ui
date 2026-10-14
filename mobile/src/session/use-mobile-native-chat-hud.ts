@@ -9,11 +9,14 @@ import {
   NO_SCREEN_HUD_OBSERVATION
 } from './hud-agent-status-fields'
 import { agentHudBeaconMatches, applyAgentHudBeaconFields } from './hud-beacon-fields'
+import { attachContextBreakdown } from './hud-context-breakdown'
+import { hudRateLimitWindows, type RateLimitWindowReading } from './hud-rate-limit-notice'
 import { attachHudRateLimits, hudRateLimitsForAgent } from './hud-rate-limits'
 import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
 import { useAgentHudBeaconLiveness } from './use-agent-hud-beacon-liveness'
 import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
+import { useHeldContextReport } from './use-held-context-report'
 import { useStickyLiveHud } from './use-sticky-live-hud'
 import { fileStartupFrame } from './claude-startup-frame-pair'
 import {
@@ -49,6 +52,10 @@ export type NativeChatLiveHud = {
   label: string | null
   effort: string | null
   context: TerminalHudObservation['context']
+  /** The usage windows the rate-limit banner reads: the beacon's for the session on screen, else the
+   *  host's feed (hud-rate-limit-notice.ts). Independent of the context figure: a banner needs the
+   *  windows, not the ring. */
+  limits: RateLimitWindowReading[]
 }
 
 /** The chat HUD, from sources that need nothing set up on the host, open
@@ -69,6 +76,9 @@ export type NativeChatLiveHud = {
  *    (`agent-hud-beacon-liveness.ts`).
  *  - a newer host's `agentStatus` fields, when it forwards them.
  *  - the host's `accounts.subscribe` for the rate-limit windows.
+ *  - the `/context` table, when the user (or the phone's composer) has run it and Claude Code has
+ *    printed it: the context sheet's categories (`claude-context-report.ts`). The phone never runs
+ *    it: that would draw in the user's terminal.
  *
  *  The screen's model pair and context are held across empty screen reads
  *  (`useStickyLiveHud`), and the hold is applied to the raw screen reading
@@ -137,10 +147,16 @@ export function useMobileNativeChatHud(args: {
     painting && agentHudBeaconMatches(beacon, args.agent, args.sessionId) ? beacon : null
   const hostFields = hudFieldsFromAgentStatus(args.agentStatus)
   const rateLimits = hudRateLimitsForAgent(accounts, args.agent)
+  // The `/context` table, held after it scrolls off the screen it was printed on, for as long as
+  // this session lasts; it rides on the context reading like the usage windows do.
+  const breakdown = useHeldContextReport(screen.contextReport ?? null, args.tabId, handle, args.sessionId)
   const merge = (base: TerminalHudObservation | null) =>
-    attachHudRateLimits(
-      applyAgentHudBeaconFields(applyAgentStatusHudFields(base, hostFields), liveBeacon),
-      rateLimits
+    attachContextBreakdown(
+      attachHudRateLimits(
+        applyAgentHudBeaconFields(applyAgentStatusHudFields(base, hostFields), liveBeacon),
+        rateLimits
+      ),
+      breakdown
     )
   // `observation` is this tick's screen with the beacon merged in, as every
   // reader of the footer state (permission mode, agent mode, shell count)
@@ -171,7 +187,8 @@ export function useMobileNativeChatHud(args: {
       model: live?.modelId ?? null,
       label: live?.modelLabel || null,
       effort: live?.effort ?? null,
-      context: live?.context ?? null
+      context: live?.context ?? null,
+      limits: hudRateLimitWindows(liveBeacon, rateLimits)
     }
   }
 }
