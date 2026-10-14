@@ -50,7 +50,12 @@ function withoutAsides(label: string): string {
   return label.replace(/\s*\([^)]*\)/g, '').replace(/\s+/g, ' ').trim()
 }
 
-export function sessionModelPillLabel(live: LiveModelPair | null): string | null {
+/** The pill's two parts: the model's name, and the effort the agent stated, as the Claude app
+ *  names it ("Extra", not "xhigh"). The chip draws the effort in a quieter tone than the name
+ *  (`md6.a`: `pl7.O` and `pl7.P`), which one joined string cannot carry. */
+export function sessionModelPillParts(
+  live: LiveModelPair | null
+): { name: string; effort: string | null } | null {
   // A label with no model behind it is not a statement about this session.
   const model = text(live?.model)
   if (model === null) {
@@ -61,6 +66,14 @@ export function sessionModelPillLabel(live: LiveModelPair | null): string | null
   const label = text(live?.label)
   const name = text(withoutAsides(label ?? model)) ?? text(withoutAsides(model)) ?? model
   const effort = text(live?.effort)
+  return { name, effort: effort === null ? null : effortDisplayLabel(effort) }
+}
+
+export function sessionModelPillLabel(live: LiveModelPair | null): string | null {
+  const parts = sessionModelPillParts(live)
+  if (parts === null) {
+    return null
+  }
   // Named as the Claude app names it: "Opus 5.5 Extra", not "xhigh".
-  return effort === null ? name : `${name} ${effortDisplayLabel(effort)}`
+  return parts.effort === null ? parts.name : `${parts.name} ${parts.effort}`
 }

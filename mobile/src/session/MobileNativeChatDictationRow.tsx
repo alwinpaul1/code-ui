@@ -14,6 +14,7 @@ import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import type { LevelSource } from '../dictation/pcm-level'
 import { springFromAppleParams } from '../ui/alert/alert-motion'
+import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 
 /** Where a dictation take is, as the composer draws it. */
 export type DictationRowPhase = 'off' | 'listening' | 'transcribing'
@@ -104,6 +105,7 @@ export function MobileNativeChatDictationRow({
     >
       <Pressable
         focusable={false}
+        hitSlop={COMPOSER_BUTTON_HIT_SLOP}
         accessibilityLabel="Cancel"
         accessibilityRole="button"
         style={({ pressed }) => [iconButton, control(pressed)]}
@@ -138,6 +140,7 @@ export function MobileNativeChatDictationRow({
       </View>
       <Pressable
         focusable={false}
+        hitSlop={COMPOSER_BUTTON_HIT_SLOP}
         accessibilityLabel="Stop dictation"
         accessibilityRole="button"
         accessibilityState={{ disabled: transcribing, busy: busy('stop') }}
@@ -157,6 +160,7 @@ export function MobileNativeChatDictationRow({
       </Pressable>
       <Pressable
         focusable={false}
+        hitSlop={COMPOSER_BUTTON_HIT_SLOP}
         accessibilityLabel="Send dictation"
         accessibilityRole="button"
         accessibilityState={{ disabled: transcribing || sendBlocked, busy: busy('send') }}

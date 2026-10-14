@@ -3,7 +3,7 @@ import { ActivityIndicator, Keyboard, View } from 'react-native'
 import { ArrowLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
-import { sessionModelPillLabel } from './session-model-pill'
+import { sessionModelPillLabel, sessionModelPillParts } from './session-model-pill'
 import { matchClaudeCatalogModelId } from './claude-model-identity'
 import { IconButton } from '../ui/IconButton'
 import { Txt } from '../ui/Txt'
@@ -223,6 +223,9 @@ export function MobileNativeChatSessionOptionPickers({
   // current value is the tracked record, and the pill read "Fable Medium" from
   // it on a session whose status line painted Opus xhigh (2026-09-18).
   const live = sessionModelPillLabel(liveModel ?? null)
+  // Only the agent's own stated effort is drawn apart, muted. The snapshot's label below is one
+  // string of descriptor values, and no word is split off a guess.
+  const liveParts = sessionModelPillParts(liveModel ?? null)
   const modelLabel = mobileModelPillLabel(model)
   const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) || null : null
   const pillLabel = live ?? (optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel)
@@ -299,7 +302,8 @@ export function MobileNativeChatSessionOptionPickers({
   return (
     <View style={{ flexShrink: 1, minWidth: 0 }}>
       <Pill
-        label={pillLabel}
+        label={liveParts?.name ?? pillLabel}
+        effort={liveParts?.effort ?? null}
         accessibleName={`Model, ${pillLabel}`}
         disabled={disabled}
         onPress={openPicker}

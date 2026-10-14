@@ -8,6 +8,8 @@ import { Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
 import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
+import { MobileNativeChatModeChip } from './MobileNativeChatModeChip'
+import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 import type {
   TerminalAgentMode,
   TerminalHudContextWindow,
@@ -524,6 +526,7 @@ export function MobileNativeChatComposer({
                 attachmentCount={nativeChatAttachmentCount(attachments)}
               />
             ) : null}
+            <MobileNativeChatModeChip {...{ agent, agentMode, permissionMode, disabled }} onPress={onSelectPermissionMode && (() => setShowModeSheet(true))} />
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
                 {...sessionOptions}
@@ -544,6 +547,7 @@ export function MobileNativeChatComposer({
             {micActive && !dictationRow.available ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
               <Pressable focusable={false}
+                hitSlop={COMPOSER_BUTTON_HIT_SLOP}
                 // Under the recording row the mic stays the plain mic: the row has the Stop.
                 accessibilityLabel={micShowsStop ? 'Stop dictation' : 'Dictate'}
                 style={({ pressed }) => [

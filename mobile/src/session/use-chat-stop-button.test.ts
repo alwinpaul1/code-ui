@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  STOP_STILL_WORKING_MESSAGE,
   STOP_STILL_WORKING_MS,
   useChatStopButton
 } from './use-chat-stop-button'
@@ -72,13 +71,13 @@ describe('a Stop tap reports whether the agent took it', () => {
   it('reports false, after saying so, when both Escapes were refused', async () => {
     await mount(vi.fn().mockResolvedValue({ ok: true, result: { send: { accepted: false } } }))
     expect(await tap()).toEqual([false])
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('reports false when there is no terminal to stop', async () => {
     await mount(vi.fn(), null)
     expect(await tap()).toEqual([false])
-    expect(onSendError).toHaveBeenCalledWith('Stop not sent (terminal not ready)')
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 })
 
@@ -126,7 +125,7 @@ describe('the Stop button while a stop is under way', () => {
     await render({ stop: (verdict) => verdict(false), canStop: true })
     await act(async () => button!.onStop())
     expect(button!.stopping).toBe(false)
-    // The lane already said why ("Stop not sent"); a second line would repeat it.
+    // The lane already said so ("Couldn't stop the session"); a second line would repeat it.
     expect(onSendError).not.toHaveBeenCalled()
   })
 
@@ -138,7 +137,7 @@ describe('the Stop button while a stop is under way', () => {
     expect(button!.stopping).toBe(true)
     await act(async () => { await vi.advanceTimersByTimeAsync(1) })
     expect(button!.stopping).toBe(false)
-    expect(onSendError).toHaveBeenCalledWith(STOP_STILL_WORKING_MESSAGE)
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('treats a lane that answers nothing (the structured cancel) as sent', async () => {
@@ -146,7 +145,7 @@ describe('the Stop button while a stop is under way', () => {
     await act(async () => button!.onStop())
     expect(button!.stopping).toBe(true)
     await act(async () => { await vi.advanceTimersByTimeAsync(STOP_STILL_WORKING_MS) })
-    expect(onSendError).toHaveBeenCalledWith(STOP_STILL_WORKING_MESSAGE)
+    expect(onSendError).toHaveBeenCalledWith("Couldn't stop the session. Try again.")
   })
 
   it('stands down quietly when the turn ends', async () => {
