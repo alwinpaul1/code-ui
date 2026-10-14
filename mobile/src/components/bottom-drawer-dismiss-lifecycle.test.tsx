@@ -64,7 +64,6 @@ vi.mock('react-native-gesture-handler', () => {
 // test can tell "snapped to 0" from "animating to 0".
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
-  const { SHEET_SPEC } = await import('./sheet-spec')
   const isTiming = (value: unknown): value is Timing =>
     typeof value === 'object' && value !== null && (value as Timing).timing === true
   return {
@@ -105,17 +104,7 @@ vi.mock('react-native-reanimated', async () => {
     useAnimatedRef: () => ({ current: null }),
     scrollTo: () => {},
     runOnUI: (fn: () => void) => fn,
-    // Since 2026-10-14 the sheet opens on the app's sheet spring (sheet-spec.ts),
-    // not a timing, so the open is an animation here like the hide. The drag
-    // settle and the scrim's own fade are springs too, and land at once: they
-    // are not the sheet's open or close.
-    withSpring: (to: number, config?: unknown, done?: (finished: boolean) => void) => {
-      if (config === SHEET_SPEC.motion.open || config === SHEET_SPEC.motion.reducedOpen) {
-        seam.timings.push({ to, done })
-        return { timing: true, to, done }
-      }
-      return to
-    },
+    withSpring: (to: number) => to,
     withTiming: (to: number, _config?: unknown, done?: (finished: boolean) => void) => {
       seam.timings.push({ to, done })
       return { timing: true, to, done }

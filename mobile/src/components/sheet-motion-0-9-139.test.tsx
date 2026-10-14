@@ -2,19 +2,20 @@ import type { ReactElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Review of the sheet-spec commit (2026-10-14). The scrim fades on a spring of
-// its own now (sheet-spec.ts), but a drag-dismiss only took `progress` and the
-// sheet's travel down: the scrim's own value stayed at 1, and the backdrop was
-// hidden only by the drag's fade. When the parent refused the close (a sheet
-// that is mid-save), the restore put the sheet back at rest in one frame, the
-// drag fade jumped to 1, and the 32% scrim appeared in that frame while the
-// sheet sprang up from the edge. Before the commit the backdrop rode
-// `progress`, which restarted at 0, so it faded in with the sheet.
+// 2026-10-14: the Claude-app port moved the sheets onto Claude's M3 springs
+// (open, drag settle, a scrim on a spring of its own). The user rejected it
+// the same day: "We need it smooth same as we have in latest release in git",
+// 0.9.139 (237ce4dca). These pin what a DRAG does in 0.9.139 for every sheet
+// family: a release short of the dismiss line settles on DRAWER_SPRING (ratio
+// 1, k 400, mass 1), and a drag-dismiss the parent refuses comes back on the
+// 180 ms open timing, its scrim riding that open. The ported springs fail
+// both. The open, hide and reduced motion are pinned in sheet-spec.test.tsx.
 
 type Recorded = { kind: string; calls: Record<string, unknown[][]> }
 
 const seam = vi.hoisted(() => ({
-  scrim: [] as number[]
+  springs: [] as { to: number; config: unknown }[],
+  timings: [] as { to: number; duration: number | undefined }[]
 }))
 
 vi.mock('react-native-gesture-handler', () => {
@@ -64,11 +65,10 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 })
 }))
 // Values land at once; a timing's completion fires at once, finished, as the
-// UI thread reports an exit that ran to its end. The scrim's spring is told
-// apart by its config, and every target it is sent to is recorded.
+// UI thread reports an exit that ran to its end. Every spring and timing is
+// recorded with its config.
 vi.mock('react-native-reanimated', async () => {
   const React = await import('react')
-  const { SHEET_SPEC } = await import('./sheet-spec')
   return {
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => React.useRef({ value: initial }).current,
@@ -77,12 +77,11 @@ vi.mock('react-native-reanimated', async () => {
     useAnimatedRef: () => ({ current: null }),
     scrollTo: () => {},
     withSpring: (to: number, config?: unknown) => {
-      if (config === SHEET_SPEC.motion.scrim) {
-        seam.scrim.push(to)
-      }
+      seam.springs.push({ to, config })
       return to
     },
-    withTiming: (to: number, _config?: unknown, done?: (finished: boolean) => void) => {
+    withTiming: (to: number, config?: { duration?: number }, done?: (finished: boolean) => void) => {
+      seam.timings.push({ to, duration: config?.duration })
       done?.(true)
       return to
     },
@@ -110,12 +109,14 @@ vi.mock('../layout/responsive-layout', () => ({
 vi.mock('./bottom-drawer-modal-host', () => ({ useInsideBottomDrawerModalHost: () => true }))
 
 import { DraggableDetailSheet } from './DraggableDetailSheet'
+import { DRAWER_SPRING } from './drawer-spring'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 let renderer: ReactTestRenderer | null = null
 
 beforeEach(() => {
-  seam.scrim.length = 0
+  seam.springs.length = 0
+  seam.timings.length = 0
   vi.useFakeTimers()
 })
 
@@ -147,13 +148,13 @@ function handlePan(): Recorded {
   return pans[0]!
 }
 
-/** A fast pull well down past the dismiss line, released. */
-function flingDown(pan: Recorded): void {
+/** A pull of `translationY`, released at `velocityY`. */
+function drag(pan: Recorded, translationY: number, velocityY: number): void {
   const handler = (name: string) => pan.calls[name]![0]![0] as (event?: object) => void
   act(() => {
     handler('onBegin')()
-    handler('onUpdate')({ translationY: 700 })
-    handler('onEnd')({ translationY: 700, velocityY: 4000 })
+    handler('onUpdate')({ translationY })
+    handler('onEnd')({ translationY, velocityY })
   })
 }
 
@@ -184,20 +185,27 @@ const CASES = [
   ]
 ] as const
 
-describe.each(CASES)('%s dragged away while its parent refuses the close', (_name, sheet) => {
-  it('fades its scrim out with the drag, and back in with the sheet when it returns', () => {
+describe.each(CASES)('%s dragged, as in 0.9.139', (_name, sheet) => {
+  it('settles back on the drawer spring when let go short of the dismiss line', () => {
+    mount(sheet(() => {}))
+    seam.springs.length = 0
+    drag(handlePan(), 20, 0)
+    expect(seam.springs.length, 'no settle').toBeGreaterThan(0)
+    expect(seam.springs.every((call) => call.config === DRAWER_SPRING)).toBe(true)
+  })
+
+  it('comes back on the 180 ms open timing when its parent refuses a drag-dismiss', () => {
     const onClose = vi.fn() // refuses: visible stays true
     mount(sheet(onClose))
-    expect(seam.scrim, 'the scrim faded in on open').toEqual([1])
-
-    flingDown(handlePan())
+    seam.springs.length = 0
+    seam.timings.length = 0
+    drag(handlePan(), 700, 4000)
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(seam.scrim.at(-1), 'the scrim stayed up through the drag-dismiss').toBe(0)
-
     // The refused close is put back (use-drawer-close-request.ts).
     act(() => {
       vi.advanceTimersByTime(150)
     })
-    expect(seam.scrim.at(-1), 'the scrim came back with the sheet').toBe(1)
+    expect(seam.timings.at(-1)).toEqual({ to: 1, duration: 180 })
+    expect(seam.springs.filter((call) => call.to === 1), 'a spring took part in the return').toEqual([])
   })
 })

@@ -8,13 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // 2026-10-14, Phase 1 of the Claude-app UI port ("we need all the things from
 // claude decompiled to here"). The Claude Android app (1.261009.20) draws
 // every sheet through one Material 3 ModalBottomSheet wrapper, so its sheets
-// share corners, ground, grabber, scrim and motion. Code UI had two sheet
-// families that agreed on none of it: BottomDrawer opened on a 180 ms timing
-// with a 24 dp corner (over a 16 dp one left in its stylesheet), a grey
-// `textMuted` bar at 40% and the warm 42% / black 55% `bgOverlay`;
-// DraggableDetailSheet had its own copy of each. These pin the one spec
-// (sheet-spec.ts) in both schemes, through both families, and a ratchet keeps
-// a new sheet from drifting off it.
+// share corners, ground, grabber and scrim. Code UI had two sheet families
+// that agreed on none of it: BottomDrawer had a 24 dp corner (over a 16 dp one
+// left in its stylesheet), a grey `textMuted` bar at 40% and the warm 42% /
+// black 55% `bgOverlay`; DraggableDetailSheet had its own copy of each. These
+// pin the one look (sheet-spec.ts) in both schemes, through both families,
+// with a ratchet that keeps a new sheet from drifting off it. The MOTION is
+// 0.9.139's, by the user's choice (see the motion pins below).
 
 const mocks = vi.hoisted(() => ({
   scheme: 'light' as 'light' | 'dark',
@@ -97,7 +97,7 @@ vi.mock('./bottom-drawer-modal-host', () => ({ useInsideBottomDrawerModalHost: (
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { DraggableDetailSheet } from './DraggableDetailSheet'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
-import { M3_STANDARD_MOTION, SHEET_SPEC, sheetColors, springFromComposeParams } from './sheet-spec'
+import { M3_STANDARD_MOTION, SHEET_SPEC, sheetColors } from './sheet-spec'
 
 const SCHEMES = [
   ['light', lightColors],
@@ -151,9 +151,11 @@ const detailSheet = (visible = true): ReactElement => (
   </DraggableDetailSheet>
 )
 
+/** Each family, and what it does under reduced motion in 0.9.139: the bottom
+ *  drawer fades on its open timing, the tool-detail sheet appears at once. */
 const FAMILIES = [
-  ['the bottom drawer', (visible?: boolean) => bottomDrawer(false, visible), 'bottom-drawer-sheet'],
-  ['the tool-detail sheet', detailSheet, 'draggable-detail-sheet']
+  ['the bottom drawer', (visible?: boolean) => bottomDrawer(false, visible), 'bottom-drawer-sheet', 'fade'],
+  ['the tool-detail sheet', detailSheet, 'draggable-detail-sheet', 'instant']
 ] as const
 
 function sheetOf(root: ReactTestInstance, testID: string): Record<string, unknown> {
@@ -196,24 +198,16 @@ describe('the sheet spec, as decompiled from the Claude app 1.261009.20', () => 
     expect(sheetColors(darkColors)).toMatchObject({ container: '#151515', handle: 'rgba(225, 224, 217, 0.15)' })
   })
 
-  it('states its springs as Material 3’s standard scheme, each with its mass', () => {
+  // 2026-10-14: Claude's M3 springs were ported and rejected by the user the
+  // same day ("We need it smooth same as we have in latest release"). The
+  // sheets move exactly as in 0.9.139 (237ce4dca); these are those values.
+  it('moves as 0.9.139 did, not on the Claude app’s springs', () => {
+    expect(SHEET_SPEC.motion.openMs).toBe(180)
+    expect(SHEET_SPEC.motion.hideMs).toBe(150)
+    expect(SHEET_SPEC.motion.settle).toEqual({ stiffness: 400, damping: 40, mass: 1 })
+    expect(SHEET_SPEC.motion.scrimFollowsOpen).toBe(true)
+    // Kept for reference only.
     expect(M3_STANDARD_MOTION.defaultSpatial).toEqual({ dampingRatio: 0.9, stiffness: 700 })
-    expect(M3_STANDARD_MOTION.defaultEffects).toEqual({ dampingRatio: 1, stiffness: 1600 })
-    expect(SHEET_SPEC.motion.open).toEqual({ stiffness: 700, damping: 2 * 0.9 * Math.sqrt(700), mass: 1 })
-    expect(SHEET_SPEC.motion.settle).toEqual(SHEET_SPEC.motion.open)
-    expect(SHEET_SPEC.motion.scrim).toEqual({ stiffness: 1600, damping: 80, mass: 1 })
-    expect(SHEET_SPEC.motion.reducedOpen).toEqual(SHEET_SPEC.motion.scrim)
-  })
-
-  it('keeps a hide timing that FastEffects (ζ 1, k 3800) has all but finished by', () => {
-    const omega = Math.sqrt(M3_STANDARD_MOTION.fastEffects.stiffness)
-    const t = SHEET_SPEC.motion.hideMs / 1000
-    // A critically damped step from rest: x(t) = (1 + ωt) e^(−ωt).
-    expect((1 + omega * t) * Math.exp(-omega * t)).toBeLessThan(0.002)
-  })
-
-  it('refuses a spring with no stiffness rather than handing Reanimated a NaN', () => {
-    expect(() => springFromComposeParams({ dampingRatio: 1, stiffness: 0 })).toThrow()
   })
 })
 
@@ -274,33 +268,33 @@ describe.each(SCHEMES)('every sheet family in %s mode', (scheme, colors) => {
   })
 })
 
-describe.each(FAMILIES)('%s moves on the app’s springs', (_name, element) => {
-  it('opens on DefaultSpatial and fades its scrim in on DefaultEffects', async () => {
+// The open, its scrim, the hide and reduced motion, exactly as 0.9.139 played
+// them (user's call, 2026-10-14). A spring-driven open, or a scrim on a spring
+// of its own, fails these.
+describe.each(FAMILIES)('%s moves as it did in 0.9.139', (_name, element, _testID, reduced) => {
+  it('opens on the 180 ms timing, with no spring and no scrim motion of its own', async () => {
     await render(element())
-    const toOpen = mocks.springs.filter((call) => call.to === 1).map((call) => call.config)
-    expect(toOpen).toContainEqual(SHEET_SPEC.motion.open)
-    expect(toOpen).toContainEqual(SHEET_SPEC.motion.scrim)
-    expect(mocks.timings.filter((call) => call.to === 1)).toEqual([])
+    expect(mocks.timings).toContainEqual({ to: 1, duration: SHEET_SPEC.motion.openMs })
+    expect(mocks.springs.filter((call) => call.to === 1)).toEqual([])
   })
 
-  it('under reduced motion, fades in place on the effects spring and never takes the travelling one', async () => {
+  it('under reduced motion, does not travel and takes no spring', async () => {
     mocks.reduced = true
     await render(element())
-    const toOpen = mocks.springs.filter((call) => call.to === 1).map((call) => call.config)
-    expect(toOpen).toContainEqual(SHEET_SPEC.motion.reducedOpen)
-    expect(toOpen).not.toContainEqual(SHEET_SPEC.motion.open)
+    expect(mocks.springs.filter((call) => call.to === 1)).toEqual([])
+    const opens = mocks.timings.filter((call) => call.to === 1)
+    expect(opens).toEqual(reduced === 'fade' ? [{ to: 1, duration: SHEET_SPEC.motion.openMs }] : [])
   })
 
-  it('hides on the spec’s timing and fades its scrim out on DefaultEffects', async () => {
+  it('hides on the 150 ms timing, the scrim going with it', async () => {
     const root = await render(element())
     mocks.springs.length = 0
     mocks.timings.length = 0
-    const hidden = element(false)
     await act(async () => {
-      root.update(hidden)
+      root.update(element(false))
     })
     expect(mocks.timings).toContainEqual({ to: 0, duration: SHEET_SPEC.motion.hideMs })
-    expect(mocks.springs).toContainEqual({ to: 0, config: SHEET_SPEC.motion.scrim })
+    expect(mocks.springs).toEqual([])
   })
 })
 
@@ -369,13 +363,6 @@ const SHEETS = [
   'components/DraggableDetailSheet.tsx',
   'session/MobileNativeChatQueueEditor.tsx'
 ]
-/** The motion of the two sheet families: their drags settle on the spec too. */
-const SHEET_MOTION = [
-  'components/mounted-bottom-drawer.tsx',
-  'components/DraggableDetailSheet.tsx',
-  'components/use-bottom-drawer-drag.ts',
-  'components/use-expandable-bottom-drawer.ts'
-]
 /** Rounded top corners that are not a sheet's, each with why. */
 const NOT_SHEETS: Record<string, string> = {
   // The results list INSIDE the smart-source drawer, not a sheet of its own.
@@ -392,23 +379,16 @@ describe('every sheet draws from the one spec (ratchet)', () => {
   const files = sourceFiles(SRC).map((path) => ({ path: relative(SRC, path), text: readFileSync(path, 'utf8') }))
 
   it('lists real files, so an emptied list cannot pass', () => {
-    for (const file of [...SHEETS, ...SHEET_MOTION, ...Object.keys(NOT_SHEETS), ...OVERLAY_NOT_SHEETS]) {
+    for (const file of [...SHEETS, ...Object.keys(NOT_SHEETS), ...OVERLAY_NOT_SHEETS]) {
       expect(files.some((candidate) => candidate.path === file), file).toBe(true)
     }
   })
 
-  it('every sheet reads its corners and colours from the spec', () => {
+  // Corners are checked app-wide below; this is the colours.
+  it('every sheet reads its colours from the spec', () => {
     const off = SHEETS.filter((file) => {
       const names = namesIn(parse(file, files.find((candidate) => candidate.path === file)!.text))
-      return !names.has('SHEET_SPEC') || !names.has('sheetColors')
-    })
-    expect(off).toEqual([])
-  })
-
-  it('the sheet families open, settle and fade on the spec’s springs, not the side drawer’s', () => {
-    const off = SHEET_MOTION.filter((file) => {
-      const names = namesIn(parse(file, files.find((candidate) => candidate.path === file)!.text))
-      return !names.has('SHEET_SPEC') || names.has('DRAWER_SPRING')
+      return !names.has('sheetColors')
     })
     expect(off).toEqual([])
   })

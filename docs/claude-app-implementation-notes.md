@@ -439,13 +439,22 @@ Material 3's `ModalBottomSheet` (`ywi.java:1899`). Verified in the
   "ScrimAlphaAnimation" (`ywi.java:2168`). Default max width 640 dp
   (`ywi.java:2054`).
 
-Code UI: `mobile/src/components/sheet-spec.ts` holds all of it;
+Code UI: `mobile/src/components/sheet-spec.ts` holds the look;
 `mounted-bottom-drawer.tsx`, `DraggableDetailSheet.tsx` and
 `MobileNativeChatQueueEditor.tsx` read it, and `sheet-spec.test.tsx` pins it
 in both schemes and refuses a new sheet that styles its own corners or reaches
-for `bgOverlay`. Under reduced motion the sheet does not travel and fades on
-DefaultEffects. The hide stays a 150 ms timing (FastEffects is within 0.1% of
-rest by then) because the close lifecycle hangs off its completion callback.
+for `bgOverlay`.
+
+**Motion is a deliberate deviation.** The M3 springs above were ported on
+2026-10-14 and rejected by the user the same day ("Dont do this"; "We need it
+smooth same as we have in latest release in git"): a spring from rest showed
+nothing on the open's first frame. Every sheet moves exactly as in 0.9.139
+(237ce4dca): a 180 ms timed open (ease-out cubic on BottomDrawer, Reanimated's
+default on the tool-detail sheet), a 150 ms hide, the `DRAWER_SPRING` settle
+(ratio 1, k 400), and a scrim whose opacity rides the open. Reduced motion is
+also 0.9.139's: BottomDrawer fades on its open timing, the tool-detail sheet
+appears at once. `sheet-motion-0-9-139.test.tsx` and `sheet-spec.test.tsx` pin
+all of it.
 
 ## Not determined
 

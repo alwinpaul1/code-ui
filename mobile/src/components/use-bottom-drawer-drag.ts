@@ -13,7 +13,7 @@ import {
   type SharedValue
 } from 'react-native-reanimated'
 import type { ExpandableSheetSettle } from './bottom-drawer-expandable'
-import { SHEET_SPEC } from './sheet-spec'
+import { DRAWER_SPRING } from './drawer-spring'
 
 const DISMISS_THRESHOLD = 80
 // Why: negative translateY (pulling up) is damped with a rubber-band factor
@@ -41,8 +41,6 @@ export function useBottomDrawerDrag(args: {
   screenHeight: number
   translateY: SharedValue<number>
   progress: SharedValue<number>
-  /** The scrim's own fade (sheet-spec.ts); a drag-dismiss takes it out too. */
-  scrim: SharedValue<number>
   sheet: {
     begin: () => void
     drag: (translationY: number) => void
@@ -52,7 +50,7 @@ export function useBottomDrawerDrag(args: {
   /** Stable for the drawer's life. */
   close: () => void
 }) {
-  const { expandable, hasList, screenHeight, translateY, progress, scrim, close } = args
+  const { expandable, hasList, screenHeight, translateY, progress, close } = args
   const { begin, drag, release, listScrolls } = args.sheet
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const scrollOffsetY = useSharedValue(0)
@@ -102,9 +100,6 @@ export function useBottomDrawerDrag(args: {
         const remaining = screenHeight - translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
-        // The scrim leaves with the sheet: left at 1, a close the parent refuses
-        // brought the sheet back under a scrim that snapped on in one frame.
-        scrim.value = withSpring(0, SHEET_SPEC.motion.scrim)
         // Only a finished exit is a close: one cut short (Back or a tap on the
         // backdrop while it ran) is followed by the exit that cut it.
         progress.value = withTiming(0, { duration }, (finished) => {
@@ -113,7 +108,7 @@ export function useBottomDrawerDrag(args: {
           }
         })
       } else {
-        translateY.value = withSpring(0, SHEET_SPEC.motion.settle)
+        translateY.value = withSpring(0, DRAWER_SPRING)
       }
     }
     const followFinger = (translationY: number) => {
@@ -155,7 +150,7 @@ export function useBottomDrawerDrag(args: {
           contentDragCanDismiss.value = false
           contentDragStartY.value = 0
           if (translateY.value !== 0) {
-            translateY.value = withSpring(0, SHEET_SPEC.motion.settle)
+            translateY.value = withSpring(0, DRAWER_SPRING)
           }
           return
         }
