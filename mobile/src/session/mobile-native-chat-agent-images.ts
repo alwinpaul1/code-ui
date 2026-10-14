@@ -130,6 +130,28 @@ export function agentImagePaths(message: NativeChatMessage): string[] {
   return paths
 }
 
+/** The `toolu_…` call id behind each of `agentImagePaths`, in the same order:
+ *  a Read's own id, and none for a picture SendUserFile sent (its bytes are
+ *  not in any tool result). use-host-image-previews.ts fills a slot the
+ *  desktop left empty from Anthropic's copy of the session by this id. */
+export function agentImageCallIds(message: NativeChatMessage): (string | undefined)[] {
+  const ids: (string | undefined)[] = []
+  for (const block of message.blocks) {
+    if (!isToolCallBlock(block)) {
+      continue
+    }
+    const sent = readSentFiles(block)
+    if (sent) {
+      ids.push(...sentImagePaths(sent).map(() => undefined))
+      continue
+    }
+    if (readImagePath(block)) {
+      ids.push(block.callId)
+    }
+  }
+  return ids
+}
+
 function imageRef(path: string, uri: string | undefined, alt: string): NativeChatImageRefBlock {
   return { type: 'image-ref', path, ...(uri ? { url: uri } : {}), alt }
 }

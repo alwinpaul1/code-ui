@@ -3,6 +3,7 @@ import {
   Copy,
   FileText,
   GitBranch,
+  ImageIcon,
   ListChecks,
   Pencil,
   Plug,
@@ -31,6 +32,8 @@ type Props = {
   onOpenBackgroundTasks: () => void
   onRename: () => void
   onCopySessionId: () => void
+  /** The one-tap check of the Anthropic path for the chat's pictures and model (MobileCcrImagesSelfTest). */
+  onCheckSessionImages: () => void
   onClose: () => void
 }
 
@@ -49,6 +52,7 @@ export function MobileSessionHeaderMoreActionsSheet({
   onOpenBackgroundTasks,
   onRename,
   onCopySessionId,
+  onCheckSessionImages,
   onClose
 }: Props) {
   const { colors } = useTheme()
@@ -126,6 +130,13 @@ export function MobileSessionHeaderMoreActionsSheet({
               }
             ]
           : []),
+        {
+          label: 'Check session images',
+          hint: 'Pictures and model from Anthropic for this chat',
+          icon: ImageIcon,
+          closeBeforePress: true,
+          onPress: onCheckSessionImages
+        },
         ...(has('copy-session-id')
           ? [{ label: 'Copy session ID', icon: Copy, onPress: onCopySessionId }]
           : [])

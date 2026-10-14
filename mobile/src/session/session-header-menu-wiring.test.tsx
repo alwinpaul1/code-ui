@@ -15,6 +15,7 @@ type MenuProps = {
   onOpenBackgroundTasks?: () => void
   onRename?: () => void
   onCopySessionId?: () => void
+  onCheckSessionImages?: () => void
 }
 type InputProps = {
   visible: boolean
@@ -26,7 +27,7 @@ type InputProps = {
   onSubmit: (value: string) => void
   onCancel: () => void
 }
-const captured = vi.hoisted(() => ({ menu: [] as MenuProps[], inputs: [] as InputProps[][] }))
+const captured = vi.hoisted(() => ({ menu: [] as MenuProps[], inputs: [] as InputProps[][], checks: [] as { visible: boolean; onClose: () => void }[] }))
 const clipboard = vi.hoisted(() => ({ writeText: vi.fn(async (_value: string) => {}) }))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
@@ -42,6 +43,12 @@ vi.mock('../platform/haptics', () => ({ triggerSuccess: () => {}, triggerError: 
 vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
   MobileSessionHeaderMoreActionsSheet: (props: MenuProps) => {
     captured.menu.push(props)
+    return null
+  }
+}))
+vi.mock('./MobileCcrImagesSelfTest', () => ({
+  MobileCcrImagesSelfTest: (props: { visible: boolean; onClose: () => void }) => {
+    captured.checks.push(props)
     return null
   }
 }))
@@ -73,6 +80,7 @@ afterEach(() => {
   renderers = []
   captured.menu.length = 0
   captured.inputs.length = 0
+  captured.checks.length = 0
   clipboard.writeText.mockClear()
 })
 
@@ -139,6 +147,15 @@ const menu = () => captured.menu.at(-1)!
 const renameInput = () => captured.inputs.at(-1)!.findLast((props) => props.title === 'Rename session')
 
 describe('the header menu session entries, wired', () => {
+  it('opens the session images check from the menu, and closes it', async () => {
+    await mount(controller(vi.fn()))
+    expect(captured.checks.at(-1)?.visible).toBe(false)
+    await act(async () => menu().onCheckSessionImages?.())
+    expect(captured.checks.at(-1)?.visible).toBe(true)
+    await act(async () => captured.checks.at(-1)!.onClose())
+    expect(captured.checks.at(-1)?.visible).toBe(false)
+  })
+
   it('copies the branch name without its refs/heads/ prefix and says so', async () => {
     const showToast = vi.fn()
     await mount(controller(showToast))

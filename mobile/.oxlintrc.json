@@ -303,7 +303,13 @@
             // draft restore and report made ask-aware (no restore, no Retry);
             // the asks themselves live in agent-image-share-ask.ts and
             // agent-image-share-context.ts.
-            "max": 513,
+            // 2026-10-14: +1 for Anthropic's copy of the session (Remote
+            // Control on): one line calling useCcrSessionModel and
+            // useCcrSessionImages; the pill's pair and the preview map take
+            // their results on existing lines. The API, matching, pictures and
+            // model live in ccr-session-*.ts, use-ccr-session-*.ts and
+            // ccr-image-overlay.ts.
+            "max": 514,
             "skipBlankLines": true,
             "skipComments": true
           }

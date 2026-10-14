@@ -17,6 +17,7 @@ import { isAgentImageShown, resetAgentImagesShownForTests, useAgentImagesShownVe
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentImagePaths } from './mobile-native-chat-agent-images'
+import { applyCcrImages } from './ccr-image-overlay'; import { NO_CCR_IMAGES, type CcrRemoteImages } from './ccr-remote-images'
 import { agentTextNamesPath, agentTextNamesPathCleanly } from './agent-image-share-ask'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 import { hostImageAskState, recordHostImageFailure, recordHostImageMissing, refusedBeforeNamed, resetHostImageRefusals, RETRY_MS } from './host-image-refusals'
@@ -258,8 +259,10 @@ export function useHostImagePreviews(args: {
   terminalHandleRef: { current: string | null }
   messages: readonly NativeChatMessage[]
   localPreviews: Record<string, string[]>
+  /** Anthropic's pictures for what the desktop cannot send (ccr-image-overlay.ts). */
+  remote?: CcrRemoteImages
 }): Record<string, string[]> {
-  const { client, enabled, hostId, worktreeId, nativeChatContext, messages, localPreviews } = args
+  const { client, enabled, hostId, worktreeId, nativeChatContext, messages, localPreviews, remote = NO_CCR_IMAGES } = args
   const { terminalHandleRef } = args
   const tabId = nativeChatContext?.tabId
   const sessionId = nativeChatContext?.sessionId
@@ -358,6 +361,6 @@ export function useHostImagePreviews(args: {
         previews[messageId] = uris
       }
     }
-    return previews
-  }, [agentIds, hostId, loaded, wanted])
+    return applyCcrImages(previews, { remote, messages, agentIds, localPreviews })
+  }, [agentIds, hostId, loaded, localPreviews, messages, remote, wanted])
 }

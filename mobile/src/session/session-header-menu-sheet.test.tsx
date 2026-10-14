@@ -49,6 +49,7 @@ function handlers() {
     onOpenBackgroundTasks: vi.fn(),
     onRename: vi.fn(),
     onCopySessionId: vi.fn(),
+    onCheckSessionImages: vi.fn(),
     onClose: vi.fn()
   }
 }
@@ -89,13 +90,14 @@ describe.each(['light', 'dark'] as const)('the session menu in %s mode', (scheme
       'MCP Servers',
       'Permission Rules',
       'Project Memory',
+      'Check session images',
       'Copy session ID'
     ])
   })
 
   it('leaves out the entries the session cannot offer', () => {
     mount(scheme, { entries: ['rename'] })
-    expect(labels()).toEqual(['Rename', 'Agent History', 'MCP Servers', 'Permission Rules', 'Project Memory'])
+    expect(labels()).toEqual(['Rename', 'Agent History', 'MCP Servers', 'Permission Rules', 'Project Memory', 'Check session images'])
   })
 
   it('hands each entry to its own handler', () => {
@@ -104,6 +106,8 @@ describe.each(['light', 'dark'] as const)('the session menu in %s mode', (scheme
     action('Background tasks').onPress()
     action('Rename').onPress()
     action('Copy session ID').onPress()
+    action('Check session images').onPress()
+    expect(calls.onCheckSessionImages).toHaveBeenCalledTimes(1)
     expect(calls.onCopyBranch).toHaveBeenCalledTimes(1)
     expect(calls.onOpenBackgroundTasks).toHaveBeenCalledTimes(1)
     expect(calls.onRename).toHaveBeenCalledTimes(1)
@@ -115,5 +119,6 @@ describe.each(['light', 'dark'] as const)('the session menu in %s mode', (scheme
     mount(scheme, { entries: ['background-tasks', 'rename'] })
     expect(action('Background tasks').closeBeforePress).toBe(true)
     expect(action('Rename').closeBeforePress).toBe(true)
+    expect(action('Check session images').closeBeforePress).toBe(true)
   })
 })
