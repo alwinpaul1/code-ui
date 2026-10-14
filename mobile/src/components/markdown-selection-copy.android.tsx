@@ -29,6 +29,9 @@ type SelectionCopyViewProps = ViewProps & {
   selectionHighlightColor?: number
   /** A Text inside opened (`active`) or closed its selection's action mode (SelectionCopyRootView.kt). */
   onSelectionChange?: (event: NativeSyntheticEvent<{ active: boolean }>) => void
+  /** False while the chat scrolls: the root makes its Texts not long-clickable, so a hold starts
+   *  no selection, and one already open stays (SelectionCopyRootView.applyHoldSelects). */
+  holdSelects?: boolean
 }
 
 function selectionCopyView(): ComponentType<SelectionCopyViewProps> | null {
@@ -43,6 +46,13 @@ function selectionCopyView(): ComponentType<SelectionCopyViewProps> | null {
 
 const SelectionCopyView = selectionCopyView()
 
+/**
+ * With the root in the tree, a scroll's guard against a stray hold (2026-09-12) is the root's,
+ * and the Texts never have `selectable` switched off: that is what ended a held selection on the
+ * first drag of the transcript (2026-10-14).
+ */
+export const MARKDOWN_ROOT_GUARDS_HOLDS = SelectionCopyView !== null
+
 /** processColor gives an Android colour int for any colour the theme writes; anything it cannot
  *  read is left out, and the native view keeps the platform's colour for it. */
 function colorInt(color: string | null): number | undefined {
@@ -50,7 +60,13 @@ function colorInt(color: string | null): number | undefined {
   return typeof processed === 'number' ? processed : undefined
 }
 
-export function MarkdownSelectionRoot({ children }: { children: ReactNode }): ReactNode {
+export function MarkdownSelectionRoot({
+  children,
+  holdSelects = true
+}: {
+  children: ReactNode
+  holdSelects?: boolean
+}): ReactNode {
   const { colors } = useTheme()
   // In the chat, the document says when it holds a selection, so a scroll does not switch its
   // Texts' `selectable` off and end it (chat-text-selectable-context.ts, 2026-10-14). One owner
@@ -70,6 +86,8 @@ export function MarkdownSelectionRoot({ children }: { children: ReactNode }): Re
     () => () => {
       if (live.current) {
         live.current = false
+        // Rule 9: a selection lost to the row unmounting (FlashList left it behind) says so.
+        console.warn('[selection] dropped: the reply holding it unmounted')
         report?.(owner, false)
       }
     },
@@ -84,6 +102,7 @@ export function MarkdownSelectionRoot({ children }: { children: ReactNode }): Re
       selectionHandleColor={colorInt(selection.handle)}
       selectionHighlightColor={colorInt(selection.highlight)}
       onSelectionChange={onSelectionChange}
+      holdSelects={holdSelects}
     >
       {children}
     </SelectionCopyView>
