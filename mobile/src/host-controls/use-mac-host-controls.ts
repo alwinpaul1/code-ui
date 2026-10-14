@@ -11,11 +11,10 @@ import {
 } from './mac-host-commands'
 import { readMacHostPlatformResult, selectMacHostWorktreeId } from './mac-host-platform'
 import { macHostSheetState, type MacHostSheetOptions } from './mac-host-sheet-actions'
-import { hostStateToDraw } from './mac-host-expected-state'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
-import { connectedAtOf, useKnownHostStates } from './use-known-host-states'
+import { connectedAtOf, useFirstDrawnHostState, useKnownHostStates } from './use-known-host-states'
 import { WINDOWS_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
 import { WINDOWS_HOST_ACTION_PROGRESS, buildWindowsHostCommand, isWindowsHostAction } from './windows-host-commands'
 
@@ -59,7 +58,7 @@ export function useMacHostControls(args: {
   const [probed, setProbed] = useState<{ hostId: string; state: MacHostState } | null>(null)
   // Per host: the last answer, and after an action that finished OK, the state it
   // left behind, which the next open draws at once (use-known-host-states.ts).
-  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, cachedFor } = useKnownHostStates(args.clients)
+  const { recordProbe, recordAction, actionStarted, actionFailed, drawFor } = useKnownHostStates(args.clients)
   const [toast, setToast] = useState<string | null>(null)
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
   // Hosts whose action is running or settling; their menu waits before asking.
@@ -307,7 +306,7 @@ export function useMacHostControls(args: {
         if (outcome.ok && mountedRef.current) {
           // Only an action that finished OK says what the host is now; a failed,
           // unfinished or thrown one forgets what was known (finally, below), and
-          // the next open asks behind "Checking".
+          // the next open draws every row but Unlock while it asks.
           recordAction(hostId, action, platforms[hostId], clientsRef.current.find((c) => c.hostId === hostId)?.client)
         }
         if (!outcome.ok) {
@@ -362,13 +361,10 @@ export function useMacHostControls(args: {
     [platforms, run, showToast]
   )
 
-  const openDrawn = hostStateToDraw(
-    expectedFor(openHostId),
-    probed?.hostId === openHostId ? probed.state : null,
-    // Not while an action of this host runs or settles: "Checking" (a disabled row)
-    // is what keeps a second run from starting over it, and these rows predate it.
-    openHostId && !settlingHostIds.has(openHostId) ? cachedFor(openHostId) : null
-  )
+  const openDrawn = drawFor(openHostId, probed?.hostId === openHostId ? probed.state : null, settlingHostIds)
+  // The rows this open started with stay drawn when the answer narrows them, so
+  // the sheet keeps its height (mac-host-sheet-actions.ts).
+  const openFirstDrawn = useFirstDrawnHostState(openHostId, openDrawn)
 
   const macOptions: MacHostSheetOptions | undefined = openHostId
     ? {
@@ -376,6 +372,7 @@ export function useMacHostControls(args: {
         worktreeId: worktreeIdForHost(openHostId),
         // An expectation already holds the probe's answer laid over it.
         state: macHostSheetState(openHostConnection, openDrawn),
+        keep: openFirstDrawn,
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)

@@ -13,10 +13,14 @@ export type MacHostSheetOptions = {
   hostPlatform: NodeJS.Platform | null
   /** The workspace whose terminal carries the command; null when the Mac has none. */
   worktreeId: string | null
-  /** What the Mac itself reported, 'checking' while the probe is still out, or
+  /** What the Mac itself reported, 'checking' while one of its actions runs, or
    *  'offline' / 'connecting' while the host is not connected (macHostSheetState). */
   state: MacHostSheetState
   onAction: (action: MacHostAction) => void
+  /** The state this open of the menu first drew. Its rows stay drawn, dimmed where
+   *  `state` says they would do nothing, so the sheet keeps its height when the
+   *  host's answer arrives while it is up. The lock row follows `state` alone. */
+  keep?: MacHostState | null
   /** Hold on Unlock Mac. Forgets the password saved on this phone. */
   onForgetUnlockPassword?: () => void
 }
@@ -68,6 +72,12 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
     canUnlock: false,
     hasDisplayRows: false
   }
+}
+
+const ROW_ORDER: MacHostAction[] = ['lock', 'unlock', 'sleep-display', 'wake-display', 'mute', 'unmute']
+
+function isLockRow(action: MacHostAction): boolean {
+  return action === 'lock' || action === 'unlock'
 }
 
 /** Only the rows that can do anything from where the Mac actually is: you cannot lock a
@@ -151,10 +161,14 @@ export function getMacHostSheetActions(
     ]
   }
   const disabled = options.worktreeId === null
-  const rows: ActionSheetAction[] = actionsForState(options.state, copy).map((action) => ({
+  const offered = actionsForState(options.state, copy)
+  // Kept rows slot in where they sit in a full menu, after the one lock row.
+  const kept = options.keep ? actionsForState(options.keep, copy).filter((action) => !isLockRow(action)) : []
+  const drawn = ROW_ORDER.filter((action) => offered.includes(action) || kept.includes(action))
+  const rows: ActionSheetAction[] = drawn.map((action) => ({
     label: copy.labels[action] ?? MAC_HOST_ACTION_LABELS[action],
     icon: MAC_ACTION_ICONS[action],
-    ...(disabled ? { disabled: true, hint: copy.noWorktreeHint } : {}),
+    ...(disabled ? { disabled: true, hint: copy.noWorktreeHint } : !offered.includes(action) ? { disabled: true } : {}),
     ...(action === 'unlock' && options.onForgetUnlockPassword && !disabled
       ? {
           onLongPress: () => {
@@ -166,7 +180,7 @@ export function getMacHostSheetActions(
     // native modal while this sheet's is still up freezes the screen (issue #8791).
     closeBeforePress: true,
     onPress: () => {
-      if (!disabled) {
+      if (!disabled && offered.includes(action)) {
         options.onAction(action)
       }
     }

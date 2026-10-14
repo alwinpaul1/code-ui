@@ -22,7 +22,7 @@ vi.mock('./mac-unlock-password-store', () => ({
 
 import type { MacHostAction } from './mac-host-commands'
 import { EXPECTED_HOST_STATE_FRESH_MS } from './mac-host-expected-state'
-import { MAC_HOST_STATE_PROBE_COMMAND, type MacHostState } from './mac-host-state'
+import { MAC_HOST_STATE_PROBE_COMMAND, UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { MAC_HOST_STATE_PROBE_TIMEOUT_MS, WINDOWS_HOST_STATE_PROBE_TIMEOUT_MS } from './probe-mac-host-state'
 import { getMacHostSheetActions, type MacHostSheetState } from './mac-host-sheet-actions'
 import { WINDOWS_HOST_STATE_PROBE_COMMAND } from './windows-host-state'
@@ -207,7 +207,8 @@ describe('the host menu while it checks the host', () => {
     await elapse(300)
     render({ clients: clientsOf(mac, pc), worktreeInfo: { mac: infoFor('mac'), pc: infoFor('pc') }, openHostId: 'mac' })
     await elapse(300)
-    expect(latest?.macOptions?.state).toBe('checking')
+    // Nothing known yet: every row but Unlock, drawn at once (2026-10-14).
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
 
     mac.answer = LOCKED_MUTED
     await elapse(400)
@@ -396,10 +397,13 @@ describe('the host menu after one of its rows ran', () => {
     await elapse(10)
     // The failure is said, in words that name the host and nothing it was sent.
     expect(latest?.toast).toBe('The Mac did not answer.')
+    states.length = 0
     render({ ...props, openHostId: 'mac' })
-    const waited = await checkingFor(20_000)
-    expect(waited).not.toBeNull()
-    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS)
+    // The throw may have half-run: nothing known is trusted, so every row but
+    // Unlock, at once, until the Mac says again.
+    expect(states).not.toContain('checking')
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
+    await elapse(600)
     expect(latest?.macOptions?.state).toEqual(UNLOCKED_AWAKE_STATE)
   })
 
@@ -419,10 +423,11 @@ describe('the host menu after one of its rows ran', () => {
     render({ ...props, openHostId: null })
     act(() => onAction?.('unmute'))
     await elapse(500)
-    // The other Mac is slow to answer; its sheet must say it is still checking.
+    // The other Mac is slow to answer; its sheet must draw nothing it learnt from
+    // the first one, only the rows of a host that has not said.
     render({ ...props, openHostId: 'other' })
     await elapse(5000)
-    expect(latest?.macOptions?.state).toBe('checking')
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
     other.answer = UNLOCKED_AWAKE
     await elapse(400)
     expect(latest?.macOptions?.state).toEqual(UNLOCKED_AWAKE_STATE)
@@ -474,8 +479,12 @@ const HOSTS = [
 type FakeHost = ReturnType<typeof fakeHost>
 type MenuProps = Omit<Props, 'openHostId'>
 
+/** The rows a tap acts on. Rows kept only so the sheet holds its height are dimmed
+ *  (disabled) and left out. */
 function rows(): string[] {
-  return getMacHostSheetActions(latest?.macOptions).map((row) => row.label)
+  return getMacHostSheetActions(latest?.macOptions)
+    .filter((row) => !row.disabled)
+    .map((row) => row.label)
 }
 
 function propsFor(host: FakeHost): MenuProps {
@@ -568,7 +577,7 @@ describe('the host menu reopened after one of its rows finished', () => {
     expect(rows()).not.toContain('Mute PC')
   })
 
-  it('says it is checking again when reopened after a row that did not finish', async () => {
+  it('offers every row but Unlock again when reopened after a row that did not finish', async () => {
     const host = fakeHost('host', 'win32')
     const props = propsFor(host)
     host.answer = HOSTS[1].marker(false, 'on')
@@ -577,7 +586,7 @@ describe('the host menu reopened after one of its rows finished', () => {
     await elapse(16_000)
     expect(latest?.toast).toBe('The PC did not finish that. Check the desktop.')
     reopen(host, props)
-    expect(latest?.macOptions?.state).toBe('checking')
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
   })
 
   // Review, 2026-10-10: the rows the last action left behind stayed drawn, and
@@ -599,7 +608,7 @@ describe('the host menu reopened after one of its rows finished', () => {
     expect(latest?.macOptions?.state).toBe('checking')
   })
 
-  it('says it is checking after a row failed, even when the one before it finished', async () => {
+  it('forgets what it expected after a row failed, even when the one before it finished', async () => {
     const host = fakeHost('host', 'darwin')
     const props = propsFor(host)
     host.answer = UNLOCKED_AWAKE
@@ -612,7 +621,7 @@ describe('the host menu reopened after one of its rows finished', () => {
     await elapse(11_000)
     expect(latest?.toast).toBe('The Mac did not finish that. Check the desktop.')
     reopen(host, props)
-    expect(latest?.macOptions?.state).toBe('checking')
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
   })
 
   // Until 2026-10-14 this said "Checking" again past the two minutes; now the rows
@@ -815,14 +824,14 @@ describe('the host menu opened a second time on the same connection', () => {
     })
   }
 
-  it('asks behind "Checking" again once the host reconnected', async () => {
+  it('draws nothing an earlier connection said once the host reconnected', async () => {
     const host = fakeHost('host', 'darwin')
     const props = propsFor(host)
     host.answer = UNLOCKED_AWAKE
     await openOnce(host, props)
     host.connectedAt = 2
     reopen(host, props)
-    expect(latest?.macOptions?.state).toBe('checking')
+    expect(latest?.macOptions?.state).toEqual(UNKNOWN_MAC_HOST_STATE)
   })
 
   // Unlock types the password into whatever is in front on the Mac, so it follows
@@ -843,5 +852,110 @@ describe('the host menu opened a second time on the same connection', () => {
     await elapse(400)
     expect(rows()).toContain('Unlock Mac')
     expect(rows()).not.toContain('Lock Mac')
+  })
+})
+
+// 2026-10-14, the user, after 0.9.139: the first open of a host's menu on each
+// connection still hid the Mac or PC rows behind "Checking…" until the host answered,
+// and the sheet changed height when it did. Nothing about these rows needs the
+// answer first: each is harmless on a host already in that state, except Unlock,
+// which is never offered before the Mac says it is locked.
+describe('the host menu opened for the first time on a connection', () => {
+  const FIRST_ROWS = {
+    darwin: ['Lock Mac', 'Sleep display', 'Wake display', 'Mute Mac', 'Unmute Mac'],
+    win32: ['Lock PC', 'Mute PC', 'Unmute PC']
+  } as const
+
+  function rowStates(): string[] {
+    return getMacHostSheetActions(latest?.macOptions).map((row) => `${row.label}${row.disabled ? ' (off)' : ''}`)
+  }
+
+  async function openFirst(host: FakeHost, props: MenuProps) {
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    states.length = 0
+    render({ ...props, openHostId: host.hostId })
+  }
+
+  for (const { platform, noun, marker } of HOSTS) {
+    it(`shows the ${noun} actions at once, enabled, before the ${noun} answers`, async () => {
+      const host = fakeHost('host', platform)
+      const props = propsFor(host)
+      await openFirst(host, props)
+      await elapse(100)
+      expect(states).not.toContain('checking')
+      expect(rowStates()).toEqual(FIRST_ROWS[platform])
+    })
+
+    it(`keeps the ${noun} sheet the same height when the first answer arrives`, async () => {
+      const host = fakeHost('host', platform)
+      const props = propsFor(host)
+      await openFirst(host, props)
+      host.answer = marker(true, 'on')
+      await elapse(400)
+      // Same rows, same order; the ones that would do nothing now are dimmed.
+      expect(rowStates()).toEqual(
+        platform === 'win32'
+          ? ['Lock PC', 'Mute PC (off)', 'Unmute PC']
+          : ['Lock Mac', 'Sleep display', 'Wake display (off)', 'Mute Mac (off)', 'Unmute Mac']
+      )
+      expect(states).not.toContain('checking')
+    })
+
+    it(`keeps offering every ${noun} row when the first check never answers`, async () => {
+      const host = fakeHost('host', platform)
+      const props = propsFor(host)
+      await openFirst(host, props)
+      await elapse(20_000)
+      expect(host.probes()).toBe(1)
+      expect(states).not.toContain('checking')
+      expect(rowStates()).toEqual(FIRST_ROWS[platform])
+    })
+
+    it(`keeps offering every ${noun} row when the host refuses the first check`, async () => {
+      const host = fakeHost('host', platform)
+      host.liveWorktree = 'elsewhere'
+      const props = propsFor(host)
+      await openFirst(host, props)
+      await elapse(2000)
+      expect(states).not.toContain('checking')
+      expect(rowStates()).toEqual(FIRST_ROWS[platform])
+    })
+
+    it(`says why the ${noun} rows are off, with no spinner, when the host has no workspace`, async () => {
+      const host = fakeHost('host', platform)
+      const props = { clients: clientsOf(host), worktreeInfo: {} }
+      await openFirst(host, props)
+      await elapse(100)
+      expect(states).not.toContain('checking')
+      const sheet = getMacHostSheetActions(latest?.macOptions)
+      expect(sheet.map((row) => row.label)).toEqual(FIRST_ROWS[platform])
+      expect(sheet.every((row) => row.disabled && !row.loading)).toBe(true)
+      expect(host.created).toEqual([])
+    })
+  }
+
+  it('swaps Lock for Unlock in place, never before the Mac says it is locked', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    await openFirst(host, props)
+    await elapse(100)
+    expect(rowStates()[0]).toBe('Lock Mac')
+    expect(rowStates()).not.toContain('Unlock Mac')
+    host.answer = LOCKED_MUTED
+    await elapse(400)
+    expect(rowStates()).toEqual(['Unlock Mac', 'Sleep display (off)', 'Wake display', 'Mute Mac (off)', 'Unmute Mac'])
+  })
+
+  it('draws the narrower rows the host named on the next open', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    await openFirst(host, props)
+    host.answer = UNLOCKED_AWAKE
+    await elapse(400)
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    reopen(host, props)
+    expect(rowStates()).toEqual(['Lock Mac', 'Sleep display', 'Mute Mac'])
   })
 })

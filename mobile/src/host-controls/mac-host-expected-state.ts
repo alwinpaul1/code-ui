@@ -45,7 +45,7 @@ export function isKnownHostStateCurrent(
   return known !== undefined && known.connectedAt === connectedAt && now - known.at < EXPECTED_HOST_STATE_FRESH_MS
 }
 
-/** The state the menu may draw at once for a host, or null to say "Checking". */
+/** The state an action left behind, drawn at once, or null when there is none to draw. */
 export function drawableExpectedHostState(
   known: KnownHostState | undefined,
   connectedAt: number | null,
@@ -69,7 +69,7 @@ export function expectedHostStateForRender(
 /**
  * What the menu draws at once, before this open's probe has answered, from what an
  * earlier probe or action on the same connection learnt; null when nothing is known
- * on this connection, and the menu says "Checking".
+ * on this connection, and the menu draws the rows of a host that has not said.
  *
  * Why: every open threw the last answer away and hid the rows behind one disabled
  * "Checking the Mac…" row, at a different sheet height, for as long as the host took
@@ -96,21 +96,39 @@ export function isUnknownHostState(state: MacHostState): boolean {
   return state.lock === 'unknown' && state.display === 'unknown' && state.mute === 'unknown'
 }
 
-/** What the open menu draws: an action's live expectation (already holding this
- *  open's probe), else this open's answer, unless it learnt nothing (a timeout, a
- *  refused tab) while something is known, else what is known, else "Checking". */
+/**
+ * What the open menu draws: an action's live expectation (already holding this
+ * open's probe), else this open's answer, unless it learnt nothing (a timeout, a
+ * refused tab) while something is known, else what is known, else the rows of a
+ * host that would not say: every row but Unlock.
+ *
+ * Why not "Checking" when nothing is known: the first open on every connection hid
+ * the rows behind it until the host had opened a shell and answered, and the sheet
+ * changed height when it did (the user, 2026-10-14). Every row an unknown state
+ * offers does nothing harmful to a host already in that state (Lock on a locked Mac,
+ * Wake on a display that is on); Unlock, the one that would, needs the Mac to say it
+ * is locked first.
+ *
+ * "Checking" (a disabled row) stays only while an action of the host runs or
+ * settles (`settling`): it is what keeps a second run from starting over the first,
+ * and what was known before it no longer describes the host.
+ */
 export function hostStateToDraw(
   expected: MacHostState | null,
   probed: MacHostState | null,
-  cached: MacHostState | null
+  cached: MacHostState | null,
+  settling: boolean
 ): MacHostState | 'checking' {
   if (expected) {
     return expected
   }
+  if (settling) {
+    return probed ?? 'checking'
+  }
   if (probed && !(cached && isUnknownHostState(probed))) {
     return probed
   }
-  return cached ?? probed ?? 'checking'
+  return cached ?? probed ?? UNKNOWN_MAC_HOST_STATE
 }
 
 /** Stops drawing every expectation whose window has run out; the same object when
