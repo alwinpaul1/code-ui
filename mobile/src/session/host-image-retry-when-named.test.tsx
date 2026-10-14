@@ -3,7 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
-import { loadHostImage, resetHostImagePreviewCacheForTests, useHostImagePreviews } from './use-host-image-previews'
+import { collectHostImagePaths, loadHostImage, resetHostImagePreviewCacheForTests, useHostImagePreviews } from './use-host-image-previews'
+import { showAgentImage } from './agent-image-visibility'
 import { RETRY_MS } from './host-image-refusals'
 import { SEND_CALL_ID, SEND_FILE_PATH, SEND_FILE_TURN } from './fixtures/claude-send-user-file-2.1.296'
 
@@ -53,6 +54,11 @@ describe('a picture the desktop shares once the agent names it', () => {
   function mount(client: RpcClient, messages: NativeChatMessage[], out: { previews: Record<string, string[]> }) {
     const terminalHandleRef = { current: 'term' }
     const local = {}
+    // No view here: the pictures' slots are taken as on screen, which is
+    // when the hook asks for them (agent-image-visibility.ts).
+    for (const path of Object.values(collectHostImagePaths(messages, undefined)).flat()) {
+      showAgentImage(path)
+    }
     function Probe({ rows }: { rows: NativeChatMessage[] }) {
       out.previews = useHostImagePreviews({
         client,

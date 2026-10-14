@@ -142,6 +142,7 @@ describe('an image the agent read', () => {
     ])
     const root = render(step)
     expect(imageButtons(root)).toHaveLength(0)
-    expect(root.findAll((node) => node.props.accessibilityLabel === 'Image on Desktop: img39_1.jpeg. Preview unavailable.')).not.toHaveLength(0)
+    // While the desktop has not answered, the slot is the tile the picture will fill.
+    expect(root.findAll((node) => node.props.accessibilityLabel === 'Loading image: img39_1.jpeg')).not.toHaveLength(0)
   })
 })

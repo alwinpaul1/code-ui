@@ -210,7 +210,8 @@ describe('asking the agent to share a picture the desktop refused', () => {
   it('offers no ask while the desktop has not answered yet', async () => {
     const never = { sendRequest: vi.fn(() => new Promise(() => undefined)) } as unknown as RpcClient
     const chat = await mount({ client: never, send: vi.fn(async (): Promise<MobileNativeChatSendOutcome> => 'accepted') })
-    open(chat.root())
+    // Waiting, the slot is the tile the picture will fill; a tap on it says so.
+    act(() => pressables(chat.root()).find((node) => node.props.accessibilityLabel === 'Loading image: chips.png')!.props.onPress())
     expect(lines(chat.root()).some((line) => line.includes('Waiting for the desktop'))).toBe(true)
     expect(askButtons(chat.root())).toEqual([])
   })

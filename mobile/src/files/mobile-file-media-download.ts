@@ -9,7 +9,9 @@ import { isMobileScopeRefusal } from '../transport/mobile-scope-refusal'
 export const MOBILE_MEDIA_CHUNK_BYTES = 384 * 1024
 export const MOBILE_MEDIA_MAX_BYTES = 256 * 1024 * 1024
 
-const statRead = bindDeferredRpcOperation(
+/** `files.stat` of a worktree file: its size, before its bytes are asked for.
+ *  Also used by the chat's agent pictures (use-host-image-previews.ts). */
+export const statRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'files.media-preview-stat',
     method: 'files.stat',

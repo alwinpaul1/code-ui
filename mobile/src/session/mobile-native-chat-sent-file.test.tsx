@@ -188,10 +188,11 @@ describe('a file the agent sent with SendUserFile', () => {
     const root = render(step)
     expect(imageButtons(root)).toHaveLength(0)
     const placeholders = root.findAll(
-      (node) => typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('Image on Desktop: where.png')
+      (node) => typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith('Loading image: where.png')
     )
     // One for the Read's picture, one for the sent one; the caption still shows.
-    // Its chip is a button now: a tap says why there is no picture
+    // While the desktop has not answered, each is the tile its picture will
+    // fill, and a button: a tap says why there is no picture yet
     // (agent-image-placeholders.test.tsx).
     expect(placeholders.filter((node) => (node.type as unknown) === 'Pressable')).toHaveLength(2)
     expect(json()).toContain(SEND_FILE_CAPTION)
@@ -201,14 +202,13 @@ describe('a file the agent sent with SendUserFile', () => {
   it('draws the placeholder in the dark theme with the dark surface, not the light one', () => {
     scheme = 'dark'
     const root = render(stepOf(SEND_FILE_TURN, ASKED))
-    const [chip] = root.findAll(
-      (node) => (node.type as unknown) === 'Pressable' && String(node.props.accessibilityLabel ?? '').startsWith('Image on Desktop: where.png')
+    const [tile] = root.findAll(
+      (node) => node.props.testID === 'agent-image-loading-tile' && String(node.props.accessibilityLabel ?? '').startsWith('Loading image: where.png')
     )
-    const chipStyle: unknown = chip!.props.style
-    const resting = typeof chipStyle === 'function' ? chipStyle({ pressed: false }) : chipStyle
-    const style = Object.assign({}, ...[resting].flat(3).filter(Boolean)) as Record<string, unknown>
-    expect(style.backgroundColor).toBe(colorsForScheme('dark').bgRaised)
-    expect(style.backgroundColor).not.toBe(colorsForScheme('light').bgRaised)
+    const style = Object.assign({}, ...[tile!.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
+    expect(style.backgroundColor).toBe(colorsForScheme('dark').chatBg)
+    expect(style.borderColor).toBe(colorsForScheme('dark').border)
+    expect(style.backgroundColor).not.toBe(colorsForScheme('light').chatBg)
   })
 
   it('sends nothing to draw for an empty file list: the caption alone, no picture, no crash', () => {

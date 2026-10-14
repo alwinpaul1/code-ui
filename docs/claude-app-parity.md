@@ -282,7 +282,14 @@ Nothing here is built.
   Read result holds base64. Since then the phone draws the slot anyway: the
   picture when the host sends it, else a placeholder naming the file. Only
   where the host was asked: on the structured lane and while disconnected the
-  fetch is off, and nothing is drawn.
+  fetch is off, and nothing is drawn. Rechecked on Orca 1.4.224 (2026-10-14):
+  Orca's own PostToolUse hook keeps only a tool response's text, and
+  `agentSession.readVisual` / `agentSessionAttachment.read` read only Orca's
+  own folders, so the grant path is still the only one. Since 2026-10-14 a
+  picture is asked for only while its slot is mounted; while the desktop has
+  not answered the slot is a 96 dp loading tile (several in one sideways
+  row), it becomes the chip once refused or failed, and a worktree file over
+  8 MiB (`files.stat` first) is never read.
 - **Files the agent sent (SendUserFile, 2026-10-11).** The Claude app draws the
   caption as a line of text and each sent picture as a 96 dp square tile,
   outside the tool group, and does not count the call as "used a tool". The

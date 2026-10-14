@@ -56,10 +56,11 @@ export function recordHostImageFailure(
 }
 
 /** Why the last ask for a picture brought nothing: the desktop answered and
- *  would not share it, or the ask failed (the connection, a file it could not
- *  read, a file that is not an image). No entry: it came, or no answer is in
- *  yet. */
-export type HostImageMissing = 'not-shared' | 'failed'
+ *  would not share it, the ask failed (the connection, a file it could not
+ *  read, a file that is not an image), or the file is over the size the phone
+ *  takes for a chat picture and was never read. No entry: it came, or no
+ *  answer is in yet. */
+export type HostImageMissing = 'not-shared' | 'failed' | 'too-large'
 const missingByPath = new Map<string, HostImageMissing>()
 const missingListeners = new Set<() => void>()
 
