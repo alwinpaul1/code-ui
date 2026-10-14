@@ -12,6 +12,7 @@ import {
   startLogin,
   type StoredAccount
 } from '../dictation/anthropic-auth-store'
+import { isAccountUsable } from '../dictation/anthropic-account-state'
 import { voiceSettingsStyles } from './voice-settings-styles'
 
 /** What the row under "Add another account" says. claude.ai signs in whichever account the phone's
@@ -29,6 +30,8 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useThemedStyles(voiceSettingsStyles)
   const [accounts, setAccounts] = useState<StoredAccount[] | null>(null)
+  /** When the list was read: whether each account is still signed in is judged at that moment. */
+  const [readAt, setReadAt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [authCode, setAuthCode] = useState('')
@@ -36,7 +39,9 @@ export function AnthropicAccountsSection(): React.JSX.Element {
 
   const reload = useCallback(async () => {
     try {
-      setAccounts(await listAccounts())
+      const listed = await listAccounts()
+      setReadAt(Date.now())
+      setAccounts(listed)
     } catch (err) {
       // An unreadable store reads as signed out, and says why instead of leaving a bare button.
       setAccounts([])
@@ -101,6 +106,10 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   )
 
   const signedIn = accounts !== null && accounts.length > 0
+  // Voice uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
+  // so instead of "Signed in", as the single-account screen did (isLoggedIn) before 2026-10-14.
+  const now = readAt
+  const voiceAccountId = accounts?.find((account) => isAccountUsable(account, now))?.id ?? null
 
   return (
     <>
@@ -116,7 +125,11 @@ export function AnthropicAccountsSection(): React.JSX.Element {
               <View style={styles.rowContent}>
                 <Text style={styles.rowLabel}>{accountLabel(account, index)}</Text>
                 <Text style={styles.rowSublabel}>
-                  {index === 0 ? 'Signed in. Voice transcription uses this account.' : 'Signed in.'}
+                  {!isAccountUsable(account, now)
+                    ? 'Signed out. Sign in to this account again.'
+                    : account.id === voiceAccountId
+                      ? 'Signed in. Voice transcription uses this account.'
+                      : 'Signed in.'}
                 </Text>
               </View>
               <Button

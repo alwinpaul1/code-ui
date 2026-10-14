@@ -7,7 +7,7 @@
 import { randomBytes } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const fake = vi.hoisted(() => ({ store: new Map<string, string>(), writes: 0, failWrites: false }))
+const fake = vi.hoisted(() => ({ store: new Map<string, string>(), writes: 0, failWrites: false, failNextReadOf: null as string | null }))
 
 vi.mock('expo-secure-store', () => ({
   setItemAsync: async (key: string, value: string) => {
@@ -17,7 +17,13 @@ vi.mock('expo-secure-store', () => ({
     fake.writes += 1
     fake.store.set(key, value)
   },
-  getItemAsync: async (key: string) => fake.store.get(key) ?? null,
+  getItemAsync: async (key: string) => {
+    if (fake.failNextReadOf === key) {
+      fake.failNextReadOf = null
+      throw new Error('keystore busy')
+    }
+    return fake.store.get(key) ?? null
+  },
   deleteItemAsync: async (key: string) => {
     fake.store.delete(key)
   }
@@ -69,6 +75,8 @@ beforeEach(() => {
   fake.store.clear()
   fake.writes = 0
   fake.failWrites = false
+  fake.failNextReadOf = null
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
@@ -264,5 +272,159 @@ describe('refreshing each account', () => {
     vi.stubGlobal('fetch', fetchSpy)
     expect((await fetchAccountCredentials())[0]!.accessToken).toBe('a1')
     expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('reading one account for the model pill refreshes that account and no other', async () => {
+    await twoAccountsDue()
+    refreshEndpoint({})
+    const read = await fetchAccountCredentials(WORK_ACCOUNT)
+    expect(read.map((account) => [account.id, account.accessToken])).toEqual([[WORK_ACCOUNT, 'w-new']])
+    expect((await listAccounts())[0]!.credential.accessToken).toBe('a-old')
+  })
+
+  it('spends a refresh token once when dictation and the sessions path refresh the same account at once', async () => {
+    await twoAccountsDue()
+    const spent: string[] = []
+    vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
+      const refresh = JSON.parse(init.body).refresh_token as string
+      spent.push(refresh)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      return { ok: true, status: 200, json: async () => ({ access_token: refresh.replace('-old-refresh', '-new'), refresh_token: `${refresh}-rotated`, expires_in: 3600 }) }
+    })
+
+    const [dictation, sessions] = await Promise.all([fetchAnthropicCredential(), fetchAccountCredentials()])
+
+    expect(spent.filter((token) => token === 'a-old-refresh')).toHaveLength(1)
+    expect(dictation?.accessToken).toBe('a-new')
+    expect(sessions[0]!.accessToken).toBe('a-new')
+  })
+})
+
+/** Two identified accounts, stored as a sign-in writes them. */
+async function twoAccountsStored(): Promise<string> {
+  await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+  await signIn('w1', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+  return fake.store.get('anthropic-accounts-v1')!
+}
+
+describe('a saved list that cannot be read is never written over (review of 2026-10-14)', () => {
+  it('keeps both accounts when one keystore read fails just before a 401 forgets an organization', async () => {
+    const before = await twoAccountsStored()
+    fake.failNextReadOf = 'anthropic-accounts-v1'
+
+    await forgetAccountOrganization(WORK_ACCOUNT).catch(() => undefined)
+
+    expect(fake.store.get('anthropic-accounts-v1')).toBe(before)
+    expect((await listAccounts()).map((account) => account.id)).toEqual([DEFAULT_ACCOUNT, WORK_ACCOUNT])
+  })
+
+  it('refuses the write and says why, instead of resolving as if it had stored it', async () => {
+    await twoAccountsStored()
+    fake.failNextReadOf = 'anthropic-accounts-v1'
+    await expect(removeAccount(WORK_ACCOUNT)).rejects.toThrow('keystore busy')
+  })
+
+  it('keeps both accounts when a sign-in lands on a read that failed', async () => {
+    const before = await twoAccountsStored()
+    fake.store.set('anthropic-dictation-oauth-state', 'st')
+    vi.stubGlobal('fetch', async (url: string) =>
+      url.endsWith('/api/oauth/profile')
+        ? { ok: false, status: 500, json: async () => ({}), text: async () => '' }
+        : { ok: true, status: 200, json: async () => ({ access_token: 'third', refresh_token: 'third-refresh', expires_in: 3600 }) }
+    )
+    fake.failNextReadOf = 'anthropic-accounts-v1'
+    await exchangeCode('code#st', 'verifier').catch(() => undefined)
+    expect(fake.store.get('anthropic-accounts-v1')).toBe(before)
+  })
+
+  it.each([
+    ['cut-off JSON', '{"accounts":[{"id":"'],
+    ['a list that is not one', '{"accounts":"nope"}']
+  ])('does not write over a stored list that reads as %s', async (_name, corrupt) => {
+    fake.store.set('anthropic-accounts-v1', corrupt)
+    await forgetAccountOrganization(WORK_ACCOUNT).catch(() => undefined)
+    await removeAccount(DEFAULT_ACCOUNT).catch(() => undefined)
+    await signIn('w2', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' }).catch(() => undefined)
+    expect(fake.store.get('anthropic-accounts-v1')).toBe(corrupt)
+    await expect(listAccounts()).rejects.toThrow('could not be read')
+  })
+})
+
+describe('one account signed in twice, the first time unidentified (review of 2026-10-14)', () => {
+  it('keeps the newer sign-in’s credential when the unidentified one turns out to be an account already listed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000_000)
+    await signIn('old-tok', 'unreadable')
+    const pendingId = (await listAccounts())[0]!.id
+    vi.setSystemTime(2_000_000)
+    await signIn('new-tok', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+
+    await rememberAccountProfile(pendingId, { accountUuid: DEFAULT_ACCOUNT, organizationUuid: DEFAULT_ORG, organizationName: 'Personal' })
+
+    const accounts = await listAccounts()
+    expect(accounts.map((account) => account.id)).toEqual([DEFAULT_ACCOUNT])
+    expect(accounts[0]!.credential.accessToken).toBe('new-tok')
+  })
+})
+
+describe('an account whose sign-in died (review of 2026-10-14)', () => {
+  it('a sign-in again replaces a migrated primary whose refresh token was refused, and dictation uses the new one', async () => {
+    fake.store.set('anthropic-dictation-oauth-v2', JSON.stringify({ accessToken: 'dead', refreshToken: 'dead-refresh', expiresAt: 0 }))
+    await listAccounts()
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 400, json: async () => ({ error: 'invalid_grant' }) }))
+    expect(await fetchAnthropicCredential()).toBeNull()
+
+    await signIn('fresh', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+
+    expect((await readCredential())?.accessToken).toBe('fresh')
+    expect((await listAccounts()).map((account) => account.id)).toEqual([DEFAULT_ACCOUNT])
+  })
+
+  it('dictation skips an expired primary that has no refresh token, and uses the next account', async () => {
+    fake.store.set('anthropic-dictation-oauth-v2', JSON.stringify({ accessToken: 'dead', refreshToken: '', expiresAt: 0 }))
+    await listAccounts()
+    expect(await readCredential()).toBeNull()
+    expect(await isLoggedIn()).toBe(false)
+
+    await signIn('fresh', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+
+    expect((await readCredential())?.accessToken).toBe('fresh')
+    expect(await isLoggedIn()).toBe(true)
+  })
+
+  it('does not count a refresh that failed on the network as a dead sign-in', async () => {
+    fake.store.set('anthropic-dictation-oauth-v2', JSON.stringify({ accessToken: 'alive', refreshToken: 'alive-refresh', expiresAt: 0 }))
+    await listAccounts()
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Network request failed')
+    })
+    expect(await fetchAnthropicCredential()).toBeNull()
+    expect((await readCredential())?.accessToken).toBe('alive')
+  })
+})
+
+describe('a sign-in whose profile read hangs (review of 2026-10-14)', () => {
+  it('finishes the sign-in, unidentified, instead of leaving the spinner busy forever', async () => {
+    vi.useFakeTimers()
+    fake.store.set('anthropic-dictation-oauth-state', 'st')
+    vi.stubGlobal('fetch', (url: string) =>
+      url.endsWith('/api/oauth/profile')
+        ? new Promise(() => undefined)
+        : Promise.resolve({ ok: true, status: 200, json: async () => ({ access_token: 'slow', refresh_token: 'slow-refresh', expires_in: 3600 }) })
+    )
+    let settled = false
+    const done = exchangeCode('code#st', 'verifier').then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(settled).toBe(true)
+    await done
+    vi.useRealTimers()
+    const accounts = await listAccounts()
+    expect(accounts).toHaveLength(1)
+    expect(accounts[0]!.id).toMatch(/^pending-/)
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'))
   })
 })

@@ -39,8 +39,9 @@ export type CcrAccountEntry = {
 }
 
 export type CcrAccountsSource = {
-  /** Every signed-in account, tokens refreshed account by account; empty when nobody is signed in. */
-  list: () => Promise<CcrAccountEntry[]>
+  /** Every signed-in account, tokens refreshed account by account; empty when nobody is signed in.
+   *  With `only`, just that account (or nothing), and only its token is refreshed. */
+  list: (only?: string) => Promise<CcrAccountEntry[]>
   /** Keeps the profile read for an account. Resolves to the account's id afterwards (a uuid). */
   rememberProfile: (id: string, profile: CcrProfile) => Promise<string>
   /** Drops the account's kept organization, so the profile is asked again. */

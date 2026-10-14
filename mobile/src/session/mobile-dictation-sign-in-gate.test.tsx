@@ -103,8 +103,8 @@ vi.mock('./use-mobile-send-completion-generation', () => ({
 // The Anthropic engine's token store reads the keychain (expo-secure-store), whose native module
 // does not exist under vitest. No phone sign-in is the state these routing tests run in.
 vi.mock('../dictation/anthropic-auth-store', () => ({
-  readCredential: async () =>
-    seen.signedIn ? { accessToken: 'phone-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 } : null,
+  readPrimaryAccount: async () =>
+    seen.signedIn ? { credential: { accessToken: 'phone-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 }, refreshRefused: false } : null,
   refreshAccessToken: async () => null
 }))
 

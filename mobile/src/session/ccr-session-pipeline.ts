@@ -141,6 +141,10 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   } else {
     // sessions: every account's list, so a work account's session is found beside the default's
     const candidates: { row: CcrSessionRow; auth: CcrAuth }[] = []
+    /** A session listed by two accounts (two sign-ins in one organization) is one candidate, read
+     *  with the first account that listed it; counted twice it was "2 sessions share messages" with
+     *  the same id twice, and never matched. */
+    const seen = new Set<string>()
     const listFailures: string[] = []
     let listed = 0
     let malformed = 0
@@ -159,13 +163,15 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
           listCursor = result.nextCursor
         }
         listed += rows.length
-        candidates.push(
-          ...rows
-            .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
-            .sort((a, b) => b.activeAt - a.activeAt)
-            .slice(0, CCR_MAX_CANDIDATES)
-            .map((row) => ({ row, auth: account }))
-        )
+        for (const row of rows
+          .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
+          .sort((a, b) => b.activeAt - a.activeAt)
+          .slice(0, CCR_MAX_CANDIDATES)) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id)
+            candidates.push({ row, auth: account })
+          }
+        }
       } catch (error) {
         if (error instanceof CcrApiError && (error.reason === 'unauthorized' || error.reason === 'forbidden')) {
           // The org may be stale for this sign-in: ask the profile again next time.
@@ -192,13 +198,15 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     if (tabIds.size === 0) {
       return fail('match', 'the tab has no transcript messages to compare yet')
     }
+    /** Paging per account and session: each account reads with its own cursor. */
+    const pageKey = (candidate: { row: CcrSessionRow; auth: CcrAuth }) => `${candidate.auth.accountId}\0${candidate.row.id}`
     const pages = new Map<string, { events: CcrEvent[]; uuids: Set<string>; cursor: string | null }>()
-    /** Candidates whose events could not be read: left out, so the other accounts still answer. */
-    const unreadable = new Map<string, string>()
     for (let round = 0; round < CCR_MATCH_PAGES && !sessionId; round += 1) {
+      /** Candidates whose events could not be read this round, with the account's words for why. */
+      const unreadable: string[] = []
       for (const candidate of candidates) {
-        const held = pages.get(candidate.row.id)
-        if (unreadable.has(candidate.row.id) || (round > 0 && !held?.cursor)) {
+        const held = pages.get(pageKey(candidate))
+        if (round > 0 && !held?.cursor) {
           continue
         }
         try {
@@ -210,19 +218,25 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
               uuids.add(uuid)
             }
           }
-          pages.set(candidate.row.id, { events: [...(held?.events ?? []), ...page.events], uuids, cursor: page.nextCursor })
+          pages.set(pageKey(candidate), { events: [...(held?.events ?? []), ...page.events], uuids, cursor: page.nextCursor })
         } catch (error) {
-          const detail = `${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(error)}`
-          unreadable.set(candidate.row.id, detail)
+          unreadable.push(`${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(error)}`)
         }
       }
-      const readable = candidates.filter((candidate) => !unreadable.has(candidate.row.id))
-      if (readable.length === 0) {
-        const details = [...unreadable.values()]
-        reportFailures(details.slice(0, -1).map((detail) => ({ stage: 'match', detail })))
-        return fail('match', details[details.length - 1]!)
+      if (unreadable.length > 0 && candidates.length === 1) {
+        return fail('match', unreadable[0]!)
       }
-      const match = matchCcrSession(tabIds, readable.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(candidate.row.id)?.uuids ?? new Set() })))
+      if (unreadable.length > 0) {
+        // A session whose events could not be read may be the one that shares the tab's messages,
+        // or a second one that does: picking among the rest is a guess the cache would then keep.
+        // Each reason is logged, and nothing is matched or cached until every candidate reads.
+        reportFailures(unreadable.map((detail) => ({ stage: 'match', detail })))
+        return fail(
+          'match',
+          `${unreadable.length} of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} could not be read, so any of them may be this tab's; not guessing`
+        )
+      }
+      const match = matchCcrSession(tabIds, candidates.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(pageKey(candidate))?.uuids ?? new Set() })))
       if (match.kind === 'ambiguous') {
         return fail('match', `${match.sessionIds.length} sessions share messages with this tab (${match.sessionIds.map(maskId).join(', ')}); not guessing`)
       }
@@ -230,18 +244,16 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         sessionId = match.sessionId
         const matched = candidates.find((candidate) => candidate.row.id === sessionId)!
         auth = matched.auth
-        const held = pages.get(sessionId)!
+        const held = pages.get(pageKey(matched))!
         extractCcrImages(held.events, wanted, deps.maxBytes, extracted)
         cursor = held.cursor
         pagesRead = round + 1
         setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId)
-        reportFailures([...unreadable.values()].map((detail) => ({ stage: 'match', detail })))
         report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${match.overlap} message${match.overlap === 1 ? '' : 's'} with this tab`)
         noteModel(input.tabId, input.epoch, matched.row, report)
       }
     }
     if (!sessionId || !auth) {
-      reportFailures([...unreadable.values()].map((detail) => ({ stage: 'match', detail })))
       return fail(
         'match',
         `none of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} shares a message with this tab in its latest ${CCR_MATCH_PAGES * CCR_EVENT_PAGE_SIZE} events`

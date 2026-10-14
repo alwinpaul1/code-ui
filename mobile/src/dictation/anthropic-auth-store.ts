@@ -1,14 +1,16 @@
 import * as SecureStore from 'expo-secure-store'
 import * as Crypto from 'expo-crypto'
 import * as Linking from 'expo-linking'
-import { fetchCcrProfile } from '../session/ccr-session-api'
-import { clearAccounts, readCredential, replaceCredentialOf, upsertAccount, type StoredCredential } from './anthropic-accounts-store'
+import { fetchCcrProfile, type CcrProfile } from '../session/ccr-session-api'
+import { clearAccounts, markRefreshRefused, readCredential, replaceCredentialOf, upsertAccount, type StoredCredential } from './anthropic-accounts-store'
 
 export {
   accountLabel,
   forgetAccountOrganization,
+  isAccountUsable,
   listAccounts,
   readCredential,
+  readPrimaryAccount,
   rememberAccountProfile,
   removeAccount,
   type StoredAccount,
@@ -195,10 +197,7 @@ export async function exchangeCode(
   // Which account this is decides whether it replaces one already signed in. The profile is best
   // effort: dictation only needs the token, so a profile that cannot be read leaves the account
   // unidentified until the sessions path asks again (rememberAccountProfile).
-  const profile = await fetchCcrProfile(
-    (url, init) => fetch(url, init),
-    credential.accessToken
-  ).catch((error: unknown) => {
+  const profile = await readProfileWithin(credential.accessToken, PROFILE_TIMEOUT_MS).catch((error: unknown) => {
     console.warn(`[anthropic-auth] signed in, but the profile could not be read: ${error instanceof Error ? error.message : String(error)}`)
     return null
   })
@@ -208,15 +207,50 @@ export async function exchangeCode(
   return credential
 }
 
+/** How long a sign-in waits for its profile before storing the account unidentified. A request
+ *  that never answers otherwise kept the code field's spinner busy forever. */
+const PROFILE_TIMEOUT_MS = 15_000
+
+/** The profile, or a rejection once `ms` pass (the request is aborted too). */
+function readProfileWithin(token: string, ms: number): Promise<CcrProfile> {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timedOut = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      reject(new Error(`the profile request timed out after ${ms / 1000} s`))
+    }, ms)
+  })
+  const read = fetchCcrProfile((url, init) => fetch(url, { ...init, signal: controller.signal }), token)
+  return Promise.race([read, timedOut]).finally(() => clearTimeout(timer))
+}
+
+/** Refreshes in flight, by refresh token. Dictation and the sessions path can both find one
+ *  account due at the same moment; spending its refresh token twice could have the server treat
+ *  the second use of a rotated token as a replay and refuse it. */
+const refreshesInFlight = new Map<string, Promise<StoredCredential>>()
+
 /**
- * Refresh the access token. Validates the response shape before storing.
+ * Refresh the access token. Validates the response shape before storing. One refresh per refresh
+ * token at a time: a second caller shares the first one's answer. A refusal from the token
+ * endpoint (400/401/403) marks the account, so it reads as signed out once its token runs out.
  */
-export async function refreshAccessToken(
-  credential: StoredCredential
-): Promise<StoredCredential> {
+export function refreshAccessToken(credential: StoredCredential): Promise<StoredCredential> {
   if (!credential.refreshToken) {
-    throw new Error('No refresh token')
+    return Promise.reject(new Error('No refresh token'))
   }
+  const running = refreshesInFlight.get(credential.refreshToken)
+  if (running) {
+    return running
+  }
+  const run = refreshOnce(credential).finally(() => {
+    refreshesInFlight.delete(credential.refreshToken)
+  })
+  refreshesInFlight.set(credential.refreshToken, run)
+  return run
+}
+
+async function refreshOnce(credential: StoredCredential): Promise<StoredCredential> {
   // JSON with the scopes, as Claude Code 2.1.296 refreshes.
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -229,6 +263,11 @@ export async function refreshAccessToken(
     })
   })
   if (!res.ok) {
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      await markRefreshRefused(credential).catch((error: unknown) => {
+        console.warn(`[anthropic-auth] the refused sign-in could not be marked: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
     throw new Error(`Token refresh failed (${res.status})`)
   }
   const raw = parseTokenResponse(await res.json())
