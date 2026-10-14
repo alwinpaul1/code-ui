@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { CLAUDE_SEND_NOW_BYTES } from './claude-send-queue-now'
 import {
@@ -258,7 +258,7 @@ describe('Send now on a message that is still being typed into Claude', () => {
   it('waits again when another message starts typing during the look at the screen', async () => {
     const claude: Claude = { queue: [], sentNow: [], droppedKeys: 0 }
     const { rpc } = host(claude)
-    const read = rpc.sendRequest as unknown as ReturnType<typeof vi.fn>
+    const read = rpc.sendRequest as unknown as Mock<(method: string, params: { text?: string }) => Promise<unknown>>
     const answer = read.getMockImplementation()!
     let retaken = false
     read.mockImplementation(async (method: string, params: { text?: string }) => {
