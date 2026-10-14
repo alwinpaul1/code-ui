@@ -122,6 +122,7 @@ export function claudeEase(x: number): number {
   }
   const { x1, y1, x2, y2 } = CLAUDE_EASE
   const at = (a: number, b: number, t: number): number => {
+    'worklet'
     const u = 1 - t
     return 3 * u * u * t * a + 3 * u * t * t * b + t * t * t
   }

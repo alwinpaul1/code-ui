@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
-  Animated: { View: 'AnimatedView' },
+  Animated: { View: 'AnimatedView', createAnimatedComponent: (component: unknown) => component },
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
   StyleSheet: {

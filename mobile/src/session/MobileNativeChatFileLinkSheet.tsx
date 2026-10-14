@@ -40,7 +40,7 @@ export function MobileNativeChatFileLinkSheet({
     if (text === null) {
       return
     }
-    clipboard.writeText(text).then(triggerSuccess, triggerError)
+    clipboard.writeText(text).then(triggerSuccess).catch(triggerError)
   }
   const actions: ActionSheetAction[] = []
   for (const entry of fileLinkMenuEntries(names)) {
