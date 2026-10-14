@@ -8,6 +8,8 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { canSendQueueNow } from './claude-send-queue-now'
 import { tapTargetHitSlop } from '../ui/tap-target'
+import { useChatTextHoldSelects, useChatTextSelectable } from '../components/chat-text-selectable-context'
+import { MARKDOWN_ROOT_GUARDS_HOLDS, MarkdownSelectionRoot } from '../components/markdown-selection-copy'
 
 /** The queue sits in the chat list's header, and FlashList inverts that list on
  *  Android with a 180° rotation of the list and of every cell. A plain
@@ -198,11 +200,14 @@ export function MobileNativeChatQueue({
                 <QueuedImages images={images} index={index} />
               ) : null}
               <View style={{ flex: 1, gap: space.xs }}>
-                {parsed.text ? (
-                  // Selectable only where no tap edits it: a selectable Text takes the row's press.
-                  <Txt variant="body" selectable={!canEdit}>
-                    {parsed.text}
-                  </Txt>
+                {parsed.text && canEdit ? (
+                  // Not selectable where a tap edits it: a selectable Text takes the row's press.
+                  <Txt variant="body">{parsed.text}</Txt>
+                ) : parsed.text ? (
+                  // The queue is in the chat list's header, so the finger that scrolls the
+                  // transcript lands here too; the scroll's guard against a stray hold covers
+                  // these words as it covers a reply's (QueuedWords).
+                  <QueuedWords text={parsed.text} />
                 ) : null}
                 {!images.length && parsed.paths.length ? (
                   <Txt variant="caption" tone="secondary">
@@ -224,6 +229,28 @@ export function MobileNativeChatQueue({
         })}
       </ScrollView>
     </View>
+  )
+}
+
+/**
+ * A queued message's words, selectable as a reply's are. On Android they sit in the document's
+ * selection root, which stops a hold starting a selection while the list scrolls and leaves one
+ * already open alone (SelectionCopyRootView.applyHoldSelects), so the words stay selectable
+ * throughout. Without the root, `selectable` itself is the guard. Before this, the queue was the
+ * one text in the chat list a scroll never guarded: a finger that caught a fling on a queued
+ * message started a selection in it (2026-10-15, 0.9.147).
+ */
+function QueuedWords({ text }: { text: string }) {
+  const selectableNow = useChatTextSelectable()
+  const holdsSelect = useChatTextHoldSelects()
+  return (
+    <MarkdownSelectionRoot holdSelects={selectableNow && holdsSelect}>
+      <View>
+        <Txt variant="body" selectable={MARKDOWN_ROOT_GUARDS_HOLDS || selectableNow}>
+          {text}
+        </Txt>
+      </View>
+    </MarkdownSelectionRoot>
   )
 }
 
