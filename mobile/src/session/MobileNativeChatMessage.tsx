@@ -21,6 +21,7 @@ import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageRow'
+import { withTaskNotifications } from './MobileNativeChatTaskNotificationRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
 import { errorRowOf } from './mobile-native-chat-error-rows'
 import type { TurnEditedFile } from './mobile-native-chat-turn-edits'
@@ -534,4 +535,5 @@ function MobileNativeChatMessageImpl({
   )
 }
 
-export const MobileNativeChatMessage = memo(MobileNativeChatMessageImpl)
+/** A background task's notification is a status line, not a user bubble of XML. */
+export const MobileNativeChatMessage = memo(withTaskNotifications(MobileNativeChatMessageImpl))
