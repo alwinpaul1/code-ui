@@ -32,5 +32,6 @@ export function composerPlaceholder(
   if (lockReason === 'waiting') {
     return 'Waiting for terminal…'
   }
-  return agentWorking ? 'Queue a message…' : 'Reply, @files, /commands'
+  // The Claude app's own (`ccr_input_placeholder_existing_session` / `_queue`, 1.261009.20).
+  return agentWorking ? 'Queue a message…' : 'Type / for commands'
 }

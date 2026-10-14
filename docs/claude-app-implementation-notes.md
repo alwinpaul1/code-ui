@@ -251,8 +251,10 @@ field `aj1`, placeholder `ib8`, custom measure policies `ai9` (button row) and
   chip), a flexible middle, a trailing group (model chip, mic, Send/Stop) at
   least 8 dp from the middle. Row height = tallest child (36 dp) + 6 = 42 dp.
 - **Gap between text and buttons**: no spacer. The buttons sit straight under
-  the text box, so the visible gap is about **11 dp** (8 dp text padding +
-  3 dp).
+  the text box. Read from the decompile as about 11 dp (8 dp text padding +
+  3 dp), but the user's screen recording (2026-10-14, 1080 px at 2.8125 px/dp)
+  measures **16 dp** from the caret's foot to the buttons' top, and 8 dp from
+  the buttons to the card's foot. Code UI follows the recording (G37).
 - **Buttons**: 36 dp, 48 dp touch target, 20 dp icons.
   - Send: clay fill, white `arrowUp`; disabled at 40%; while sending
     ("Sending") the icon becomes a 24 dp progress ring, stroke 2.

@@ -113,20 +113,19 @@ describe('the composer’s round action buttons', () => {
     expect(flat(button('Stop dictation').props.style).backgroundColor).toBe(colors.dangerSoft)
   })
 
-  it.each(['light', 'dark'] as const)('draws send as an accent circle, dimmed with nothing to send, in %s', async (scheme) => {
+  it.each(['light', 'dark'] as const)('draws send as the clay circle, fill and arrow each at 40% with nothing to send, in %s', async (scheme) => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     await render(scheme, ' hello ')
     const live = flat(button('Send message').props.style)
-    expect(live.backgroundColor).toBe(colors.accent)
+    expect(live.backgroundColor).toBe(colors.composerSend)
     expect(live.opacity ?? 1).toBe(1)
     expect(button('Send message').props.disabled).toBe(false)
     await act(async () => renderer!.unmount())
     renderer = null
     await render(scheme, '')
     const idle = flat(button('Send message').props.style)
-    expect(idle.backgroundColor).toBe(colors.accent)
-    expect(idle.opacity).toBeLessThan(1)
-    expect(idle.opacity).toBeGreaterThan(0)
+    expect(idle.backgroundColor).toBe(colors.composerSendDisabled)
+    expect(idle.opacity ?? 1).toBe(1)
     expect(button('Send message').props.disabled).toBe(true)
   })
 

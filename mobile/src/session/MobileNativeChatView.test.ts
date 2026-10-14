@@ -633,7 +633,7 @@ describe('MobileNativeChatView', () => {
       await act(async () => vi.advanceTimersByTime(1))
 
       expect(composer().props.disabled).toBe(false)
-      expect(composer().props.placeholder).toBe('Reply, @files, /commands')
+      expect(composer().props.placeholder).toBe('Type / for commands')
     } finally {
       vi.useRealTimers()
     }

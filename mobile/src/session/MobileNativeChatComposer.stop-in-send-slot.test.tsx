@@ -9,8 +9,8 @@ import { darkColors, lightColors } from '../theme/tokens'
 // Send; krz.d shows exactly one of the two). Both Stop states need an empty
 // composer, so typing while the agent works brings Send back to queue the
 // message and Stop goes. Code UI drew Stop as a red pill on the status line
-// above the composer instead. Sizes and colours stay Code UI's own: the 36 dp
-// circle of + and the mic, and the danger tone the old pill had.
+// above the composer instead. Its look is the app's since 2026-10-14 (yg9.g): the
+// 36 dp control circle and an outline stop square in the text colour, not red.
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   FlatList: 'FlatList',
@@ -158,13 +158,13 @@ describe('Stop in the composer’s send slot', () => {
     expect(trailing().props.accessibilityState).toMatchObject({ busy: true })
   })
 
-  it.each(['light', 'dark'] as const)('draws Stop in Code UI’s own circle and danger tone in %s', async (scheme) => {
+  it.each(['light', 'dark'] as const)('draws Stop as the Claude app does, an ink outline square on the control circle, in %s', async (scheme) => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     await render('', { canStop: true, onStop: vi.fn() }, scheme)
     const style = flat(trailing().props.style)
     expect(style).toMatchObject({ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.composerControl })
     const square = trailing().find((node) => (node.type as unknown) === 'Square')
-    expect(square.props.fill).toBe(colors.danger)
-    expect(square.props.color).toBe(colors.danger)
+    expect(square.props.fill ?? 'none').toBe('none')
+    expect(square.props.color).toBe(colors.text)
   })
 })

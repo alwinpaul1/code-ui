@@ -180,7 +180,7 @@ padding `vml.d/e/f/g`).
 | Status line above the composer ("12s · 1,234 tokens · 3 running tasks · thinking…") | `jn7.E` 15 / 400 / 1.4; 16 dp clay spinner, 8 dp gap; separator " · "; 16 dp vertical padding | text `pl7.Q`; "N running tasks" link `ad5.C0()` `#184F95` / `#6DA7EC`; verb-only form ("Cooking...") in clay `pl7.e` | `nl7.b`, `au8` |
 | Composer shell | 24 dp radius, 0.5 dp border, shadow blur 8 / black 10% / y 2, 8 dp vertical padding | fill `pl7.p` at 96% (`#FFFFFF` / `#20201F`); border `pl7.x` | `o530.b` |
 | Composer text | `jn7.B` **17 / 400 / 1.4** (23.8 sp), padding **13 dp horizontal, 8 dp vertical**, 1 to 6 lines then scrolls | text and caret `pl7.O`; placeholder `pl7.Q` | `aj1` case 1, `ib8` |
-| Composer text-to-buttons gap | no spacer: about **11 dp** (the text's 8 dp bottom padding + 3 dp, half of the button row's extra 6) | – | `di9`, `yg9.a = 6` |
+| Composer text-to-buttons gap | **16 dp**, measured on the user's screen recording (2026-10-14: 46 px at 2.8125 px/dp from the caret's foot to the buttons' top). Read as 11 dp (8 + 3, half of the row's extra 6) from the decompile before that; the recording does not bear it out | – | `di9`, `yg9.a = 6` |
 | Composer button row | 8 dp in from each side, 42 dp tall (36 dp buttons + 6) | – | `ai9` |
 | Composer buttons | all 36 dp, 48 dp touch target, 20 dp icons; model chip 36 dp pill, 16 dp side padding, max 220 dp | Send fill `pl7.e` `#C6613F` / `#D97757`, white arrow; Stop fill `pl7.x0` `#F0EFEC` / white at 8%, icon `pl7.O`; mic `pl7.P` | `yg9`, `bb8`, `md6.a` |
 | Queued message ("Queue a message…") | 80% width, 12 dp radius, 12 dp padding, `jn7.E` **italic**, 14 dp "x" at top end | fill `pl7.s` `#F0EFEC` / `#0D0D0D`; text `pl7.Q` | `hb20.e` |

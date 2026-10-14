@@ -9,8 +9,10 @@ import { PressScale } from '../ui/PressScale'
  * decompiled: `yv8.i` picks Idle/Ready/Sending/Receiving/Interrupting, `ll`
  * case 3 maps the last two to Stop and the rest to Send, and `krz.d` shows
  * exactly one). Both of its Stop states need an empty composer, so typed text
- * brings Send back and the message queues. Sizes and colours are Code UI's: the
- * 36 dp circle of + and the mic, and the danger tone the old status-line Stop had.
+ * brings Send back and the message queues. Both are the app's 36 dp buttons (`yg9.b`): Send a
+ * white arrow on clay (`yg9.f`: `pl7.H` on `pl7.e`), Stop an outline square in the text colour on
+ * the control fill (`yg9.g`: `pl7.O` on `pl7.x0`). The row's 8 dp gap spaces them from the mic.
+ * Glyph sizes match what the recording of 2026-10-14 measures (arrow about 11 dp, square 14 dp).
  */
 export function MobileNativeChatSendSlot({
   showStop,
@@ -27,7 +29,7 @@ export function MobileNativeChatSendSlot({
   onSend: () => void
   iconButton: ViewStyle
 }): React.JSX.Element {
-  const { colors, space } = useTheme()
+  const { colors } = useTheme()
   if (showStop) {
     return (
       <Pressable focusable={false}
@@ -38,12 +40,12 @@ export function MobileNativeChatSendSlot({
         accessibilityState={{ busy: stopping }}
         style={({ pressed }) => [
           iconButton,
-          { marginLeft: space.xs, backgroundColor: pressed ? colors.composerControlPressed : colors.composerControl }
+          { backgroundColor: pressed ? colors.composerControlPressed : colors.composerControl }
         ]}
         onPress={onStop}
       >
         {stopping ? (
-          // The Claude app's stopping mark: a thin ring round the button.
+          // The Claude app's stopping mark (`sg4`): a 1 dp ring round the button in the content colour.
           <View
             pointerEvents="none"
             testID="native-chat-stop-ring"
@@ -53,11 +55,11 @@ export function MobileNativeChatSendSlot({
               height: 36,
               borderRadius: 18,
               borderWidth: 1,
-              borderColor: colors.danger
+              borderColor: colors.text
             }}
           />
         ) : null}
-        <Square pointerEvents="none" size={14} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
+        <Square pointerEvents="none" size={17} color={colors.text} strokeWidth={2} />
       </Pressable>
     )
   }
@@ -66,18 +68,17 @@ export function MobileNativeChatSendSlot({
       accessibilityLabel="Send message"
       accessibilityRole="button"
       accessibilityState={{ disabled: !canSend }}
-      // Extra margin: two filled circles on the row's 4 px gap read as one blob.
-      // The accent circle always; with nothing to send it is dimmed, as the
-      // Claude app draws it, not swapped for a grey one.
-      style={[iconButton, { marginLeft: space.xs, backgroundColor: colors.accent, opacity: canSend ? 1 : 0.4 }]}
+      // The clay circle always; with nothing to send its fill and its arrow each go to 40%, as
+      // the Claude app draws it, not swapped for a grey one and not faded as a group.
+      style={[iconButton, { backgroundColor: canSend ? colors.composerSend : colors.composerSendDisabled }]}
       pressedScale={0.9}
       onPress={onSend}
       disabled={!canSend}
     >
       <ArrowUp
-        size={19}
-        color={colors.onAccent}
-        strokeWidth={2.6}
+        size={18}
+        color={canSend ? colors.composerSendGlyph : colors.composerSendGlyphDisabled}
+        strokeWidth={2.4}
       />
     </PressScale>
   )

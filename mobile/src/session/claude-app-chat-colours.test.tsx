@@ -15,10 +15,11 @@ import { richMarkdownEditorThemeVariables } from '../components/rich-markdown/do
 
 // Reported 2026-10-13 with a Claude app screenshot: "We need the exact same
 // colours the Claude mobile app uses: the background is black, and the input
-// box is different." Colours only; the sizes stay Code UI's own (reverted
-// 2026-10-11). The values are the app's own tokens, decompiled from
-// com.anthropic.claude 1.261009.20 (docs/claude-app-typography.md), except the
-// dark model pill, which is sampled from that screenshot (tokens.ts says why).
+// box is different." The values are the app's own tokens, decompiled from
+// com.anthropic.claude 1.261009.20 (docs/claude-app-typography.md). The sizes
+// followed on 2026-10-14 (MobileNativeChatComposer.claude-geometry.test.tsx), and
+// the dark model pill moved from a screenshot sample to the decompiled `pl7.x0`,
+// which the user's screen recording agrees with (tokens.ts says why).
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   FlatList: 'FlatList',
@@ -194,7 +195,7 @@ describe('the Claude app’s chat and composer tokens', () => {
       composerPlaceholder: '#97958D',
       composerControl: 'rgba(255, 255, 255, 0.08)',
       composerControlPressed: '#454442',
-      composerPill: '#545452',
+      composerPill: 'rgba(255, 255, 255, 0.08)',
       composerPillText: '#F8F8F6'
     })
   })
@@ -260,7 +261,7 @@ describe('the composer in Claude’s colours', () => {
       expect(flat(pressable('Stop the agent').props.style, true).backgroundColor).toBe(colors.composerControlPressed)
     })
 
-    it(`draws the model pill and its label in ${scheme}`, () => {
+    it(`draws the model pill and its label, with no chevron, in ${scheme}`, () => {
       act(() => {
         renderer = create(
           <ThemeProvider initialPreference={scheme}>
@@ -273,18 +274,17 @@ describe('the composer in Claude’s colours', () => {
       expect(flat(pill.props.style, true).backgroundColor).toBe(colors.composerControlPressed)
       const label = renderer!.root.find((node) => (node.type as unknown) === 'Text')
       expect(flat(label.props.style).color).toBe(colors.composerPillText)
-      const chevron = renderer!.root.find((node) => (node.type as unknown) === 'ChevronDown')
-      expect(chevron.props.color).toBe(colors.composerPillText)
     })
 
     it(`keeps everything in the composer readable in ${scheme}`, () => {
       const surface = composerSurface(colors)
       // The app's own placeholder value measures 4.35:1 on the light box.
       expect(contrastRatio(colors.composerPlaceholder, surface)).toBeGreaterThanOrEqual(4.3)
-      expect(contrastRatio(colors.composerPillText, colors.composerPill)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(colors.composerPillText, over(colors.composerPill, surface))).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.text, surface)).toBeGreaterThanOrEqual(4.5)
-      // The + and mic glyphs on their circles, a UI-icon floor.
-      expect(contrastRatio(colors.textSecondary, over(colors.composerControl, surface))).toBeGreaterThanOrEqual(3)
+      // The + and mic glyphs on their circles, a UI-icon floor; Send's white arrow on clay.
+      expect(contrastRatio(colors.composerIcon, over(colors.composerControl, surface))).toBeGreaterThanOrEqual(3)
+      expect(contrastRatio(colors.composerSendGlyph, colors.composerSend)).toBeGreaterThanOrEqual(3)
       expect(contrastRatio(colors.text, colors.chatBg)).toBeGreaterThanOrEqual(4.5)
       expect(contrastRatio(colors.textMuted, colors.chatBg)).toBeGreaterThanOrEqual(4.5)
     })

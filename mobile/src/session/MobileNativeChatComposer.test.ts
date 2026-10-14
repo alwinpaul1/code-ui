@@ -163,13 +163,14 @@ describe('MobileNativeChatComposer', () => {
     const actionArea = renderer!.root.findByProps({ testID: 'native-chat-composer-action-area' })
     expect(composer.children[composer.children.length - 1]).toBe(actionArea)
     expect(actionArea.findByProps({ testID: 'native-chat-composer-actions' })).toBe(actions)
+    // The Claude app's 16 dp from the screen's sides and from the keyboard (G37).
     expect(inset.props.style).toMatchObject({
-      paddingHorizontal: space.md,
+      paddingHorizontal: space.lg,
       paddingTop: space.xs,
-      paddingBottom: space.md
+      paddingBottom: space.lg
     })
     expect(composer.props.style).toMatchObject({
-      borderWidth: 1,
+      borderWidth: 0.5,
       borderRadius: radius.xl,
       overflow: 'hidden'
     })
@@ -881,8 +882,9 @@ describe('MobileNativeChatComposer', () => {
   const fold = renderer!.root.findByProps({ testID: 'native-chat-composer-input-fold' }) as {
     props: { style: { maxHeight?: number; overflow?: string } | null }
   }
-  expect(fold.props.style).toMatchObject({ maxHeight: 65, overflow: 'hidden' })
-  // Six whole lines and the padding, 12 + 6 × 22 + 9 (MobileNativeChatComposer.text-air.test.tsx).
-  expect(input.props.style.maxHeight).toBe(153)
+  // Two whole lines and the padding, 16 + 2 × 24 + 8.
+  expect(fold.props.style).toMatchObject({ maxHeight: 72, overflow: 'hidden' })
+  // Six whole lines and the padding, 16 + 6 × 24 + 8 (MobileNativeChatComposer.text-air.test.tsx).
+  expect(input.props.style.maxHeight).toBe(168)
 })
 })

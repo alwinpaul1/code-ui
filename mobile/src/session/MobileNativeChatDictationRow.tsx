@@ -44,7 +44,7 @@ const ROW_GAP = 12
  * The composer's recording row, after the Claude app's speech toolbar (1.261009.20, `kcw.f`):
  * Cancel on the left, the waveform in the middle, Stop dictation and Send dictation on the right.
  * Cancel and Stop are the composer's grey control circle with the ink glyph (`pl7.x0` / `pl7.O`),
- * Send the accent circle with the on-accent arrow (`pl7.e` / `pl7.H`).
+ * Send the composer's clay circle with the white arrow (`pl7.e` / `pl7.H`, composerSend tokens).
  *
  * While the words finish ("transcribing"), the centre crossfades to "Transcribing…"; Cancel stays
  * live; the button that ended the take shows a busy ring and the other dims to 38%.
@@ -164,16 +164,16 @@ export function MobileNativeChatDictationRow({
         style={[
           iconButton,
           {
-            backgroundColor: colors.accent,
+            backgroundColor: colors.composerSend,
             opacity: dimmed('send') || (sendBlocked && !busy('send')) ? DICTATION_BUTTON_DISABLED_OPACITY : 1
           }
         ]}
         onPress={onSend}
       >
         {busy('send') ? (
-          <ActivityIndicator size="small" color={colors.onAccent} />
+          <ActivityIndicator size="small" color={colors.composerSendGlyph} />
         ) : (
-          <ArrowUp pointerEvents="none" size={19} color={colors.onAccent} strokeWidth={2.6} />
+          <ArrowUp pointerEvents="none" size={18} color={colors.composerSendGlyph} strokeWidth={2.4} />
         )}
       </Pressable>
     </View>
@@ -223,8 +223,9 @@ export function MobileNativeChatDictationLayer({
           bottom: 0,
           flexDirection: 'row',
           alignItems: 'center',
+          // The action row's own padding on every side, so these buttons land on its buttons.
           paddingHorizontal: padding,
-          paddingBottom: padding
+          paddingVertical: padding
         },
         row.layerStyle
       ]}
