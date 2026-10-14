@@ -441,7 +441,8 @@
             // 2026-10-10, later: 428 for Orca #26071's chat visuals: the
             // `visualSource` prop and the provider around the list that hands
             // its rows the visual renderer (MobileNativeChatVisual.tsx).
-            "max": 428,
+            // 2026-10-14: +1, `dictationCaption` handed to the composer (the live caption).
+            "max": 429,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -518,7 +519,9 @@
             // 2026-10-14 (later): 414. `micLevelSource`, the Anthropic engine's
             // per-chunk level (dictation/pcm-level.ts), in the import, the type,
             // the destructure and the hand-off.
-            "max": 414,
+            // 2026-10-14 (caption): 417. `dictationCaption` in the type, the destructure and the
+            // hand-off; the caption is MobileNativeChatDictationCaption.tsx.
+            "max": 417,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -580,7 +583,9 @@
             // row is MobileNativeChatDictationRow.tsx.
             // 2026-10-14 (later): +3 for `micLevelSource` (import, prop, destructure),
             // handed to the waveform so a chunk's level skips React.
-            "max": 462,
+            // 2026-10-14 (caption): +6, the `dictationCaption` prop, its destructure, the import
+            // and the caption above the card (MobileNativeChatDictationCaption.tsx).
+            "max": 468,
             "skipBlankLines": true,
             "skipComments": true
           }

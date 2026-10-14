@@ -21,7 +21,14 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light',
   useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
-vi.mock('react-native-svg', () => ({ default: () => null, Circle: () => null }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Circle: 'Circle',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
@@ -87,6 +94,7 @@ type Take = {
   micActive?: boolean
   micTranscribing?: boolean
   micLevel?: number
+  caption?: string
 }
 
 const handlers = {
@@ -111,6 +119,7 @@ function element(take: Take, scheme: 'light' | 'dark'): React.JSX.Element {
         micActive={take.micActive ?? false}
         micTranscribing={take.micTranscribing ?? false}
         micLevel={take.micLevel ?? 0}
+        dictationCaption={take.caption ?? ''}
         onCancelDictation={handlers.onCancelDictation}
         onStopDictation={handlers.onStopDictation}
       />
@@ -379,5 +388,103 @@ describe('the swap’s motion', () => {
     await rerender({ micActive: true })
     expect(springs.calls).toEqual([])
     expect(shown()).toEqual(RECORDING)
+  })
+})
+
+// The Claude app's live caption (1.261009.20; the user's recording of 2026-10-14, and the
+// decompile: `yv8.java:2219-2257` feeds `etq.R`/`etq.S` the take's transcript while the speech
+// toolbar is up). The field is folded away, so this is where the words are seen as they are said.
+describe('the live caption above the recording row', () => {
+  const captionText = (): string | null => {
+    const texts = byTestId('native-chat-dictation-caption').findAll(
+      (node) => (node.type as unknown) === 'Text' && typeof node.props.children === 'string'
+    )
+    return texts.length === 0 ? null : (texts[0]!.props.children as string)
+  }
+  const captionShown = (): boolean => {
+    const style = flat(byTestId('native-chat-dictation-caption').props.style)
+    return (style.opacity as number) > 0 && (style.height as number) > 0
+  }
+
+  it('shows the words above the recording row while they are spoken', async () => {
+    await render({ micActive: true, caption: 'How are you' })
+    expect(captionShown()).toBe(true)
+    expect(captionText()).toBe('How are you')
+    // Above the composer card, not inside it.
+    const caption = byTestId('native-chat-dictation-caption')
+    const card = byTestId('native-chat-composer')
+    const order = renderer!.root.findAll((node) => node === caption || node === card)
+    expect(order[0]).toBe(caption)
+    await rerender({ micActive: true, caption: 'How are you doing? I am fine. Thanks.' })
+    expect(captionText()).toBe('How are you doing? I am fine. Thanks.')
+    // Still shown while the last words finish.
+    await rerender({ micTranscribing: true, caption: 'How are you doing? I am fine. Thanks.' })
+    expect(captionShown()).toBe(true)
+  })
+
+  it('shows nothing before the first word, and a single word once it comes', async () => {
+    await render({ micActive: true, caption: '' })
+    expect(captionShown()).toBe(false)
+    await rerender({ micActive: true, caption: '   ' })
+    expect(captionShown()).toBe(false)
+    await rerender({ micActive: true, caption: 'How' })
+    expect(captionShown()).toBe(true)
+    expect(captionText()).toBe('How')
+  })
+
+  it('draws the words in italic secondary ink, the composer’s size, from the start edge', async () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const colors = scheme === 'dark' ? darkColors : lightColors
+      await render({ micActive: true, caption: 'How are you' }, scheme)
+      const text = byTestId('native-chat-dictation-caption').find(
+        (node) => (node.type as unknown) === 'Text' && node.props.children === 'How are you'
+      )
+      expect(flat(text.props.style)).toMatchObject({
+        color: colors.textSecondary,
+        fontStyle: 'italic',
+        fontSize: 17,
+        lineHeight: 24,
+        textAlign: 'left'
+      })
+      // The scrim behind it is the chat's own colour.
+      expect(flat(byTestId('native-chat-dictation-caption-box').parent!.props.style).backgroundColor).toBe(colors.chatBg)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  it('keeps a fixed four-line box for many lines: the words grow upward and the top line fades', async () => {
+    const long = Array.from({ length: 30 }, (_, i) => `word${i}`).join(' ')
+    await render({ micActive: true, caption: 'one line' })
+    const height = flat(byTestId('native-chat-dictation-caption').props.style).height
+    await rerender({ micActive: true, caption: long })
+    // The box does not grow with the words, so the chat above does not move as lines arrive.
+    expect(flat(byTestId('native-chat-dictation-caption').props.style).height).toBe(height)
+    expect(height).toBe(4 * 24 + 2 * 8)
+    const box = byTestId('native-chat-dictation-caption-box')
+    expect(flat(box.props.style)).toMatchObject({ height: 4 * 24, overflow: 'hidden' })
+    const text = box.find((node) => (node.type as unknown) === 'Text' && node.props.children === long)
+    // Anchored one line of air above the bottom, with no top: it grows upward and is clipped.
+    expect(flat(text.props.style)).toMatchObject({ position: 'absolute', bottom: 24 })
+    expect(flat(text.props.style).top).toBeUndefined()
+    expect(anyTestId('native-chat-dictation-caption-fade')).toHaveLength(1)
+  })
+
+  it('goes when the take is cancelled, and the next take starts with nothing', async () => {
+    await render({ micActive: true, caption: 'How are you' })
+    await act(async () => button('Cancel').props.onPress())
+    await rerender({ micActive: false, caption: 'How are you' })
+    expect(captionShown()).toBe(false)
+    expect(byTestId('native-chat-dictation-caption').props.accessibilityElementsHidden).toBe(true)
+    await rerender({ micActive: true, caption: '' })
+    expect(captionShown()).toBe(false)
+  })
+
+  it('appears without the spring under reduced motion', async () => {
+    motion.reduced = true
+    await render({ micActive: true, caption: '' })
+    await rerender({ micActive: true, caption: 'How' })
+    expect(springs.calls).toEqual([])
+    expect(captionShown()).toBe(true)
   })
 })
