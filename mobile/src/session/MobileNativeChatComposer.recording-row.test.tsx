@@ -394,6 +394,31 @@ describe('the swap’s motion', () => {
 // The Claude app's live caption (1.261009.20; the user's recording of 2026-10-14, and the
 // decompile: `yv8.java:2219-2257` feeds `etq.R`/`etq.S` the take's transcript while the speech
 // toolbar is up). The field is folded away, so this is where the words are seen as they are said.
+// Device, 0.9.143 (2026-10-14): while recording, the transcript scrolled visibly through the
+// recording row and its card. The Claude app lays a "dictation-caption-scrim" of the screen colour
+// behind its composer while it dictates (etq.h0, etq.java:3811-3829); here it sits behind the
+// whole composer, first in DOM order, so the card and the row are drawn over the chat colour.
+describe('nothing shows through the composer while recording', () => {
+  it.each(['light', 'dark'] as const)('lays an opaque chat-colour scrim behind the card and the row in %s', async (scheme) => {
+    const colors = scheme === 'dark' ? darkColors : lightColors
+    await render({ micActive: false }, scheme)
+    const idle = byTestId('native-chat-dictation-scrim')
+    expect(flat(idle.props.style).opacity).toBe(0)
+    await rerender({ micActive: true }, scheme)
+    const scrim = byTestId('native-chat-dictation-scrim')
+    const style = flat(scrim.props.style)
+    expect(style).toMatchObject({ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, opacity: 1 })
+    expect(style.backgroundColor).toBe(colors.chatBg)
+    // Opaque: a colour with no alpha channel.
+    expect(String(style.backgroundColor)).toMatch(/^#[0-9A-Fa-f]{6}$/)
+    expect(scrim.props.pointerEvents).toBe('none')
+    // Behind, by order: the composer's first child, before the card.
+    const card = byTestId('native-chat-composer')
+    const order = renderer!.root.findAll((node) => node === scrim || node === card)
+    expect(order[0]).toBe(scrim)
+  })
+})
+
 describe('the live caption above the recording row', () => {
   const captionText = (): string | null => {
     const texts = byTestId('native-chat-dictation-caption').findAll(

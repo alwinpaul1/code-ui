@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { Text, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated'
+import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  type AnimatedStyle
+} from 'react-native-reanimated'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
@@ -128,5 +133,31 @@ export function MobileNativeChatDictationCaption({
         </View>
       </View>
     </Animated.View>
+  )
+}
+
+/**
+ * The chat colour laid behind the whole composer while the recording row is up, the Claude app's
+ * "dictation-caption-scrim" (etq.h0, etq.java:3811-3829: the screen colour `pl7.q`, faded in while
+ * it dictates). Without it the transcript scrolled visibly through the card and the row (device,
+ * 0.9.143): the card is 96% opaque, as Claude's is, which Claude never shows bare over the chat
+ * while dictating. It is the composer's first child, so the card is drawn over it by order alone.
+ * It fades with the recording row's own swap (`layerStyle`), so it follows reduced motion too.
+ */
+export function MobileNativeChatDictationScrim({
+  fadeStyle
+}: {
+  fadeStyle: StyleProp<AnimatedStyle<ViewStyle>>
+}): React.JSX.Element {
+  const { colors } = useTheme()
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: colors.chatBg },
+        fadeStyle
+      ]}
+      testID="native-chat-dictation-scrim"
+    />
   )
 }
