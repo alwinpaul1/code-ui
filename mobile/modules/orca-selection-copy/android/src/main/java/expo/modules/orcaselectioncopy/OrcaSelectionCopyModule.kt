@@ -17,6 +17,9 @@ class OrcaSelectionCopyModule : Module() {
     Name("OrcaSelectionCopy")
 
     View(SelectionCopyRootView::class) {
+      // A Text inside opened or closed a selection (SelectionCopyRootView.selectionChanged).
+      Events("onSelectionChange")
+
       // Android colour ints from processColor (chat-selection-colors.ts). Absent: the platform's.
       Prop("selectionHandleColor") { view: SelectionCopyRootView, color: Double? ->
         view.setSelectionHandleColor(colorIntOf(color))

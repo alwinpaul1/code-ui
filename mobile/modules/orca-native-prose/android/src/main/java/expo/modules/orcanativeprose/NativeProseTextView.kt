@@ -32,7 +32,8 @@ import kotlin.math.min
  * narrower than [layoutWidth] cannot be widened here; the mismatch is logged (onLayout).
  *
  * Selection is the JavaScript's to switch: off while the chat list scrolls, so a finger that stops
- * a fling and stays down does not start one (chat-text-selectable-context.ts, 2026-09-12).
+ * a fling and stays down does not start one (chat-text-selectable-context.ts, 2026-09-12), but
+ * left on while a selection is open, because switching it off here ends that selection (2026-10-14).
  */
 class NativeProseTextView(context: Context) : TextView(context) {
   private val onLinkPress by EventDispatcher()

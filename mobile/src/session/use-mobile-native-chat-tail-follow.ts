@@ -50,8 +50,11 @@ export type MobileNativeChatTailFollow<TItem> = {
    *  shows none there). */
   showJumpToLatest: boolean
   /** Off while a scroll is in flight, so Android cannot arm a text-selection
-   *  long-press under the moving rows. */
+   *  long-press under the moving rows, unless a reply holds a selection: off
+   *  would end it (2026-10-14). */
   textSelectable: boolean
+  /** A document's selection opened or closed (ChatTextSelectionReportContext). */
+  reportSelection: (owner: object, live: boolean) => void
   touchStart: () => void
   touchEnd: () => void
   /** Every scroll sample: records geometry, pages history at the far end. */
@@ -137,6 +140,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     touchEnd,
     followGate,
     textSelectable,
+    reportSelection,
     detached,
     setFollowing,
     beginScroll,
@@ -423,6 +427,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     detachedFromTail: detached,
     showJumpToLatest: detached && contentBelow,
     textSelectable,
+    reportSelection,
     touchStart,
     touchEnd,
     evaluateEdge,

@@ -2,6 +2,7 @@ import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { scheduleScrollIndicatorUpdate } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
+import { repositionOverlay } from './selection-overlay'
 import {
   emitKeyboardAvoidanceMetrics,
   requestKeyboardAvoidanceMetrics
@@ -25,6 +26,9 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
     scope.termObserverDisposables.push(
       scope.term.onScroll!(function () {
         scheduleScrollIndicatorUpdate(scope, false)
+        // Why: a scroll no longer dismisses a selection (tap-dispatch.ts, 2026-10-14), so its
+        // handles and Copy pill must follow the rows xterm keeps highlighted. No-op unless selecting.
+        repositionOverlay(scope)
       })
     )
   } catch {}
@@ -35,6 +39,8 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
       scope.termObserverDisposables.push(
         scope.term.onRender(() => syncTerminalScreenTransformToRender(scope))
       )
+      // The selection's handles follow the rows the paint just moved (see onScroll above).
+      scope.termObserverDisposables.push(scope.term.onRender(() => repositionOverlay(scope)))
     }
   } catch {}
   // Why: emit modes on every parsed write so RN's mirror stays current

@@ -4,6 +4,7 @@ import { notify } from './host-notify'
 import { viewportToCell } from './viewport-cell'
 import type { TerminalDocumentScope } from './document-scope'
 import { notifyTerminalSurfaceTap } from './surface-tap'
+import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
   eventTargetInRoot,
   touchesInRoot,
@@ -151,12 +152,28 @@ function onDocumentTouchStart(scope: TerminalDocumentScope, e: TouchEvent) {
   }
 
   if (inSurface && scope.selMode === 'select') {
-    // Why: tap-to-dismiss matches native iOS/Android — touching outside the
-    // selection clears it. We cancel immediately and latch to 'surface' so
-    // the same gesture still drives scroll/pan without a second touch.
-    cancelSelect(scope)
+    // Why: tap-to-dismiss matches native iOS/Android — a TAP away from the
+    // selection clears it, and a scroll does not. Cancelling here, on touch
+    // down, wiped the selection the moment a finger went down to scroll and
+    // see more of it (the user, 2026-10-14; the Claude app keeps it). So the
+    // touch is a tap candidate, and touchend dismisses only if it stayed one.
+    // No long press is armed: a hold here leaves the selection as it is.
+    // Except where a swipe is wheel input for the program (alternate screen,
+    // mouse tracking): it never scrolls xterm, the program repaints, and the
+    // selection would cover words nobody selected. There it goes at once.
     scope.touchDispatch.mode = 'surface'
     scope.touchDispatch.touchId = t.identifier
+    if (shouldRouteScrollToTerminalInput(scope)) {
+      cancelSelect(scope)
+      return
+    }
+    scope.tapCandidate = {
+      x: t.clientX,
+      y: t.clientY,
+      t: Date.now(),
+      identifier: t.identifier,
+      dismissesSelection: true
+    }
     return
   }
 
@@ -240,13 +257,16 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
     // mouse gets the tap as a click and the keyboard stays shut (cc4dfe216: a
     // tap on Claude Code's "Jump to bottom (click)" opened it); any other
     // program still opens the keyboard from a tap (surface-tap.ts).
-    if (
-      touches.length === 0 &&
-      scope.tapCandidate &&
-      scope.selMode !== 'select' &&
-      Date.now() - scope.tapCandidate.t <= TAP_MAX_MS
-    ) {
-      notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, false)
+    // The hold that STARTED a selection ends here too, and must not dismiss it: only a touch
+    // that went down over a selection already showing does.
+    const candidate = touches.length === 0 ? scope.tapCandidate : null
+    const tapped = candidate !== null && Date.now() - candidate.t <= TAP_MAX_MS
+    if (tapped && candidate.dismissesSelection === true) {
+      if (scope.selMode === 'select') {
+        cancelSelect(scope)
+      }
+    } else if (tapped && scope.selMode !== 'select') {
+      notifyTerminalSurfaceTap(scope, candidate.x, candidate.y, false)
     }
     clearLongPress(scope)
     scope.tapCandidate = null

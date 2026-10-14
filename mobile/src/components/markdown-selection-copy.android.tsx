@@ -1,7 +1,8 @@
 import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core'
-import type { ComponentType, ReactNode } from 'react'
-import { processColor, type ViewProps } from 'react-native'
+import { useCallback, useEffect, useRef, type ComponentType, type ReactNode } from 'react'
+import { processColor, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import { useTheme } from '../theme/theme-context'
+import { useChatTextSelectionReport } from './chat-text-selectable-context'
 import { chatSelectionColors } from './chat-selection-colors'
 import { encodePillCopyNativeId, SELECTION_COPY_MODULE } from './markdown-pill-copy-id'
 
@@ -26,6 +27,8 @@ type SelectionCopyViewProps = ViewProps & {
   /** Android colour ints (processColor); absent, the platform's colours. */
   selectionHandleColor?: number
   selectionHighlightColor?: number
+  /** A Text inside opened (`active`) or closed its selection's action mode (SelectionCopyRootView.kt). */
+  onSelectionChange?: (event: NativeSyntheticEvent<{ active: boolean }>) => void
 }
 
 function selectionCopyView(): ComponentType<SelectionCopyViewProps> | null {
@@ -49,6 +52,29 @@ function colorInt(color: string | null): number | undefined {
 
 export function MarkdownSelectionRoot({ children }: { children: ReactNode }): ReactNode {
   const { colors } = useTheme()
+  // In the chat, the document says when it holds a selection, so a scroll does not switch its
+  // Texts' `selectable` off and end it (chat-text-selectable-context.ts, 2026-10-14). One owner
+  // per document; one that unmounts with a selection open releases it, or every later scroll
+  // in the chat would keep selection on.
+  const report = useChatTextSelectionReport()
+  const owner = useRef({}).current
+  const live = useRef(false)
+  const onSelectionChange = useCallback(
+    (event: NativeSyntheticEvent<{ active: boolean }>) => {
+      live.current = event.nativeEvent.active === true
+      report?.(owner, live.current)
+    },
+    [owner, report]
+  )
+  useEffect(
+    () => () => {
+      if (live.current) {
+        live.current = false
+        report?.(owner, false)
+      }
+    },
+    [owner, report]
+  )
   if (!SelectionCopyView) {
     return children
   }
@@ -57,6 +83,7 @@ export function MarkdownSelectionRoot({ children }: { children: ReactNode }): Re
     <SelectionCopyView
       selectionHandleColor={colorInt(selection.handle)}
       selectionHighlightColor={colorInt(selection.highlight)}
+      onSelectionChange={onSelectionChange}
     >
       {children}
     </SelectionCopyView>
