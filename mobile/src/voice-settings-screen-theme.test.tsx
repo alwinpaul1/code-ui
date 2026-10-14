@@ -117,14 +117,13 @@ describe('draws the Voice settings screen light in a light session', () => {
     )[0]
     expect(stylesOf(dictationModeLabel!.props.style).map((s) => s.color)).toContain(palette.text)
 
-    const enableLabel = root.findAll(
-      (node) => String(node.type) === 'Text' && node.props.children === 'Enable Voice Dictation'
+    const signIn = root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.children === 'Sign in to Anthropic'
     )[0]
-    expect(stylesOf(enableLabel!.props.style).map((s) => s.color)).toContain(palette.text)
+    expect(stylesOf(signIn!.props.style).map((s) => s.color)).toContain(palette.text)
 
-    const toggle = root.findByType('Switch' as never)
-    expect(toggle.props.trackColor).toEqual({ false: palette.bgRaised, true: palette.textSecondary })
-    expect(toggle.props.thumbColor).toBe(palette.text)
+    // Dictation is always on (2026-10-14): no switch is drawn in either scheme.
+    expect(root.findAll((node) => String(node.type) === 'Switch')).toHaveLength(0)
   })
 
   it('does not paint the two schemes alike, so the pins above can tell them apart', () => {

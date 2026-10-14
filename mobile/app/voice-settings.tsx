@@ -23,7 +23,6 @@ import {
 } from '../src/transport/stale-after-reconnect'
 import type { RpcClient } from '../src/transport/rpc-client'
 import type { ConnectionState } from '../src/transport/types'
-import { VoiceSettingsSwitchRow } from '../src/components/VoiceSettingsSwitchRow'
 import { voiceSettingsStyles } from '../src/components/voice-settings-styles'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
@@ -115,23 +114,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     void refreshSetup()
   }, [refreshSetup])
 
-  const handleToggleEnabled = useCallback(
-    async (enabled: boolean) => {
-      if (!client) {
-        return
-      }
-      setError(null)
-      setSetup((prev) => (prev ? { ...prev, enabled } : prev))
-      try {
-        setSetup(await setDictationConfig(client, { enabled }))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update')
-        void refreshSetup()
-      }
-    },
-    [client, refreshSetup]
-  )
-
   const handleSelectMode = useCallback(
     async (dictationMode: 'toggle' | 'hold') => {
       if (!client) {
@@ -208,8 +190,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       setAnthBusy(false)
     }
   }, [])
-
-  const enabled = setup?.enabled ?? false
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -356,20 +336,9 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         ) : (
           <>
             <Text style={[styles.groupHeading, styles.inputGroupGap]}>DICTATION</Text>
+            {/* No on/off switch: dictation is always on (the user, 2026-10-14). */}
             <View style={[styles.section, styles.sectionTopGap]}>
-              <VoiceSettingsSwitchRow
-                label="Enable Voice Dictation"
-                sublabel="Dictate text into any focused pane on your desktop."
-                value={enabled}
-                onValueChange={(v) => void handleToggleEnabled(v)}
-              />
-
-              <View style={styles.separator} />
-
-              <View
-                style={[styles.row, !enabled && styles.disabled]}
-                pointerEvents={enabled ? 'auto' : 'none'}
-              >
+              <View style={styles.row}>
                 <View style={styles.rowContent}>
                   <Text style={styles.rowLabel}>Dictation Mode</Text>
                   <Text style={styles.rowSublabel}>

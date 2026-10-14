@@ -156,7 +156,7 @@ function retryButton(tree: ReactTestRenderer) {
 
 /** What the old screen drew over a setup it never had. */
 function expectNoInventedSettings(tree: ReactTestRenderer): void {
-  expect(texts(tree)).not.toContain('Enable Voice Dictation')
+  expect(texts(tree)).not.toContain('Dictation Mode')
   expect(tree.root.findAll((node) => String(node.type) === 'Switch')).toHaveLength(0)
 }
 
@@ -231,8 +231,7 @@ describe('Voice settings without settings to show', () => {
 
     expect(sendRequest).toHaveBeenCalledTimes(2)
     expect(texts(tree)).not.toContain('Could not read dictation settings')
-    expect(texts(tree)).toContain('Enable Voice Dictation')
-    expect(tree.root.findByType('Switch' as never).props.value).toBe(true)
+    expect(texts(tree)).toContain('Dictation Mode')
   })
 
   it('reads a failed setup again once per new connection, not on every render', async () => {
@@ -249,16 +248,20 @@ describe('Voice settings without settings to show', () => {
     fakes.lastConnectedAt = 2000
     await rerender()
     expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(texts(tree)).toContain('Enable Voice Dictation')
+    expect(texts(tree)).toContain('Dictation Mode')
   })
 
-  it('draws the switch off only once the desktop has said dictation is off', async () => {
+  // The user, 2026-10-14: dictation is always on, so there is no switch to turn it off, and the
+  // mode stays choosable even over a desktop whose own setting says off.
+  it('draws no on/off switch, and keeps the mode choosable, even when the desktop says off', async () => {
     const { client } = desktop([listed({ ...SETUP, enabled: false })])
     fakes.entries = [{ hostId: 'host-1', client, state: 'connected' }]
     const tree = await mount()
 
-    expect(texts(tree)).toContain('Enable Voice Dictation')
-    expect(tree.root.findByType('Switch' as never).props.value).toBe(false)
+    expect(texts(tree)).not.toContain('Enable Voice Dictation')
+    expect(tree.root.findAll((node) => String(node.type) === 'Switch')).toHaveLength(0)
+    expect(texts(tree)).toContain('Dictation Mode')
+    expect(tree.root.findAll((node) => node.props.pointerEvents === 'none')).toHaveLength(0)
   })
 })
 
