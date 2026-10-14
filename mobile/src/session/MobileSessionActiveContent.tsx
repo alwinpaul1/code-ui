@@ -1,3 +1,4 @@
+import type { LevelSource } from '../dictation/pcm-level'
 import { useMemo, useRef } from 'react'
 import { shownPermissionMode, stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
@@ -359,6 +360,7 @@ export function MobileSessionActiveContent({
         // microphone is a take, and Cancel or Stop ends it.
         micActive={dictation.isStarting || dictation.isRecording}
         micLevel={(dictation as { level?: number }).level ?? 0}
+        micLevelSource={(dictation as { levelSource?: LevelSource }).levelSource}
         micTranscribing={dictation.isProcessing}
         onCancelDictation={() => cancelDictation()}
         onStopDictation={stopDictation}

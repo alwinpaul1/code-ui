@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
+import type { LevelSource } from '../dictation/pcm-level'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
@@ -91,6 +92,8 @@ type Props = {
   /** Microphone level 0..1 while `micActive`; drives the waveform (the voice bars without the
    *  recording row). */
   micLevel?: number
+  /** The engine's per-chunk level, held outside React; the waveform prefers it to `micLevel`. */
+  micLevelSource?: LevelSource
   /** The take has stopped listening and its words are being finished. */
   micTranscribing?: boolean
   /** With `onStopDictation`, turns on the recording row while dictating: the field and the
@@ -184,6 +187,7 @@ export function MobileNativeChatComposer({
   onBeforeSend,
   micActive = false,
   micLevel = 0,
+  micLevelSource,
   micTranscribing = false,
   onCancelDictation,
   onStopDictation,
@@ -563,7 +567,7 @@ export function MobileNativeChatComposer({
           </View>
           </Animated.View>
           {dictationRow.available ? (
-            <MobileNativeChatDictationLayer row={dictationRow} level={micLevel} padding={space.sm} iconButton={iconButton} />
+            <MobileNativeChatDictationLayer row={dictationRow} level={micLevel} levelSource={micLevelSource} padding={space.sm} iconButton={iconButton} />
           ) : null}
           </View>
         </View>

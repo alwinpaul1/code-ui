@@ -515,7 +515,10 @@
             // 2026-10-14: 410. The recording row's three props (`micTranscribing`,
             // `onCancelDictation`, `onStopDictation`) in the type, the destructure
             // and the hand-off to the chat view; the row is MobileNativeChatDictationRow.tsx.
-            "max": 410,
+            // 2026-10-14 (later): 414. `micLevelSource`, the Anthropic engine's
+            // per-chunk level (dictation/pcm-level.ts), in the import, the type,
+            // the destructure and the hand-off.
+            "max": 414,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -575,7 +578,9 @@
             // after the take, the send-blocked grey and the swap are
             // use-composer-dictation-row.ts; the
             // row is MobileNativeChatDictationRow.tsx.
-            "max": 459,
+            // 2026-10-14 (later): +3 for `micLevelSource` (import, prop, destructure),
+            // handed to the waveform so a chunk's level skips React.
+            "max": 462,
             "skipBlankLines": true,
             "skipComments": true
           }

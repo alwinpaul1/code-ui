@@ -638,7 +638,9 @@ const HEAD_HOST_JSX_SHA256 = 'aa75133a961d99b340038d28b533e354b1b74ed6341e198446
 // 2026-10-14: the chat overlay's micActive reads isStarting too, and it is handed
 // `micTranscribing`, `onCancelDictation` and `onStopDictation` for the recording row. Same
 // records; only the overlay's moved.
-const HEAD_LEAF_JSX_SHA256 = '5b2e7c428492f5b241a8fdb1ab86ffeb8b5921546f6cfb87740212b3b89bc0b6'
+// 2026-10-14 (later): the chat overlay is handed `micLevelSource`, the Anthropic engine's per-chunk
+// microphone level for the waveform. Same records; only the overlay's moved.
+const HEAD_LEAF_JSX_SHA256 = '26625116e4966176887aad197165bc33180e9d9a8afeefe6bf837e25d4199f69'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).

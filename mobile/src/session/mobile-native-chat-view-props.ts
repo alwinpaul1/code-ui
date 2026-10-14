@@ -1,3 +1,4 @@
+import type { LevelSource } from '../dictation/pcm-level'
 import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
@@ -141,6 +142,8 @@ export type MobileNativeChatViewProps = {
   onBeforeSend?: () => void
   micActive?: boolean
   micLevel?: number
+  /** The engine's per-chunk microphone level, held outside React (the waveform reads it). */
+  micLevelSource?: LevelSource
   /** The take stopped listening and its words are being finished ("Transcribing…"). */
   micTranscribing?: boolean
   /** The recording row's Cancel: ends the take and discards its words. */

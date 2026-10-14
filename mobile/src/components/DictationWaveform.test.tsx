@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
 
 import { DictationWaveform } from './DictationWaveform'
 import { WAVEFORM_HEIGHT } from './dictation-waveform-geometry'
+import type { LevelSource } from '../dictation/pcm-level'
 
 let renderer: ReactTestRenderer | null = null
 afterEach(() => {
@@ -75,5 +76,34 @@ describe('the dictation waveform view', () => {
       expect(view.props.voicedColor).toBe(colors.text)
       expect(view.props.silentColor).toBe(colors.textSecondary)
     }
+  })
+})
+
+describe('the dictation waveform fed by a per-chunk level', () => {
+  // The Anthropic engine's level changes about 31 times a second; it reaches the waveform through a
+  // subscription, not a prop, so the screen does not re-render per chunk (2026-10-14).
+  it('listens to the engine’s level source while mounted, and lets go when it unmounts', async () => {
+    const listeners = new Set<(level: number) => void>()
+    const source: LevelSource = {
+      current: 0.3,
+      set: () => {},
+      subscribe: (listener) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }
+    }
+    await act(async () => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <DictationWaveform level={0} levelSource={source} />
+        </ThemeProvider>
+      )
+    })
+    expect(listeners.size).toBe(1)
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(listeners.size).toBe(0)
   })
 })
