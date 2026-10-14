@@ -30,6 +30,11 @@ import {
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
 import { subscribeAppForegroundClock } from '../src/session/app-foreground-clock'
 import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
+import { PERMISSION_COMMENT_ACTION } from '../src/notifications/permission-notification-content'
+import { answerSessionReplyFromResponse } from '../src/notifications/session-reply-answer'
+import { productionSessionReplyIo } from '../src/notifications/session-reply-io'
+import { SESSION_REPLY_ACTION } from '../src/notifications/session-reply-notification'
+import { sendClaudePermissionComment } from '../src/session/claude-permission-comment-send'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
 import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
 import { repostBannerWithReplyVerdict } from '../src/notifications/question-reply-verdict'
@@ -183,6 +188,13 @@ function ThemedRoot() {
         // opening the app, which is the point: the alternative was unlock,
         // open, find the session, tap. Anything that is not one of ours falls
         // through to the clear below, exactly as before.
+        if (response.actionIdentifier === SESSION_REPLY_ACTION) {
+          // The Reply on a finished session: written to the chat outbox, which sends it
+          // (session-reply-response.ts), and the banner settled either way.
+          await answerSessionReplyFromResponse(response, productionSessionReplyIo())
+          clearLastNotificationResponse()
+          return
+        }
         const userText = response.userText ?? null
         const outcome = await answerPromptFromNotification({
           actionIdentifier: response.actionIdentifier,
@@ -211,14 +223,21 @@ function ThemedRoot() {
           // Same road as the chat card's answer: option numbers and typed
           // text as keystrokes, built by the shared key builders and paced by
           // the shared stepper, under the terminal write lock.
-          sendQuestion: sendQuestionAnswerFromNotification
+          sendQuestion: sendQuestionAnswerFromNotification,
+          // Deny with comment: the words typed into Claude Code's own "No" row, by its own keys
+          // (claude-permission-comment-send.ts).
+          sendPermissionComment: sendClaudePermissionComment
         })
         // A typed reply leaves Android showing the text with a spinner until
         // the notification is updated. Sent: the desktop's dismiss clears it
         // when the agent moves on. Not sent: nothing would, and the user would
         // never learn why — so the banner is posted again with the reason on top.
         if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer') {
-          await repostBannerWithReplyVerdict(response, outcome)
+          await repostBannerWithReplyVerdict(
+            response,
+            outcome,
+            response.actionIdentifier === PERMISSION_COMMENT_ACTION ? 'comment' : 'question'
+          )
         }
         clearLastNotificationResponse()
         return

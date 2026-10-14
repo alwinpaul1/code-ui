@@ -1,6 +1,8 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { mobileChatPermissionKey } from '../session/mobile-native-chat-permission'
+import type { ClaudePermissionCommentOutcome } from '../session/claude-permission-comment-send'
 import type { PendingPrompt } from './permission-lookup'
+import { PERMISSION_COMMENT_ACTION } from './permission-notification-content'
 
 /** What a permission notification carries so its buttons can be answered. */
 export type PermissionNotificationData = {
@@ -10,6 +12,9 @@ export type PermissionNotificationData = {
   permissionKey: string
   /** Action identifier to the keystrokes that option sends. */
   sends: Record<string, string>
+  /** The banner offers Deny with comment (PERMISSION_COMMENT_ACTION). Absent for a banner that
+   *  does not, so a tap that names it anyway answers nothing. */
+  comment?: true
 }
 
 /** How a tap on a prompt banner's button ended. Shared by the permission and
@@ -26,7 +31,9 @@ export type PromptAnswerOutcome =
   | 'stale'
   | 'failed'
 
-export type PermissionAnswerOutcome = Exclude<PromptAnswerOutcome, 'refused'>
+/** A permission can be refused too now: Deny with comment with no words, or for an agent whose
+ *  dialog it was not verified against. */
+export type PermissionAnswerOutcome = PromptAnswerOutcome
 
 function readData(value: unknown): PermissionNotificationData | null {
   if (value == null || typeof value !== 'object') {
@@ -37,6 +44,7 @@ function readData(value: unknown): PermissionNotificationData | null {
   const worktreeId: unknown = Reflect.get(box, 'worktreeId')
   const permissionKey: unknown = Reflect.get(box, 'permissionKey')
   const sends: unknown = Reflect.get(box, 'sends')
+  const comment: unknown = Reflect.get(box, 'comment')
   if (
     typeof hostId !== 'string' ||
     typeof worktreeId !== 'string' ||
@@ -46,7 +54,26 @@ function readData(value: unknown): PermissionNotificationData | null {
   ) {
     return null
   }
-  return { hostId, worktreeId, permissionKey, sends: sends as Record<string, string> }
+  return {
+    hostId,
+    worktreeId,
+    permissionKey,
+    sends: sends as Record<string, string>,
+    ...(comment === true ? { comment: true as const } : {})
+  }
+}
+
+/** The agents whose permission dialog Deny with comment was verified against (Claude Code 2.1.299,
+ *  claude-permission-comment-send.ts). */
+function takesComment(agent: string): boolean {
+  return agent === 'claude' || agent === 'openclaude'
+}
+
+/** A comment that was not typed leaves one line: the shade shows nothing, and the banner simply
+ *  stays. The words are never logged. */
+function refuseComment(detail: { hostId: string; worktreeId: string; reason: string }): 'refused' {
+  console.warn('[permission-notification] comment not sent', detail)
+  return 'refused'
 }
 
 /**
@@ -69,20 +96,38 @@ function readData(value: unknown): PermissionNotificationData | null {
  */
 export async function answerPermissionFromNotification(args: {
   actionIdentifier: string
+  /** What the user typed into a reply field; null for a plain button. */
+  userText?: string | null
   data: unknown
   resolveClient: (hostId: string) => RpcClient | null
   lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPrompt | null>
   send: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
+  /** Types a comment into the agent's own dialog (Deny with comment). */
+  sendComment?: (input: {
+    client: RpcClient
+    terminal: string
+    comment: string
+  }) => Promise<ClaudePermissionCommentOutcome>
 }): Promise<PermissionAnswerOutcome> {
   try {
     const data = readData(args.data)
     if (!data) {
       return 'not-an-answer'
     }
+    const isComment = args.actionIdentifier === PERMISSION_COMMENT_ACTION
+    const comment = (args.userText ?? '').trim()
     const text = data.sends[args.actionIdentifier]
-    // Android delivers the DEFAULT identifier when the body is tapped rather
-    // than a button. That is "open the app", not "answer", and must not send.
-    if (typeof text !== 'string' || text === '') {
+    if (isComment) {
+      // Only a banner that offered the button can be answered through it.
+      if (data.comment !== true || !args.sendComment) {
+        return 'not-an-answer'
+      }
+      if (comment === '') {
+        return refuseComment({ hostId: data.hostId, worktreeId: data.worktreeId, reason: 'no words typed' })
+      }
+    } else if (typeof text !== 'string' || text === '') {
+      // Android delivers the DEFAULT identifier when the body is tapped rather
+      // than a button. That is "open the app", not "answer", and must not send.
       return 'not-an-answer'
     }
     const client = args.resolveClient(data.hostId)
@@ -101,6 +146,16 @@ export async function answerPermissionFromNotification(args: {
       mobileChatPermissionKey(pending.permission) !== data.permissionKey
     ) {
       return 'stale'
+    }
+    if (isComment) {
+      if (!takesComment(pending.agent)) {
+        return refuseComment({
+          hostId: data.hostId,
+          worktreeId: data.worktreeId,
+          reason: `the prompt is waiting in ${pending.agent}, whose dialog this was not verified against`
+        })
+      }
+      return await args.sendComment!({ client, terminal: pending.terminal, comment })
     }
     // Why the option must still be on offer: an agent can re-ask the same
     // question with different choices, which passes the key check while the

@@ -1,3 +1,4 @@
+import type { ClaudePermissionCommentOutcome } from '../session/claude-permission-comment-send'
 import type { RpcClient } from '../transport/rpc-client'
 import type { PendingPrompt } from './permission-lookup'
 import {
@@ -42,15 +43,23 @@ export async function answerPromptFromNotification(args: {
   resolveClient: (hostId: string) => RpcClient | null
   lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPrompt | null>
   sendPermission: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
+  /** Deny with comment: the words, typed into Claude Code's own dialog. */
+  sendPermissionComment?: (input: {
+    client: RpcClient
+    terminal: string
+    comment: string
+  }) => Promise<ClaudePermissionCommentOutcome>
   sendQuestion: (input: QuestionAnswerSend) => Promise<boolean>
 }): Promise<PromptAnswerOutcome> {
   const { actionIdentifier, userText, data, resolveClient, lookup } = args
   let outcome: PromptAnswerOutcome = await answerPermissionFromNotification({
     actionIdentifier,
+    userText,
     data,
     resolveClient,
     lookup,
-    send: args.sendPermission
+    send: args.sendPermission,
+    sendComment: args.sendPermissionComment
   })
   if (outcome === 'not-an-answer') {
     outcome = await answerQuestionFromNotification({

@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications'
 import { notificationTrigger } from './local-notification-scheduling'
 import type { PromptAnswerOutcome } from './permission-notification-response'
+import { SESSION_REPLY_FAILURE_LINES } from './session-reply-failure'
 
 /** The ways a typed reply ends without being written. */
 export type ReplyVerdict = Exclude<PromptAnswerOutcome, 'sent' | 'not-an-answer'>
@@ -9,6 +10,18 @@ export type ReplyVerdict = Exclude<PromptAnswerOutcome, 'sent' | 'not-an-answer'
  *  stacking. Words only: the warning icon beside it is drawn by the native
  *  view from `data.replyVerdict` (notification-status-icon.ts). */
 const VERDICT_MARK = 'Reply not sent — '
+
+/** What a failed tap was: an answer to a question (the default), or Deny with comment. */
+export type ReplyKind = 'question' | 'comment'
+
+/** Deny with comment, not sent. Claude's own "Couldn’t send. Tap to open." for everything that
+ *  went wrong with the send (session-reply-failure.ts); the one thing a comment can also be is
+ *  late, when the agent has moved on to something else. */
+export function commentVerdictLine(outcome: ReplyVerdict): string {
+  return outcome === 'stale'
+    ? 'Comment not sent — the agent has moved on'
+    : SESSION_REPLY_FAILURE_LINES.generic
+}
 
 /** One line, in the user's terms, for why the reply was not sent. */
 export function replyVerdictLine(outcome: ReplyVerdict): string {
@@ -38,7 +51,12 @@ async function stillShown(identifier: string): Promise<boolean> {
   }
 }
 
-function withoutVerdict(body: string): string {
+/** The banner's words without a verdict line an earlier post put on top: the line the banner's
+ *  own `replyVerdict` names, else any that opens with the question mark above. */
+function withoutVerdict(body: string, previous: unknown): string {
+  if (typeof previous === 'string' && previous !== '' && body.startsWith(`${previous}\n`)) {
+    return body.slice(previous.length + 1)
+  }
   return body.startsWith(VERDICT_MARK) ? body.slice(body.indexOf('\n') + 1) : body
 }
 
@@ -72,11 +90,21 @@ export type RepostableResponse = {
  */
 export async function repostBannerWithReplyVerdict(
   response: RepostableResponse,
-  outcome: ReplyVerdict
+  outcome: ReplyVerdict,
+  kind: ReplyKind = 'question'
 ): Promise<void> {
+  await repostBannerWithVerdictLine(
+    response,
+    kind === 'comment' ? commentVerdictLine(outcome) : replyVerdictLine(outcome)
+  )
+}
+
+/** The same re-post for a line that is already worded: a reply's failure line
+ *  (session-reply-failure.ts). The line is recorded on the banner as `replyVerdict`, which the
+ *  native view draws its warning from and a later re-post reads to take the line off again. */
+export async function repostBannerWithVerdictLine(response: RepostableResponse, verdict: string): Promise<void> {
   const { identifier, content } = response.notification.request
-  const body = withoutVerdict(content.body ?? '')
-  const verdict = replyVerdictLine(outcome)
+  const body = withoutVerdict(content.body ?? '', content.data?.replyVerdict)
   try {
     // The reply field can be open while the desktop's dismiss lands (the
     // agent was answered at the desk); the reply then ends 'stale', and a

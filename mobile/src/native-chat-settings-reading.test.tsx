@@ -124,7 +124,7 @@ describe('the reading settings on the Chat UI screen', () => {
     expect(radio(tree, 'Transcript text size', 'Small').props.accessibilityState).toMatchObject({ checked: false })
     expect(radio(tree, 'Transcript font', 'Instrument Sans').props.accessibilityState).toMatchObject({ checked: true })
     expect(radio(tree, 'Code font', 'JetBrains Mono').props.accessibilityState).toMatchObject({ checked: true })
-    const wrap = tree.root.find((node) => node.type === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines')
+    const wrap = tree.root.find((node) => (node.type as unknown) === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines')
     expect(wrap.props.value).toBe(false)
   })
 
@@ -158,7 +158,7 @@ describe('the reading settings on the Chat UI screen', () => {
   it('turns Wrap long lines on and off', async () => {
     const tree = await draw()
     const wrap = () =>
-      tree.root.find((node) => node.type === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines')
+      tree.root.find((node) => (node.type as unknown) === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines')
     await act(async () => {
       wrap().props.onValueChange(true)
       await Promise.resolve()
@@ -179,7 +179,7 @@ describe('the reading settings on the Chat UI screen', () => {
     expect(radio(tree, 'Transcript font', 'System').props.accessibilityState).toMatchObject({ checked: true })
     expect(radio(tree, 'Code font', 'System').props.accessibilityState).toMatchObject({ checked: true })
     expect(
-      tree.root.find((node) => node.type === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines').props.value
+      tree.root.find((node) => (node.type as unknown) === 'Switch' && node.props.accessibilityLabel === 'Wrap long lines').props.value
     ).toBe(true)
   })
 })

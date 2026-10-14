@@ -164,7 +164,7 @@ describe('notification route coordination', () => {
     const notificationEffect = rootLayoutSource.slice(start, end)
     const answered = notificationEffect.indexOf('const outcome = await answerPromptFromNotification(')
     expect(answered).toBeGreaterThanOrEqual(0)
-    const repost = notificationEffect.indexOf('await repostBannerWithReplyVerdict(response, outcome)', answered)
+    const repost = notificationEffect.indexOf('await repostBannerWithReplyVerdict(', answered)
     expect(repost).toBeGreaterThan(answered)
     expect(notificationEffect.slice(answered, repost)).toContain(
       "if (userText !== null && outcome !== 'sent' && outcome !== 'not-an-answer')"
