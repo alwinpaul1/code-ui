@@ -36,7 +36,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** The saved sign-ins could not be read. The store refuses every write then, sign-in included,
-   *  so the screen offers the one way out: clearing them. */
+   *  so the screen offers the one way out: Sign out, which deletes them unread. */
   const [unreadable, setUnreadable] = useState(false)
   const [authCode, setAuthCode] = useState('')
   const [showCodeInput, setShowCodeInput] = useState(false)
@@ -118,7 +118,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
       await clearCredential()
       await reload()
     } catch (err) {
-      setError(`Could not clear the saved sign-ins: ${err instanceof Error ? err.message : String(err)}`)
+      setError(`Could not sign out: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setBusy(false)
     }
@@ -220,9 +220,17 @@ export function AnthropicAccountsSection(): React.JSX.Element {
             <Text style={styles.error}>{error}</Text>
           </View>
         ) : null}
-        {unreadable ? (
+        {unreadable || (accounts !== null && accounts.length > 1) ? (
           <View style={{ paddingHorizontal: spacing.md + 2, paddingBottom: spacing.sm }}>
-            <Button label="Clear saved sign-ins" variant="secondary" align="center" onPress={() => void handleClear()} disabled={busy} />
+            {/* Sign out is what clears. Unreadable sign-ins cannot be listed, so this one button
+                deletes the stored keys without reading them; with 2+ accounts it signs all out. */}
+            <Button
+              label={unreadable ? 'Sign out' : 'Sign out of all accounts'}
+              variant="secondary"
+              align="center"
+              onPress={() => void handleClear()}
+              disabled={busy}
+            />
           </View>
         ) : null}
       </View>
