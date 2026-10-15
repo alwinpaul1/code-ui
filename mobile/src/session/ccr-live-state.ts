@@ -1,5 +1,5 @@
 import type { CcrEvent } from './ccr-session-api'
-import { decodeCcrEvent } from './ccr-transcript-decode'
+import { decodeCcrEvent, isCcrInterruptEvent } from './ccr-transcript-decode'
 
 /**
  * A Claude tab's LIVE state, read from Anthropic's copy of its Remote Control session, as the
@@ -141,11 +141,11 @@ type TurnSignal = 'prompt' | 'thinking' | 'output' | 'end' | 'other'
 
 /** What one top-level user or assistant event says about the lead's turn. */
 function turnSignal(event: CcrEvent): TurnSignal {
-  const rows = decodeCcrEvent(event)
-  if (rows.some((row) => row.role === 'system')) {
-    // The interrupt marker is the only user/assistant event the decoder turns into a system row.
+  // Stop's marker draws no row (the Claude app's rule) but still ends the turn.
+  if (isCcrInterruptEvent(event)) {
     return 'end'
   }
+  const rows = decodeCcrEvent(event)
   if (rows.some((row) => row.role === 'user')) {
     return 'prompt'
   }

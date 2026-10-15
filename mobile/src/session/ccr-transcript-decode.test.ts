@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT } from '../../../src/shared/native-chat-types'
 import { parseCcrEvent, type CcrEvent } from './ccr-session-api'
 import { ccrEventDrawsRow, ccrKeptImages, decodeCcrEvent, decodeCcrEvents, slimCcrEvent } from './ccr-transcript-decode'
 import { PNG_1PX, SESSION_A, assistantEvent, event, imageBlock, pasteEvent, readResultEvent, systemEvent } from './fixtures/ccr-session-api-2026-10-14'
@@ -72,10 +71,8 @@ describe('a matched Claude tab draws Anthropic’s events as the Claude app does
     expect(rows(assistant('a3', [{ type: 'thinking', thinking: '', signature: 'sig' }, { type: 'redacted_thinking', data: 'x' }]))).toEqual([])
   })
 
-  it('an interrupt is the quiet status line, not a user bubble', () => {
-    expect(rows(user('u6', [{ type: 'text', text: '[Request interrupted by user]' }]))).toEqual([
-      expect.objectContaining({ id: 'u6', role: 'system', blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }] })
-    ])
+  it('an interrupt draws no row, as in the app (ccr-stop-and-api-error-rows.test.ts)', () => {
+    expect(rows(user('u6', [{ type: 'text', text: '[Request interrupted by user]' }]))).toEqual([])
   })
 
   it('an injected turn (meta, synthetic, compaction summary) shows only its tool results', () => {
