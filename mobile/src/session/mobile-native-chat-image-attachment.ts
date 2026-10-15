@@ -76,7 +76,7 @@ export type NativeChatStoredBytes = { readonly path: string; readonly anthropicF
 /** Puts one picked file's bytes somewhere the send can reference. The default is the desktop's
  *  temp file (`saveMobileClipboardImageAsTempFile`); a Claude tab on the Anthropic lane hands in
  *  an upload to Anthropic instead (ccr-file-upload.ts). */
-export type NativeChatAttachmentStore = (bytes: { readonly base64: string; readonly name?: string; readonly mimeType?: string }) => Promise<NativeChatStoredBytes>
+export type NativeChatAttachmentStore = (bytes: { readonly base64: string; readonly name?: string; readonly mimeType?: string }, signal?: AbortSignal) => Promise<NativeChatStoredBytes>
 
 /** What a retry brings back for its chip. */
 export type NativeChatUploadLanded = NativeChatStoredBytes & { readonly previewUri: string }
@@ -261,8 +261,9 @@ export type UploadNativeChatImagesDeps = {
   // Fired once the user has picked an image and the host upload is about to start —
   // lets the UI show the attach spinner only for the transfer, not the picker.
   readonly onUploadStart?: () => void
-  /** Fired per picked file before its bytes go up, so a chip can appear at once. */
-  readonly onImageStart?: (image: UploadingNativeChatImage) => void
+  /** Fired per picked file before its bytes go up, so a chip can appear at once. `upload` aborts
+   *  that file's upload to `store` (its chip was removed while it went up). */
+  readonly onImageStart?: (image: UploadingNativeChatImage, upload: AbortController) => void
   /** Retains each completed upload if a later image in the same selection fails. */
   readonly onImageUploaded?: (image: Omit<PendingNativeChatImage, 'id'>) => void
   /** One picture's read or upload failed. With this set, the rest of the
@@ -272,7 +273,7 @@ export type UploadNativeChatImagesDeps = {
   readonly onImageFailed?: (
     image: UploadingNativeChatImage,
     error: unknown,
-    retry: () => Promise<NativeChatUploadLanded>
+    retry: (signal?: AbortSignal) => Promise<NativeChatUploadLanded>
   ) => boolean | void
   /** Whether the strip has room for one more chip, asked before each picture
    *  of a selection. Without room the picture is skipped, never read or sent,
@@ -353,7 +354,8 @@ export async function uploadMobileNativeChatImages(
       : image.videoFrame
         ? { previewUri, videoFrame: image.videoFrame }
         : { previewUri }
-    onImageStart?.(chip)
+    const upload = new AbortController()
+    onImageStart?.(chip, upload)
     try {
       // The chip is up; now the bytes, which a photo reads (and scales) on demand.
       const base64 = image.base64 || (image.load ? await image.load() : '')
@@ -361,7 +363,7 @@ export async function uploadMobileNativeChatImages(
         continue
       }
       const stored = store
-        ? await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) })
+        ? await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) }, upload.signal)
         : { path: await saveToDesktop(client, base64, connectionId) }
       const result = { ...chip, ...stored }
       uploaded.push(result)
@@ -371,13 +373,13 @@ export async function uploadMobileNativeChatImages(
         throw error
       }
       // False: the user took the chip out while it went up, so nothing failed for them.
-      const kept = onImageFailed(chip, error, async () => {
+      const kept = onImageFailed(chip, error, async (signal) => {
         const base64 = image.base64 || (image.load ? await image.load() : '')
         if (!base64) {
           throw new Error('The picture could not be read')
         }
         if (store) {
-          return { ...(await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) })), previewUri }
+          return { ...(await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) }, signal)), previewUri }
         }
         const live = retryConnection?.() ?? { client, getConnectionId }
         if (!live.client) {

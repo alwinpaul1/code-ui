@@ -40,6 +40,11 @@ export const nativeChatAttachmentsResets = { current: 0 }
  *  upload. */
 export const nativeChatRemovedUploads = { ids: new Set<string>(), uploads: new Set<string>() }
 
+/** The uploads that CAN be called back: a pick going to Anthropic (ccr-file-upload.ts), keyed as
+ *  `removedUploadKey` keys it. The remove badge aborts its chip's (2026-10-15 review: the request
+ *  went on and left a file at Anthropic that nothing referenced); a desktop save ignores it. */
+export const nativeChatUploadAborts = new Map<string, AbortController>()
+
 export function removedUploadKey(scope: string, batch: string | undefined, previewUri: string): string {
   return `${scope}\u0000${batch ?? ''}\u0000${previewUri}`
 }
@@ -155,6 +160,10 @@ export const useNativeChatImageAttachmentsStore = create<{
     nativeChatWaitingSends.clear()
     nativeChatRemovedUploads.ids.clear()
     nativeChatRemovedUploads.uploads.clear()
+    for (const upload of nativeChatUploadAborts.values()) {
+      upload.abort()
+    }
+    nativeChatUploadAborts.clear()
     for (const controller of videoFrameExtractionControllers.values()) {
       controller.abort()
     }

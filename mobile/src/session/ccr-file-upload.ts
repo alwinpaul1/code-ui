@@ -75,8 +75,9 @@ export type CcrFileUploadRequest = {
 }
 
 export type CcrFileUploadDeps = Pick<CcrLinkDeps, 'auth'> & {
-  /** Sends the multipart request; the HTTP status and the body as text, whatever they are. */
-  upload: (request: CcrFileUploadRequest) => Promise<{ status: number; body: string }>
+  /** Sends the multipart request; the HTTP status and the body as text, whatever they are. Stops
+   *  the request when `signal` aborts (the chip was removed, or the lane went away). */
+  upload: (request: CcrFileUploadRequest, signal?: AbortSignal) => Promise<{ status: number; body: string }>
 }
 
 /** An upload that failed, with the line the chip's toast shows. */
@@ -169,9 +170,9 @@ function idOf(body: string): string | null {
  * Uploads one attachment with `accountId`'s own sign-in (the tab's send target: ccrSendTargetForTab
  * names it, never another copy of the session) and returns what the send references. A 401 reads
  * the sign-in again once, as every other call on this lane does. Refuses an empty file and one past
- * the cap before any request goes out.
+ * the cap before any request goes out. `signal` cancels it (nothing goes out once it has aborted).
  */
-export async function uploadCcrFile(deps: CcrFileUploadDeps, accountId: string, file: { base64: string; name?: string | null; mimeType?: string | null }): Promise<CcrUploadedFile> {
+export async function uploadCcrFile(deps: CcrFileUploadDeps, accountId: string, file: { base64: string; name?: string | null; mimeType?: string | null }, signal?: AbortSignal): Promise<CcrUploadedFile> {
   const refusal = ccrAttachmentRefusal(base64ByteLength(file.base64))
   if (refusal) {
     throw new CcrFileUploadError(refusal, 'refused before upload', true)
@@ -181,7 +182,10 @@ export async function uploadCcrFile(deps: CcrFileUploadDeps, accountId: string, 
   let fileId: string
   try {
     fileId = await withAccountAuth(deps, accountId, async (auth) => {
-      const response = await deps.upload(ccrFileUploadRequest(auth.token, { base64: file.base64, fileName, mimeType }))
+      if (signal?.aborted) {
+        throw new CcrFileUploadError(CCR_UPLOAD_FAILED, 'cancelled')
+      }
+      const response = await deps.upload(ccrFileUploadRequest(auth.token, { base64: file.base64, fileName, mimeType }), signal)
       if (response.status === 401) {
         throw new CcrApiError('files', 'unauthorized', 401)
       }
@@ -204,4 +208,27 @@ export async function uploadCcrFile(deps: CcrFileUploadDeps, accountId: string, 
     throw new CcrFileUploadError(CCR_UPLOAD_FAILED, error instanceof Error ? error.message : String(error))
   }
   return { fileId, fileName, isImage: ccrAttachmentIsImage(mimeType), accountId }
+}
+
+export type CcrFileDeleteDeps = Pick<CcrLinkDeps, 'auth'> & {
+  /** Sends the DELETE; the HTTP status, whatever it is. */
+  remove: (request: { readonly url: string; readonly headers: Readonly<Record<string, string>> }) => Promise<{ status: number }>
+}
+
+/**
+ * Deletes a file this phone uploaded and no chip references any more (removed, or landed after its
+ * chip was removed), with the sign-in of the account that uploaded it: the Files API's
+ * `DELETE /v1/files/{id}`. Resolves with the HTTP status; a 401 reads the sign-in again once.
+ */
+export async function deleteCcrFile(deps: CcrFileDeleteDeps, accountId: string, fileId: string): Promise<number> {
+  return withAccountAuth(deps, accountId, async (auth) => {
+    const response = await deps.remove({
+      url: `${CCR_FILES_URL}/${encodeURIComponent(fileId)}`,
+      headers: { Authorization: `Bearer ${auth.token}`, 'anthropic-version': CCR_ANTHROPIC_VERSION, 'anthropic-beta': CCR_FILES_BETA }
+    })
+    if (response.status === 401) {
+      throw new CcrApiError('files', 'unauthorized', 401)
+    }
+    return response.status
+  })
 }

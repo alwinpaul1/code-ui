@@ -65,7 +65,7 @@ describe('a Claude tab attachment on the Anthropic lane', () => {
     expect(failed).toHaveLength(1)
     fail = false
     await expect(retry!()).resolves.toEqual({ path: '', anthropicFile: uploaded('acct-tab'), previewUri: 'file:///p.png' })
-    expect(store).toHaveBeenCalledWith({ base64: 'iVBORw0KGgo=', mimeType: 'image/png' })
+    expect(store).toHaveBeenCalledWith({ base64: 'iVBORw0KGgo=', mimeType: 'image/png' }, expect.any(AbortSignal))
     expect(getConnectionId).not.toHaveBeenCalled()
     expect(desktop.sendRequest).not.toHaveBeenCalled()
   })

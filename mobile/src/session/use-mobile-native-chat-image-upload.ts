@@ -65,7 +65,7 @@ export function useMobileNativeChatImageUpload(args: {
   showToast: ShowToast
   onImagesUploaded: (scope: string, images: UploadedNativeChatImage[]) => void
   /** A picked file is on its way: show its chip now, with a spinner. */
-  onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
+  onImageUploading?: (scope: string, image: UploadingNativeChatImage, upload?: AbortController) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
   /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`.
@@ -73,7 +73,7 @@ export function useMobileNativeChatImageUpload(args: {
   onImageFailed?: (
     scope: string,
     image: UploadingNativeChatImage & { batch: string },
-    retry: () => Promise<NativeChatUploadLanded>
+    retry: (signal?: AbortSignal) => Promise<NativeChatUploadLanded>
   ) => boolean
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
@@ -194,7 +194,7 @@ export function useMobileNativeChatImageUpload(args: {
             nativeChatAttachmentCount(useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []) <
             NATIVE_CHAT_ATTACHMENT_LIMIT,
           onLimitReached: () => showToast(NATIVE_CHAT_ATTACHMENT_LIMIT_LINE, 2500),
-          onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
+          onImageStart: (image, upload) => onImageUploading?.(scope, { ...image, batch }, upload),
           onUploadStart: () => {
             started = true
             attachingCount.current += 1
