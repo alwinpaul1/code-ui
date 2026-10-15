@@ -506,7 +506,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 2026-10-15 (982ed4371, dictated words stay in the caption): four `spoken: ''` resets of the
 // chat take and the 'chat' check in onSpokenError. 693.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'a0ac19dc78cb7f2f90e07683273168750de858b60dace046076bab4c0725e9d9'
+  '22164f21f9feb5273e0ec04188e536e6b0f65c07faf10309435a64c74ab248dc'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1287,7 +1287,10 @@ describe('mobile session route extraction parity', () => {
     // 693 since 982ed4371 (2026-10-15, dictated words stay in the caption): the chat take's four
     // `spoken: ''` resets in the dictation hook and the 'chat' check in its onSpokenError, which
     // commits the words heard so far. The typed-claude auto-permission rewrite adds no string.
-    expect(strings).toHaveLength(693)
+    // 691 since 577c6ab09 (2026-10-15, the Anthropic control lane): the mode toast's words moved
+    // to permission-mode-pick.ts and the lock's 'agent-session' / 'connected' / 'disconnected'
+    // to use-mobile-native-chat-input-lock.ts, out of these files; their two imports came in.
+    expect(strings).toHaveLength(691)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
