@@ -3,11 +3,11 @@ import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
 import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
-import { readCcrTranscript, writeCcrTranscript } from './ccr-transcript-persist'
+import { readCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
-import { CcrEventStore } from './ccr-link-store'
+import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
 
-export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
+export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
 /**
  * One Claude Code session on Anthropic, read with one account: its events, paged back from the
@@ -29,6 +29,7 @@ export class CcrSessionLink {
   readonly sessionId: string
   private readonly deps: CcrLinkDeps
   private readonly store: CcrEventStore
+  private readonly keptCopy: CcrKeptCopyWriter
   private olderCursor: string | null = null
   private state: CcrLinkState
   private readonly listeners = new Set<() => void>()
@@ -46,6 +47,9 @@ export class CcrSessionLink {
     this.sessionId = sessionId
     this.deps = deps
     this.store = new CcrEventStore(deps.keep)
+    this.keptCopy = new CcrKeptCopyWriter(deps.setTimer ?? defaultCcrTimer, () =>
+      this.stopped ? null : { accountId, sessionId, events: this.store.drawing(), lastSequenceNum: this.store.lastSequenceNum, olderCursor: this.olderCursor, hasOlder: this.state.hasOlder }
+    )
     this.state = { events: [], phase: 'idle', error: null, hasOlder: true, loadingOlder: false, connectionStatus: null, version: 0 }
     const kept = readCcrTranscript(accountId, sessionId)
     if (kept) {
@@ -87,20 +91,19 @@ export class CcrSessionLink {
     return this.store.ordered
   }
 
+  /** Writes the kept copy now; a streamed burst waits (persistSoon). A stopped link's account may
+   *  have signed out, its copy just wiped: a page landing late must not write it back. */
   private persist(): void {
-    // A stopped link's account may have signed out, its copy just wiped: a page landing late must
-    // not write it back.
-    if (this.stopped) {
-      return
-    }
-    writeCcrTranscript({
-      accountId: this.accountId,
-      sessionId: this.sessionId,
-      events: this.store.drawing(),
-      lastSequenceNum: this.store.lastSequenceNum,
-      olderCursor: this.olderCursor,
-      hasOlder: this.state.hasOlder
-    })
+    this.keptCopy.write()
+  }
+
+  private persistSoon(): void {
+    this.keptCopy.soon()
+  }
+
+  /** Writes a pending streamed burst now (the app leaving, the link closing). */
+  flushPersist(): void {
+    this.keptCopy.flush()
   }
 
   /** Starts reading: the newest page when nothing is held, then the stream. Idempotent. */
@@ -228,7 +231,7 @@ export class CcrSessionLink {
       case 'event':
         if (this.add([frame.event])) {
           this.set({})
-          this.persist()
+          this.persistSoon()
         }
         return
       case 'truncated':
@@ -329,6 +332,7 @@ export class CcrSessionLink {
     this.cancelTimer = null
     this.abort?.abort()
     this.abort = null
+    this.flushPersist()
   }
 
   /** The app is back in front: a paused stream resumes after the last sequence held, and a lost
@@ -353,12 +357,14 @@ export class CcrSessionLink {
     void this.open()
   }
 
-  /** Stops the stream and timers for good; the registry wipes the kept copy on a sign-out. */
+  /** Stops the stream and timers for good, a pending write too (flushPersist() first to keep it);
+   *  the registry wipes the kept copy on a sign-out. */
   stop(): void {
     this.stopped = true
     this.abort?.abort()
     this.cancelTimer?.()
     this.cancelTimer = null
+    this.keptCopy.cancel()
     this.listeners.clear()
   }
 }

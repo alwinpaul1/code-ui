@@ -250,7 +250,9 @@ function isInterruptMarker(blocks: readonly NativeChatBlock[]): boolean {
 
 /** Whether an event draws a row (what is persisted for the first paint). */
 export function ccrEventDrawsRow(event: CcrEvent): boolean {
-  return decodeCcrEvent(event).length > 0
+  // From the decode cache the chat draws with: a held event is decoded once, not on every
+  // streamed event's persist (review 2026-10-15).
+  return decodeCcrEvents([event]).length > 0
 }
 
 /** The rows one event draws, oldest first; none for an event the chat does not show. */

@@ -94,6 +94,7 @@ export function acquireCcrLink(accountId: string, sessionId: string): CcrLinkHan
       }
       held.cancelLinger = lingerTimer(() => {
         if (held.refs === 0 && entries.get(key) === held) {
+          held.link.flushPersist()
           held.link.stop()
           entries.delete(key)
         }

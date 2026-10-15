@@ -27,6 +27,9 @@ export const CCR_STREAM_RECONNECT_MS: readonly number[] = [1_000, 3_000, 7_000, 
  *  AND stayed up this long: a server that answers and closes at once, whatever it sends first, is
  *  backed off to `lost` rather than redialled every second (review 2026-10-15). */
 export const CCR_STREAM_STABLE_MS = 5_000
+/** A burst of streamed events is kept on the phone once, this long after its first event: each
+ *  write trims and sizes the whole kept copy (review 2026-10-15). */
+export const CCR_PERSIST_STREAM_MS = 750
 /** The Claude app's page sizes (xjw.java:92-117, ujw `g()`): the newest page 200 events, older
  *  pages 500. With 84% of events `system` (observed live 2026-10-14), a page of 100 can hold no
  *  row at all. */

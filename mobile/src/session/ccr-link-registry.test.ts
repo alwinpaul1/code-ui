@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-events'
 import type { CcrFetch } from './ccr-session-api'
 import { acquireCcrLink, CCR_LINK_LINGER_MS, foregroundCcrLinks, openCcrLink, pauseCcrLinks, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
-import { CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
+import { CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
 import { ccrToolImage, ccrUserImages, resetCcrCacheForTests } from './ccr-session-cache'
 import { CCR_PERSISTED_EVENTS, flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
 import { decodeCcrEvents } from './ccr-transcript-decode'
@@ -372,6 +372,44 @@ describe('the transcript a link holds', () => {
     expect(link.getState().hasOlder).toBe(false)
   })
 
+  // Review 2026-10-15: each streamed event wrote the whole kept copy (a trim and a JSON size check
+  // of up to 200 rows) at once; a burst of events now writes once.
+  it('events streamed in a burst are kept once, after the burst', async () => {
+    const one = text('u1', 'user', 'hello')
+    const burst = Array.from({ length: 5 }, (_row, index) => text(`a${index}`, 'assistant', `part ${index}`))
+    const w = world(() => ({ status: 200, chunks: sseBody(burst.map((raw) => sseFrame('client_event', raw))), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([one])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(rowsOf(link)).toHaveLength(6)
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(1)
+    expect(w.timers.pending()).toEqual([CCR_PERSIST_STREAM_MS])
+    w.timers.fire(CCR_PERSIST_STREAM_MS)
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(6)
+  })
+
+  it('the app going to the background keeps what streamed in at once', async () => {
+    const two = text('a1', 'assistant', 'streamed')
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hello')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    pauseCcrLinks()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(2)
+    expect(w.timers.pending()).toEqual([])
+  })
+
+  it('a sign-out with a write pending writes nothing back', async () => {
+    const two = text('a1', 'assistant', 'streamed')
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hello')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    notifyAnthropicAccountsChanged({ signedOut: ACCOUNT_A })
+    w.timers.fire()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+  })
+
   it('pictures arrive as files, are drawn from the image cache, and no base64 is held or kept', async () => {
     const paste = pasteEvent('u-paste', [imageBlock(PNG_1PX)], '[Image #1] look')
     const read = readResultEvent('u-read', 'toolu_1', [imageBlock(PNG_1PX)])
@@ -410,7 +448,7 @@ describe('when reading fails', () => {
   async function fireUntilLost(w: World, link: CcrSessionLink): Promise<number[]> {
     const waits: number[] = []
     for (let firing = 0; firing < 30 && link.getState().phase !== 'lost'; firing++) {
-      waits.push(...w.timers.pending())
+      waits.push(...w.timers.pending().filter((ms) => ms !== CCR_PERSIST_STREAM_MS))
       w.timers.fire()
       await flush()
     }
@@ -454,7 +492,7 @@ describe('when reading fails', () => {
     const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
     await flush()
     for (let firing = 0; firing < 8; firing++) {
-      expect(w.timers.pending()).toEqual([CCR_STREAM_RECONNECT_MS[0]])
+      expect(w.timers.pending().filter((ms) => ms !== CCR_PERSIST_STREAM_MS)).toEqual([CCR_STREAM_RECONNECT_MS[0]])
       w.timers.fire()
       await flush()
     }
