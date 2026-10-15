@@ -10,6 +10,7 @@ import {
 } from './mobile-native-chat-image-attachments-store'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
 import { discardCcrUploadedFile } from './ccr-file-discard'
+import { CcrFileUploadError } from './ccr-file-upload'
 
 /**
  * How a chip whose upload failed goes up again (2026-10-11). A failed upload used to take its
@@ -100,12 +101,17 @@ export async function retryNativeChatUpload(id: string): Promise<boolean> {
       )
     return true
   } catch (error) {
-    // Removed while it went up again (the badge shows over the ring): nothing to say.
+    // Removed while it went up again (the badge shows over the ring): nothing to say. Refused as
+    // too large (HTTP 413): no retry can help, so the chip goes, with the app's words.
     const stillWanted = retries.get(id) === retry
+    const refused = error instanceof CcrFileUploadError && error.refusedBeforeUpload
+    if (refused) {
+      retries.delete(id)
+    }
     useNativeChatImageAttachmentsStore
       .getState()
       .update((prev) =>
-        withScopeAttachments(prev, retry.scope, refailNativeChatImage(prev[retry.scope] ?? [], id))
+        withScopeAttachments(prev, retry.scope, refused ? (prev[retry.scope] ?? []).filter((chip) => chip.id !== id) : refailNativeChatImage(prev[retry.scope] ?? [], id))
       )
     if (stillWanted) {
       retry.onFailed(error)

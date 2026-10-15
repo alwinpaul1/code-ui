@@ -283,13 +283,16 @@ export type UploadNativeChatImagesDeps = {
   readonly hasRoom?: () => boolean
   readonly onLimitReached?: () => void
   /** The connection a retry goes out on, read when it is tapped: a reconnect is a new client,
-   *  and a retry pinned to the pick's own could never succeed (Opus review, 2026-10-12). */
+   *  and a retry pinned to the pick's own could never succeed (Opus review, 2026-10-12). `store`
+   *  is the tab's Anthropic upload read then too (null: none now, the desktop), so a chip retried
+   *  after the tab left or joined the lane goes where a pick would go now (2026-10-15 review). */
   readonly retryConnection?: () => {
     readonly client: MobileClipboardImageRpcSender | null
     readonly getConnectionId: () => Promise<string | null>
+    readonly store?: (() => NativeChatAttachmentStore | null) | null
   }
-  /** Where the bytes go instead of the desktop (a Claude tab on the Anthropic lane): the pick and
-   *  its retries all use it, and no desktop connection is needed for either. */
+  /** Where the bytes go instead of the desktop (a Claude tab on the Anthropic lane): the pick
+   *  uses it, and no desktop connection is needed. A retry reads `retryConnection` instead. */
   readonly store?: NativeChatAttachmentStore
 }
 
@@ -378,10 +381,11 @@ export async function uploadMobileNativeChatImages(
         if (!base64) {
           throw new Error('The picture could not be read')
         }
-        if (store) {
-          return { ...(await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) }, signal)), previewUri }
-        }
         const live = retryConnection?.() ?? { client, getConnectionId }
+        const liveStore = live.store === undefined ? store : (live.store?.() ?? null)
+        if (liveStore) {
+          return { ...(await liveStore({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) }, signal)), previewUri }
+        }
         if (!live.client) {
           throw new Error('Not connected to the desktop')
         }

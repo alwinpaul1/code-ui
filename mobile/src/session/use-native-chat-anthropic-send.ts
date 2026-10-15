@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { planCcrAttachmentSend } from './ccr-attachment-send'
+import { CCR_ATTACHMENT_NO_ACCOUNT, planCcrAttachmentSend } from './ccr-attachment-send'
 import type { NativeChatAttachmentStore, PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -36,10 +36,16 @@ export function useNativeChatAnthropicSend(args: {
       return false
     }
     const chips = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
-    const accountId = lane.accountId()
-    if (chips.length === 0 || accountId === null) {
-      // No chips, or no target: the plain send, which refuses with the target's own reason.
+    if (chips.length === 0) {
       return (await lane.send(composerText)) !== 'rejected'
+    }
+    const accountId = lane.accountId()
+    if (accountId === null) {
+      // Chips, and no target read yet: refused whole. A plain send here could post the words
+      // the moment the target settles and leave the chips behind without a word.
+      onError?.()
+      onSendError(CCR_ATTACHMENT_NO_ACCOUNT)
+      return false
     }
     const plan = planCcrAttachmentSend(chips, composerText, accountId)
     switch (plan.kind) {

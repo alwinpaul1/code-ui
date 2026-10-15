@@ -437,7 +437,7 @@ export function MobileNativeChatView({
         {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}
       />
       <MobileNativeChatChromeRow
-        sendErrorMessage={sendErrorMessage} onRetrySend={() => retrySendFromComposer(composerText, handleSend, onClearSendError)}
+        sendErrorMessage={sendErrorMessage} onRetrySend={() => retrySendFromComposer(composerText, handleSend, onClearSendError, attachments?.length ?? 0)}
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}

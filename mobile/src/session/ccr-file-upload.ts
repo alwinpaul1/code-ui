@@ -85,7 +85,8 @@ export class CcrFileUploadError extends Error {
   constructor(
     readonly userMessage: string,
     readonly detail: string,
-    /** Refused on the phone (empty, over the cap): nothing went out, and a retry cannot help. */
+    /** Refused on the phone (empty, over the cap), or by the server as too large (HTTP 413): a
+     *  retry cannot help, so the chip goes with the app's words instead of offering one. */
     readonly refusedBeforeUpload = false
   ) {
     super(`${userMessage} (${detail})`)
@@ -190,7 +191,9 @@ export async function uploadCcrFile(deps: CcrFileUploadDeps, accountId: string, 
         throw new CcrApiError('files', 'unauthorized', 401)
       }
       if (response.status === 413) {
-        throw new CcrFileUploadError(CCR_ATTACHMENT_TOO_LARGE, 'HTTP 413')
+        // The server will not take this file whatever happens next: the app's too-large state,
+        // refused as the phone refuses one past the cap, so the chip offers no retry.
+        throw new CcrFileUploadError(CCR_ATTACHMENT_TOO_LARGE, 'HTTP 413', true)
       }
       if (response.status < 200 || response.status >= 300) {
         throw new CcrFileUploadError(CCR_UPLOAD_FAILED, `HTTP ${response.status}`)

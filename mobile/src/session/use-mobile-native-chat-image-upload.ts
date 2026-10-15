@@ -118,8 +118,8 @@ export function useMobileNativeChatImageUpload(args: {
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
   // What a failed chip's retry goes out on, read at the tap (mobile-native-chat-image-attachment.ts).
-  const liveConnectionRef = useRef({ client, getConnectionId: getActiveWorktreeConnectionId })
-  liveConnectionRef.current = { client, getConnectionId: getActiveWorktreeConnectionId }
+  const liveConnectionRef = useRef({ client, getConnectionId: getActiveWorktreeConnectionId, store: anthropicStore ?? null })
+  liveConnectionRef.current = { client, getConnectionId: getActiveWorktreeConnectionId, store: anthropicStore ?? null }
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
     connStateRef.current = connState
