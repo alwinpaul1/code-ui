@@ -79,7 +79,7 @@ describe('the usage rows of a tab matched to an account', () => {
     const work = applyCcrUsageToHud(hostToday, { reading: reading(), matchedAccount: true, hostFeedAllowed: true, beaconDecidesLimits: false })
     const personal = applyCcrUsageToHud(hostToday, {
       reading: reading({ sessionId: 'cse_personal', accountId: 'personal', limits: [{ name: 'Session', usedPercent: 3, windowMinutes: 300, resetsAt: 2_000_000_000 }], context: { usedTokens: 4_005, windowTokens: null } }),
-      matchedAccount: true,
+      matchedAccount: true, hostFeedAllowed: true,
       beaconDecidesLimits: false
     })
     expect(work.limits.map((row) => row.usedPercent)).toEqual([88, 40])
