@@ -92,10 +92,9 @@ describe.each(CLAUDE_APP_SHEET_COMMANDS)('a typed /%s with two chats mounted in 
 })
 
 it('one command’s chats do not touch another command’s opener', () => {
-  const [first, second] = CLAUDE_APP_SHEET_COMMANDS
   const open = vi.fn()
-  mount(first, open)
-  unmount(mount(second, vi.fn()))
-  expect(openClaudeAppCommandSheet(first)).toBe(true)
+  mount('workflows', open)
+  unmount(mount('diff', vi.fn()))
+  expect(openClaudeAppCommandSheet('workflows')).toBe(true)
   expect(open).toHaveBeenCalledTimes(1)
 })
