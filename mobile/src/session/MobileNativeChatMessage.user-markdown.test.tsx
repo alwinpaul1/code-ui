@@ -110,6 +110,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, fontFamily, lightColors } from '../theme/tokens'
 import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { nativeChatPromptPlainText } from './mobile-native-chat-message-text'
 import { holdThenChoose } from './user-message-menu.test-support'
 
 const PASTED = [
@@ -251,11 +252,15 @@ describe('a sent prompt written in Markdown', () => {
     expect(contrastRatio(colors.accentText, colors.userBubble)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('copies the raw Markdown from the menu a hold opens, and nothing in the bubble takes the hold for a selection', async () => {
-    const root = render(userMessage(PASTED))
+  // Claude's Copy gives the Markdown source; Code UI gives the words as drawn (the user's choice,
+  // 2026-09-28 and again 2026-10-15).
+  it('copies the words as drawn from the menu a hold opens, and nothing in the bubble takes the hold for a selection', async () => {
+    const message = userMessage(PASTED)
+    const root = render(message)
     const bubble = bubbleOf(root, 'light')!
     await holdThenChoose(root, 'Copy')
-    expect(mocks.clipboard).toEqual([PASTED])
+    expect(mocks.clipboard).toEqual([nativeChatPromptPlainText(message.blocks)])
+    expect(mocks.clipboard[0]).not.toContain('**')
     expect(texts(bubble).filter((node) => node.props.selectable === true)).toEqual([])
   })
 

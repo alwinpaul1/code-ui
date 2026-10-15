@@ -24,7 +24,12 @@ export function HoldTarget({
   onHold,
   style,
   children,
-  ...rest
+  onPress,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityHint,
+  testID,
+  accessible
 }: {
   onHold?: HoldHandler
   style?: StyleProp<ViewStyle>
@@ -42,9 +47,27 @@ export function HoldTarget({
       onHold?.(ref.current, { x: 0, y: 0 })
     }
   }
-  const actions = onHold ? { accessibilityActions: [HOLD_ACTION], onAccessibilityAction } : {}
+  // Every prop spelled out, none spread: the page-served Back census reads a spread Pressable as
+  // a control it cannot rule on (page-served-back-control-a11y.test.ts).
   return (
-    <Pressable ref={ref} style={style} collapsable={false} {...rest} {...actions} {...hold}>
+    <Pressable
+      ref={ref}
+      style={style}
+      collapsable={false}
+      onPress={onPress}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      testID={testID}
+      accessible={accessible}
+      accessibilityActions={onHold ? [HOLD_ACTION] : undefined}
+      onAccessibilityAction={onHold ? onAccessibilityAction : undefined}
+      onPressIn={hold.onPressIn}
+      onTouchMove={hold.onTouchMove}
+      onPressOut={hold.onPressOut}
+      onLongPress={hold.onLongPress}
+      delayLongPress={hold.delayLongPress}
+    >
       {children}
     </Pressable>
   )
