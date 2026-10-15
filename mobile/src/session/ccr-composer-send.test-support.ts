@@ -88,7 +88,7 @@ function Harness(): null {
     connectionStatus: state.connectionStatus,
     working: state.working,
     promptUp: state.promptUp,
-    attachments: state.attachments,
+    attachments: () => state.attachments,
     composerText: state.composerText,
     setComposerText,
     captureSendOrigin: origin,

@@ -93,7 +93,8 @@ export function useCcrComposerSend(args: {
   connectionStatus: string | null
   working: boolean
   promptUp: boolean
-  attachments: number
+  /** Pictures or files attached in the composer of the tab on screen, read at the turn end. */
+  attachments: () => number
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
@@ -302,7 +303,7 @@ export function useCcrComposerSend(args: {
       return true
     }
     const verdict: CcrQueueTurnEnd = same
-      ? ccrQueueAtTurnEnd(captured, { offline: isOffline, promptUp: now.promptUp, draft: now.composerText, attachments: now.attachments, sending: posting.current > 0 })
+      ? ccrQueueAtTurnEnd(captured, { offline: isOffline, promptUp: now.promptUp, draft: now.composerText, attachments: now.attachments(), sending: posting.current > 0 })
       : { kind: 'to-composer', text: captured, because: resolved.kind === 'refused' ? `no send target (${resolved.reason})` : `this tab now sends to session ${ccrSessionTail(resolved.sessionId)}, not ${ccrSessionTail(held.target.sessionId)}` }
     switch (verdict.kind) {
       case 'none':
