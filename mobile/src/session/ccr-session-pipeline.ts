@@ -2,6 +2,7 @@ import { listCcrSessionEvents, CcrApiError, type CcrSessionRow } from './ccr-ses
 import { recordCcrMatchOutcome } from './ccr-match-outcome'
 import { bindCcrConfigDir, clearCcrFailure, ccrAccountForConfigDir, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
 import { forgetSharedCcrLists, listAccountSessionsShared } from './ccr-session-lists'
+import { forgetCcrSessionFacts } from './ccr-session-facts'
 import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
 import { emptyCcrExtracted, extractCcrImages, type CcrExtracted } from './ccr-session-images'
 import { rankCcrCandidates } from './ccr-session-match'
@@ -153,6 +154,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch, agentSessionId, input.configDir))
     if (!auth) {
       forgetCcrMapping(input.tabId, agentSessionId)
+      forgetCcrSessionFacts(input.tabId)
       sessionId = null
     }
   }
@@ -341,6 +343,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   } catch (error) {
     if (error instanceof CcrApiError && error.reason === 'not-found') {
       forgetCcrMapping(input.tabId, agentSessionId)
+      forgetCcrSessionFacts(input.tabId)
     }
     keepFound(extracted, deps)
     return fail('images', `${reasonOf(error)} after ${pagesRead} page${pagesRead === 1 ? '' : 's'}`)

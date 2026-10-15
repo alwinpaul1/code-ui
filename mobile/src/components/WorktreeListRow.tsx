@@ -17,6 +17,7 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { AgentSpinner } from './AgentSpinner'
+import { isClaudeOnlyWorkspace } from '../worktree/claude-session-list-filter'
 import { MobileRepoIcon } from './MobileRepoIcon'
 import { WorktreeAgentList } from './WorktreeAgentList'
 import { WorktreeMetaGlyphs, prStateColor } from './WorktreeMetaGlyphs'
@@ -152,7 +153,11 @@ function WorktreeListRowComponent<T extends WorktreeListRowItem>({
           gap: 4
         }}
       >
-        <AgentSpinner status={status} workingMode={item.workingMode} />
+        <AgentSpinner
+          status={status}
+          workingMode={item.workingMode}
+          themed={isClaudeOnlyWorkspace(item.agents) || undefined}
+        />
         {item.unread && (
           <Bell size={10} color={colors.warning} fill={colors.warning} style={{ marginTop: 2 }} />
         )}
