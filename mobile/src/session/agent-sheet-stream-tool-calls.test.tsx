@@ -199,8 +199,8 @@ describe('the Agent sheet counts the agent’s calls from its file and the strea
 })
 
 describe('unionSubagentMessages', () => {
-  const call = (id: string, callId: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {}, callId }] })
-  const result = (id: string, callId: string): NativeChatMessage => ({ id, role: 'tool', blocks: [{ type: 'tool-result', output: 'ok', callId }] })
+  const call = (id: string, callId: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {}, callId }], timestamp: null, source: 'transcript' })
+  const result = (id: string, callId: string): NativeChatMessage => ({ id, role: 'tool', blocks: [{ type: 'tool-result', output: 'ok', callId }], timestamp: null, source: 'transcript' })
 
   it('is empty for two empty sources', () => {
     expect(unionSubagentMessages([], [])).toEqual([])
