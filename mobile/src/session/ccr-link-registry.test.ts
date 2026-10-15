@@ -499,6 +499,25 @@ describe('when reading fails', () => {
     expect(link.getState().phase).toBe('reconnecting')
   })
 
+  // Review 2026-10-15: only a connection that moved the transcript on reset the back-off, so a
+  // healthy stream up for minutes on an idle session, dropped by the network now and then, was
+  // `lost` after its fifth drop over hours.
+  it('an idle stream that stayed up a minute before each drop starts the back-off over, never lost', async () => {
+    const w = world(() => ({ status: 200, chunks: [] }))
+    // Every connection lasts a minute by the link's clock, and carries no event.
+    w.clock.step = 60_000
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    for (let drop = 0; drop < CCR_STREAM_RECONNECT_MS.length + 1; drop++) {
+      expect(w.timers.pending().filter((ms) => ms !== CCR_PERSIST_STREAM_MS)).toEqual([CCR_STREAM_RECONNECT_MS[0]])
+      w.timers.fire()
+      await flush()
+    }
+    expect(link.getState().phase).toBe('reconnecting')
+    expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 2)
+  })
+
   it('a stream refused for this sign-in stops and says why, with no redial, as the app does', async () => {
     const w = world(() => ({ status: 403, chunks: [], text: '{"error":{"type":"permission_error"}}' }))
     w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])

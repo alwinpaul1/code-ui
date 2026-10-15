@@ -1,6 +1,6 @@
 import { CcrApiError, type CcrEvent, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_IDLE_STABLE_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
 import { readCcrTranscript } from './ccr-transcript-persist'
@@ -189,11 +189,13 @@ export class CcrSessionLink {
       const from = this.store.lastSequenceNum
       const now = this.deps.now ?? Date.now
       let openedAt: number | null = null
-      // The back-off starts over only after a connection that moved the transcript on AND stayed
-      // up (CCR_STREAM_STABLE_MS). Any frame was enough before: a server that sent one
-      // `session_update` and closed was redialled every second for ever (review 2026-10-15).
+      // The back-off starts over after a connection that moved the transcript on AND stayed up
+      // (CCR_STREAM_STABLE_MS), or that stayed up long with nothing new (CCR_STREAM_IDLE_STABLE_MS,
+      // an idle session). Any frame was enough before: a server that sent one `session_update` and
+      // closed was redialled every second for ever (review 2026-10-15).
       const settle = () => {
-        if (openedAt !== null && this.store.lastSequenceNum > from && now() - openedAt >= CCR_STREAM_STABLE_MS) {
+        const up = openedAt === null ? 0 : now() - openedAt
+        if (openedAt !== null && (up >= CCR_STREAM_IDLE_STABLE_MS || (this.store.lastSequenceNum > from && up >= CCR_STREAM_STABLE_MS))) {
           this.reconnects = 0
         }
       }

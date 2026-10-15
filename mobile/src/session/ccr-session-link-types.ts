@@ -23,10 +23,15 @@ export type CcrLinkDeps = {
 /** The waits before each reconnect, as the Claude app's stream does (1, 3, 7, 15, 31 s). After
  *  the last, the stream is `lost` until `retry()` (a relay reconnect) or `resume()` (the app back in front). */
 export const CCR_STREAM_RECONNECT_MS: readonly number[] = [1_000, 3_000, 7_000, 15_000, 31_000]
-/** A connection starts the back-off over only when it delivered an event the link did not hold
- *  AND stayed up this long: a server that answers and closes at once, whatever it sends first, is
- *  backed off to `lost` rather than redialled every second (review 2026-10-15). */
+/** A connection starts the back-off over when it delivered an event the link did not hold AND
+ *  stayed up this long (or stayed up CCR_STREAM_IDLE_STABLE_MS with none): a server that answers
+ *  and closes at once, whatever it sends first, is backed off to `lost` rather than redialled every
+ *  second (review 2026-10-15). */
 export const CCR_STREAM_STABLE_MS = 5_000
+/** A connection that stayed up this long starts the back-off over even with no new event: a
+ *  healthy stream on an idle session, dropped by the network now and then, is not counted toward
+ *  `lost` (review 2026-10-15: five such drops over hours lost the link). */
+export const CCR_STREAM_IDLE_STABLE_MS = 30_000
 /** A burst of streamed events is kept on the phone once, this long after its first event: each
  *  write trims and sizes the whole kept copy (review 2026-10-15). */
 export const CCR_PERSIST_STREAM_MS = 750
