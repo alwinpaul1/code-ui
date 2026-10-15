@@ -1,12 +1,12 @@
 import { CcrApiError, listCcrSessionEvents, type CcrEvent, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { bySequence, CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, ccrEventKey, defaultCcrTimer, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { readCcrTranscript, writeCcrTranscript } from './ccr-transcript-persist'
-import { storeCcrImages } from './ccr-session-cache'
-import { ccrEventDrawsRow, ccrKeptImages, slimCcrEvent } from './ccr-transcript-decode'
+import { ccrEventDrawsRow } from './ccr-transcript-decode'
+import { CcrEventStore } from './ccr-link-store'
 
-export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
+export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
 /**
  * One Claude Code session on Anthropic, read with one account: its events, paged back from the
@@ -27,9 +27,7 @@ export class CcrSessionLink {
   readonly accountId: string
   readonly sessionId: string
   private readonly deps: CcrLinkDeps
-  private readonly byKey = new Map<string, CcrEvent>()
-  private ordered: CcrEvent[] = []
-  private lastSequenceNum = 0
+  private readonly store: CcrEventStore
   private olderCursor: string | null = null
   private state: CcrLinkState
   private readonly listeners = new Set<() => void>()
@@ -45,11 +43,12 @@ export class CcrSessionLink {
     this.accountId = accountId
     this.sessionId = sessionId
     this.deps = deps
+    this.store = new CcrEventStore(deps.keep)
     this.state = { events: [], phase: 'idle', error: null, hasOlder: true, loadingOlder: false, connectionStatus: null, version: 0 }
     const kept = readCcrTranscript(accountId, sessionId)
     if (kept) {
       this.add(kept.events, false)
-      this.lastSequenceNum = Math.max(this.lastSequenceNum, kept.lastSequenceNum)
+      this.store.seen(kept.lastSequenceNum)
       this.olderCursor = kept.olderCursor
       this.state = { ...this.state, events: this.ordered, hasOlder: kept.hasOlder }
     }
@@ -78,32 +77,12 @@ export class CcrSessionLink {
     }
   }
 
-  /** Adds events (already slim or not); true when any was new. */
   private add(events: readonly CcrEvent[], slim = true): boolean {
-    let added = false
-    for (const raw of events) {
-      const key = ccrEventKey(raw)
-      if (!key || this.byKey.has(key)) {
-        if (raw.sequenceNum != null && raw.sequenceNum > this.lastSequenceNum) {
-          this.lastSequenceNum = raw.sequenceNum
-        }
-        continue
-      }
-      const event = slim ? slimCcrEvent(raw, this.deps.keep) : raw
-      this.byKey.set(key, event)
-      const kept = ccrKeptImages(event)
-      if (kept.tool.size + kept.user.size > 0) {
-        storeCcrImages(kept.tool, kept.user)
-      }
-      if (event.sequenceNum != null && event.sequenceNum > this.lastSequenceNum) {
-        this.lastSequenceNum = event.sequenceNum
-      }
-      added = true
-    }
-    if (added) {
-      this.ordered = [...this.byKey.values()].sort(bySequence)
-    }
-    return added
+    return this.store.add(events, slim)
+  }
+
+  private get ordered(): CcrEvent[] {
+    return this.store.ordered
   }
 
   private persist(): void {
@@ -115,8 +94,8 @@ export class CcrSessionLink {
     writeCcrTranscript({
       accountId: this.accountId,
       sessionId: this.sessionId,
-      events: this.ordered.filter(ccrEventDrawsRow),
-      lastSequenceNum: this.lastSequenceNum,
+      events: this.store.drawing(),
+      lastSequenceNum: this.store.lastSequenceNum,
       olderCursor: this.olderCursor,
       hasOlder: this.state.hasOlder
     })
@@ -197,7 +176,17 @@ export class CcrSessionLink {
         this.set({ phase: 'error', error: 'This account is signed out on this phone. Sign in to it again in Anthropic accounts.' })
         return
       }
-      const from = this.lastSequenceNum
+      const from = this.store.lastSequenceNum
+      const now = this.deps.now ?? Date.now
+      let openedAt: number | null = null
+      // The back-off starts over only after a connection that moved the transcript on AND stayed
+      // up (CCR_STREAM_STABLE_MS). Any frame was enough before: a server that sent one
+      // `session_update` and closed was redialled every second for ever (review 2026-10-15).
+      const settle = () => {
+        if (openedAt !== null && this.store.lastSequenceNum > from && now() - openedAt >= CCR_STREAM_STABLE_MS) {
+          this.reconnects = 0
+        }
+      }
       try {
         const end = await readCcrEventStream({
           fetch: this.deps.streamFetch,
@@ -206,24 +195,22 @@ export class CcrSessionLink {
           fromSequenceNum: from,
           signal: controller.signal,
           onOpen: () => {
+            openedAt = now()
             this.refreshedAuth = false
             this.set({ phase: 'live', error: null })
           },
-          onFrame: (frame) => {
-            // The back-off starts over only once the stream has said something: a server that
-            // accepts and closes at once would otherwise be redialled every second for ever.
-            this.reconnects = 0
-            this.onFrame(frame, from)
-          }
+          onFrame: (frame) => this.onFrame(frame, from)
         })
         if (end === 'aborted' || this.stopped) {
           return
         }
+        settle()
         this.scheduleReconnect('the stream ended')
       } catch (error) {
         if (controller.signal.aborted || this.stopped) {
           return
         }
+        settle()
         if (error instanceof CcrApiError && error.reason === 'unauthorized' && !this.refreshedAuth) {
           // Read the sign-in afresh once (a token rotated since), then connect again at once.
           this.refreshedAuth = true

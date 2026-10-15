@@ -55,6 +55,8 @@ type World = {
   authCalls: string[]
   timers: ReturnType<typeof manualTimers>
   signedOut: Set<string>
+  /** The link's clock: each read returns `at`, then moves it on by `step`. */
+  clock: { at: number; step: number }
 }
 
 function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promise<StreamReply>): World {
@@ -65,7 +67,8 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     logs: [],
     authCalls: [],
     timers: manualTimers(),
-    signedOut: new Set()
+    signedOut: new Set(),
+    clock: { at: 0, step: 0 }
   }
   const fetch: CcrFetch = async (url, init) => {
     w.pageRequests.push({ url, auth: init.headers.Authorization, org: init.headers['X-Organization-Uuid'] })
@@ -83,7 +86,12 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     },
     keep: (key) => `file:///cache/${encodeURIComponent(key)}`,
     log: (line) => w.logs.push(line),
-    setTimer: w.timers.timer
+    setTimer: w.timers.timer,
+    now: () => {
+      const at = w.clock.at
+      w.clock.at += w.clock.step
+      return at
+    }
   }
   setCcrLinkDepsLoader(async () => deps)
   setCcrLinkTimerForTests(w.timers.timer)
@@ -308,6 +316,61 @@ describe('when reading fails', () => {
     link.retry()
     await flush()
     expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 2)
+  })
+
+  /** Fires every reconnect wait until the link is lost (or 30 firings): the waits it asked for. */
+  async function fireUntilLost(w: World, link: CcrSessionLink): Promise<number[]> {
+    const waits: number[] = []
+    for (let firing = 0; firing < 30 && link.getState().phase !== 'lost'; firing++) {
+      waits.push(...w.timers.pending())
+      w.timers.fire()
+      await flush()
+    }
+    return waits
+  }
+
+  // Review 2026-10-15: any frame reset the back-off, so a server that answers with one frame and
+  // closes was redialled every second for ever (31 requests in 30 firings, never `lost`).
+  it('a server that sends one session_update and closes backs off 1/3/7/15/31 s, then is lost', async () => {
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('session_update', { connection_status: 'connected' })]) }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(await fireUntilLost(w, link)).toEqual([...CCR_STREAM_RECONNECT_MS])
+    expect(link.getState().phase).toBe('lost')
+    expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 1)
+  })
+
+  it('a server that hands over a new event and closes at once still backs off, then is lost', async () => {
+    let seq = 0
+    const w = world(() => {
+      seq += 1
+      return { status: 200, chunks: sseBody([sseFrame('client_event', text(`u${seq}`, 'user', `again ${seq}`))]) }
+    })
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(await fireUntilLost(w, link)).toEqual([...CCR_STREAM_RECONNECT_MS])
+    expect(link.getState().phase).toBe('lost')
+  })
+
+  it('a stream that delivered new events and stayed up starts the back-off over at 1 s', async () => {
+    let seq = 0
+    const w = world(() => {
+      seq += 1
+      return { status: 200, chunks: sseBody([sseFrame('client_event', text(`u${seq}`, 'user', `turn ${seq}`))]) }
+    })
+    // Every connection lasts a minute by the link's clock.
+    w.clock.step = 60_000
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    for (let firing = 0; firing < 8; firing++) {
+      expect(w.timers.pending()).toEqual([CCR_STREAM_RECONNECT_MS[0]])
+      w.timers.fire()
+      await flush()
+    }
+    expect(link.getState().phase).toBe('reconnecting')
   })
 
   it('a stream refused for this sign-in stops and says why, with no redial, as the app does', async () => {

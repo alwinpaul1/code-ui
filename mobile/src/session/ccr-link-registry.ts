@@ -49,7 +49,8 @@ function lazyDeps(): CcrLinkDeps {
     // Pictures are kept as they arrive; until the deps load nothing has arrived to keep.
     keep: (key, dataUri) => (depsPromiseResolved?.keep(key, dataUri) ?? null),
     log: (line) => (depsPromiseResolved?.log ?? ((text: string) => console.log(text)))(line),
-    setTimer: (run, ms) => (depsPromiseResolved?.setTimer ?? lingerTimer)(run, ms)
+    setTimer: (run, ms) => (depsPromiseResolved?.setTimer ?? lingerTimer)(run, ms),
+    now: () => (depsPromiseResolved?.now ?? Date.now)()
   }
 }
 
