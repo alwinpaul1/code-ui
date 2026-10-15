@@ -8,7 +8,7 @@ import { RECORDING_UUID } from './fixtures/ccr-attachments-2026-10-15'
 
 const REF = { fileUuid: RECORDING_UUID, fileName: 'Screen_Recording_20261015_123030_Code UI.mp4', isImage: false }
 
-function deps(statuses: Record<string, number>, accounts = [{ id: 'a', accessToken: 'tok-a' }, { id: 'b', accessToken: 'tok-b' }]): CcrAttachmentDeps & { calls: string[] } {
+function deps(statuses: Record<string, number>, accounts: { id: string; accessToken: string | null }[] = [{ id: 'a', accessToken: 'tok-a' }, { id: 'b', accessToken: 'tok-b' }]): CcrAttachmentDeps & { calls: string[] } {
   const calls: string[] = []
   return {
     calls,

@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { resetChatDockHeightForTests } from './use-mobile-chat-dock'
 
 /**
@@ -88,7 +89,7 @@ function row(id: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text: `Reply ${id}` }], timestamp: 0, source: 'transcript' }
 }
 
-function chatViewElement(rows: NativeChatMessage[], extra: Record<string, unknown> = {}): ReturnType<typeof createElement> {
+function chatViewElement(rows: NativeChatMessage[], extra: Partial<MobileNativeChatViewProps> = {}): ReturnType<typeof createElement> {
   return createElement(MobileNativeChatView, {
     messages: rows,
     folded: rows,
@@ -97,6 +98,7 @@ function chatViewElement(rows: NativeChatMessage[], extra: Record<string, unknow
     onSend: vi.fn().mockResolvedValue(true),
     sendSurfaceId: 'tab-a',
     getSendCompletionGeneration: () => 0,
+    getComposerEditGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),
@@ -125,7 +127,7 @@ describe('opening a session at its latest message', () => {
     vi.unstubAllGlobals()
   })
 
-  async function open(rows: NativeChatMessage[], extra: Record<string, unknown> = {}): Promise<void> {
+  async function open(rows: NativeChatMessage[], extra: Partial<MobileNativeChatViewProps> = {}): Promise<void> {
     await act(async () => {
       renderer = create(chatViewElement(rows, extra), {
         createNodeMock: (node) => (node.type === 'FlashList' ? { scrollToOffset, getAbsoluteLastScrollOffset: () => 0 } : null)
@@ -134,7 +136,7 @@ describe('opening a session at its latest message', () => {
   }
 
   function list() {
-    return renderer!.root.find((node) => node.type === 'FlashList')
+    return renderer!.root.find((node) => (node.type as unknown) === 'FlashList')
   }
 
   function ids(): string[] {

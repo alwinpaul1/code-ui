@@ -12,7 +12,7 @@ import { FILES_ONLY_PROMPT, RECORDING_PROMPT, RECORDING_UUID, withPayload } from
 // decoder's own output for the recorded events (fixtures/ccr-attachments-2026-10-15.ts), drawn by the
 // real message component under both themes.
 
-const open = vi.fn(async () => undefined)
+const open = vi.fn(async (_ref: never) => undefined)
 const load = vi.fn()
 vi.mock('./ccr-attachment-open', () => ({
   openCcrAttachment: (ref: unknown) => open(ref as never),
