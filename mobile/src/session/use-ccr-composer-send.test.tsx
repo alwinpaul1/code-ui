@@ -170,6 +170,18 @@ describe('sending from the composer of a Claude tab', () => {
     expect(api.deliveries).toEqual({})
   })
 
+  // P13, 2026-10-15: POST events into a session whose computer had gone offline answered 409
+  // session_not_active. The phone said "Message not sent: HTTP 409" where the app says why.
+  it('says the Remote Control session is offline when Anthropic answers that the session is not active', async () => {
+    postImpl = async () => {
+      throw new CcrApiError('events', 'session-not-active', 409)
+    }
+    expect(await send('run the tests')).toBe('rejected')
+    expect(calls.restore).toHaveBeenCalledWith(expect.objectContaining({ normalizedText: 'run the tests' }), 'run the tests')
+    expect(calls.error).toHaveBeenCalledWith(CCR_REMOTE_CONTROL_OFFLINE, { retry: true })
+    expect(logs.some((line) => line.includes('session is not active (HTTP 409)'))).toBe(true)
+  })
+
   it('counts a failed POST whose echo was already seen as sent', async () => {
     // The stream carried the echo (the uuid is the one this send will mint) before the POST's
     // answer came back as a failure: the ack was lost, the message was not.

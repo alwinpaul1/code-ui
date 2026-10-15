@@ -151,6 +151,9 @@ describe('each way a request fails', () => {
     ['403', () => reply(403, { error: { type: 'permission_error', message: 'Remote Control is disabled' } }), 'forbidden', 403],
     ['403 from an untrusted device', () => reply(403, { error: { type: 'permission_error', message: 'This device is not a trusted device' } }), 'untrusted-device', 403],
     ['404', () => reply(404, {}), 'not-found', 404],
+    // P13, 2026-10-15: a POST into a session whose computer is offline is refused like this.
+    ['409 for a session that is not active', () => reply(409, { error: { message: 'Session cse_01FaTuRHkvnrgXpjd3nuGiQF is not active', type: 'session_not_active' }, type: 'error' }), 'session-not-active', 409],
+    ['409 for anything else', () => reply(409, { error: { type: 'conflict' } }), 'http', 409],
     ['500', () => reply(500, {}), 'http', 500],
     ['no network', () => Promise.reject(new TypeError('Network request failed')), 'network', undefined],
     ['a body that is not JSON', () => reply(200, '<html>'), 'malformed', 200],

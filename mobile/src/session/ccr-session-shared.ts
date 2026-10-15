@@ -117,6 +117,8 @@ export function reasonOf(error: unknown): string {
         return `forbidden (HTTP ${error.status ?? 403}); the organization may not allow Remote Control, or the sign-in lacks access`
       case 'not-found':
         return `not found (HTTP ${error.status ?? 404})`
+      case 'session-not-active':
+        return `the session is not active (HTTP ${error.status ?? 409}); its computer is offline`
       case 'http':
         return `HTTP ${error.status ?? '?'}`
       case 'network':

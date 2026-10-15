@@ -65,6 +65,7 @@ export type CcrFailureReason =
   | 'forbidden'
   | 'untrusted-device'
   | 'not-found'
+  | 'session-not-active'
   | 'http'
   | 'network'
   | 'malformed'
@@ -124,6 +125,11 @@ async function getJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string,
     }
     if (status === 404) {
       throw new CcrApiError(stage, 'not-found', status)
+    }
+    if (status === 409) {
+      // A POST into a session whose computer is offline: `session_not_active` (P13, 2026-10-15).
+      const body = await response.text?.().catch(() => '') ?? ''
+      throw new CcrApiError(stage, /session_not_active/.test(body) ? 'session-not-active' : 'http', status)
     }
     throw new CcrApiError(stage, 'http', status)
   }

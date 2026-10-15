@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateA
 import { defaultCcrComposerSendDeps, type CcrComposerSendDeps } from './ccr-composer-send-deps'
 import { ccrQueueAtTurnEnd, returnCcrQueueToComposer, type CcrQueueTurnEnd } from './ccr-local-queue'
 import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
-import type { CcrEvent } from './ccr-session-api'
+import { CcrApiError, type CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import { reasonOf } from './ccr-session-shared'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -195,7 +195,7 @@ export function useCcrComposerSend(args: {
       }
       const why = reasonOf(error)
       deps.log(`[ccr-send] POST events to session ${ccrSessionTail(to.sessionId)} failed: ${why}`)
-      return why
+      return error instanceof CcrApiError && error.reason === 'session-not-active' ? CCR_REMOTE_CONTROL_OFFLINE : `Message not sent: ${why}`
     }
   }, [deps])
 
@@ -240,7 +240,7 @@ export function useCcrComposerSend(args: {
       latest.current.removePending(rowId)
     }
     latest.current.restoreRejectedDraft(origin, text)
-    latest.current.onSendError(`Message not sent: ${result}`, { retry: true })
+    latest.current.onSendError(result, { retry: true })
     return 'rejected'
   }, [deps, flight, post, setDelivery, settle])
   const sendOlderFirst = useCallback((origin: MobileNativeChatSendOrigin, to: CcrTo) =>
