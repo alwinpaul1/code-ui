@@ -60,6 +60,19 @@ export function makeFileCardStyles(theme: Theme) {
     pressed: {
       opacity: 0.7
     },
+    /** An attached photo: the picture itself at 96 x 96, clipped to the same 16 dp
+     *  (m330.java:6350, the `jd2Var != null` branch of m330.c). */
+    thumb: {
+      width: CARD_HEIGHT,
+      height: CARD_HEIGHT,
+      borderRadius: 16,
+      overflow: 'hidden',
+      backgroundColor: colors.attachmentCardFill
+    },
+    thumbImage: {
+      width: CARD_HEIGHT,
+      height: CARD_HEIGHT
+    },
     badge: {
       alignSelf: 'flex-start',
       borderRadius: 8,

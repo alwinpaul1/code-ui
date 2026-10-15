@@ -8,6 +8,7 @@ import type { CcrEvent } from './ccr-session-api'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
+import { ccrAttachmentBlock, type CcrAttachmentRef } from './mobile-native-chat-file-mentions'
 
 /**
  * A Claude Code session's Anthropic events as the chat's rows: the only transcript a matched
@@ -200,6 +201,28 @@ function contentBlocks(content: unknown): { blocks: NativeChatBlock[]; thinking:
   return { blocks, thinking, pictures }
 }
 
+/**
+ * The files a prompt carried, from `payload.file_attachments` (`[{file_uuid, file_name, is_image}]`,
+ * recorded 2026-10-15 on events a phone or the Claude app sent: the files sit NEXT to the message,
+ * whose `content` is a plain string, empty when the prompt was only files). An entry that is not
+ * that shape is left out, and so is a list that is not a list: refusing beats guessing a card.
+ */
+function readFileAttachments(value: unknown): CcrAttachmentRef[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const refs: CcrAttachmentRef[] = []
+  for (const item of value) {
+    const entry = record(item)
+    const fileUuid = str(entry?.file_uuid)
+    const fileName = str(entry?.file_name)
+    if (fileUuid && fileName) {
+      refs.push({ fileUuid, fileName, isImage: entry?.is_image === true })
+    }
+  }
+  return refs
+}
+
 const IMAGE_MARKER = /\[Image #\d+\]/
 const REPLAY_HIDDEN_ORIGINS = new Set(['peer', 'channel', 'coordinator', 'observer'])
 
@@ -314,7 +337,9 @@ function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp
   // the markers are, from the image cache (ccrKeptImages below, use-ccr-session-images.ts); one
   // that names none (sent from the Claude app or the phone) gets them as tiles of its own.
   const named = text.some((block) => block.type === 'text' && IMAGE_MARKER.test(block.text))
-  const decoded: NativeChatBlock[] = named ? text : [...text, ...pictures.map((url): NativeChatBlock => ({ type: 'image-ref', url }))]
+  // The prompt's files lead its blocks: the chat draws them as a row of cards above the bubble.
+  const files = role === 'user' ? readFileAttachments(payload.file_attachments).map(ccrAttachmentBlock) : []
+  const decoded: NativeChatBlock[] = [...files, ...(named ? text : [...text, ...pictures.map((url): NativeChatBlock => ({ type: 'image-ref', url }))])]
   if (role === 'user' && isInterruptMarker(decoded)) {
     return [{ id: uuid, role: 'system', blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }], timestamp, source: 'transcript' }]
   }

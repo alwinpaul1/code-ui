@@ -50,6 +50,47 @@ export type FileMentionCard = {
   /** `path` is Orca's `.png` upload container, not the file under its own
    *  name: reading it as what its name says would read the wrong type. */
   container?: true
+  /** A file the prompt carried as `file_attachments` in Anthropic's copy of the
+   *  session: it lives on Anthropic's servers, `path` is only a stable key. */
+  attachment?: CcrAttachmentRef
+}
+
+/** One entry of an Anthropic user event's `file_attachments`
+ *  (`{file_uuid, file_name, is_image}`, recorded 2026-10-15). */
+export type CcrAttachmentRef = { fileUuid: string; fileName: string; isImage: boolean }
+
+/** The `presentation` the carrier block of an attachment has: the kind, then the file's uuid. The
+ *  block's text is the file name, so a row drawn by anything that does not know the carrier still
+ *  names the file. */
+const ATTACHMENT_PRESENTATION = /^ccr-attachment:(image|file):(.+)$/
+
+/** The block that carries one attachment from the Anthropic decoder to the prompt's card row. */
+export function ccrAttachmentBlock(ref: CcrAttachmentRef): NativeChatBlock {
+  return { type: 'text', text: ref.fileName, presentation: `ccr-attachment:${ref.isImage ? 'image' : 'file'}:${ref.fileUuid}` }
+}
+
+function attachmentOfBlock(block: NativeChatBlock): CcrAttachmentRef | null {
+  if (!isTextBlock(block) || !block.presentation) {
+    return null
+  }
+  const match = ATTACHMENT_PRESENTATION.exec(block.presentation)
+  return match && block.text ? { fileUuid: match[2]!, fileName: block.text, isImage: match[1] === 'image' } : null
+}
+
+/** The extension the Claude app badges (p530.java:104-126): what follows the last dot, unless it is
+ *  empty, holds a space or a bidi control, or is only digits ("version 2.5" has none). */
+function splitAttachmentName(name: string): { stem: string; ext: string } {
+  const dot = name.lastIndexOf('.')
+  const ext = dot === -1 ? '' : name.slice(dot + 1)
+  if (ext === '' || /[\s\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(ext) || /^\d+$/.test(ext)) {
+    return { stem: name, ext: '' }
+  }
+  return { stem: name.slice(0, dot), ext: ext.toUpperCase() }
+}
+
+function attachmentCard(ref: CcrAttachmentRef): FileMentionCard {
+  const { stem, ext } = splitAttachmentName(baseName(ref.fileName))
+  return { path: `anthropic-file:${ref.fileUuid}`, name: stem, ext, attachment: ref }
 }
 
 function baseName(path: string): string {
@@ -143,6 +184,11 @@ export function takeUserUploads(blocks: readonly NativeChatBlock[]): {
       kept.push(block)
       continue
     }
+    const attachment = attachmentOfBlock(block)
+    if (attachment) {
+      cards.push(attachmentCard(attachment))
+      continue
+    }
     const found = uploadsInText(block.text)
     if (found.cards.length === 0) {
       kept.push(block)
@@ -169,6 +215,10 @@ const TEXT_EXTENSIONS = new Set(['txt', 'log', 'json', 'csv', 'tsv', 'yaml', 'ym
  * Orca's note names a `.png` container, never the file itself.
  */
 export function uploadOpensOnPhone(card: FileMentionCard): boolean {
+  // An attachment is fetched from Anthropic by its uuid, whatever it is (ccr-attachment-open.ts).
+  if (card.attachment) {
+    return true
+  }
   if (card.container || !card.ext) {
     return false
   }
