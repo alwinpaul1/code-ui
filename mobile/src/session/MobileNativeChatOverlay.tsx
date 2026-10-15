@@ -272,7 +272,7 @@ export function MobileNativeChatOverlay({
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // A picture from the chat marked up in the viewer goes to this composer (chat-image-markup-target.ts).
   // What the composer has attached goes to the Anthropic queue's turn-end blocker (use-ccr-composer-send.ts).
-  const reportAttachments = controller.setNativeChatComposerAttachments; useEffect(() => setChatMarkupAttachTarget(images.attachImageBase64), [images.attachImageBase64]); useEffect(() => reportAttachments?.(images.attachments.length), [reportAttachments, images.attachments.length])
+  const reportAttachments = controller.setNativeChatComposerAttachments; useEffect(() => setChatMarkupAttachTarget(images.attachImageBase64), [images.attachImageBase64]); useEffect(() => reportAttachments?.(images.attachments.length), [reportAttachments, images.attachments])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
   // A user row of a desk copy's words lands it, unless a later submission of
@@ -478,7 +478,7 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={claudeComposerSend(controller.nativeChatAnthropicSend, images.sendNativeChat, images.attachments.length)}
+        onSend={claudeComposerSend(controller.nativeChatAnthropicSend, images.sendNativeChat, () => images.attachments.length)}
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}

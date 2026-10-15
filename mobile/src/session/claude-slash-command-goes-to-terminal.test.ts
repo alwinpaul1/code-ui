@@ -16,7 +16,7 @@ function sends() {
 describe('the composer send of a Claude tab on the Anthropic lane', () => {
   it('types a slash command into the terminal instead of posting it to Anthropic', async () => {
     const { anthropic, terminal } = sends()
-    const send = claudeComposerSend(anthropic, terminal, 0)
+    const send = claudeComposerSend(anthropic, terminal, () => 0)
     await send('/compact')
     await send('/model opus')
     expect(anthropic).not.toHaveBeenCalled()
@@ -25,14 +25,14 @@ describe('the composer send of a Claude tab on the Anthropic lane', () => {
 
   it('sends an unknown slash token the terminal way too, never as Anthropic text', async () => {
     const { anthropic, terminal } = sends()
-    await claudeComposerSend(anthropic, terminal, 0)('/not-a-real-command now')
+    await claudeComposerSend(anthropic, terminal, () => 0)('/not-a-real-command now')
     expect(anthropic).not.toHaveBeenCalled()
     expect(terminal).toHaveBeenCalledWith('/not-a-real-command now')
   })
 
   it('posts ordinary words, a path, and a slash mid-sentence to Anthropic', async () => {
     const { anthropic, terminal } = sends()
-    const send = claudeComposerSend(anthropic, terminal, 0)
+    const send = claudeComposerSend(anthropic, terminal, () => 0)
     await send('run the tests')
     await send('look at src/app.ts')
     await send('use /compact later')
@@ -42,12 +42,20 @@ describe('the composer send of a Claude tab on the Anthropic lane', () => {
 
   it('keeps the terminal send with attachments in the composer or with no Anthropic lane', () => {
     const { anthropic, terminal } = sends()
-    expect(claudeComposerSend(anthropic, terminal, 1)).toBe(terminal)
-    expect(claudeComposerSend(undefined, terminal, 0)).toBe(terminal)
+    expect(claudeComposerSend(anthropic, terminal, () => 1)).toBe(terminal)
+    expect(claudeComposerSend(undefined, terminal, () => 0)).toBe(terminal)
+  })
+
+  it('does not read the attachments of a tab off the lane, as the composer it replaced did not', () => {
+    const { terminal } = sends()
+    const unread = (): number => {
+      throw new Error('attachments read off the Anthropic lane')
+    }
+    expect(claudeComposerSend(undefined, terminal, unread)).toBe(terminal)
   })
 
   it('hands the composer the same function for the same pair, render after render', () => {
     const { anthropic, terminal } = sends()
-    expect(claudeComposerSend(anthropic, terminal, 0)).toBe(claudeComposerSend(anthropic, terminal, 0))
+    expect(claudeComposerSend(anthropic, terminal, () => 0)).toBe(claudeComposerSend(anthropic, terminal, () => 0))
   })
 })

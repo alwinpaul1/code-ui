@@ -20,8 +20,9 @@ const routed = new WeakMap<Send, WeakMap<Send, Send>>()
  * terminal path (it carries files and types commands).
  * The same pair always yields the same function, so the composer's `onSend` keeps its identity.
  */
-export function claudeComposerSend(anthropic: Send | undefined, terminal: Send, attachments: number): Send {
-  if (!anthropic || attachments > 0) {
+/** `attachments` is read only on the Anthropic lane: off it, the terminal send is all there is. */
+export function claudeComposerSend(anthropic: Send | undefined, terminal: Send, attachments: () => number): Send {
+  if (!anthropic || attachments() > 0) {
     return terminal
   }
   let byTerminal = routed.get(anthropic)
