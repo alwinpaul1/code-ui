@@ -8,7 +8,8 @@ import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-st
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   useMobileNativeChatImageAttachments,
-  type MobileNativeChatImageAttachments
+  type MobileNativeChatImageAttachments,
+  type NativeChatAnthropicAttachments
 } from './use-mobile-native-chat-image-attachments'
 
 type CurrentRef<T> = { readonly current: T }
@@ -56,6 +57,8 @@ type Args = {
   readonly onNativeChatSendError: (message: string) => void
   readonly onSuccess: () => void
   readonly onError: () => void
+  /** A Claude tab whose attachments go to Anthropic, not the desktop (ccr-file-upload.ts). */
+  readonly nativeChatAnthropic?: NativeChatAnthropicAttachments | null
 }
 
 /** A session exposes image attachment on two surfaces that share one upload
@@ -83,7 +86,8 @@ export function useMobileSessionImageAttachments({
   showToast,
   onNativeChatSendError,
   onSuccess,
-  onError
+  onError,
+  nativeChatAnthropic = null
 }: Args): {
   attachImage: (source: MobileImageSource) => Promise<void>
   attachDocument: () => Promise<void>
@@ -122,7 +126,8 @@ export function useMobileSessionImageAttachments({
     beginImageSend: beginNativeChatImageSend, parkRefusedSend: parkRefusedNativeChatSend,
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
-    onError
+    onError,
+    anthropic: nativeChatAnthropic
   })
   return { attachImage, attachDocument, isAttaching, nativeChatImages }
 }

@@ -4,6 +4,7 @@ import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-ope
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
 import type { VideoFrameAttachmentMeta } from '../platform/media-picker-contract'
+import type { CcrUploadedFile } from './ccr-file-upload'
 
 /** The most attachments one message takes: the Claude app's
  *  `cai_file_upload_config.max_per_message_upload_count`, 20 unless its server
@@ -60,10 +61,25 @@ export type PendingNativeChatImage = {
    *  settle first and delete the video's chip, and the video never went with
    *  the message (2026-09-13). */
   readonly batch?: string
+  /** A Claude tab sending through Anthropic (ccr-file-upload.ts): the file Anthropic holds for this
+   *  chip, uploaded when it was attached. `path` stays empty, since the desktop never had it, and
+   *  the send references it as `file_attachments` (ccr-attachment-send.ts). */
+  readonly anthropicFile?: CcrUploadedFile
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */
-export type UploadingNativeChatImage = Omit<PendingNativeChatImage, 'id' | 'path' | 'uploading' | 'failed'>
+export type UploadingNativeChatImage = Omit<PendingNativeChatImage, 'id' | 'path' | 'uploading' | 'failed' | 'anthropicFile'>
+
+/** Where one picture's bytes went: a desktop temp path, or (Anthropic lane) a file Anthropic holds. */
+export type NativeChatStoredBytes = { readonly path: string; readonly anthropicFile?: CcrUploadedFile }
+
+/** Puts one picked file's bytes somewhere the send can reference. The default is the desktop's
+ *  temp file (`saveMobileClipboardImageAsTempFile`); a Claude tab on the Anthropic lane hands in
+ *  an upload to Anthropic instead (ccr-file-upload.ts). */
+export type NativeChatAttachmentStore = (bytes: { readonly base64: string; readonly name?: string; readonly mimeType?: string }) => Promise<NativeChatStoredBytes>
+
+/** What a retry brings back for its chip. */
+export type NativeChatUploadLanded = NativeChatStoredBytes & { readonly previewUri: string }
 
 /** Marks the chip a failed upload left behind (one selection's, matched the
  *  way a finished upload is) as failed, and returns its id, or null when no
@@ -169,7 +185,7 @@ export function dropUploadingNativeChatImages(
 export function replaceNativeChatImageAttachment(
   current: readonly PendingNativeChatImage[],
   id: string,
-  next: { path: string; previewUri: string }
+  next: { path: string; previewUri: string; anthropicFile?: CcrUploadedFile }
 ): PendingNativeChatImage[] {
   const index = current.findIndex((attachment) => attachment.id === id)
   if (index === -1) {
@@ -232,7 +248,8 @@ export async function uploadMarkedUpNativeChatImage(
 }
 
 export type UploadNativeChatImagesDeps = {
-  readonly client: MobileClipboardImageRpcSender
+  /** The desktop the bytes go to; null only with a `store` (nothing then goes to the desktop). */
+  readonly client: MobileClipboardImageRpcSender | null
   readonly getConnectionId: () => Promise<string | null>
   // Injected so this module stays free of expo/react-native imports (unit-testable).
   readonly pickImages: (
@@ -255,7 +272,7 @@ export type UploadNativeChatImagesDeps = {
   readonly onImageFailed?: (
     image: UploadingNativeChatImage,
     error: unknown,
-    retry: () => Promise<{ path: string; previewUri: string }>
+    retry: () => Promise<NativeChatUploadLanded>
   ) => boolean | void
   /** Whether the strip has room for one more chip, asked before each picture
    *  of a selection. Without room the picture is skipped, never read or sent,
@@ -270,6 +287,16 @@ export type UploadNativeChatImagesDeps = {
     readonly client: MobileClipboardImageRpcSender | null
     readonly getConnectionId: () => Promise<string | null>
   }
+  /** Where the bytes go instead of the desktop (a Claude tab on the Anthropic lane): the pick and
+   *  its retries all use it, and no desktop connection is needed for either. */
+  readonly store?: NativeChatAttachmentStore
+}
+
+async function saveToDesktop(client: MobileClipboardImageRpcSender | null, base64: string, connectionId: string | null): Promise<string> {
+  if (!client) {
+    throw new Error('Not connected to the desktop')
+  }
+  return saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
 }
 
 /** Picks an image and uploads it to the host, returning the host path + a local
@@ -289,7 +316,8 @@ export async function uploadMobileNativeChatImages(
     onImageFailed,
     retryConnection,
     hasRoom,
-    onLimitReached
+    onLimitReached,
+    store
   }: UploadNativeChatImagesDeps
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
   const picked = await pickImages(source)
@@ -315,7 +343,7 @@ export async function uploadMobileNativeChatImages(
     if (!started) {
       started = true
       onUploadStart?.()
-      connectionId = await getConnectionId()
+      connectionId = store ? null : await getConnectionId()
     }
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
@@ -332,8 +360,10 @@ export async function uploadMobileNativeChatImages(
       if (!base64) {
         continue
       }
-      const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
-      const result = { ...chip, path }
+      const stored = store
+        ? await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) })
+        : { path: await saveToDesktop(client, base64, connectionId) }
+      const result = { ...chip, ...stored }
       uploaded.push(result)
       onImageUploaded?.(result)
     } catch (error) {
@@ -345,6 +375,9 @@ export async function uploadMobileNativeChatImages(
         const base64 = image.base64 || (image.load ? await image.load() : '')
         if (!base64) {
           throw new Error('The picture could not be read')
+        }
+        if (store) {
+          return { ...(await store({ base64, ...(image.name ? { name: image.name } : {}), ...(image.mimeType ? { mimeType: image.mimeType } : {}) })), previewUri }
         }
         const live = retryConnection?.() ?? { client, getConnectionId }
         if (!live.client) {

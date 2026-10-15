@@ -2,6 +2,9 @@ import { CCR_API_BASE_URL, CcrApiError, ccrSessionHeaders, getCcrSession, isCcrS
 import { CcrSignedOutError } from './ccr-link-history'
 import type { CcrLinkDeps } from './ccr-session-link-types'
 
+/** One `file_attachments` entry (`SessionFileAttachment`, `u7v`): what ccr-file-upload.ts returns. */
+export type CcrFileAttachment = { file_uuid: string; file_name: string; is_image: boolean }
+
 /**
  * Sending a Claude tab's message the way the Claude Android app 1.261009.20 does: through
  * Anthropic's sessions API into the tab's Remote Control session, not by typing into the desktop
@@ -54,12 +57,18 @@ export function newCcrEventUuid(random: () => number = Math.random): string {
   return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
 }
 
-/** The POST body for one user message, as `sessions.store.a` builds it. */
-export function buildCcrUserEventBody(args: { sessionId: string; uuid: string; text: string; priority?: CcrSendPriority }): {
+/** The POST body for one user message, as `sessions.store.a` builds it. Attachments ride as
+ *  `file_attachments` beside the plain-string text (`hu.java:627`: `new erw(uuid, text,
+ *  attachments, …)`), only the ones that finished uploading, and the field is left out when there
+ *  are none. */
+export function buildCcrUserEventBody(args: { sessionId: string; uuid: string; text: string; priority?: CcrSendPriority; fileAttachments?: readonly CcrFileAttachment[] }): {
   session_id: string
   events: { payload: Record<string, unknown> }[]
 } {
   const payload: Record<string, unknown> = { type: 'user', uuid: args.uuid, message: { role: 'user', content: args.text } }
+  if (args.fileAttachments && args.fileAttachments.length > 0) {
+    payload.file_attachments = args.fileAttachments.map((file) => ({ file_uuid: file.file_uuid, file_name: file.file_name, is_image: file.is_image }))
+  }
   if (args.priority) {
     payload.priority = args.priority
   }
@@ -77,7 +86,7 @@ export function ccrEchoSeen(events: readonly CcrEvent[], uuid: string): boolean 
 }
 
 /** The account's own sign-in, read again once after a 401 (as readCcrHistoryPage does). */
-async function withAccountAuth<T>(deps: Pick<CcrLinkDeps, 'auth'>, accountId: string, run: (auth: { token: string; organizationUuid: string }) => Promise<T>): Promise<T> {
+export async function withAccountAuth<T>(deps: Pick<CcrLinkDeps, 'auth'>, accountId: string, run: (auth: { token: string; organizationUuid: string }) => Promise<T>): Promise<T> {
   for (const fresh of [false, true]) {
     const auth = await deps.auth(accountId, fresh).catch(() => null)
     if (!auth) {

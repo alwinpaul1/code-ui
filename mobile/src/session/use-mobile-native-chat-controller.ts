@@ -40,7 +40,7 @@ import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useActiveChatBeacon } from './use-active-chat-beacon'
 import { beaconDecidesLimits } from './hud-rate-limit-notice'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
-import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'; import { claudeSendsThroughAnthropic, useCcrComposerSend } from './use-ccr-composer-send'; import { claudeComposerSendGoes } from './claude-composer-send-route'; import { ccrSendTargetForTab } from './ccr-session-cache'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'; import { claudeSendsThroughAnthropic, useCcrComposerSend } from './use-ccr-composer-send'; import { claudeComposerSendGoes } from './claude-composer-send-route'; import { ccrSendTargetForTab } from './ccr-session-cache'; import { useCcrAttachmentLane } from './use-ccr-attachment-lane'; import { uploadCcrFileForSession } from './ccr-file-upload-device'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -502,6 +502,8 @@ export function useMobileNativeChatController(
   })
   // The composer's attachments live in the image hook, made after this one: the overlay reports their count (the queue's turn-end blocker).
   const ccrComposerAttachments = useRef(0), setCcrComposerAttachments = useRef((count: number) => { ccrComposerAttachments.current = count }).current; const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: () => ccrComposerAttachments.current, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, removePending, onSendError }); if (ccrLane) { shareSendRef.current.send = (text) => (claudeComposerSendGoes(text) === 'anthropic' ? ccrSend.sendWithOutcome(text) : handleNativeChatSendWithOutcome(text)) } // a slash command types, as before the lane (claude-composer-send-route.ts)
+  // Attachments too, behind the switch (ccr-file-upload.ts): uploaded under the tab's own target's account.
+  const ccrAttachments = useCcrAttachmentLane({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), send: ccrSend.sendWithOutcome, upload: uploadCcrFileForSession })
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
     client,
     enabled: inputSendable,
@@ -556,7 +558,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1), requestModelSheet: () => setHeaderModelRequests((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outboxDeliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
-    nativeChatQueuedMessages: activeChatStructured || ccrLane || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatLocalQueue: ccrLane ? { text: ccrSend.queue, onEdit: ccrSend.editQueue } : null, nativeChatAnthropicSend: ccrLane ? ccrSend.send : undefined, setNativeChatComposerAttachments: setCcrComposerAttachments, nativeChatQueueReadable: !activeChatStructured && !ccrLane && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
+    nativeChatQueuedMessages: activeChatStructured || ccrLane || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatLocalQueue: ccrLane ? { text: ccrSend.queue, onEdit: ccrSend.editQueue } : null, nativeChatAnthropicSend: ccrLane ? ccrSend.send : undefined, setNativeChatComposerAttachments: setCcrComposerAttachments, nativeChatAnthropicAttachments: ccrAttachments, nativeChatQueueReadable: !activeChatStructured && !ccrLane && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
     chatImagePreviewsByMessageId, nativeChatImageShare,
     nativeChatSession: drawnSession, nativeChatAnthropicGate: claudeApi.gate, nativeChatAnthropicLive,
     nativeChatStructured: activeChatStructured,

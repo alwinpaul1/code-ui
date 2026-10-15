@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { defaultCcrComposerSendDeps, type CcrComposerSendDeps } from './ccr-composer-send-deps'
 import { ccrQueueAtTurnEnd, returnCcrQueueToComposer, type CcrQueueTurnEnd } from './ccr-local-queue'
-import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline, type CcrSendPriority } from './ccr-send'
+import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
+import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
 import type { CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import { reasonOf } from './ccr-session-shared'
@@ -82,6 +83,11 @@ export const CCR_SEND_REFUSALS: Record<Extract<CcrSendTarget, { kind: 'refused' 
 export const CCR_SEND_IN_FLIGHT = 'Another input is still being sent. Try again.'
 
 type Sent = { uuid: string; rowId: string | null }
+
+/** A send's attachments, already at Anthropic (ccr-attachment-send.ts chose them): referenced in the
+ *  same event as the words, uploaded under `accountId`, which must be the target's own. */
+export type CcrSendFiles = { readonly attachments: readonly CcrFileAttachment[]; readonly previewUris: readonly string[]; readonly accountId: string }
+
 export function useCcrComposerSend(args: {
   /** A Claude tab on the Anthropic lane. Off, every call refuses and nothing is posted. */
   active: boolean
@@ -101,13 +107,14 @@ export function useCcrComposerSend(args: {
   setComposerText: Dispatch<SetStateAction<string>>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  acceptSend: (origin: MobileNativeChatSendOrigin, text: string) => string | null
+  acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => string | null
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   removePending: (id: string) => void
   onSendError: (message: string, details?: MobileNativeChatSendErrorDetails) => void
   deps?: CcrComposerSendDeps
 }): {
-  sendWithOutcome: (text: string) => Promise<MobileNativeChatSendOutcome>
+  /** With `files`, they ride in the same event as the words (`file_attachments`). */
+  sendWithOutcome: (text: string, files?: CcrSendFiles) => Promise<MobileNativeChatSendOutcome>
   /** The outbox's resend on this lane (use-mobile-native-chat-outbox.ts `sendAnthropic`). */
   resendFromOutbox: (text: string, entry: NativeChatOutboxEntry) => Promise<MobileNativeChatSendOutcome>
   /** The composer's send: true unless refused. */
@@ -179,9 +186,9 @@ export function useCcrComposerSend(args: {
   }, [deps])
 
   /** One POST; true on a 2xx, or on a failure whose echo was already seen. */
-  const post = useCallback(async (to: CcrTo, text: string, uuid: string, priority?: CcrSendPriority): Promise<true | string> => {
+  const post = useCallback(async (to: CcrTo, text: string, uuid: string, priority?: CcrSendPriority, files?: readonly CcrFileAttachment[]): Promise<true | string> => {
     try {
-      await deps.post(to.accountId, to.sessionId, buildCcrUserEventBody({ sessionId: to.sessionId, uuid, text, ...(priority ? { priority } : {}) }))
+      await deps.post(to.accountId, to.sessionId, buildCcrUserEventBody({ sessionId: to.sessionId, uuid, text, ...(priority ? { priority } : {}), ...(files && files.length > 0 ? { fileAttachments: files } : {}) }))
       return true
     } catch (error) {
       if (ccrEchoSeen(latest.current.events, uuid)) {
@@ -207,19 +214,26 @@ export function useCcrComposerSend(args: {
 
   /** Sends `text` now, its bubble drawn and its words restored on failure. Written to the outbox
    *  with its session and uuid before the box empties, and kept there until the POST is answered,
-   *  so an app killed meanwhile resends it from there (under the same uuid) on the next launch. */
-  const sendNow = useCallback(async (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid = deps.newUuid()): Promise<MobileNativeChatSendOutcome> => {
+   *  so an app killed meanwhile resends it from there (under the same uuid) on the next launch.
+   *  A send with attachments is not written there: the outbox keeps words only, and a resend
+   *  without its files would drop them without a word. */
+  const sendNow = useCallback(async (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid = deps.newUuid(), files?: CcrSendFiles): Promise<MobileNativeChatSendOutcome> => {
     const now = latest.current
+    const withFiles = files !== undefined && files.attachments.length > 0
     posting.current += 1
-    recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } })
+    if (!withFiles) {
+      recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } })
+    }
     now.clearDraftForSend(origin, text)
-    const rowId = now.acceptSend(origin, text)
+    const rowId = files && files.previewUris.length > 0 ? now.acceptSend(origin, text, [...files.previewUris]) : now.acceptSend(origin, text)
     setDelivery(rowId, 'sending')
     sent.current.push({ uuid, rowId })
-    const result = await post(to, text, uuid)
+    const result = await post(to, text, uuid, undefined, files?.attachments)
     posting.current -= 1
     if (result === true) {
-      void retireOutboxSend(origin.outboxId)
+      if (!withFiles) {
+        void retireOutboxSend(origin.outboxId)
+      }
       if (ccrEchoSeen(latest.current.events, uuid)) {
         settle(uuid)
       } else {
@@ -248,14 +262,21 @@ export function useCcrComposerSend(args: {
 
   /** A composer send, or (`pinned`) an outbox resend into the session and under the uuid its
    *  first attempt had, which is never queued and never goes to another session. */
-  const sendOrResend = useCallback(async (raw: string, pinned?: NativeChatOutboxCcr): Promise<MobileNativeChatSendOutcome> => {
+  const sendOrResend = useCallback(async (raw: string, pinned?: NativeChatOutboxCcr, files?: CcrSendFiles): Promise<MobileNativeChatSendOutcome> => {
     const text = raw.trim()
-    if (!text) {
+    const withFiles = files !== undefined && files.attachments.length > 0
+    if (!text && !withFiles) {
       return 'rejected'
     }
     const tab = latest.current.tabId ?? ''
     const to = target()
     if (!to) {
+      return 'rejected'
+    }
+    if (withFiles && files.accountId !== to.accountId) {
+      // The desktop reads a file with the session account's own sign-in: another account's is not its.
+      deps.log(`[ccr-send] refused: attachments were uploaded under another account than session ${ccrSessionTail(to.sessionId)}'s`)
+      latest.current.onSendError(CCR_ATTACHMENT_OTHER_ACCOUNT)
       return 'rejected'
     }
     if (pinned && !sameCcrTarget(to, pinned)) {
@@ -288,17 +309,19 @@ export function useCcrComposerSend(args: {
       }
       // Steering and post-later are off (ccr-local-queue.ts): the words wait on the phone, behind
       // anything this tab already has waiting.
-      if (!pinned && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
+      // A send with files goes now, unprioritised, as the phone's queue holds words only (the app's
+      // local queue is blocked by attachments); the server holds it until Claude takes input.
+      if (!pinned && !withFiles && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
         now.clearDraftForSend(origin, text)
         queueOnTab(tab, text, to, origin.draftKey)
         return 'accepted'
       }
-      return await sendNow(text, origin, to, pinned?.uuid)
+      return await sendNow(text, origin, to, pinned?.uuid, withFiles ? files : undefined)
     } finally {
       claimed.current = false
     }
   }, [deps, offline, queueOnTab, sendNow, target])
-  const sendWithOutcome = useCallback((text: string) => sendOrResend(text), [sendOrResend])
+  const sendWithOutcome = useCallback((text: string, files?: CcrSendFiles) => sendOrResend(text, undefined, files), [sendOrResend])
   // An entry from before this lane has no uuid: it goes as a new post, through Anthropic still.
   const resendFromOutbox = useCallback((text: string, entry: NativeChatOutboxEntry) => sendOrResend(text, entry.ccr), [sendOrResend])
 

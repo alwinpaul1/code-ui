@@ -6,6 +6,7 @@ import {
   failUploadingNativeChatImage,
   markNativeChatImageReuploading,
   replaceNativeChatImageAttachment,
+  type NativeChatUploadLanded,
   type PendingNativeChatImage,
   type UploadingNativeChatImage
 } from './mobile-native-chat-image-attachment'
@@ -60,7 +61,7 @@ export function useNativeChatAttachmentScopeWriters(
     (
       scope: string,
       image: { previewUri: string; batch?: string },
-      retry: () => Promise<{ path: string; previewUri: string }>
+      retry: () => Promise<NativeChatUploadLanded>
     ): boolean => {
       if (nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))) {
         return false

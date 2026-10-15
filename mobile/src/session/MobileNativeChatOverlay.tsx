@@ -38,7 +38,7 @@ import { openImageMarkup } from './image-markup-store'
 import { setChatMarkupAttachTarget } from './chat-image-markup-target'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'; import { claudeComposerSend } from './claude-composer-send-route'
+import type { MobileNativeChatController } from './use-mobile-native-chat-controller'; import { nativeChatComposerSend } from './native-chat-send-route'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
@@ -478,7 +478,7 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={claudeComposerSend(controller.nativeChatAnthropicSend, images.sendNativeChat, () => images.attachments.length)}
+        onSend={nativeChatComposerSend(controller, images)}
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
