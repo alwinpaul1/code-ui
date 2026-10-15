@@ -131,6 +131,15 @@ describe("the HUD believes the agent about itself where the screen says nothing"
     ])
   })
 
+  it('draws the context of a beacon saved without limits, rather than throwing', () => {
+    // A restored beacon is not re-parsed (agent-hud-beacon-warm-start.ts), so an older build's
+    // stored record can lack the field entirely.
+    const { limits: _dropped, ...older } = CODEX
+    const merged = applyAgentHudBeaconFields(null, older as AgentHudBeacon)
+    expect(merged?.context).toMatchObject({ usedPercent: 9, usedLabel: '22.1k' })
+    expect(merged?.context?.limits).toBeUndefined()
+  })
+
   it("computes Codex's percentage from its own two figures", () => {
     const merged = applyAgentHudBeaconFields(null, CODEX)
     expect(merged?.context).toMatchObject({

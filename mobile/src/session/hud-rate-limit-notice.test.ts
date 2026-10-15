@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ProviderRateLimits } from '../components/accounts-snapshot'
 import { parseAgentHudBeaconPayload, type AgentHudBeacon } from './agent-hud-beacon'
-import { hudRateLimitWindows, rateLimitNotice, type RateLimitWindowReading } from './hud-rate-limit-notice'
+import { beaconDecidesLimits, hudRateLimitWindows, rateLimitNotice, type RateLimitWindowReading } from './hud-rate-limit-notice'
 
 // The recorded beacon: Claude Code 2.1.296's status line, written to its own PTY and read back from
 // the phone's store (fixtures/claude-busy-lead-tasks-2.1.296/beacon-payloads.txt, 2026-10-11). Its
@@ -31,6 +31,12 @@ function recordedWith(figures: { h5?: string; d7?: string }): AgentHudBeacon {
     throw new Error(`the recorded payload did not parse: ${line.slice(0, 80)}`)
   }
   return beacon
+}
+
+/** The beacon as an older build's stored record holds it: no `limits` field at all. */
+function withoutLimits(beacon: AgentHudBeacon): AgentHudBeacon {
+  const { limits: _dropped, ...older } = beacon
+  return older as AgentHudBeacon
 }
 
 /** An hour before the 5-hour window resets: 4 of its 5 hours gone is the wrong example for the
@@ -257,6 +263,26 @@ describe('where the figures come from', () => {
     const codex = parseAgentHudBeaconPayload('CUIHUD1 agent=codex sid=thread-1 model=gpt-6-astra effort=high used=22147 win=258400', 0)
     expect(codex?.limits).toEqual([])
     expect(hudRateLimitWindows(codex, { ...fullSession, provider: 'codex' })).toHaveLength(1)
+  })
+
+  // A beacon restored from storage is not re-parsed (agent-hud-beacon-warm-start.ts keeps any
+  // signed record), so one saved by an older build can lack `limits` entirely.
+  it('asks the host feed for a Codex beacon saved without limits, rather than throwing', () => {
+    const restored = withoutLimits(
+      parseAgentHudBeaconPayload('CUIHUD1 agent=codex sid=thread-1 model=gpt-6-astra effort=high used=22147 win=258400', 0)!
+    )
+    expect(beaconDecidesLimits(restored)).toBe(false)
+    expect(hudRateLimitWindows(restored, { ...fullSession, provider: 'codex' })).toHaveLength(1)
+  })
+
+  it('lets a Claude beacon saved without limits decide alone, with no window', () => {
+    const restored = withoutLimits(recordedWith({}))
+    expect(beaconDecidesLimits(restored)).toBe(true)
+    expect(hudRateLimitWindows(restored, fullSession)).toEqual([])
+  })
+
+  it('has no beacon decide when there is none', () => {
+    expect(beaconDecidesLimits(null)).toBe(false)
   })
 
   it('reads nothing from no beacon and no feed', () => {
