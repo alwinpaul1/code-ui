@@ -129,6 +129,12 @@ function resolveSections(
     return { sections: inputsSection(call.input, call.name), generic: true }
   }
   const record = parseRecord(call.input)
+  // A proposed plan opens as the plan itself, under the Claude app's "Plan"
+  // (`ccr_tool_exit_plan_mode`), not as an input named `plan`.
+  const plan = call.name.trim() === 'ExitPlanMode' ? text(record?.plan) : null
+  if (plan) {
+    return { sections: markdown('Plan', plan), generic: true }
+  }
   if (record) {
     const known = knownSections(kind, record, hasChanges)
     if (known) {
