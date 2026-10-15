@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
+import { ChatTextInPlaceSelectionContext } from './chat-text-selectable-context'
 
 type Props = {
   visible: boolean
@@ -76,7 +77,9 @@ export function BottomDrawer({
       dismissKeyboardOnOpen={dismissKeyboardOnOpen}
       edgeToEdge={edgeToEdge}
     >
-      {children}
+      {/* A sheet is its own surface: one opened from a chat row (a thought, Select text) selects
+          in place even though the row it came from does not. */}
+      <ChatTextInPlaceSelectionContext.Provider value>{children}</ChatTextInPlaceSelectionContext.Provider>
     </MountedBottomDrawer>
   )
 }

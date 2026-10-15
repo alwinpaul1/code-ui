@@ -1,4 +1,4 @@
-import { memo, useContext, useState, type ReactNode } from 'react'
+import { memo, useContext, useState, type ComponentProps, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
@@ -16,7 +16,11 @@ import { renderProseGroup } from './mobile-native-chat-prose-group-view'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
-import { nativeChatMessageText, nativeChatReplyPlainText } from './mobile-native-chat-message-text'
+import {
+  nativeChatMessageText,
+  nativeChatReplyPlainText,
+  nativeChatReplySource
+} from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
@@ -38,23 +42,16 @@ import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
 import { takeUserUploads } from './mobile-native-chat-file-mentions'
 import { MobileNativeChatUploadCardRow } from './MobileNativeChatFileCard'
-import { userMessageMenuEntries } from './mobile-native-chat-user-message-menu'
-import {
-  MobileNativeChatSelectTextSheet,
-  MobileNativeChatUserMessageMenu
-} from './MobileNativeChatUserMessageMenu'
-
-/** A finger held this long opens the message menu: Android's own long-press
- *  timeout, the one the chat's scroll gate already keys on. */
-const HOLD_FOR_MENU_MS = 400
+import { ChatTextInPlaceSelectionContext } from '../components/chat-text-selectable-context'
+import { HoldTarget, ProseHold, useMobileNativeChatMessageHold, type HoldHandler } from './MobileNativeChatMessageHold'
 
 /** The message container: a sent prompt is tappable (it discloses its
- *  controls) and a hold opens its menu, Copy message and Select text, as the
- *  Claude app's does. A hold used to copy the prompt at once (2026-09-21:
+ *  controls) and a hold opens its menu, Copy and Select text, as the Claude
+ *  app's does. A hold used to copy the prompt at once (2026-09-21:
  *  "automatic copy on long hold instead of long hold and copy button"); the
  *  menu replaces that so the words can also be selected. A waiting message
- *  holds too, for Undo send. Everything else is a plain view so nothing
- *  steals its touches. */
+ *  holds too, for Undo send. A reply's bubble is a plain view: its holds are
+ *  taken by each run of its words (ProseHold), not by its tool rows. */
 function Bubble({
   user,
   onToggle,
@@ -65,7 +62,7 @@ function Bubble({
   user: boolean
   onToggle: () => void
   /** Absent when the message offers nothing: a hold would open an empty menu. */
-  onHold?: () => void
+  onHold?: HoldHandler
   style: StyleProp<ViewStyle>
   children: ReactNode
 }) {
@@ -85,14 +82,12 @@ function Bubble({
     )
   }
   return (
-    <Pressable
+    // Its own native view too (HoldTarget), for the same reason as the plain bubble above.
+    <HoldTarget
       style={style}
-      // Its own native view too, for the same reason as the plain bubble above.
-      collapsable={false}
       // A waiting message has no controls to disclose, only the hold.
       onPress={user ? onToggle : undefined}
-      onLongPress={onHold}
-      delayLongPress={HOLD_FOR_MENU_MS}
+      onHold={onHold}
       // A label replaces what a screen reader reads inside the bubble. A sent prompt has always
       // carried one; a waiting message keeps its words and Queued line to be read.
       accessibilityRole={user ? 'button' : undefined}
@@ -100,11 +95,21 @@ function Bubble({
       accessibilityHint={onHold ? 'Hold for options' : undefined}
     >
       {children}
-    </Pressable>
+    </HoldTarget>
   )
 }
 
-function MobileNativeChatMessageImpl({
+/** A message row: nothing in it is selected in place. A hold opens its menu and Select text is
+ *  where words are selected, as in the Claude app's Code timeline (chat-text-selectable-context.ts). */
+function MobileNativeChatMessageImpl(props: ComponentProps<typeof MobileNativeChatMessageRow>) {
+  return (
+    <ChatTextInPlaceSelectionContext.Provider value={false}>
+      <MobileNativeChatMessageRow {...props} />
+    </ChatTextInPlaceSelectionContext.Provider>
+  )
+}
+
+function MobileNativeChatMessageRow({
   message,
   mayStillGrow = false,
   toolsExpanded = false,
@@ -213,23 +218,18 @@ function MobileNativeChatMessageImpl({
   const { copied, error: copyError, copy } = useMobileNativeChatMessageCopy(
     isUser ? MESSAGE_COPIED_MS : COPY_CHECK_HOLD_MS
   )
+  // A reply's held run copies through its own copy, so the turn's Copy glyph does not turn into a
+  // check for words it did not copy; a refusal still says so under the row.
+  const { error: heldCopyError, copy: copyHeld } = useMobileNativeChatMessageCopy(COPY_CHECK_HOLD_MS)
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
-  // The hold's menu, and the words Select text is showing. Neither is mounted until a hold asks
-  // for it (a list of prompts carries no sheet per row); the menu stays mounted once opened, so
-  // its exit plays out, and the words are kept until their sheet has left the screen.
-  const [menu, setMenu] = useState<'idle' | 'open' | 'closed'>('idle')
-  const [selecting, setSelecting] = useState<{ text: string; open: boolean } | null>(null)
-  // The list recycles this instance for other messages, and what was opened belongs to the one it
-  // was opened on: a menu or a sheet is dropped the moment another message is bound here, so it
-  // neither follows to the next prompt nor opens by itself when a prompt comes back.
-  const [openedOn, setOpenedOn] = useState(message.id)
-  if (openedOn !== message.id) {
-    setOpenedOn(message.id)
-    setMenu('idle')
-    setSelecting(null)
-  }
+  const { holdOn, overlays: holdOverlays } = useMobileNativeChatMessageHold({
+    messageId: message.id,
+    onUndoSend: onCancelQueued,
+    copyBubble: copy,
+    copyRun: copyHeld
+  })
   // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
   const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
   const renderVisual = message.role === 'assistant' ? transcriptVisuals : undefined
@@ -320,24 +320,16 @@ function MobileNativeChatMessageImpl({
   // 2026-10-09), and the earlier words had no Copy of their own any more.
   const copiesTurn = isAgent && copyTurnText !== undefined
   const copyable = copiesTurn ? (turnHasProse ?? hasProse) : hasProse
-  // This message's own words, for Copy and for Select text. A prompt gives them as typed,
-  // Markdown source and all, even where it is drawn formatted: the user's own words back. Only
-  // the subagent transcript's task prompts (promptsAsMarkdown) give what they draw, like a reply.
-  const ownText = (): string =>
-    isUser && !promptsAsMarkdown ? nativeChatMessageText(drawn) : nativeChatReplyPlainText(drawn)
+  // The Copy under a reply's turn: the words as drawn, not their Markdown (the hold's Copy gives that).
   const handleCopy = (): void => {
-    const text = copiesTurn ? copyTurnText(message.id) : ownText()
+    const text = copiesTurn ? copyTurnText(message.id) : nativeChatReplyPlainText(drawn)
     if (!text) {
       return
     }
     copy(text)
   }
-  // What a hold on a sent message offers (mobile-native-chat-user-message-menu.ts). Only a sent
-  // prompt has a menu; a reply keeps its selection in place.
-  const menuEntries = isUser
-    ? userMessageMenuEntries({ hasText: hasProse, waiting: onCancelQueued !== undefined })
-    : []
-  const openMenu = menuEntries.length > 0 ? () => setMenu('open') : undefined
+  // A sent prompt is held whole, from its bubble; a reply by each run of its words, from that run.
+  const holdBubble = isUser ? holdOn(nativeChatMessageText(drawn), true) : undefined
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
   const sentPromptControls =
@@ -401,7 +393,7 @@ function MobileNativeChatMessageImpl({
         {uploadsOnly ? null : <Bubble
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
-          onHold={openMenu}
+          onHold={holdBubble}
           style={[styles.content, isUser && styles.userBubble, isUser && copied && styles.copied]}
         >
           {segments.map((segment, segmentIndex) =>
@@ -409,6 +401,7 @@ function MobileNativeChatMessageImpl({
               // No line beside the agent's own words, interim or final
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
+                <ProseHold onHold={isAgent ? holdOn(nativeChatReplySource(segment.blocks), false) : undefined}>
                 {groupProseBlocks(segment.blocks).map((group, index, groups) => (
                   // Air between a picture and the caption under it, and
                   // between pictures that follow each other.
@@ -435,6 +428,7 @@ function MobileNativeChatMessageImpl({
                     })}
                   </View>
                 ))}
+                </ProseHold>
                 {/* Under the turn's last words, above the work still running after them. */}
                 {segmentIndex === lastWordsSegment ? placeAt('words') : null}
               </View>
@@ -487,24 +481,7 @@ function MobileNativeChatMessageImpl({
           )}
         </Bubble>}
         {/* A hold's menu, and the sheet Select text opens. */}
-        {openMenu && menu !== 'idle' ? (
-          <MobileNativeChatUserMessageMenu
-            visible={menu === 'open'}
-            entries={menuEntries}
-            onCopy={handleCopy}
-            onSelectText={() => setSelecting({ text: ownText(), open: true })}
-            onUndoSend={onCancelQueued}
-            onClose={() => setMenu('closed')}
-          />
-        ) : null}
-        {selecting ? (
-          <MobileNativeChatSelectTextSheet
-            visible={selecting.open}
-            text={selecting.text}
-            onClose={() => setSelecting((current) => (current ? { ...current, open: false } : null))}
-            onAfterClose={() => setSelecting(null)}
-          />
-        ) : null}
+        {holdOverlays}
         {isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
           <MobileNativeChatTurnEditsCard
             files={turnEdits}
@@ -514,9 +491,9 @@ function MobileNativeChatMessageImpl({
           />
         ) : null}
         {/* Under the bubble, in the page's ink rather than the bubble's. */}
-        {copyError ? (
+        {copyError || heldCopyError ? (
           <Txt variant="caption" tone="danger" style={{ marginTop: 4 }} accessibilityLiveRegion="polite">
-            {copyFailedNotice(copyError)}
+            {copyFailedNotice(copyError ?? heldCopyError ?? '')}
           </Txt>
         ) : null}
       </View>

@@ -28,11 +28,12 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Linking: { openURL: () => Promise.resolve() },
     Platform: { OS: 'android', Version: 34, select: (o: Record<string, unknown>) => o.android ?? o.default },
+    Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
     Text,
     View: 'View',
-    StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style, hairlineWidth: 1 },
+    StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style, hairlineWidth: 1, absoluteFill: {} },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
@@ -141,8 +142,8 @@ describe('a code block in the chat', () => {
     expect(others).toHaveLength(0)
     await press(button!)
     expect(pasteboard.written).toEqual([CODE])
-    // A hold opens the message menu now; its Copy message gives the prompt as typed.
-    await holdThenChoose(tree.root, 'Copy message')
+    // A hold opens the message menu now; its Copy gives the prompt as typed.
+    await holdThenChoose(tree.root, 'Copy')
     expect(pasteboard.written).toEqual([CODE, REPLY])
   })
 

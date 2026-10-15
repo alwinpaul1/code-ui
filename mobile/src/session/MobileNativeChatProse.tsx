@@ -2,7 +2,6 @@ import { useMemo, useState, useSyncExternalStore } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import {
   TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY,
@@ -65,12 +64,10 @@ export function Prose({
   const ownMarkdown = useMemo(() => ownText !== null && userTextDrawsAsMarkdown(ownText), [ownText])
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt && !ownMarkdown) {
-      // Not selectable, on purpose: a hold on a sent prompt opens its menu
-      // (MobileNativeChatMessage's Bubble: Copy message, Select text), and a
-      // selectable Text would take that hold for Android's own selection
-      // first. The 2026-09-12 complaint — a hold on their own bubble did
-      // nothing — is answered by the menu, and by the sheet Select text opens
-      // for the reader who wants part of the words.
+      // Not selectable, on purpose: a hold on a message opens its menu
+      // (MobileNativeChatMessage: Copy, Select text), and a selectable Text
+      // would take that hold for Android's own selection first. Words are
+      // selected in the sheet Select text opens.
       return (
         <Text
           style={[
@@ -104,18 +101,10 @@ export function Prose({
         typed={ownMarkdown}
       />
     )
-    // The user's own bubble opens its menu on a hold, as the plain line does,
-    // so the document must not take that hold for a selection. False here turns
-    // selection off in its Texts where the document can; on Android the Texts
-    // stay selectable (that is what keeps a selection through a scroll) and
-    // only the document's native root hears it, and stops a hold from
-    // starting one (chat-text-selectable-context.ts). A double tap on a word
-    // there can still select it; that is not checked on a phone.
-    return ownMarkdown ? (
-      <ChatTextSelectableContext.Provider value={false}>{document}</ChatTextSelectableContext.Provider>
-    ) : (
-      document
-    )
+    // Selects nothing in place: the message row turns that off for every
+    // document in it (ChatTextInPlaceSelectionContext), and a hold opens the
+    // message's menu.
+    return document
   }
   if (isImageRefBlock(block)) {
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare

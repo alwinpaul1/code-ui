@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { X } from 'lucide-react-native'
 import { useBackClaim } from '../navigation/use-back-claim'
+import { ChatTextInPlaceSelectionContext } from './chat-text-selectable-context'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
@@ -83,7 +84,9 @@ export function DraggableDetailSheet({
 
   return (
     <MountedDraggableDetailSheet visible={visible} onClose={onClose} onHidden={handleHidden} header={header}>
-      {children}
+      {/* A sheet is its own surface: one opened from a chat row (a tool's detail) selects in place
+          even though the row it came from does not. */}
+      <ChatTextInPlaceSelectionContext.Provider value>{children}</ChatTextInPlaceSelectionContext.Provider>
     </MountedDraggableDetailSheet>
   )
 }

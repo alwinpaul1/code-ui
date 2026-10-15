@@ -35,6 +35,8 @@ vi.mock('react-native', async () => {
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
     Image: 'Image',
+    // The menu a hold opens is a full-screen layer.
+    Modal: ({ children, ...props }: { children?: unknown }) => React.createElement('Modal', props, children),
     // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
     Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
@@ -43,7 +45,7 @@ vi.mock('react-native', async () => {
     Text,
     View: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFill: {} },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
@@ -72,7 +74,7 @@ vi.mock('../components/BottomDrawer', async () => {
 })
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { holdThenChoose, sentPromptBubble } from './user-message-menu.test-support'
+import { holdStill, holdThenChoose, menuRow, sentPromptBubble } from './user-message-menu.test-support'
 import { DESKTOP_PROMPT_IMAGE_REF } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
@@ -136,26 +138,24 @@ describe('MobileNativeChatMessage', () => {
 
   // 2026-09-21, the user: "automatic copy on long hold on user send prompts
   // instead of long hold and copy button". A hold on a sent prompt copied the
-  // whole prompt at once. It opens the Claude app's message menu now (Copy
-  // message, Select text; MobileNativeChatMessage.user-menu.test.tsx), and
-  // Copy message copies the whole prompt and tints the bubble, the way the
-  // agent's Copy control does. The bubble's text is still not a selection
-  // target — a selectable Text would take the hold for Android's own selection
-  // and the menu would never open; Select text is where the words are
-  // selected. The agent's prose keeps its selection (2026-09-12).
-  it('opens a menu on a hold, and Copy message copies the whole prompt and confirms it on the bubble', async () => {
+  // whole prompt at once. It opens the Claude app's message menu now (Copy,
+  // Select text; chat-message-hold-menu.test.tsx), and Copy copies the whole
+  // prompt and tints the bubble, the way the agent's Copy control does. No text
+  // in a message row is a selection target (2026-10-15): Select text is where
+  // the words are selected.
+  it('opens a menu on a hold, and its Copy copies the whole prompt and confirms it on the bubble', async () => {
     const clipboard = await import('expo-clipboard')
     vi.mocked(clipboard.setStringAsync).mockClear()
     const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
     const bubble = sentPromptBubble(tree.root)
     expect(bubble.props.delayLongPress).toBe(400)
     expect(bubble.props.accessibilityHint).toMatch(/hold for options/i)
-    act(() => {
-      bubble.props.onLongPress()
-    })
+    await holdStill(bubble)
     // Opening the menu copies nothing.
     expect(clipboard.setStringAsync).not.toHaveBeenCalled()
-    await holdThenChoose(tree.root, 'Copy message')
+    await act(async () => {
+      menuRow(tree.root, 'Copy').props.onPress()
+    })
     expect(clipboard.setStringAsync).toHaveBeenCalledWith('run the full gate')
   })
 
@@ -205,16 +205,18 @@ describe('MobileNativeChatMessage', () => {
     )
   })
 
-  // The subagent transcript draws the lead's task prompt as Markdown, so its
-  // hold copies what it draws, like a reply's Copy.
-  it('copies a prompt drawn as Markdown as the words it shows', async () => {
+  // The subagent transcript draws the lead's task prompt as Markdown. Its hold's
+  // Copy gives the prompt as it arrived, as the Claude app's menu gives every
+  // message's text (2026-10-15); only the reply's own Copy control gives words
+  // as drawn.
+  it('copies a prompt drawn as Markdown as it arrived, from the menu a hold opens', async () => {
     const clipboard = await import('expo-clipboard')
     vi.mocked(clipboard.setStringAsync).mockClear()
     const tree = render(userMessage([{ type: 'text', text: '**Task:** run `npm test` and report' }]), {
       promptsAsMarkdown: true
     })
-    await holdThenChoose(tree.root, 'Copy message')
-    expect(clipboard.setStringAsync).toHaveBeenCalledWith('Task: run npm test and report')
+    await holdThenChoose(tree.root, 'Copy')
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith('**Task:** run `npm test` and report')
   })
 
   it('does not make the prompt text a selection target, so the hold reaches the bubble', () => {
@@ -228,12 +230,12 @@ describe('MobileNativeChatMessage', () => {
   })
 
   // 2026-09-25, phone recording: a hold on the agent's reply mid-turn
-  // selected nothing. One suspect was a touchable above the prose taking the
-  // hold first, as the sent prompt's bubble does on purpose. Nothing between
-  // the reply's markdown and the row may claim a press, a long press or the
-  // responder, in a settled reply, an interim note, or a reply in a turn that
-  // is still working with a live tool row beside it.
-  it('puts nothing that takes a touch above the agent reply’s prose, working or settled', () => {
+  // selected nothing; a touchable above the prose had taken the hold first.
+  // Since 2026-10-15 a hold on a reply opens its menu, as the Claude app's
+  // does, so exactly one thing above each run of the reply's words takes a
+  // touch: that run's hold (no tap, no responder of its own), in a settled
+  // reply, an interim note, or a turn still working with a live tool row.
+  it('puts nothing but its hold above the agent reply’s prose, working or settled', () => {
     const TOUCH_PROPS = [
       'onPress',
       'onLongPress',
@@ -267,14 +269,13 @@ describe('MobileNativeChatMessage', () => {
           }
           claims.push(...TOUCH_PROPS.filter((prop) => typeof ancestor!.props[prop] === 'function'))
         }
-        expect({ label, claims }).toEqual({ label, claims: [] })
+        expect({ label, claims }).toEqual({ label, claims: ['Pressable', 'onLongPress', 'onPressIn'] })
       }
       act(() => tree.unmount())
     }
-    // The one place a hold is meant to be taken: the sent prompt's bubble.
+    // A sent prompt is held whole, by its bubble.
     const prompt = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
-    const bubble = prompt.root.findByProps({ accessibilityLabel: 'Sent prompt' })
-    expect(bubble.type).toBe('Pressable')
+    expect(sentPromptBubble(prompt.root).props.onLongPress).toBeTypeOf('function')
   })
 
   it('discloses no copy button on a tap any more, and none on a queued echo', () => {
