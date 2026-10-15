@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
@@ -46,6 +47,8 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: () => null }))
 
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { claudeSendRingShown } from './native-chat-send-ring'
+import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 
 let renderer: ReactTestRenderer | null = null
 afterEach(() => {
@@ -63,13 +66,15 @@ function flat(style: unknown): Record<string, unknown> {
   return (style ?? {}) as Record<string, unknown>
 }
 
-async function render(agent: string, onSend: (text: string) => Promise<boolean>, scheme: 'light' | 'dark' = 'light'): Promise<void> {
+/** `sendRing`: the tab is a Claude tab matched to its Anthropic session (claudeSendRingShown). */
+async function render(agent: string, onSend: (text: string) => Promise<boolean>, scheme: 'light' | 'dark' = 'light', sendRing = agent === 'claude'): Promise<void> {
   await act(async () => {
     renderer = create(
       <ThemeProvider initialPreference={scheme}>
         <MobileNativeChatComposer
           value="run the tests"
           agent={agent}
+          sendRing={sendRing}
           onChangeText={vi.fn()}
           onSend={onSend}
           sendSurfaceId="tab-a"
@@ -135,9 +140,59 @@ describe('the Send button while a Claude send is in flight', () => {
 
   it('leaves a Codex tab’s button as it was: no ring', async () => {
     const held = heldSend()
-    await render('codex', held.onSend)
+    await render('codex', held.onSend, 'light', false)
     await act(async () => send().props.onPress())
     expect(rings()).toHaveLength(0)
     await act(async () => held.settle(true))
+  })
+
+  // Review 2026-10-15: the ring showed on any Claude tab. It is the Claude app's, drawn on a tab
+  // matched to its Anthropic session, as the session's other app features are.
+  it.each(['light', 'dark'] as const)('draws no ring on a Claude tab not matched to its Anthropic session, in %s', async (scheme) => {
+    const held = heldSend()
+    await render('claude', held.onSend, scheme, false)
+    await act(async () => send().props.onPress())
+    expect(rings()).toHaveLength(0)
+    expect(send().findAll((node) => (node.type as unknown) === 'ArrowUp')).toHaveLength(1)
+    await act(async () => held.settle(true))
+  })
+})
+
+describe('which tabs ring their Send button', () => {
+  it('a Claude tab matched to its Anthropic session', () => {
+    expect(claudeSendRingShown('claude', { kind: 'matched' } as ClaudeChatGate)).toBe(true)
+  })
+
+  it('not an unmatched, signed-out, off or gateless Claude tab', () => {
+    for (const kind of ['unmatched', 'signed-out', 'off', 'finding', 'new', 'orca-empty']) {
+      expect(claudeSendRingShown('claude', { kind } as ClaudeChatGate)).toBe(false)
+    }
+    expect(claudeSendRingShown('claude', undefined)).toBe(false)
+  })
+
+  it('not a Codex tab, nor a tab with no agent, whatever its gate says', () => {
+    expect(claudeSendRingShown('codex', { kind: 'matched' } as ClaudeChatGate)).toBe(false)
+    expect(claudeSendRingShown(null, { kind: 'matched' } as ClaudeChatGate)).toBe(false)
+  })
+})
+
+// The overlay is too wide to mount here; the wiring is pinned in its source, on code lines only
+// (a `//` comment naming the call does not count): the chat view is handed the gate's answer, and
+// the composer rings on that alone, not on the agent.
+describe('where the ring’s gate is wired', () => {
+  const code = (file: string) =>
+    readFileSync(new URL(file, import.meta.url), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n')
+
+  it('the overlay hands the chat view the matched-tab answer', () => {
+    expect(code('./MobileNativeChatOverlay.tsx')).toMatch(/sendRing=\{claudeSendRingShown\(controller\.nativeChatAgent, anthropicGate\)\}/)
+  })
+
+  it('the composer rings on that answer, not on the agent being Claude', () => {
+    const composer = code('./MobileNativeChatComposer.tsx')
+    expect(composer).toMatch(/sending=\{sending && sendRing\}/)
+    expect(composer).not.toMatch(/sending=\{[^}]*agent === 'claude'/)
   })
 })

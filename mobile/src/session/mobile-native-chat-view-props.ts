@@ -50,6 +50,8 @@ export type MobileNativeChatViewProps = {
   error?: string
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
+  /** The composer's Send button rings while a send is in flight (claudeSendRingShown). */
+  sendRing?: boolean
   agentWorking?: boolean
   /** Whether Stop has a turn to act on. Defaults to `agentWorking`, which is
    *  the bridge lane's answer; the structured lane says "working" from the

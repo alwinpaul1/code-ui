@@ -63,6 +63,9 @@ type Props = {
   getComposerEditGeneration: () => number
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
   agent?: string | null
+  /** A Claude tab matched to its Anthropic session (claudeSendRingShown): its Send button rings
+   *  while a send is in flight. Off everywhere else, Codex included. */
+  sendRing?: boolean
   /** Model/session-option pickers shown in the composer action row; null when
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
@@ -184,6 +187,7 @@ export function MobileNativeChatComposer({
   getSendCompletionGeneration,
   getComposerEditGeneration,
   agent,
+  sendRing = false,
   sessionOptions,
   onCaptureImage,
   onAttachImage,
@@ -579,7 +583,7 @@ export function MobileNativeChatComposer({
               showStop={showStop}
               stopping={stopping}
               onStop={onStop}
-              canSend={canSend} sending={sending && agent === 'claude'}
+              canSend={canSend} sending={sending && sendRing}
               onSend={() => void handleSend()}
               iconButton={iconButton}
             />
