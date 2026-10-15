@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { drawsStoppedTurnRow } from './mobile-native-chat-error-rows'
+import { agentTurnsByEnd, trailingWorkIsRunning } from './mobile-native-chat-turn-end'
 
 // A Claude tab that is not matched to an Anthropic session reads Orca's
 // transcript, whose decoder turns Claude Code's `[Request interrupted by
@@ -11,6 +13,10 @@ import { buildMobileNativeChatTransientData, foldMobileNativeChatMessages } from
 // a Stop: the marker becomes no row (`u5a.j`, `t5v`) and its `result` row draws
 // nothing (`gy30`), which a matched tab already does (542b5935e). Codex keeps
 // its row: the Claude app has no Codex screen to copy.
+//
+// Only the drawn row goes. The Stop still ends the turn: review of 3308bfbe1
+// found that taking the row out of the list merged the turns around it and
+// read the call it cut off as still running.
 
 const user = (id: string, text: string): NativeChatMessage => ({ id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' })
 const assistant = (id: string, text: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' })
@@ -23,54 +29,85 @@ const stopped = (id: string): NativeChatMessage => ({
   source: 'transcript'
 })
 
-function drawn(
+/** The list the chat view builds, as it builds it: the same for every agent. */
+function list(
   messages: NativeChatMessage[],
-  agent: string | null,
   pending: Parameters<typeof buildMobileNativeChatTransientData>[0]['pending'] = []
-): string[] {
+): NativeChatMessage[] {
   return buildMobileNativeChatTransientData({
     messages,
     folded: foldMobileNativeChatMessages(messages),
     streaming: null,
-    pending,
-    agent
-  }).data.map((message) => message.id)
+    pending
+  }).data
 }
+
+/** The rows the list draws something for on a tab of `agent`. */
+const drawn = (rows: NativeChatMessage[], agent: string | null): string[] =>
+  rows.filter((row) => drawsStoppedTurnRow(row, agent)).map((row) => row.id)
 
 const STOPPED_TURN = [user('u1', 'go'), assistant('a1', 'Looking.'), stopped('s1'), user('u2', 'again')]
 
 describe('a stopped turn on a Claude tab Orca reads', () => {
   it('draws no row for the Stop, as the Claude app draws none', () => {
-    expect(drawn(STOPPED_TURN, 'claude')).toEqual(['u1', 'a1', 'u2'])
+    expect(drawn(list(STOPPED_TURN), 'claude')).toEqual(['u1', 'a1', 'u2'])
   })
 
   it('draws nothing at all for a transcript that is only the Stop', () => {
-    expect(drawn([stopped('s1')], 'claude')).toEqual([])
+    expect(drawn(list([stopped('s1')]), 'claude')).toEqual([])
   })
 
   it('keeps a message sent right after the Stop where it was sent', () => {
-    expect(drawn([user('u1', 'go'), assistant('a1', 'Looking.'), stopped('s1')], 'claude', [
-      { id: 'p1', text: 'next', drawAfterId: 's1' }
-    ])).toEqual(['u1', 'a1', 'p1'])
+    expect(
+      drawn(list([user('u1', 'go'), assistant('a1', 'Looking.'), stopped('s1')], [{ id: 'p1', text: 'next', drawAfterId: 's1' }]), 'claude')
+    ).toEqual(['u1', 'a1', 'p1'])
+  })
+
+  // P2 of the review: a1 and a2 read as one turn, one Copy for both.
+  it('still ends the turn at the Stop: the replies either side are two turns', () => {
+    const rows = list([user('u1', 'go'), assistant('a1', 'First.'), stopped('s1'), assistant('a2', 'Second.')])
+    expect([...agentTurnsByEnd(rows).keys()]).toEqual(['a1', 'a2'])
+  })
+
+  // P1 of the review: with the agent working on a new turn, the call the Stop
+  // cut off read as running, and the turn's actions hung above it.
+  it('does not read the call the Stop cut off as running while the agent works on', () => {
+    const cut: NativeChatMessage = {
+      id: 'a1',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text: 'Running the tests.' },
+        { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test', description: 'Run the tests' } }
+      ],
+      timestamp: 0,
+      source: 'transcript'
+    }
+    const rows = list([user('u1', 'go'), cut, stopped('s1')])
+    const turn = agentTurnsByEnd(rows).get('a1')!
+    expect(turn.isNewest).toBe(false)
+    const runs = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
+    expect(trailingWorkIsRunning(turn.trailingWork, { turnIsNewest: turn.isNewest, runs })).toBe(false)
   })
 })
 
 describe('a stopped turn on a Codex tab', () => {
-  it('keeps its Session interrupted row', () => {
-    expect(drawn(STOPPED_TURN, 'codex')).toEqual(['u1', 'a1', 's1', 'u2'])
+  it('keeps its list and its Session interrupted row', () => {
+    const rows = list(STOPPED_TURN)
+    expect(rows.map((row) => row.id)).toEqual(['u1', 'a1', 's1', 'u2'])
+    expect(drawn(rows, 'codex')).toEqual(['u1', 'a1', 's1', 'u2'])
   })
 
   it('keeps it where the agent is not known either', () => {
-    expect(drawn(STOPPED_TURN, null)).toEqual(['u1', 'a1', 's1', 'u2'])
+    expect(drawn(list(STOPPED_TURN), null)).toEqual(['u1', 'a1', 's1', 'u2'])
   })
 })
 
-// The list is built in the chat view; the rule only holds if the view hands
-// it the tab's agent. Matched against code, not the comments around it.
+// The rule only holds if the chat view asks it of every row it draws. Matched
+// against code, not the comments around it.
 describe('the chat view', () => {
-  it("passes the tab's agent to the list it builds", () => {
+  it("asks of each row whether the tab's agent draws it", () => {
     const source = readFileSync(join(import.meta.dirname, 'MobileNativeChatView.tsx'), 'utf8')
-    const call = source.match(/buildMobileNativeChatTransientData\(\{([^}]*)\}\)/)
-    expect(call?.[1]).toMatch(/\bagent\b/)
+    const code = source.replace(/^\s*\/\/.*$/gm, '')
+    expect(code).toMatch(/drawsStoppedTurnRow\(item, agent\)/)
   })
 })
