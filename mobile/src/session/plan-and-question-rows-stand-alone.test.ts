@@ -58,12 +58,25 @@ describe('a proposed plan and an asked question get rows of their own', () => {
     expect(splitTurnIntoSegments(many).flatMap((segment) => segment.blocks)).toEqual(many)
   })
 
-  it('leaves another call\'s result in the run it belongs to', () => {
-    const other = read('c')
-    // The read's result came after the plan call: it answers the read, not the plan.
-    const runs = toolRuns([other[0]!, planCall, other[1]!, planResult])
-    expect(runs.flat()).toHaveLength(4)
-    expect(runs.find((run) => run.includes(planCall))).not.toContain(other[1])
+  // Review of this change: a question or plan made beside another call split
+  // calls from their results, so the read showed no answer and a run of orphan
+  // results appeared. Interleaved with other work, it stays in the run.
+  it('keeps a question made in parallel with a read in one run, every call with its answer', () => {
+    const a = read('a')
+    const blocks = [a[0]!, askCall, a[1]!, askResult]
+    expect(toolRuns(blocks)).toEqual([blocks])
+    const b = read('b')
+    const first = [askCall, b[0]!, askResult, b[1]!]
+    expect(toolRuns(first)).toEqual([first])
+    const unnamed = [{ ...askCall, callId: undefined }, { ...b[0]!, callId: undefined }, { ...askResult, callId: undefined }, { ...b[1]!, callId: undefined }] as NativeChatBlock[]
+    expect(toolRuns(unnamed)).toEqual([unnamed])
+  })
+
+  it('keeps two questions asked together in one run', () => {
+    const askC: NativeChatBlock = { ...askCall, callId: 'toolu_c' }
+    const resultC: NativeChatBlock = { ...askResult, callId: 'toolu_c' }
+    const blocks = [askCall, askC, askResult, resultC]
+    expect(toolRuns(blocks)).toEqual([blocks])
   })
 
   it('opens the plan as Markdown under "Plan"', () => {
