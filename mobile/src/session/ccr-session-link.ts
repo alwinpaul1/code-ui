@@ -1,6 +1,6 @@
 import { CcrApiError, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_LOST_RETRY_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
 import { readCcrTranscript } from './ccr-transcript-persist'
@@ -9,7 +9,7 @@ import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
 import { readCcrCatchUp } from './ccr-link-catch-up'
 import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'; import { CcrControlWaiters } from './ccr-context-usage'
 
-export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
+export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_LOST_RETRY_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
 /**
  * One Claude Code session on Anthropic, read with one account: its events, paged back from the
@@ -40,6 +40,9 @@ export class CcrSessionLink {
   private abort: AbortController | null = null
   private cancelTimer: (() => void) | null = null
   private readonly backoff = new CcrStreamBackoff()
+  /** Retries made since the stream was last lost (CCR_STREAM_LOST_RETRY_MS); back to 0 on a
+   *  connection good enough to start the back-off over, and on retry()/resume(). */
+  private lostRetries = 0
   private stopped = false
   private started = false
   private paused = false
@@ -198,7 +201,12 @@ export class CcrSessionLink {
       const now = this.deps.now ?? Date.now
       let openedAt: number | null = null
       // Whether this connection was good enough to start the back-off over (ccr-stream-backoff.ts).
-      const settle = () => this.backoff.settle(openedAt === null ? null : now() - openedAt, this.store.lastSequenceNum > from)
+      const settle = () => {
+        this.backoff.settle(openedAt === null ? null : now() - openedAt, this.store.lastSequenceNum > from)
+        if (this.backoff.count === 0) {
+          this.lostRetries = 0
+        }
+      }
       try {
         const end = await readCcrEventStream({
           fetch: this.deps.streamFetch,
@@ -296,6 +304,16 @@ export class CcrSessionLink {
     if (wait === null) {
       this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.backoff.count} reconnects: ${why}`)
       this.set({ phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' })
+      // One more attempt per step, with the back-off still spent: a failure comes straight back
+      // here, so each step costs one stream request, and after the last the stream stays lost.
+      const later = CCR_STREAM_LOST_RETRY_MS[this.lostRetries]
+      if (later !== undefined) {
+        this.lostRetries += 1
+        this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => {
+          this.cancelTimer = null
+          this.connect()
+        }, later)
+      }
       return
     }
     this.set({ phase: 'reconnecting', streamThinking: null })
@@ -361,6 +379,7 @@ export class CcrSessionLink {
   private restart(): void {
     this.generation += 1
     this.backoff.reset()
+    this.lostRetries = 0
     this.refreshedAuth = false
     this.cancelTimer?.()
     this.cancelTimer = null

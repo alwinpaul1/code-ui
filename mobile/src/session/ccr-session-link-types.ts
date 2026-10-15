@@ -21,8 +21,15 @@ export type CcrLinkDeps = {
 }
 
 /** The waits before each reconnect, as the Claude app's stream does (1, 3, 7, 15, 31 s). After
- *  the last, the stream is `lost` until `retry()` (a relay reconnect) or `resume()` (the app back in front). */
+ *  the last, the stream is `lost`: it tries again on CCR_STREAM_LOST_RETRY_MS, and at once on `retry()`
+ *  (a relay reconnect) or `resume()` (the app back in front). */
 export const CCR_STREAM_RECONNECT_MS: readonly number[] = [1_000, 3_000, 7_000, 15_000, 31_000]
+/** Once `lost`, the stream tries again once after each of these waits (1, 5 and 15 min), one
+ *  stream request per wait, and then stays lost until `retry()` or `resume()`. A matched Claude
+ *  chat's rows come from this stream, so a lost one with the relay healthy froze them for good;
+ *  the cap keeps a down Anthropic from being redialled in a loop (review 2026-10-15). Not the
+ *  Claude app's behaviour: its stream has a backplane of its own. */
+export const CCR_STREAM_LOST_RETRY_MS: readonly number[] = [60_000, 300_000, 900_000]
 /** A connection starts the back-off over when it delivered an event the link did not hold AND
  *  stayed up this long (or stayed up CCR_STREAM_IDLE_STABLE_MS with none): a server that answers
  *  and closes at once, whatever it sends first, is backed off to `lost` rather than redialled every

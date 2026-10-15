@@ -449,6 +449,85 @@ describe('when reading fails', () => {
     expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 2)
   })
 
+  // Review 2026-10-15: a lost stream waited for a relay reconnect or the app coming back to front,
+  // so with the relay healthy a matched chat's rows stayed frozen for good. It now tries again once
+  // after 1, 5 and 15 minutes, one stream request each, and then stays lost: a down Anthropic is
+  // never redialled in a loop.
+  const LOST_RETRIES = [60_000, 300_000, 900_000]
+  const retryWaits = (w: World) => w.timers.pending().filter((ms) => LOST_RETRIES.includes(ms))
+
+  async function loseStream(w: World, link: CcrSessionLink): Promise<void> {
+    for (const wait of CCR_STREAM_RECONNECT_MS) {
+      w.timers.fire(wait)
+      await flush()
+    }
+    expect(link.getState().phase).toBe('lost')
+  }
+
+  it('a lost stream tries again once after 1, 5 and 15 minutes while Anthropic stays down, then stays lost', async () => {
+    const w = world(() => ({ status: 200, chunks: [] }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await loseStream(w, link)
+    let requests = w.stream.requests.length
+    for (const wait of LOST_RETRIES) {
+      expect(retryWaits(w)).toEqual([wait])
+      w.timers.fire(wait)
+      await flush()
+      // One attempt per step, and it fails straight back to lost: no 1/3/7/15/31 s run behind it.
+      expect(w.stream.requests).toHaveLength(requests + 1)
+      requests += 1
+      expect(link.getState().phase).toBe('lost')
+      expect(w.timers.pending().filter((ms) => CCR_STREAM_RECONNECT_MS.includes(ms))).toEqual([])
+    }
+    expect(retryWaits(w)).toEqual([])
+    expect(w.timers.pending().filter((ms) => ms !== CCR_LINK_LINGER_MS && ms !== CCR_PERSIST_STREAM_MS)).toEqual([])
+    expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 1 + LOST_RETRIES.length)
+  })
+
+  it('a lost stream that comes back on a retry is live again', async () => {
+    let attempt = 0
+    const w = world(() => {
+      attempt += 1
+      return attempt <= CCR_STREAM_RECONNECT_MS.length + 1 ? { status: 200, chunks: [] } : { status: 200, chunks: [], hold: true }
+    })
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await loseStream(w, link)
+    w.timers.fire(LOST_RETRIES[0])
+    await flush()
+    expect(link.getState().phase).toBe('live')
+  })
+
+  it('a stream refused on a retry stops there and says why, with no further retry', async () => {
+    let attempt = 0
+    const w = world(() => {
+      attempt += 1
+      return attempt <= CCR_STREAM_RECONNECT_MS.length + 1 ? { status: 200, chunks: [] } : { status: 403, chunks: [], text: '{"error":{"type":"permission_error"}}' }
+    })
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await loseStream(w, link)
+    w.timers.fire(LOST_RETRIES[0])
+    await flush()
+    expect(link.getState().phase).toBe('error')
+    expect(retryWaits(w)).toEqual([])
+  })
+
+  it('the app going to the background cancels a pending retry of a lost stream', async () => {
+    const w = world(() => ({ status: 200, chunks: [] }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await loseStream(w, link)
+    expect(retryWaits(w)).toEqual([LOST_RETRIES[0]])
+    pauseCcrLinks()
+    expect(retryWaits(w)).toEqual([])
+  })
+
   /** Fires every reconnect wait until the link is lost (or 30 firings): the waits it asked for. */
   async function fireUntilLost(w: World, link: CcrSessionLink): Promise<number[]> {
     const waits: number[] = []
