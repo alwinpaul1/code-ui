@@ -23,6 +23,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { noteCcrSessionFacts, resetCcrSessionFactsForTests, CCR_SESSION_FACTS_FRESH_MS } from '../session/ccr-session-facts'
 import { parseCcrSessionRow } from '../session/ccr-session-row'
+import { resetCcrCacheForTests, setCcrMapping } from '../session/ccr-session-cache'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 
 // A Claude agent row in the workspace list, with its tab's Anthropic session row fresh on the
@@ -57,10 +58,14 @@ afterEach(() => {
   flags.writes = false
   flags.dots.length = 0
   resetCcrSessionFactsForTests()
+  resetCcrCacheForTests()
 })
 
+// The phone keys a terminal tab by the host's `<tabId>::<leafId>`; Orca's pane is `<tabId>:<leafId>`.
+// The row applies only to the session the tab is matched to (claude-session-list-filter.ts).
 function noteRow(fields: Record<string, unknown>) {
-  noteCcrSessionFacts('tab-1', 1, parseCcrSessionRow({ id: 'cse_01QXaaaaaaaaaaaaaaaaaaaa', ...fields })!, NOW)
+  setCcrMapping('tab-1::leaf-1', 'cse_01QXaaaaaaaaaaaaaaaaaaaa', 1, 'acct-1')
+  noteCcrSessionFacts('tab-1::leaf-1', 1, parseCcrSessionRow({ id: 'cse_01QXaaaaaaaaaaaaaaaaaaaa', ...fields })!, NOW)
 }
 
 function mount(scheme: 'light' | 'dark', row: RuntimeWorktreeAgentRow, now = NOW + 1000) {

@@ -101,8 +101,9 @@ export function ccrSessionStateOfRow(row: StateRow, now: number): ClaudeSessionS
   }
 }
 
-/** A Claude agent row's state from Orca (the desktop's agent status) when no fresh session row is
- *  held: the same filters, from the dot the row already draws. */
+/** A Claude agent row's state from Orca (the desktop's agent status) when no session row applies
+ *  (claude-session-list-filter.ts `claudeAgentSessionFacts`): the same filters, from the dot the
+ *  row already draws. */
 export function orcaClaudeSessionState(dot: AgentDotState): ClaudeSessionState {
   switch (dot) {
     case 'working':

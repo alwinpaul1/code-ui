@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { CCR_SESSION_FACTS_FRESH_MS, noteCcrSessionFacts, resetCcrSessionFactsForTests } from '../session/ccr-session-facts'
 import { parseCcrSessionRow } from '../session/ccr-session-row'
+import { resetCcrCacheForTests, setCcrMapping } from '../session/ccr-session-cache'
 import { claudeAgentSessionState, filterSectionsByClaudeSession, hasClaudeAgents } from './claude-session-list-filter'
 import type { Section, Worktree } from './workspace-list-types'
 
@@ -36,7 +37,10 @@ function worktree(id: string, agents: RuntimeWorktreeAgentRow[] | undefined): Wo
 
 const section = (key: string, data: Worktree[]): Section => ({ key, title: key, data })
 
-afterEach(() => resetCcrSessionFactsForTests())
+afterEach(() => {
+  resetCcrSessionFactsForTests()
+  resetCcrCacheForTests()
+})
 
 describe('a Claude agent row’s session state', () => {
   it('comes from Orca’s agent status when no fresh session row is held', () => {
@@ -46,6 +50,7 @@ describe('a Claude agent row’s session state', () => {
   })
 
   it('comes from the session row while it is fresh, then falls back to Orca', () => {
+    setCcrMapping('t1', 'cse_01QXaaaaaaaaaaaaaaaaaaaa', 1, 'acct-1')
     noteCcrSessionFacts('t1', 1, parseCcrSessionRow({ id: 'cse_01QXaaaaaaaaaaaaaaaaaaaa', status: 'idle', post_turn_summary: { status_category: 'review_ready' } })!, NOW)
     expect(claudeAgentSessionState(agent('t1:a', { state: 'done' }), NOW + 1000)).toBe('ready-for-review')
     expect(claudeAgentSessionState(agent('t1:a', { state: 'done' }), NOW + CCR_SESSION_FACTS_FRESH_MS)).toBe('completed')

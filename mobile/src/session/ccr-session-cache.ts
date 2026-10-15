@@ -113,6 +113,14 @@ export function setCcrMapping(
   }
 }
 
+/** The Anthropic session the tab is matched to, whatever connection or Claude Code session the
+ *  match was made on: the workspace list has neither, and asks only whether facts read for a tab
+ *  are about the session it is matched to now (ccr-session-facts.ts `ccrSessionFactsForAgent`). A
+ *  match dropped for another Claude Code session (`currentMapping`) is gone from here too. */
+export function ccrMappedSessionForTab(tabId: string): string | null {
+  return mappingByTab.get(tabId)?.sessionId ?? null
+}
+
 /** Keeps found pictures under their ids (a Read's `toolu_…`, a prompt's uuid) and tells the hooks. */
 export function storeCcrImages(tool: ReadonlyMap<string, string>, user: ReadonlyMap<string, string[]>): void {
   for (const [id, uri] of tool) {

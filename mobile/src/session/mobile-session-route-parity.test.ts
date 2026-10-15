@@ -382,8 +382,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // 2026-10-15 (auto permission): handleSend rewrites a typed `claude` line before it is sent, only
 // on a line known to be empty, and marks the line empty after an accepted send; handleCreateTerminal
 // marks a new plain terminal's line empty.
+// 2026-10-15 (stale Anthropic session facts): handleCloseSessionTab forgets an accepted close's
+// tab facts (forgetCcrSessionFacts, ccr-session-facts.ts). Same 16 functions.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'd2620b7e4c55085f0fc5d367631d47e8d341e19f81c3d3c8a124163d8830531c'
+  'd76211c999cbd0dffa880b4fd65451af4d9036095c1b741daacd4520f4477c7d'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.

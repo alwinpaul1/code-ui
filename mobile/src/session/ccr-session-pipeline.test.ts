@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CcrFetchResponse } from './ccr-session-api'
 import { ccrModelForTab, resetCcrModelForTests } from './ccr-session-model'
+import { ccrSessionFactsForTab, resetCcrSessionFactsForTests } from './ccr-session-facts'
 import {
   CCR_MAX_CANDIDATES,
   CCR_MAX_EVENT_PAGES,
@@ -457,5 +458,42 @@ describe('the model and effort the session reports', () => {
     fail = true
     await expect(refreshCcrModel('tab-1', 1, h.deps)).resolves.toEqual({ stage: 'model', ok: false, detail: 'HTTP 500' })
     expect(ccrModelForTab('tab-1', 1)).toBeNull()
+  })
+})
+
+// Reported 2026-10-15 (review of the session-state branch): a dropped match left the tab's session
+// facts behind (forgetCcrSessionFacts was never called), so the header and the list could keep
+// reading a session the tab is no longer matched to.
+describe('the tab’s session facts when its match is dropped', () => {
+  afterEach(() => resetCcrSessionFactsForTests())
+
+  it('are forgotten when the session is gone (404 on its events)', async () => {
+    let gone = false
+    const h = harness(
+      apiRoutes({
+        sessions: () => reply(200, sessionsReply([sessionRow(SESSION_A, { title: 'CI failure' })])),
+        events: { [SESSION_A]: () => (gone ? reply(404, {}) : reply(200, sessionAPage)) }
+      })
+    )
+    await runCcrImagePipeline(input(), h.deps)
+    expect(ccrSessionFactsForTab('tab-1', SESSION_A)?.title).toBe('CI failure')
+    gone = true
+    await runCcrImagePipeline(input({ wanted: { toolUseIds: ['toolu_new'], userMessageIds: [] } }), h.deps)
+    expect(ccrSessionFactsForTab('tab-1', SESSION_A)).toBeNull()
+  })
+
+  it('are forgotten when a refresh no longer finds the session in the list', async () => {
+    let listed = true
+    const h = harness(
+      apiRoutes({
+        sessions: () => reply(200, sessionsReply(listed ? [sessionRow(SESSION_A, { title: 'CI failure', external_metadata: { model: 'claude-opus-5-5' } })] : [])),
+        events: { [SESSION_A]: () => reply(200, sessionAPage) }
+      })
+    )
+    await runCcrImagePipeline(input(), h.deps)
+    expect(ccrSessionFactsForTab('tab-1', SESSION_A)?.title).toBe('CI failure')
+    listed = false
+    await refreshCcrModel('tab-1', 1, h.deps)
+    expect(ccrSessionFactsForTab('tab-1', SESSION_A)).toBeNull()
   })
 })

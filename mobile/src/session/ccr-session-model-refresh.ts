@@ -3,7 +3,7 @@ import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-sess
 import { findAccountSessionRow } from './ccr-session-lists'
 import { noteCcrRowContext } from './ccr-session-usage'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
-import { noteCcrSessionFacts } from './ccr-session-facts'
+import { forgetCcrSessionFacts, noteCcrSessionFacts } from './ccr-session-facts'
 import {
   defaultLog,
   maskId,
@@ -70,6 +70,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
         // Signed out: the match cannot be read with it again. Dropped, the tab's next run matches
         // it afresh across the accounts still signed in, instead of re-reading a dead one forever.
         forgetCcrMapping(tabId, agentSessionId)
+        forgetCcrSessionFacts(tabId)
       }
       report(
         'model',
@@ -89,6 +90,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
     }
     forgetCcrModel(tabId)
     forgetCcrMapping(tabId, agentSessionId)
+    forgetCcrSessionFacts(tabId)
     report('model', false, `session ${maskId(sessionId)} is no longer in the account's list; the tab is matched again`)
   } catch (error) {
     forgetCcrModel(tabId)

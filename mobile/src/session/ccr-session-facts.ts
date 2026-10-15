@@ -9,9 +9,9 @@ import { ccrSessionStateOfRow, type ClaudeSessionState } from './claude-session-
  * fetched for it.
  *
  * The header reads it only for the session the tab is matched to now (use-ccr-session-header.ts).
- * The list reads it only while fresh (CCR_SESSION_FACTS_FRESH_MS): the row is re-read only while
- * the chat is open, so an older reading would draw a state the session has moved on from, and the
- * list then keeps Orca's own state.
+ * The list reads it only while fresh, newer than Orca's own row and about the session the tab is
+ * matched to now (`ccrSessionFactsForAgent`); otherwise the list keeps Orca's own state. A tab
+ * closed on the phone, or a match dropped, forgets its facts (`forgetCcrSessionFacts`).
  */
 
 export type CcrSessionFacts = {
@@ -39,19 +39,34 @@ function changed(): void {
   }
 }
 
-export function noteCcrSessionFacts(tabId: string, epoch: number | null, row: CcrSessionRow, now = Date.now()): void {
-  const title = row.title?.trim() || null
-  factsByTab.set(tabId, { sessionId: row.id, epoch, title, state: ccrSessionStateOfRow(row, now), unread: row.unread ?? null, fetchedAt: now })
-  changed()
+/** The fields a reader draws. A re-read that changes none of them still moves `fetchedAt` (the list
+ *  times freshness from it) but tells no one: an open chat re-reads its row every minute, and a
+ *  version bump re-rendered every subscriber each time for nothing. */
+function sameDrawnFacts(a: CcrSessionFacts, b: CcrSessionFacts): boolean {
+  return a.sessionId === b.sessionId && a.epoch === b.epoch && a.title === b.title && a.state === b.state && a.unread === b.unread
 }
 
-/** A rename that landed: every tab showing that session takes the new title at once. `cse_` and
- *  `session_` spellings of one id are the same session. */
-export function retitleCcrSessionFacts(sessionId: string, title: string): void {
+export function noteCcrSessionFacts(tabId: string, epoch: number | null, row: CcrSessionRow, now = Date.now()): void {
+  const title = row.title?.trim() || null
+  const next: CcrSessionFacts = { sessionId: row.id, epoch, title, state: ccrSessionStateOfRow(row, now), unread: row.unread ?? null, fetchedAt: now }
+  const previous = factsByTab.get(tabId)
+  factsByTab.set(tabId, next)
+  if (!previous || !sameDrawnFacts(previous, next)) {
+    changed()
+  }
+}
+
+/** `cse_` and `session_` spellings of one id are the same session. */
+export function sameCcrSessionId(a: string, b: string): boolean {
   const key = (id: string) => id.replace(/^session_/, 'cse_')
+  return key(a) === key(b)
+}
+
+/** A rename that landed: every tab showing that session takes the new title at once. */
+export function retitleCcrSessionFacts(sessionId: string, title: string): void {
   let touched = false
   for (const [tabId, facts] of factsByTab) {
-    if (key(facts.sessionId) === key(sessionId)) {
+    if (sameCcrSessionId(facts.sessionId, sessionId)) {
       factsByTab.set(tabId, { ...facts, title: title.trim() || null })
       touched = true
     }
@@ -87,12 +102,50 @@ export function ccrSessionFactsForTab(tabId: string, sessionId: string | null): 
   return facts && sessionId !== null && facts.sessionId === sessionId ? facts : null
 }
 
-/** The facts of the tab an Orca pane belongs to (`<tabId>:<leafId>`), only while fresh. */
-export function freshCcrSessionFactsForPane(paneKey: string, now: number): CcrSessionFacts | null {
-  const separator = paneKey.indexOf(':')
-  const tabId = separator > 0 ? paneKey.slice(0, separator) : paneKey
-  const facts = factsByTab.get(tabId)
-  return facts && now - facts.fetchedAt >= 0 && now - facts.fetchedAt < CCR_SESSION_FACTS_FRESH_MS ? facts : null
+/**
+ * The facts of the tab an Orca agent row belongs to, only when they still describe what Orca
+ * shows. Orca hears the agent live; the row is read at most once a minute, and only while the chat
+ * is open. So the facts are dropped, and the caller keeps Orca's own state, when any of these holds:
+ *
+ *  - they are older than CCR_SESSION_FACTS_FRESH_MS;
+ *  - Orca's row changed after they were read (`stateStartedAt` or `updatedAt` later than
+ *    `fetchedAt`): a turn that ended at +20 s is done, whatever a row read at 0 s said, and a new
+ *    session started in the tab is not the old one asking for input;
+ *  - Orca's row carries no usable time at all: nothing then says which is newer, and a wrong
+ *    state on the list is worse than Orca's (prefer refusing over guessing);
+ *  - they are about another Anthropic session than the one the tab is matched to now
+ *    (`currentSessionId`, ccr-session-cache.ts `ccrMappedSessionForTab`), or the tab has no match.
+ *
+ * Orca's `paneKey` is `<tabId>:<leafId>`, while the phone keys a terminal tab by its host address
+ * `<tabId>::<leafId>`; a host that publishes no leaf address keys the tab by its bare id.
+ */
+export function ccrSessionFactsForAgent(
+  agent: { paneKey: string; stateStartedAt?: number | null; updatedAt?: number | null },
+  now: number,
+  currentSessionId: (tabId: string) => string | null
+): CcrSessionFacts | null {
+  const separator = agent.paneKey.indexOf(':')
+  const candidates =
+    separator > 0
+      ? [`${agent.paneKey.slice(0, separator)}::${agent.paneKey.slice(separator + 1)}`, agent.paneKey.slice(0, separator)]
+      : [agent.paneKey]
+  for (const tabId of candidates) {
+    const facts = factsByTab.get(tabId)
+    if (!facts) {
+      continue
+    }
+    const age = now - facts.fetchedAt
+    if (!(age >= 0 && age < CCR_SESSION_FACTS_FRESH_MS)) {
+      return null
+    }
+    const orcaTimes = [agent.stateStartedAt, agent.updatedAt].filter((time): time is number => typeof time === 'number' && Number.isFinite(time) && time > 0)
+    if (orcaTimes.length === 0 || Math.max(...orcaTimes) > facts.fetchedAt) {
+      return null
+    }
+    const current = currentSessionId(tabId)
+    return current !== null && sameCcrSessionId(current, facts.sessionId) ? facts : null
+  }
+  return null
 }
 
 export function subscribeCcrSessionFacts(listener: () => void): () => void {

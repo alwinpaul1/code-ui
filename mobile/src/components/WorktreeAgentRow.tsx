@@ -9,8 +9,7 @@ import {
   agentRowTimeAt,
   formatTimeAgo
 } from '../worktree/agent-row-display'
-import { claudeAgentDotState } from '../worktree/claude-session-list-filter'
-import { freshCcrSessionFactsForPane } from '../session/ccr-session-facts'
+import { claudeAgentDotState, claudeAgentSessionFacts } from '../worktree/claude-session-list-filter'
 import { CCR_SESSION_WRITES } from '../session/ccr-session-writes'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
@@ -35,10 +34,7 @@ function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
   const dotState = claudeAgentDotState(agent, now)
   // The Claude app's "Unread" mark (`ccr_session_unread`), only while mark_read is on as well:
   // without it the mark would stay on a session the user has just read here.
-  const unread =
-    CCR_SESSION_WRITES &&
-    agent.agentType === 'claude' &&
-    freshCcrSessionFactsForPane(agent.paneKey, now)?.unread === true
+  const unread = CCR_SESSION_WRITES && claudeAgentSessionFacts(agent, now)?.unread === true
   // A visual line renders only in the transcript; the row shows the words around it, and a reply
   // that is only a visual falls back like an empty one (Orca #26071).
   const reply = agent.lastAssistantMessage
