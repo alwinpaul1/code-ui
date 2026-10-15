@@ -60,6 +60,9 @@ export type ChatMessageMenuAnchor = { x: number; y: number; width: number; heigh
 export const MESSAGE_MENU_RADIUS = 12
 export const MESSAGE_MENU_PAD_Y = 4
 export const MESSAGE_MENU_ROW_HEIGHT = 48
+/** The card is at least this wide (its minWidth, dp), so a start nearer the edge than this
+ *  would hang it off screen; used to keep it inside when the held view could not be measured. */
+export const MESSAGE_MENU_MIN_WIDTH = 180
 /** The card keeps 16 dp from the screen's safe edges (fmg.java `c`: insets + 16). */
 export const MESSAGE_MENU_EDGE = 16
 /** The air between the held message and the card. */
@@ -96,7 +99,11 @@ export function chatMessageMenuPlacement(input: {
   const top = Math.max(minTop, Math.min(preferred, Math.max(minTop, maxTop)))
   if (alignEnd) {
     const fromRight = window.width - (anchor.x + anchor.width)
-    return { top, right: Math.max(insets.right + MESSAGE_MENU_EDGE, fromRight) }
+    const maxRight = window.width - insets.left - MESSAGE_MENU_EDGE - MESSAGE_MENU_MIN_WIDTH
+    const minRight = insets.right + MESSAGE_MENU_EDGE
+    return { top, right: Math.min(Math.max(minRight, fromRight), Math.max(minRight, maxRight)) }
   }
-  return { top, left: Math.max(insets.left + MESSAGE_MENU_EDGE, anchor.x) }
+  const maxLeft = window.width - insets.right - MESSAGE_MENU_EDGE - MESSAGE_MENU_MIN_WIDTH
+  const minLeft = insets.left + MESSAGE_MENU_EDGE
+  return { top, left: Math.min(Math.max(minLeft, anchor.x), Math.max(minLeft, maxLeft)) }
 }

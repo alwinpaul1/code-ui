@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
-import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { Pressable, View, type AccessibilityActionEvent, type StyleProp, type ViewStyle } from 'react-native'
 import { useChatMessageHold, type ChatHoldPoint } from './chat-message-hold'
 import {
   chatMessageMenuEntries,
   type ChatMessageMenuAnchor,
   type ChatMessageMenuEntry
 } from './mobile-native-chat-message-menu'
+import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
 import { MobileNativeChatMessageMenu, MobileNativeChatSelectTextSheet } from './MobileNativeChatMessageMenu'
+
+/** The accessibility action that stands in for the hold (TalkBack's actions menu). */
+const HOLD_ACTION = { name: 'longpress', label: 'Message options' } as const
 
 /** What a hold opens a menu with: the held view, the point the finger was on. */
 export type HoldHandler = (target: View | null, at: ChatHoldPoint) => void
@@ -27,12 +31,20 @@ export function HoldTarget({
   children: ReactNode
 } & Pick<
   ComponentProps<typeof Pressable>,
-  'onPress' | 'accessibilityRole' | 'accessibilityLabel' | 'accessibilityHint' | 'testID'
+  'onPress' | 'accessibilityRole' | 'accessibilityLabel' | 'accessibilityHint' | 'testID' | 'accessible'
 >) {
   const ref = useRef<View>(null)
   const hold = useChatMessageHold(onHold ? (at) => onHold(ref.current, at) : undefined)
+  // TalkBack cannot hold: its custom action opens the same menu, from the view's own box (no
+  // touch point, so a view that cannot be measured is anchored at the window's corner).
+  const onAccessibilityAction = (event: AccessibilityActionEvent): void => {
+    if (event.nativeEvent.actionName === HOLD_ACTION.name) {
+      onHold?.(ref.current, { x: 0, y: 0 })
+    }
+  }
+  const actions = onHold ? { accessibilityActions: [HOLD_ACTION], onAccessibilityAction } : {}
   return (
-    <Pressable ref={ref} style={style} collapsable={false} {...rest} {...hold}>
+    <Pressable ref={ref} style={style} collapsable={false} {...rest} {...actions} {...hold}>
       {children}
     </Pressable>
   )
@@ -40,7 +52,11 @@ export function HoldTarget({
 
 /** A run of a reply's words: a hold opens its menu when it has words to offer, else a plain view. */
 export function ProseHold({ onHold, children }: { onHold?: HoldHandler; children: ReactNode }) {
-  return onHold ? <HoldTarget onHold={onHold}>{children}</HoldTarget> : <>{children}</>
+  return onHold ? // Not accessible itself: one merged node would hide the links, chips and code Copy inside the
+  // run from a screen reader. The hold's action is still on the view for those that surface it.
+  <HoldTarget onHold={onHold} accessible={false}>
+      {children}
+    </HoldTarget> : <>{children}</>
 }
 
 /** The menu a hold opened, and what its rows act on. */
@@ -110,6 +126,16 @@ export function useMobileNativeChatMessageHold({
     setSelecting(null)
     setSelectNext(null)
   }
+  // A native Modal is not gated by the screen's focus: a route pushed while the menu or the
+  // sheet is open would leave it painted over the new screen. Losing focus puts both down.
+  const onFocusChange = useCallback((focused: boolean) => {
+    if (!focused) {
+      setHeld(null)
+      setSelecting(null)
+      setSelectNext(null)
+    }
+  }, [])
+  useNativeChatScreenFocus(onFocusChange)
   useEffect(() => {
     if (selectNext !== null && held === null) {
       setSelecting({ text: selectNext, open: true })

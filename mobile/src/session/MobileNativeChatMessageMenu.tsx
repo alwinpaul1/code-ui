@@ -8,6 +8,7 @@ import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import {
   CHAT_MESSAGE_MENU_LABELS,
   chatMessageMenuPlacement,
+  MESSAGE_MENU_MIN_WIDTH,
   MESSAGE_MENU_PAD_Y,
   MESSAGE_MENU_RADIUS,
   MESSAGE_MENU_ROW_HEIGHT,
@@ -166,7 +167,7 @@ export function MobileNativeChatSelectTextSheet({
 const styles = StyleSheet.create({
   card: {
     position: 'absolute',
-    minWidth: 180,
+    minWidth: MESSAGE_MENU_MIN_WIDTH,
     paddingVertical: MESSAGE_MENU_PAD_Y,
     borderRadius: MESSAGE_MENU_RADIUS,
     borderWidth: 1,

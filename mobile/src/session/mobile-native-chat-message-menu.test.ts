@@ -5,6 +5,7 @@ import {
   chatMessageMenuPlacement,
   MESSAGE_MENU_EDGE,
   MESSAGE_MENU_GAP,
+  MESSAGE_MENU_MIN_WIDTH,
   MESSAGE_MENU_PAD_Y,
   MESSAGE_MENU_ROW_HEIGHT
 } from './mobile-native-chat-message-menu'
@@ -32,6 +33,20 @@ describe("the Claude app's message menu entries", () => {
 })
 
 describe('where the menu card hangs', () => {
+  // A point with no box (a hold whose view could not be measured) near the right edge: the card
+  // is at least MESSAGE_MENU_MIN_WIDTH wide, so its start is kept that far in from the edge.
+  it('keeps a card hung from a point near the right edge inside the window', () => {
+    const anchor = { x: window.width - 10, y: 300, width: 0, height: 0 }
+    const placed = chatMessageMenuPlacement({ anchor, alignEnd: false, rows: 2, window, insets })
+    expect(placed.left).toBe(window.width - insets.right - MESSAGE_MENU_EDGE - MESSAGE_MENU_MIN_WIDTH)
+  })
+
+  it('keeps a card hung from a point near the left edge inside the window, from its end', () => {
+    const anchor = { x: 10, y: 300, width: 0, height: 0 }
+    const placed = chatMessageMenuPlacement({ anchor, alignEnd: true, rows: 2, window, insets })
+    expect(placed.right).toBe(window.width - insets.left - MESSAGE_MENU_EDGE - MESSAGE_MENU_MIN_WIDTH)
+  })
+
   it('hangs under a reply, from its start', () => {
     const anchor = { x: 20, y: 100, width: 350, height: 200 }
     expect(chatMessageMenuPlacement({ anchor, alignEnd: false, rows: 2, window, insets })).toEqual({

@@ -41,6 +41,12 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
 })
+const focusReports = vi.hoisted(() => ({ report: null as null | ((focused: boolean) => void) }))
+vi.mock('./use-native-chat-screen-focus', () => ({
+  useNativeChatScreenFocus: (onFocusChange: (focused: boolean) => void) => {
+    focusReports.report = onFocusChange
+  }
+}))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => true) }))
 vi.mock('../platform/haptics', () => ({
   triggerSuccess: vi.fn(),
@@ -347,5 +353,79 @@ describe('sizes at the edges', () => {
   it.each([['empty bold marks', '****'], ['an empty fence', '```\n```']])('gives %s alone nothing to hold', (_label, text) => {
     expect(holdTargets(render(message('assistant', text)))).toEqual([])
     expect(holdTargets(render(message('user', text)))).toEqual([])
+  })
+})
+
+describe('the menu is reachable and does not outlive its screen', () => {
+  const ACTION = { nativeEvent: { actionName: 'longpress' } }
+
+  it.each([
+    ['a reply run', message('assistant', REPLY)],
+    ['a sent prompt', message('user', 'run the gate')]
+  ])('offers %s a TalkBack action that opens the same menu', async (_label, row) => {
+    const root = render(row)
+    const target = holdTarget(root)
+    expect(target.props.accessibilityActions).toEqual([{ name: 'longpress', label: 'Message options' }])
+    await act(async () => {
+      target.props.onAccessibilityAction(ACTION)
+    })
+    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+  })
+
+  it('ignores an accessibility action it does not offer', async () => {
+    const root = render(message('assistant', REPLY))
+    await act(async () => {
+      holdTarget(root).props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } })
+    })
+    expect(menu(root)).toBeUndefined()
+  })
+
+  it('does not merge a reply run into one screen-reader node, so its own controls stay reachable', () => {
+    const fenced = 'Run:\n\n```sh\nnpm test\n```\n\nThen push.'
+    const root = render(message('assistant', fenced))
+    expect(holdTarget(root).props.accessible).toBe(false)
+    const copyCode = root.findAll(
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Copy code'
+    )
+    expect(copyCode).toHaveLength(1)
+    expect(copyCode[0]!.props.accessible).not.toBe(false)
+  })
+
+  it('puts the menu down when the screen loses focus', async () => {
+    const root = render(message('assistant', REPLY))
+    await holdStill(holdTarget(root))
+    expect(menu(root)).toBeDefined()
+    await act(async () => {
+      focusReports.report?.(false)
+    })
+    expect(menu(root)).toBeUndefined()
+  })
+
+  it('puts the Select text sheet down when the screen loses focus', async () => {
+    const root = render(message('assistant', REPLY))
+    await holdStill(holdTarget(root))
+    await choose(root, 'Select text')
+    expect(selectBody(root)).toBeDefined()
+    await act(async () => {
+      focusReports.report?.(false)
+    })
+    expect(selectBody(root)).toBeUndefined()
+  })
+
+  it('keeps the menu when the screen gains focus', async () => {
+    const root = render(message('assistant', REPLY))
+    await holdStill(holdTarget(root))
+    await act(async () => {
+      focusReports.report?.(true)
+    })
+    expect(menu(root)).toBeDefined()
+  })
+
+  it('keeps a card from an unmeasured hold near the right edge inside the window', async () => {
+    const root = render(message('assistant', REPLY))
+    await holdStill(holdTarget(root), 380, 300)
+    const card = flat(menu(root)!.props.style)
+    // 390 wide window, 16 dp edge, 180 dp minimum card.
+    expect(card.left).toBe(390 - 16 - 180)
   })
 })
