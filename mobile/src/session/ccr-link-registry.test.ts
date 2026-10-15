@@ -686,6 +686,36 @@ describe('the app in the background and back in front', () => {
     expect(link.getState().phase).toBe('live')
   })
 
+  // Review 2026-10-15: the open from before the pause still awaited its page, then dialled beside
+  // the one resume() started, and both wrote `this.abort`: the older stream was never closed.
+  it('a pause and resume while the first page is in flight dial one stream, not two', async () => {
+    const signals: AbortSignal[] = []
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    const recorded = w.stream.fetch
+    w.stream.fetch = (url, init) => {
+      signals.push(init.signal)
+      return recorded(url, init)
+    }
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    w.pages[SESSION_A] = async () => {
+      await held
+      return eventsReply([text('u1', 'user', 'hi')])
+    }
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.pageRequests).toHaveLength(1)
+    pauseCcrLinks()
+    foregroundCcrLinks()
+    release()
+    await flush()
+    expect(w.stream.requests).toHaveLength(1)
+    expect(signals.filter((signal) => !signal.aborted)).toHaveLength(1)
+    expect(link.getState().phase).toBe('live')
+  })
+
   it('a tab opened while the app is in the background waits for the foreground to read', async () => {
     const w = world(() => ({ status: 200, chunks: [], hold: true }))
     w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])

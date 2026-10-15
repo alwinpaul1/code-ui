@@ -41,6 +41,10 @@ export class CcrSessionLink {
   private paused = false
   private refreshedAuth = false
   private skippedFrames = 0
+  /** Bumped by pause(), restart() and stop(): an open() or connect() begun before it bails after
+   *  its next await, so a page in flight across a pause and resume does not dial a second stream
+   *  beside the one resume() started (review 2026-10-15). */
+  private generation = 0
 
   constructor(accountId: string, sessionId: string, deps: CcrLinkDeps) {
     this.accountId = accountId
@@ -118,15 +122,19 @@ export class CcrSessionLink {
   }
 
   private async open(): Promise<void> {
+    const generation = this.generation
     if (this.ordered.length === 0) {
       this.set({ phase: 'loading', error: null })
-      if (!(await this.readPage(null))) {
+      if (!(await this.readPage(null)) || generation !== this.generation) {
         return
       }
       // As the app does: a newest page with nothing to draw (all `system`) pages back until one
       // does, up to CCR_MAX_EVENT_PAGES.
       for (let page = 1; page < CCR_MAX_EVENT_PAGES && this.state.hasOlder && !this.ordered.some(ccrEventDrawsRow); page++) {
         await this.loadOlder()
+        if (generation !== this.generation) {
+          return
+        }
       }
     }
     this.connect()
@@ -164,11 +172,14 @@ export class CcrSessionLink {
     if (this.stopped || this.paused) {
       return
     }
+    // One stream per link: whatever is still dialled closes before the next one opens.
+    this.abort?.abort()
     const controller = new AbortController()
     this.abort = controller
+    const generation = this.generation
     void (async () => {
       const auth = await this.deps.auth(this.accountId, this.refreshedAuth).catch(() => null)
-      if (controller.signal.aborted || this.stopped) {
+      if (controller.signal.aborted || this.stopped || generation !== this.generation) {
         return
       }
       if (!auth) {
@@ -328,6 +339,7 @@ export class CcrSessionLink {
       return
     }
     this.paused = true
+    this.generation += 1
     this.cancelTimer?.()
     this.cancelTimer = null
     this.abort?.abort()
@@ -349,6 +361,7 @@ export class CcrSessionLink {
   }
 
   private restart(): void {
+    this.generation += 1
     this.reconnects = 0
     this.refreshedAuth = false
     this.cancelTimer?.()
@@ -361,6 +374,7 @@ export class CcrSessionLink {
    *  the registry wipes the kept copy on a sign-out. */
   stop(): void {
     this.stopped = true
+    this.generation += 1
     this.abort?.abort()
     this.cancelTimer?.()
     this.cancelTimer = null
