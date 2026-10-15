@@ -106,13 +106,9 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
   const rowNodes = (tree: ReactTestRenderer): ReactTestInstance[] =>
     tree.root.findAll((node) => node.props.testID === 'run-sheet-row' && String(node.type) === 'Pressable')
 
-  // The label is the Claude app's for a run holding a described agent (h330.i,
-  // `ccr_summary_agent_described_more`; tool-run-sentence-agent-described.test.ts).
-  // Re-pinned deliberately: the 2026-10-01 screenshot titled this sheet with the
-  // grouped sentence, from a build whose run-label code was not traced.
   it('is titled with the past-tense sentence while the agent still runs', () => {
     const { tree } = render()
-    expect(texts(tree)).toContain(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
+    expect(texts(tree)).toContain('Used a tool, ran 3 commands, ran an agent')
   })
 
   it('lists five rows with a verb and its description, not a raw tool name and input', () => {

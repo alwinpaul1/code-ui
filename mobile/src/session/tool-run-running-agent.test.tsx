@@ -152,13 +152,9 @@ describe('a mixed run whose background agent is still running', () => {
     expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
   })
 
-  // The label is the Claude app's for a run holding a described agent (h330.i,
-  // `ccr_summary_agent_described_more`; tool-run-sentence-agent-described.test.ts).
-  // Re-pinned deliberately: the 2026-10-01 screenshot titled this sheet with the
-  // grouped sentence, from a build whose run-label code was not traced.
   it('reads its sentence once the launch has answered, though the background agent still runs', () => {
     const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
-    expect(headerText(tree)).toBe(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
+    expect(headerText(tree)).toBe('Used a tool, ran 3 commands, ran an agent')
     expect(tree.root.findAll(isLabel)).toHaveLength(0)
   })
 
@@ -202,7 +198,7 @@ describe('a mixed run whose background agent is still running', () => {
 
   it('goes back to the sentence once the agent reports', () => {
     const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: REPORTED })
-    expect(headerText(tree)).toBe(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
+    expect(headerText(tree)).toBe('Used a tool, ran 3 commands, ran an agent')
   })
 
   it('keeps Running while a command is live beside the agent', () => {

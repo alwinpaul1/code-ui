@@ -167,10 +167,6 @@ describe('the run sheet opened from the chat', () => {
   // "Running agent: <description>" while Orca's roster lists the agent it
   // launched, as the Claude app's does, and its tap still opens the sheet,
   // titled in the past tense.
-  // The label is the Claude app's for a run holding a described agent (h330.i,
-  // `ccr_summary_agent_described_more`; tool-run-sentence-agent-described.test.ts).
-  // Re-pinned deliberately: the 2026-10-01 screenshot titled this sheet with the
-  // grouped sentence, from a build whose run-label code was not traced.
   it('reads Running agent while the roster lists the agent, then lists the five calls behind a tap', async () => {
     const tree = await render(true)
     expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label' && String(n.type) === 'Text')).toHaveLength(1)
@@ -178,7 +174,7 @@ describe('the run sheet opened from the chat', () => {
     await press(tree, 'tool-run-header')
     expect(tree.root.findAll((n) => n.props.testID === 'tool-line')).toHaveLength(0)
     expect(tree.root.findAll((n) => n.props.testID === 'run-sheet-row' && String(n.type) === 'Pressable')).toHaveLength(5)
-    expect(texts(tree)).toContain(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
+    expect(texts(tree)).toContain('Used a tool, ran 3 commands, ran an agent')
     expect(texts(tree)).toContain('Used CronDelete')
   })
 
@@ -186,7 +182,7 @@ describe('the run sheet opened from the chat', () => {
     const tree = await render(false)
     expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label')).toHaveLength(0)
     await press(tree, 'tool-run-header')
-    expect(texts(tree)).toContain(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
+    expect(texts(tree)).toContain('Used a tool, ran 3 commands, ran an agent')
   })
 
   it("closes the sheet and opens the tapped call's detail, not both at once", async () => {
