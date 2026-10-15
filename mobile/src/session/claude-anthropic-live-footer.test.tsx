@@ -254,3 +254,60 @@ describe('the running count on an Anthropic-drawn tab', () => {
     expect(texts(root).map((t) => t.text)).toContain('1 running task')
   })
 })
+
+// The user's screenshot of the Claude app mid-turn, 2026-10-15: "9s · 3 running tasks · thinking…",
+// and of the same session earlier: "Noodling… · 2 running tasks". Re-read in 1.261013.20: the stats
+// builder is qq30.java:353-512 (elapsed whole seconds since the turn started, 0 with no start or a
+// clock behind it, :403-409; "thinking…" under 15 s while thinking, :410-419; with no tokens the
+// stats are the time alone when there is a phrase, else none and the verb is drawn, :506-511),
+// rt30.java:492-509 writes "Ns" under a minute and "Nm Ns" from one, and wm7.java:197-226 draws the
+// time in `pl7.Q` (muted), the count's " · " in `pl7.Q` and the count in link blue `ad5.C0()`,
+// then " · " + the phrase in `pl7.Q`; the line is padded 16 dp above and below (wm7.java:80).
+describe('the thinking form of the line, as the Claude app draws it (2026-10-15 screenshot)', () => {
+  const thinkingAt = (runningTasks: number) =>
+    claudeChatLive({
+      live: { ...CCR_IDLE_LIVE_STATE, working: true, turnStartedAt: START, thinking: true, runningTasks },
+      linkPhase: 'live',
+      connectionStatus: null,
+      relayConnected: false
+    })
+
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`draws "9s · 3 running tasks · thinking…": time muted, count blue, phrase muted (${scheme})`, () => {
+      vi.setSystemTime(START + 9_000)
+      const palette = claudeStatusFooterPalette(scheme)
+      expect(texts(draw(scheme, line(thinkingAt(3), 3)))).toEqual([
+        { text: '9s', color: palette.body },
+        { text: ' · ', color: palette.body },
+        { text: '3 running tasks', color: palette.link },
+        { text: ' · thinking…', color: palette.body }
+      ])
+    })
+
+    it(`with no task running there is no link and no separator for one: "9s · thinking…" (${scheme})`, () => {
+      vi.setSystemTime(START + 9_000)
+      const palette = claudeStatusFooterPalette(scheme)
+      const root = draw(scheme, line(thinkingAt(0), 0))
+      expect(texts(root)).toEqual([
+        { text: '9s', color: palette.body },
+        { text: ' · thinking…', color: palette.body }
+      ])
+      expect(root.findAll((node) => (node.type as unknown) === 'Pressable')).toHaveLength(0)
+    })
+
+    it(`reads "0s" the moment the turn starts (${scheme})`, () => {
+      vi.setSystemTime(START)
+      expect(texts(draw(scheme, line(thinkingAt(1), 1))).map((t) => t.text)).toEqual(['0s', ' · ', '1 running task', ' · thinking…'])
+    })
+
+    it(`turns 59s into "1m 0s" at the minute, with the last thinking phrase (${scheme})`, () => {
+      vi.setSystemTime(START + 59_000)
+      const root = draw(scheme, line(thinkingAt(0), 0))
+      expect(texts(root).map((t) => t.text)).toEqual(['59s', ' · thinking some more…'])
+      act(() => {
+        vi.advanceTimersByTime(1_000)
+      })
+      expect(texts(root).map((t) => t.text)).toEqual(['1m 0s', ' · almost done thinking…'])
+    })
+  }
+})
