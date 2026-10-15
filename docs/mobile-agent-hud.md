@@ -342,14 +342,20 @@ and `plan`. The code is `mobile/src/session/claude-auto-permission-mode.ts`.
 Nothing is written to the host: no `defaultMode`, no settings file.
 
 - **New Tab → Claude and Claude Agent Teams** (`agent-hud-launch-config.ts`),
-  and **a Claude resume from history** (`ai-vault-resume-launch.ts`): the flag
-  goes first in the tab's `agentArgs`. It takes a required value, so it is safe
-  in front of anything, and Remote Control's optional-value flag then has a
-  flag to stand in front of. Auto wins over the host's saved args: a
-  `--permission-mode <other>` there is replaced, and
-  `--dangerously-skip-permissions` is taken out. That matters because it is
-  Orca's own default for both Claude agents (`YOLO_TUI_AGENT_ARGS`), so phone
-  tabs started in bypass mode until this change.
+  and **a Claude resume from history** (`ai-vault-resume-launch.ts`): auto wins
+  over the host's saved args. A `--permission-mode <other>` there, or
+  `--dangerously-skip-permissions`, is replaced by `--permission-mode auto`
+  where it stands (adjacent ones become one flag). That matters because bypass
+  is Orca's own default for both Claude agents (`YOLO_TUI_AGENT_ARGS`), so phone
+  tabs started in bypass mode until this change. With no permission flag in the
+  args, the flag goes first. In place, not moved to the front, because a flag
+  that takes an OPTIONAL value must never end up last or next to a bare word:
+  `--remote-control --dangerously-skip-permissions` with the bypass flag simply
+  removed leaves `--remote-control` last, and Orca's appended prompt becomes the
+  Remote Control session name. 2.1.300's optional-value options are `-d/--debug`,
+  `-r/--resume`, `-w/--worktree`, `--remote-control/--rc`, `--teleport`,
+  `--from-pr` and `--prompt-suggestions` (plus `--json`, `--data-size`,
+  `--trust-workspace` and `--remove-session-state`).
   `--allow-dangerously-skip-permissions` is kept, since it only adds bypass to
   the Shift+Tab cycle. Agent Teams is `orca claude-teams [claude args...]`,
   which passes every argument to `claude` (Orca 1.4.224,
@@ -375,11 +381,43 @@ Nothing is written to the host: no `defaultMode`, no settings file.
     `claude` typed to a running Claude Code is a prompt. The phone cannot tell
     that agent has since exited, so `claude` typed in a Claude tab whose Claude
     was quit is not rewritten.
-  - A live-input field session that ended before Enter (after a cursor move or
-    a flush) knows no line, so nothing is rewritten.
+  - The text must be the WHOLE input line. Both inputs write at the PTY's
+    cursor, so a `claude` typed after ←, or in front of a line recalled with ↑
+    and Home, is a fragment, and the tail would land in the middle of the line
+    (`x`, ←, `claude` gave `claude --permission-mode autox`). So a line is
+    rewritten only when the phone knows the input line was empty when the text
+    started: a plain terminal it just created (`markLiveInputLineEmpty`, from
+    `handleCreateTerminal`; not a tab made to run an agent, a command or a
+    prompt), or the line after an Enter the phone itself sent with nothing else
+    reaching the terminal while it was in flight. Any other byte to the PTY
+    forgets it: a cursor, history or control key from the strip or a hardware
+    keyboard, a paste, a dictation or attachment flush, a dropped connection.
+    Backspace and Delete edited inside the field keep it. The code is in
+    `use-terminal-live-input-commit.ts`; the buffered field asks
+    `takeLiveInputLineEmpty` before it sends.
 - **Windows**, and a host that will not say what it is, get none of this
   (`hostTakesAgentHudFlag`). The flag needs no quoting, but no new launch
   argument reaches a Windows host until a launch encoding is proven there.
+- **Blind spots of the typed-line rule, kept as design:**
+  - The phone does not know the shell's state. A `claude` line typed inside a
+    heredoc, at a `vim` command line, in a Python REPL or at any other program
+    reading the terminal is rewritten like one at a shell prompt, as long as the
+    line is known empty and the pane names no agent.
+  - `claude -p "..."` (print mode, no session) is rewritten too. The flag is
+    harmless there, but it is not a session start.
+  - Typing on the desktop into the same terminal is invisible to the phone, so
+    a line the desktop half-typed still counts as empty. Mouse and wheel bytes
+    the phone sends to a program that asked for them are not tracked either;
+    they only reach a program that turned on mouse reporting or the alternate
+    screen, which a shell prompt does not.
+- **Older Claude Code on the host.** The flag is pinned against 2.1.300. The
+  local changelog (`~/.claude/cache/changelog.md`) has no entry that adds the
+  mode: its first mention of auto permission mode is 2.1.86, and 2.1.111 says
+  "Auto mode no longer requires `--enable-auto-mode`". So a host on 2.1.111 or
+  newer takes the flag as it is. Older hosts are unverified: a build that does
+  not know `auto` would most likely refuse the value and not start, and one
+  between 2.1.86 and 2.1.110 may need `--enable-auto-mode` as well. The phone
+  does not read the host's Claude Code version and sends the flag regardless.
 - **Not covered:** a session started by hand on the desktop (the phone cannot
   change it without writing to the host), and New Tab → Claude when the host
   opens a structured `agentSession` instead of a terminal.

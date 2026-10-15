@@ -6,13 +6,20 @@
   "baseline": "0269504c8c3090df1ed7851c2a72c84ef9707d4d",
   "lockfileSha256": "761b12309b432bd5ed9f5b85e41c5928ed8f4855c26c424466294c4ee0406ff6",
   "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
-  "adapterSha256": "f0cc9511c5e878b6dd78e2911b5c14351b41b7bb944e5e03c2fa1ddbcdc7ea10",
+  "adapterSha256": "73c2d21dfdaa62b863a8fa6d3bd9ece28071dcb51d339f6f447b7ed9a1090285",
   "scenarioSha256": "df99b9c0ebcffb3d8f173c87783862edb0a66befcc3cd73f1096871f45963913",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "11fdd657c74a": {
+      "name": "mark-live-input-line-empty",
+      "ordinal": 5,
+      "value": {
+        "handle": "terminal-1"
+      }
+    },
     "2977cbddd89f": {
       "name": "session.tabs.createTerminal#1",
       "ordinal": 1,
@@ -80,21 +87,21 @@
         "handle": "terminal-0"
       }
     },
-    "59de30d666ef": {
+    "780f2e0b88ec": {
       "name": "fetch-session-tabs",
-      "ordinal": 7,
+      "ordinal": 8,
       "value": {}
-    },
-    "8b5144e3301d": {
-      "name": "schedule-delayed-action",
-      "ordinal": 6,
-      "value": {
-        "delayMs": 500
-      }
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
+    },
+    "95bcf41e673e": {
+      "name": "schedule-delayed-action",
+      "ordinal": 7,
+      "value": {
+        "delayMs": 500
+      }
     },
     "b1d637072fc8": {
       "name": "session.tabs.createTerminal#1",
@@ -127,9 +134,9 @@
         "startedAt": 0
       }
     },
-    "c13357779299": {
+    "bd0a769ba43e": {
       "name": "subscribe-terminal",
-      "ordinal": 5,
+      "ordinal": 6,
       "value": {
         "handle": "terminal-1"
       }
@@ -194,7 +201,13 @@
             "create-again": "eb79a9b3682a"
           },
           "state": "ec798d1a5c28",
-          "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "8b5144e3301d"]
+          "effects": [
+            "4d318de3b635",
+            "fb6329365e0b",
+            "11fdd657c74a",
+            "bd0a769ba43e",
+            "95bcf41e673e"
+          ]
         }
       },
       {
@@ -211,9 +224,10 @@
           "effects": [
             "4d318de3b635",
             "fb6329365e0b",
-            "c13357779299",
-            "8b5144e3301d",
-            "59de30d666ef"
+            "11fdd657c74a",
+            "bd0a769ba43e",
+            "95bcf41e673e",
+            "780f2e0b88ec"
           ]
         }
       }

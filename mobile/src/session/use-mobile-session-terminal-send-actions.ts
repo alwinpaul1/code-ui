@@ -53,7 +53,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     scheduleDelayedAction,
     showToast,
     releaseLiveInputKeyboard,
-    hostPlatformRef
+    hostPlatformRef,
+    markLiveInputLineEmpty,
+    takeLiveInputLineEmpty
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -115,7 +117,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
     const draft = bufferedTerminalDraftState.input
     const typed = normalizeTerminalTextInput(draft)
-    const text = autoPermissionLaunchLine(typed) ?? typed
+    // The draft lands at the PTY's cursor, so it is the whole line only on a line known to be
+    // empty: after ↑ and Home, `claude ` goes in front of the recalled text.
+    const handle = activeHandle
+    const lineEmpty = takeLiveInputLineEmpty(handle)
+    const interaction = getLiveInteractionGeneration()
+    const text = lineEmpty ? (autoPermissionLaunchLine(typed) ?? typed) : typed
     const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
       activeHandle,
       draft
@@ -143,6 +150,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       const accepted = terminalInputSend.interpret(response) === true
       if (!accepted) {
         restoreRejectedDraft()
+      } else if (interaction === getLiveInteractionGeneration()) {
+        // Its Enter leaves an empty line, unless a key reached the terminal meanwhile.
+        markLiveInputLineEmpty(handle)
       }
       const draftUnchanged =
         accepted && bufferedTerminalDraftState.settleBufferedTerminalDraftSend(bufferedDraftSend)

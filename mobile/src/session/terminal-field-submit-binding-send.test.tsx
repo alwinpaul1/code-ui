@@ -99,7 +99,9 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     canSend: session.canSend,
     scheduleDelayedAction: noop,
     showToast: noop,
-    hostPlatformRef: { current: null }
+    hostPlatformRef: { current: null },
+    takeLiveInputLineEmpty: () => false,
+    markLiveInputLineEmpty: noop
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook destructures exactly the keys above, which the census beside this file pins; nothing else on the model is reachable from the submit path under test.
   return scope as unknown as MobileSessionTerminalWebviewModel

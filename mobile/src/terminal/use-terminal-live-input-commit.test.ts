@@ -269,14 +269,20 @@ describe('terminal live input commit hook', () => {
   // 2026-10-15: a `claude` line typed from the phone starts Claude Code in auto mode. The field has
   // already typed (or holds) `claude` for the PTY, so only the tail may go out, ahead of the Enter.
   // Asserted on the bytes the PTY receives in order, not on how the queue frames them.
-  it('submitting a typed claude line sends the auto-mode tail before the Enter', async () => {
+  // The rewrite is offered only when the field provably holds the whole PTY line: typed from a
+  // line the phone knows is empty (a new plain terminal, or right after an Enter this field sent),
+  // with no reset since.
+  const toAuto = (line: string) => (line.startsWith('claude') ? `${line.trimEnd()} --permission-mode auto` : null)
+
+  it('submitting a typed claude line on a known-empty line sends the auto-mode tail before the Enter', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
     changeLiveInput(handlers, 'claude')
     const seen: string[] = []
 
     const accepted = await handlers.handleLiveInputSubmit((line) => {
       seen.push(line)
-      return line === 'claude' ? 'claude --permission-mode auto' : null
+      return toAuto(line)
     })
 
     expect(accepted).toBe(true)
@@ -284,8 +290,85 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent.join('')).toBe('claude --permission-mode auto\r'))
   })
 
+  it('the line after an Enter this field sent is known empty too', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'ls')
+    await handlers.handleLiveInputSubmit(toAuto)
+    changeLiveInput(handlers, 'claude')
+    await handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(sent.join('')).toBe('ls\rclaude --permission-mode auto\r'))
+  })
+
+  it('a line whose start the phone never saw is submitted as typed', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    const rewrite = vi.fn(toAuto)
+    changeLiveInput(handlers, 'claude')
+    await handlers.handleLiveInputSubmit(rewrite)
+    expect(rewrite).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(sent.join('')).toBe('claude\r'))
+  })
+
+  // Review of 022e1269f: `x`, ←, `claude` put `claude` IN FRONT of the x on the PTY line, and the
+  // tail landed in the middle: `claude --permission-mode autox`.
+  it('a run typed after a cursor key is a fragment of the line and is not rewritten', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
+    changeLiveInput(handlers, 'x')
+    await vi.waitFor(() => expect(sent.join('')).toBe('x'))
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[D' })
+    changeLiveInput(handlers, 'claude')
+    await handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(sent.join('')).toBe('xclaude\r'))
+  })
+
+  // ↑ recalls `"fix tests"`, then `claude ` typed in front of it: the field holds only `claude `.
+  it('a run typed after a history key is not rewritten', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[A' })
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x1b[H' })
+    changeLiveInput(handlers, 'claude ')
+    await handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(sent.join('')).toBe('claude \r'))
+  })
+
+  it('a hardware arrow key, a dictation or paste, and a dropped connection all forget the empty line', async () => {
+    const arrow = createTerminalLiveInputCommitHarness()
+    arrow.handlers.markLiveInputLineEmpty('terminal-a')
+    arrow.handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'ArrowUp' } })
+    changeLiveInput(arrow.handlers, 'claude')
+    await arrow.handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(arrow.sent.join('').endsWith('claude\r')).toBe(true))
+
+    const pasted = createTerminalLiveInputCommitHarness()
+    pasted.handlers.markLiveInputLineEmpty('terminal-a')
+    await pasted.handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+    changeLiveInput(pasted.handlers, 'claude')
+    await pasted.handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(pasted.sent.join('')).toBe('claude\r'))
+
+    const dropped = createTerminalLiveInputCommitHarness()
+    dropped.handlers.markLiveInputLineEmpty('terminal-a')
+    dropped.setConnected(false)
+    dropped.setConnected(true)
+    changeLiveInput(dropped.getHandlers(), 'claude')
+    await dropped.getHandlers().handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(dropped.sent.join('')).toBe('claude\r'))
+  })
+
+  it('a backspace inside the field keeps the line whole', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
+    changeLiveInput(handlers, 'claudee')
+    await vi.waitFor(() => expect(sent.join('')).toBe('claudee'))
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    await handlers.handleLiveInputSubmit(toAuto)
+    await vi.waitFor(() => expect(sent.join('')).toBe('claudee\x7f --permission-mode auto\r'))
+  })
+
   it('a line the rewrite refuses, or one it does not merely extend, is submitted as typed', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
     changeLiveInput(handlers, 'claude mcp list')
     await handlers.handleLiveInputSubmit(() => null)
     changeLiveInput(handlers, 'claude')
@@ -295,6 +378,7 @@ describe('terminal live input commit hook', () => {
 
   it('an Enter on an empty field asks nothing and sends only the Enter', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    handlers.markLiveInputLineEmpty('terminal-a')
     const rewrite = vi.fn(() => 'claude --permission-mode auto')
     await handlers.handleLiveInputSubmit(rewrite)
     expect(rewrite).not.toHaveBeenCalled()

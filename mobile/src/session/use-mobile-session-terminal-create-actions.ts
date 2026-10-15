@@ -47,7 +47,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     showToast,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchSessionTabs
+    fetchSessionTabs,
+    markLiveInputLineEmpty
   } = scope
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
@@ -182,6 +183,12 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       if (typeof created.terminal === 'string') {
         const createdHandle = created.terminal
         defaultTerminalHandlesToLiveInput([createdHandle])
+        // A plain shell starts on an empty input line, so a `claude` typed there first is the
+        // whole line and may be started in auto permission mode. A tab made to run an agent, a
+        // command or a prompt does not: its line belongs to what it runs.
+        if (!agent && !options?.startupCommand && !options?.initialPrompt?.trim()) {
+          markLiveInputLineEmpty(createdHandle)
+        }
         // Why: snapshots lag the create RPC; without this marker applySessionTabs reverts the active handle, blanking the new pane.
         pendingActiveTerminalHandleRef.current = createdHandle
         activeHandleRef.current = createdHandle

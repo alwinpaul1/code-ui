@@ -46,7 +46,7 @@ describe('New Tab → Claude starts in auto permission mode', () => {
     const client = fakeHost({ claude: '--verbose --permission-mode plan --model opus' }, 'linux')
     const config = await resolveAgentHudLaunchConfig(client, 'claude')
     expect(config?.agentArgs).toBe(
-      `--remote-control --permission-mode auto --verbose --model opus ${agentHudLaunchFlag('claude', 'linux')}`
+      `--remote-control --verbose --permission-mode auto --model opus ${agentHudLaunchFlag('claude', 'linux')}`
     )
   })
 
@@ -75,18 +75,64 @@ describe('withClaudeAutoPermissionMode', () => {
   const posix = (agentArgs: string) =>
     withClaudeAutoPermissionMode({ agent: 'claude', agentArgs, hostPlatform: 'darwin' })
 
-  it('puts the flag first, and on its own when the args are empty', () => {
+  it('with no permission flag of the host’s, puts the flag first, and on its own when the args are empty', () => {
     expect(posix('')).toBe('--permission-mode auto')
     expect(posix('   ')).toBe('--permission-mode auto')
     expect(posix('--verbose')).toBe('--permission-mode auto --verbose')
   })
 
-  it('replaces every spelling of a saved permission mode', () => {
+  it('replaces every spelling of a saved permission mode, where it stands', () => {
     expect(posix('--permission-mode=acceptEdits --verbose')).toBe('--permission-mode auto --verbose')
     expect(posix('--permission-mode bypassPermissions')).toBe('--permission-mode auto')
     expect(posix('--dangerously-skip-permissions --permission-mode plan')).toBe('--permission-mode auto')
     // A dangling flag with no value goes too: left in, it would take ours as its value.
-    expect(posix('--verbose --permission-mode')).toBe('--permission-mode auto --verbose')
+    expect(posix('--verbose --permission-mode')).toBe('--verbose --permission-mode auto')
+  })
+
+  // Review of 022e1269f: dropping the bypass flag must never leave a flag that takes an OPTIONAL
+  // value last, or Orca's appended prompt becomes that flag's value. Claude Code 2.1.300's
+  // optional-value options, read from its binary.
+  const OPTIONAL_VALUE_FLAGS = [
+    '-d',
+    '--debug',
+    '-r',
+    '--resume',
+    '-w',
+    '--worktree',
+    '--remote-control',
+    '--rc',
+    '--teleport',
+    '--from-pr',
+    '--prompt-suggestions'
+  ]
+
+  it('never leaves an optional-value flag last when it drops the bypass flag', () => {
+    expect(posix('--remote-control --dangerously-skip-permissions')).toBe(
+      '--remote-control --permission-mode auto'
+    )
+    expect(posix('--debug --dangerously-skip-permissions')).toBe('--debug --permission-mode auto')
+    for (const flag of OPTIONAL_VALUE_FLAGS) {
+      const result = posix(`${flag} --dangerously-skip-permissions`)
+      expect(result.split(' ').at(-1)).toBe('auto')
+    }
+  })
+
+  it('keeps Remote Control, put in front afterwards, off the end of the args', async () => {
+    // The second probe: `--remote-control --permission-mode auto --debug` would hand the prompt to --debug.
+    const client = fakeHost({ claude: '--debug --dangerously-skip-permissions' }, 'darwin')
+    const config = await resolveAgentHudLaunchConfig(client, 'claude')
+    expect(config?.agentArgs).toBe(
+      `--remote-control --debug --permission-mode auto ${agentHudLaunchFlag('claude', 'darwin')}`
+    )
+    const bare = await resolveAgentHudLaunchConfig(
+      fakeHost({ 'claude-agent-teams': '--remote-control --dangerously-skip-permissions' }, 'darwin'),
+      'claude-agent-teams'
+    )
+    expect(bare?.agentArgs).toBe('--remote-control --permission-mode auto')
+  })
+
+  it('a bypass flag between an optional-value flag and a bare word keeps the word out of its value', () => {
+    expect(posix('--debug --dangerously-skip-permissions api')).toBe('--debug --permission-mode auto api')
   })
 
   it('leaves args that already start in auto alone', () => {

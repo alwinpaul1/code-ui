@@ -41,6 +41,8 @@ type Setup = {
   readonly draft: string
   readonly hostPlatform: NodeJS.Platform | null
   readonly tab: MobileSessionTab
+  /** Whether the phone knows the terminal's input line is empty. Defaults to yes. */
+  readonly lineEmpty?: boolean
 }
 
 type Actions = ReturnType<typeof useMobileSessionTerminalSendActions>
@@ -48,6 +50,7 @@ type Actions = ReturnType<typeof useMobileSessionTerminalSendActions>
 function mount(setup: Setup, liveSubmit: (rewrite?: (line: string) => string | null) => Promise<boolean>) {
   const noop = (): void => {}
   const client = { getState: () => 'connected' }
+  const emptyLines = new Set(setup.lineEmpty === false ? [] : ['terminal-a'])
   const scope = {
     client,
     activeHandle: 'terminal-a',
@@ -84,7 +87,11 @@ function mount(setup: Setup, liveSubmit: (rewrite?: (line: string) => string | n
     scheduleDelayedAction: noop,
     showToast: noop,
     releaseLiveInputKeyboard: noop,
-    hostPlatformRef: { current: setup.hostPlatform }
+    hostPlatformRef: { current: setup.hostPlatform },
+    takeLiveInputLineEmpty: (handle: string) => emptyLines.delete(handle),
+    markLiveInputLineEmpty: (handle: string) => {
+      emptyLines.add(handle)
+    }
   }
   let actions: Actions | null = null
   function Harness(): null {
@@ -100,7 +107,7 @@ function mount(setup: Setup, liveSubmit: (rewrite?: (line: string) => string | n
     throw new Error('send actions did not render')
   }
   const mounted: Actions = actions
-  return { actions: mounted, unmount: () => act(() => renderer?.unmount()) }
+  return { actions: mounted, emptyLines, unmount: () => act(() => renderer?.unmount()) }
 }
 
 async function bufferedSend(setup: Setup): Promise<unknown> {
@@ -128,6 +135,27 @@ describe('a claude line sent from the buffered terminal field', () => {
     expect(await send('claude --permission-mode plan')).toBe('claude --permission-mode plan')
     expect(await send('claude mcp list')).toBe('claude mcp list')
     expect(await send('ls -la')).toBe('ls -la')
+  })
+
+  // The field's text lands at the PTY's cursor. After ↑ and Home, `claude ` goes in front of the
+  // recalled line, and the tail would land in the middle of it.
+  it('a line the phone does not know is empty gets the text as typed', async () => {
+    expect(
+      await bufferedSend({ draft: 'claude', hostPlatform: 'darwin', tab: SHELL_TAB, lineEmpty: false })
+    ).toBe('claude')
+  })
+
+  it('the Enter it sent leaves the line known empty for the next one', async () => {
+    mocks.sent.length = 0
+    const { actions, emptyLines, unmount } = mount(
+      { draft: 'ls', hostPlatform: 'darwin', tab: SHELL_TAB, lineEmpty: false },
+      async () => true
+    )
+    await act(async () => {
+      await actions.handleSend()
+    })
+    expect(emptyLines.has('terminal-a')).toBe(true)
+    unmount()
   })
 
   it('a pane an agent owns, and a Windows host, get the line as typed', async () => {

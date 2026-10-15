@@ -46,8 +46,10 @@ function isPermissionModeToken(token: string): boolean {
  * is taken out. That one matters: it is Orca's own default for both Claude agents
  * (`YOLO_TUI_AGENT_ARGS`), so without this a phone tab started in bypass mode.
  *
- * Where it goes: FIRST. The flag takes a required value, so it is safe in front
- * of anything, and Orca appends the prompt to the args, so it is never last.
+ * Where it goes: in place of the host's own permission flag when there is one,
+ * else FIRST. The flag takes a required value, so it is safe in front of
+ * anything, and the order never leaves a flag with an optional value last (see
+ * below).
  *
  * A Windows host, and one that will not say what it is, get nothing new
  * (`hostTakesAgentHudFlag`): nothing new reaches a Windows launch until a launch
@@ -70,31 +72,53 @@ export function withClaudeAutoPermissionMode(args: {
   const { tokens, spans } = tokenized
   const terminator = tokens.indexOf('--')
   const optionEnd = terminator === -1 ? tokens.length : terminator
-  const dropped = new Set<number>()
+  // Each permission flag of the host's (with its value) is one group, replaced where it stands.
+  const groups: Array<{ start: number; end: number }> = []
   for (let index = 0; index < optionEnd; index += 1) {
     const token = tokens[index]
     if (!isPermissionModeToken(token)) {
       continue
     }
-    dropped.add(index)
     const value = tokens[index + 1]
-    if (token === '--permission-mode' && index + 1 < optionEnd && value !== undefined && !value.startsWith('-')) {
-      dropped.add(index + 1)
+    const takesValue =
+      token === '--permission-mode' && index + 1 < optionEnd && value !== undefined && !value.startsWith('-')
+    const end = takesValue ? index + 1 : index
+    const previous = groups.at(-1)
+    if (previous && previous.end === index - 1) {
+      // Adjacent groups are one: `--dangerously-skip-permissions --permission-mode plan` -> one flag.
+      previous.end = end
+    } else {
+      groups.push({ start: index, end })
+    }
+    if (takesValue) {
       index += 1
     }
   }
-  const alreadyAuto =
-    dropped.size === 2 && tokens[0] === '--permission-mode' && tokens[1] === 'auto'
-  if (alreadyAuto) {
-    return agentArgs
+  if (groups.length === 0) {
+    const rest = agentArgs.trim()
+    return rest.length > 0 ? `${CLAUDE_AUTO_PERMISSION_MODE_FLAG} ${rest}` : CLAUDE_AUTO_PERMISSION_MODE_FLAG
   }
+  // Why in place and not moved to the front: a group is a flag (and its value), and so is
+  // `--permission-mode auto`, so every neighbour keeps the shape it had. Taking a group out
+  // instead could leave a flag with an OPTIONAL value (`--remote-control [name]`,
+  // `--debug [filter]`, `--resume [value]`, ...) last, where Orca's appended prompt would
+  // become its value, or next to a bare word it would swallow. Two groups give the flag
+  // twice; Claude Code takes the last, and both say auto.
   // Each kept token keeps its own quoting: the args can hold the beacon's quoted `--settings` JSON.
-  const kept = tokens
-    .map((_, index) => index)
-    .filter((index) => !dropped.has(index))
-    .map((index) => agentArgs.slice(spans[index].start, spans[index].end))
-  const rest = dropped.size === 0 ? agentArgs.trim() : kept.join(' ')
-  return rest.length > 0 ? `${CLAUDE_AUTO_PERMISSION_MODE_FLAG} ${rest}` : CLAUDE_AUTO_PERMISSION_MODE_FLAG
+  const pieces: string[] = []
+  let groupIndex = 0
+  for (let index = 0; index < tokens.length; index += 1) {
+    const group = groups[groupIndex]
+    if (group && index === group.start) {
+      pieces.push(CLAUDE_AUTO_PERMISSION_MODE_FLAG)
+      index = group.end
+      groupIndex += 1
+      continue
+    }
+    pieces.push(agentArgs.slice(spans[index].start, spans[index].end))
+  }
+  const rewritten = pieces.join(' ')
+  return rewritten === agentArgs.trim() ? agentArgs : rewritten
 }
 
 /** The words that start a Claude Code session when typed at a shell. `claudeai`

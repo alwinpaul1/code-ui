@@ -79,7 +79,8 @@ function createScope(client: RpcClient) {
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
     subscribeToTerminal: vi.fn(),
-    fetchSessionTabs: vi.fn(async () => {})
+    fetchSessionTabs: vi.fn(async () => {}),
+    markLiveInputLineEmpty: vi.fn()
   }
 }
 
@@ -572,5 +573,58 @@ describe('optimistic placement of a created tab', () => {
       'terminal-tab-1',
       'trailing-tab'
     ])
+  })
+})
+
+// A typed `claude` is started in auto permission mode only when the phone knows the field's text
+// is the whole input line. A plain terminal it just created is the first such line.
+describe('the input line of a terminal the phone creates', () => {
+  let renderer: ReactTestRenderer | undefined
+  afterEach(() => renderer?.unmount())
+
+  async function create_(
+    scope: ReturnType<typeof createScope>,
+    ...args: Parameters<ReturnType<typeof useMobileSessionTerminalCreateActions>['handleCreateTerminal']>
+  ) {
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal(...args)
+    })
+  }
+
+  it('a new plain terminal starts on a known-empty line', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    await create_(scope)
+    expect(scope.markLiveInputLineEmpty).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('a terminal made to run something does not: its line belongs to what it runs', async () => {
+    const commanded = createScope(clientReturning(terminalCreateResponse()))
+    await create_(commanded, undefined, { startupCommand: 'npm test' })
+    expect(commanded.markLiveInputLineEmpty).not.toHaveBeenCalled()
+
+    const prompted = createScope(
+      clientReturning(terminalCreateResponse(), { ok: true, result: { send: { accepted: true } } })
+    )
+    await create_(prompted, undefined, { initialPrompt: 'ls' })
+    expect(prompted.markLiveInputLineEmpty).not.toHaveBeenCalled()
+
+    const agent = createScope(
+      clientAnswering({
+        'agentSession.createSupport': { ok: true, result: { supported: false } },
+        'settings.get': { ok: true, result: {} },
+        'status.get': { ok: true, result: { hostPlatform: 'darwin' } },
+        'session.tabs.createTerminal': terminalCreateResponse()
+      })
+    )
+    await create_(agent, 'claude')
+    expect(agent.markLiveInputLineEmpty).not.toHaveBeenCalled()
   })
 })

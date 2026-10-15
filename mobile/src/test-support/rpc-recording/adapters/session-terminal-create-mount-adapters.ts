@@ -135,7 +135,9 @@ export function sessionTerminalCreateMountAdapters(
             subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
             fetchSessionTabs: async () => {
               effect('fetch-session-tabs', {})
-            }
+            },
+            markLiveInputLineEmpty: (handle: string) =>
+              effect('mark-live-input-line-empty', { handle })
           })
         )
       })

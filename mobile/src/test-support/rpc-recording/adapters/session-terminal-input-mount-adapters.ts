@@ -199,6 +199,11 @@ function mountTerminalInputSend(
         getSendCompletionGeneration: () => 0,
         // Read when a typed line may start Claude in auto mode (claude-auto-permission-mode.ts).
         hostPlatformRef: { current: 'darwin' },
+        // The input line is unknown to this screen, so a draft is sent as typed; the Enter of an
+        // accepted send marks it empty, and that mark is the effect.
+        takeLiveInputLineEmpty: () => false,
+        getLiveInteractionGeneration: () => 0,
+        markLiveInputLineEmpty: (handle: string) => effect('mark-live-input-line-empty', { handle }),
         showToast: (message: string, durationMs?: number) =>
           effect('toast', { message, durationMs: durationMs ?? null })
       })

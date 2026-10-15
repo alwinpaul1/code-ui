@@ -127,6 +127,8 @@ const HOST_COMPONENT_NAMES = new Set([
 // 309 since 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
+// 2026-10-15 (982ed4371, dictated words stay in the caption): the dictation hook's chatTakeRef.
+// 2026-10-15 (auto permission): the send actions' autoPermissionLaunchLine useCallback.
 const HEAD_MAIN_HOOK_SHA256 = '4210614ca345e00a25aa8cf28461a771903b58bcfe5eaa78f7398997b2d5a5d9'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
@@ -152,7 +154,11 @@ const HEAD_MAIN_HOOK_SHA256 = '4210614ca345e00a25aa8cf28461a771903b58bcfe5eaa78f
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 // 2026-10-15: the document readers' readFileTab depends on sessionTabsRef, to offer the worktree's
 // agent sessions as evidence for a file outside the worktree (a PDF on the Desktop).
-const HEAD_HOOK_BINDING_SHA256 = 'abd0d8c8fdd8cdcc6f31ef5ed1b5f5ff0fbc723b45504a221fa28f1358734de6'
+// 2026-10-15 (982ed4371, dictated words stay in the caption): the dictation hook's chatTakeRef.
+// 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on. The
+// live input hook also hands out markLiveInputLineEmpty and takeLiveInputLineEmpty: a typed
+// `claude` is rewritten only on an input line the phone knows is empty.
+const HEAD_HOOK_BINDING_SHA256 = '1a668cbcaa493343ba41184bd1d6d7c1c75ac24b45f06a9599639153cafc9a4d'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -167,6 +173,7 @@ const HEAD_HOOK_BINDING_SHA256 = 'abd0d8c8fdd8cdcc6f31ef5ed1b5f5ff0fbc723b45504a
 // releaseLiveInputKeyboard before they put the keyboard away. Same callback count.
 // 2026-10-15: readFileTab's dependencies gain sessionTabsRef (a Desktop PDF is granted to the
 // session that named it). Same callback count.
+// 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '081f67059e31fc97a304abb95291ca370ad0e7f0dafd22d973ddeab179980a0d'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
@@ -277,6 +284,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-15: readFileTab hands resolveMobileFileTabDoc the worktree's agent sessions
 // (nativeChatContexts) for an absolute path only, and its outside_worktree note says a terminal
 // or chat vouches.
+// 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on.
 const HEAD_CALLBACK_BODY_SHA256 = 'e49f8fdee95788d2216d762338b3ee9f398e61a1f2d81b760e8e1791c809b47b'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
@@ -371,8 +379,11 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // 16 since 2026-10-11 (slow tab close): a tab close is optimistic, so the close actions gain
 // sendClose, closeTerminalOptimistically and selectAfterClose, and handleCloseSessionTab's body
 // takes the tab off the strip before it sends.
+// 2026-10-15 (auto permission): handleSend rewrites a typed `claude` line before it is sent, only
+// on a line known to be empty, and marks the line empty after an accepted send; handleCreateTerminal
+// marks a new plain terminal's line empty.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '8b9d17aac49015955ccbe75d48caaf55bbd352324ee829afc3bca5d2798ba317'
+  'd2620b7e4c55085f0fc5d367631d47e8d341e19f81c3d3c8a124163d8830531c'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -492,6 +503,8 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 // 2026-10-15: the file tab's outside_worktree note reads "while a terminal or chat here still
 // shows its path": a session's transcript vouches for a path too. Same count.
+// 2026-10-15 (982ed4371, dictated words stay in the caption): four `spoken: ''` resets of the
+// chat take and the 'chat' check in onSpokenError. 693.
 const HEAD_RUNTIME_STRING_SHA256 =
   'a0ac19dc78cb7f2f90e07683273168750de858b60dace046076bab4c0725e9d9'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
@@ -1112,6 +1125,9 @@ describe('mobile session route extraction parity', () => {
     // foundation's two phone-mode refs (terminal-phone-mode-before-subscribe.ts).
     // 313 since 2026-10-14 (caption): the dictation hook's useState for the live caption above
     // the recording row (MobileNativeChatDictationCaption.tsx).
+    // 314 since 982ed4371 (2026-10-15, dictated words stay in the caption): the dictation hook's
+    // chatTakeRef useRef, the open chat take and the words heard so far. Main was not re-pinned
+    // with it.
     // 315 since 2026-10-15: the send actions' autoPermissionLaunchLine useCallback, which starts a
     // typed `claude` line in auto permission mode (claude-auto-permission-mode.ts).
     expect(main.hooks).toHaveLength(315)
@@ -1268,7 +1284,9 @@ describe('mobile session route extraction parity', () => {
     // 'resized' literal left. 686 - 1 = 685.
     // 688 since 2026-10-14 (caption): the live caption's state, its '' start and reset, and the
     // 'chat' target check that feeds it.
-    // 693 since 2026-10-15: the typed-claude auto-permission rewrite in the send actions.
+    // 693 since 982ed4371 (2026-10-15, dictated words stay in the caption): the chat take's four
+    // `spoken: ''` resets in the dictation hook and the 'chat' check in its onSpokenError, which
+    // commits the words heard so far. The typed-claude auto-permission rewrite adds no string.
     expect(strings).toHaveLength(693)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
