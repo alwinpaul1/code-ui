@@ -2144,3 +2144,13 @@ capture). Memory files is a category row only: no per-file section was printed w
 CLAUDE.md and a CLAUDE.local.md in the project. The table is held per tab, terminal and session
 (`use-held-context-report.ts`, under the sticky HUD's key) after it scrolls away, stamped with when the
 phone saw it printed, or unstamped when it was already on the screen as the phone began to look.
+
+## Remote Control on new Claude tabs (2026-10-15)
+
+A Claude tab the phone opens starts with `--remote-control` (Claude Code 2.1.300, `--remote-control [name]`),
+unless Settings > Chat UI > "Remote Control for new Claude sessions" is off (default on). It rides the tab's
+launch config only (`agent-remote-control-launch-args.ts`); nothing is saved in Orca's `agentDefaultArgs`, so
+the switch needs no clean-up and desktop-started tabs are untouched (a saved bare `--remote-control` of the
+user's own could not be told from ours). It goes FIRST in the args: the flag takes an optional name and Orca
+appends the prompt as a bare word. No flag when the args do not start with a flag, when they already carry
+one, on a Windows host, or when the platform is unknown (same rule as the beacon flag).

@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it, vi } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetRemoteControlPreferenceMemoryForTests } from '../storage/remote-control-preference'
 import type { RpcClient } from '../transport/rpc-client'
 import { withAgentHudDesktopFlag } from './agent-hud-desktop-launch-args'
 import { agentHudLaunchFlag, buildAgentHudLaunchArgs } from './agent-hud-launch-args'
@@ -45,6 +47,13 @@ const CASES = [
 ] as const
 
 describe('a tab the phone opens over a profile the desktop sync already flagged', () => {
+  // These are about the beacon flag; Remote Control (on by default) is pinned off here and has
+  // its own cases in agent-remote-control-launch-args.test.ts.
+  beforeEach(async () => {
+    resetRemoteControlPreferenceMemoryForTests()
+    await AsyncStorage.setItem('orca:remoteControlNewClaudeSessions', 'off')
+  })
+
   it.each(CASES)('starts %s on %s with one beacon flag, not two', (agent, hostPlatform) => {
     const once = withAgentHudDesktopFlag(agent, '--foo bar', hostPlatform)
     expect(oursIn(agent, once, hostPlatform)).toBe(1)

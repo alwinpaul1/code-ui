@@ -8,6 +8,8 @@ import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-
 import type { RpcClient } from '../transport/rpc-client'
 import { withoutStaleWindowsHudFlag } from './agent-hud-desktop-launch-args'
 import { buildAgentHudLaunchArgs } from './agent-hud-launch-args'
+import { withRemoteControlFlag } from './agent-remote-control-launch-args'
+import { loadRemoteControlNewSessions } from '../storage/remote-control-preference'
 
 type HostLaunchSettings = {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
@@ -41,9 +43,16 @@ export async function resolveAgentHudLaunchConfig(
   const hostPlatform = readMobileRuntimeHostPlatform(resultOf(status))
   // A Windows host takes no flag (`hostTakesAgentHudFlag`), so it launches as
   // the desktop would, less any flag an earlier build saved in its profile.
-  const agentArgs =
+  const hudArgs =
     buildAgentHudLaunchArgs({ agent, hostDefaultArgs, hostPlatform }) ??
     withoutStaleWindowsHudFlag(agent, hostDefaultArgs, hostPlatform)
+  // Remote Control for a new Claude tab, unless the Settings switch is off.
+  const agentArgs = withRemoteControlFlag({
+    agent,
+    agentArgs: hudArgs,
+    hostPlatform,
+    enabled: agent === 'claude' ? await loadRemoteControlNewSessions() : false
+  })
   if (agentArgs === hostDefaultArgs) {
     return null
   }

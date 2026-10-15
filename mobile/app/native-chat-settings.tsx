@@ -9,6 +9,7 @@ import { Txt } from '../src/ui/Txt'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
 import { useMobileChatFocusViewPreference } from '../src/session/use-mobile-chat-focus-view'
 import { useMobileChatExpandToolsPreference } from '../src/session/use-mobile-chat-expand-tools'
+import { useMobileRemoteControlPreference } from '../src/session/use-mobile-remote-control-preference'
 import { ChatReadingOptionGroup, type ChatReadingOption } from '../src/settings/ChatReadingOptionGroup'
 import {
   chatCodeFont,
@@ -45,6 +46,7 @@ export default function NativeChatSettingsScreen() {
   const chatDefault = defaultView === 'chat'
   const { focusView, setFocusView } = useMobileChatFocusViewPreference()
   const { expandTools, setExpandTools } = useMobileChatExpandToolsPreference()
+  const { remoteControl, setRemoteControl } = useMobileRemoteControlPreference()
   const reading = useChatReadingPreference()
 
   return (
@@ -134,6 +136,35 @@ export default function NativeChatSettingsScreen() {
             accessibilityLabel="Expand tool calls"
             value={expandTools}
             onValueChange={setExpandTools}
+            trackColor={{ false: colors.borderStrong, true: colors.accent }}
+            thumbColor={colors.bgPanel}
+          />
+        </Surface>
+        <SectionLabel style={{ marginTop: space.lg }}>Claude sessions</SectionLabel>
+        <Surface
+          rounded="lg"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            paddingVertical: space.md,
+            paddingHorizontal: space.lg
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="body" weight="medium">
+              Remote Control for new Claude sessions
+            </Txt>
+            <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+              {remoteControl
+                ? 'On: sessions started here open in the Claude app too'
+                : 'Off'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Remote Control for new Claude sessions"
+            value={remoteControl}
+            onValueChange={setRemoteControl}
             trackColor={{ false: colors.borderStrong, true: colors.accent }}
             thumbColor={colors.bgPanel}
           />
