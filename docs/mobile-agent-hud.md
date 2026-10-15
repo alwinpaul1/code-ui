@@ -2154,3 +2154,15 @@ the switch needs no clean-up and desktop-started tabs are untouched (a saved bar
 user's own could not be told from ours). It goes FIRST in the args: the flag takes an optional name and Orca
 appends the prompt as a bare word. No flag when the args do not start with a flag, when they already carry
 one, on a Windows host, or when the platform is unknown (same rule as the beacon flag).
+
+## Ring and usage per tab (2026-10-15)
+
+A Claude tab matched to its Anthropic session (`ccr-session-cache.ts`) reads its own figures once a minute
+with the model (`ccr-session-usage.ts`, merged by `ccr-usage-hud.ts`). Context: the newest main-chain
+`assistant` event usage (input + cache creation + cache read, sub-agent turns skipped); the window only
+when the newest `result` event `modelUsage[<model>].contextWindow` states it, else tokens with no
+percentage. Plan usage: `GET /api/oauth/usage` with the matched account token (`five_hour`, `seven_day`,
+`utilization` in percent), never the host feed. Precedence: a live beacon or screen for the session wins
+for context; a live Claude beacon wins for the rows; otherwise a matched tab shows its account rows or
+none (the host feed is whichever login Orca holds); a tab matched to no account keeps the host feed.
+Shapes come from the 2.1.300 binary and the transcript usage, not yet a live reply.

@@ -12,7 +12,8 @@ vi.mock('expo-linking', () => ({ openURL: vi.fn() }))
 import { useCcrSessionModel } from './use-ccr-session-model'
 import { CCR_MODEL_FRESH_MS, CCR_MODEL_REFRESH_MS, preferCcrModelPair, resetCcrModelForTests, type CcrModelReading } from './ccr-session-model'
 import { resetCcrPipelineForTests, type CcrPipelineDeps } from './ccr-session-pipeline'
-import { recordCcrFailure } from './ccr-session-cache'
+import { ccrAccountForTab, ccrSessionForTab, recordCcrFailure } from './ccr-session-cache'
+import { ccrUsageForTab, resetCcrUsageForTests } from './ccr-session-usage'
 import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-events'
 import {
   SESSION_A,
@@ -58,15 +59,15 @@ let renderer: ReactTestRenderer | null = null
 let reading: CcrModelReading | null = null
 let clock = Date.now()
 
-let current: { enabled: boolean; deps: CcrPipelineDeps; epoch: number; agentSessionId: string | null } | null = null
+let current: { enabled: boolean; deps: CcrPipelineDeps; epoch: number; agentSessionId: string | null; needsContext?: boolean } | null = null
 
 function Probe(_props: { render: number }) {
-  reading = useCcrSessionModel({ enabled: current!.enabled, tabId: 'tab-1', agentSessionId: current!.agentSessionId, messages: MESSAGES, epoch: current!.epoch, deps: current!.deps, now: () => clock })
+  reading = useCcrSessionModel({ enabled: current!.enabled, tabId: 'tab-1', agentSessionId: current!.agentSessionId, messages: MESSAGES, epoch: current!.epoch, deps: current!.deps, now: () => clock, needsContext: current!.needsContext ?? false })
   return null
 }
 
-async function mount(args: { enabled?: boolean; deps: CcrPipelineDeps; epoch?: number; agentSessionId?: string | null }) {
-  current = { enabled: args.enabled ?? true, deps: args.deps, epoch: args.epoch ?? 1, agentSessionId: args.agentSessionId ?? null }
+async function mount(args: { enabled?: boolean; deps: CcrPipelineDeps; epoch?: number; agentSessionId?: string | null; needsContext?: boolean }) {
+  current = { enabled: args.enabled ?? true, deps: args.deps, epoch: args.epoch ?? 1, agentSessionId: args.agentSessionId ?? null, needsContext: args.needsContext }
   await act(async () => {
     renderer = create(createElement(Probe, { render: 0 }))
   })
@@ -88,6 +89,7 @@ beforeEach(() => {
   shares = true
   resetCcrPipelineForTests()
   resetCcrModelForTests()
+  resetCcrUsageForTests()
 })
 afterEach(() => {
   act(() => renderer?.unmount())
@@ -172,6 +174,45 @@ describe('the model and effort a matched session reports', () => {
     reported = null
     await mount({ deps: harness.deps, epoch: 2 })
     expect(reading).toBeNull()
+  })
+})
+
+describe('the matched tab’s usage', () => {
+  function usageDeps() {
+    const base = deps()
+    const requests: RecordedRequest[] = []
+    const fetch: CcrPipelineDeps['fetch'] = async (url, init) => {
+      if (new URL(url).pathname === '/api/oauth/usage') {
+        requests.push({ url, method: init.method, headers: init.headers })
+        return reply(200, { five_hour: { utilization: 42, resets_at: '2026-10-15T18:00:00Z' } })
+      }
+      return base.deps.fetch(url, init)
+    }
+    return { deps: { ...base.deps, fetch }, requests, all: base.requests }
+  }
+
+  it('is read with the model, from the matched account: plan windows once the tab matched', async () => {
+    const harness = usageDeps()
+    await mount({ deps: harness.deps, agentSessionId: 'e50745d9-3b6f-4381-9e9c-48cfb838fa5f' })
+    const sessionId = ccrSessionForTab('tab-1', 1, 'e50745d9-3b6f-4381-9e9c-48cfb838fa5f')
+    const accountId = ccrAccountForTab('tab-1', 1, 'e50745d9-3b6f-4381-9e9c-48cfb838fa5f')
+    expect(sessionId).toBe(SESSION_A)
+    expect(ccrUsageForTab('tab-1', 1, sessionId, accountId, clock)?.limits?.map((row) => row.usedPercent)).toEqual([42])
+    expect(harness.requests).toHaveLength(1)
+  })
+
+  it('reads the session context only when the controller says no live source states it', async () => {
+    const live = usageDeps()
+    await mount({ deps: live.deps, needsContext: false })
+    const eventReadsLive = live.all.filter((request) => request.url.includes('limit=100') && request.url.includes('/events')).length
+    act(() => renderer?.unmount())
+    renderer = null
+    resetCcrPipelineForTests()
+    resetCcrUsageForTests()
+    const wanting = usageDeps()
+    await mount({ deps: wanting.deps, needsContext: true })
+    const eventReadsWanting = wanting.all.filter((request) => request.url.includes('limit=100') && request.url.includes('/events')).length
+    expect(eventReadsWanting).toBeGreaterThan(eventReadsLive)
   })
 })
 
