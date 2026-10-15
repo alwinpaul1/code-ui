@@ -193,7 +193,7 @@ describe('after thinking, and while the token figure grows, as the Claude app dr
   })
 })
 
-describe('the running count while the relay is down', () => {
+describe('the running count on an Anthropic-drawn tab', () => {
   function providerLine(live: ClaudeChatLive | null) {
     return createElement(
       ClaudeChatLiveContext.Provider,
@@ -210,10 +210,18 @@ describe('the running count while the relay is down', () => {
     expect(texts(root).map((t) => t.text)).toContain('2 running tasks')
   })
 
-  it('with the relay up, stays the relay’s', () => {
+  // 2026-10-15, relay up: the Claude app said "3 running tasks", Code UI's desktop count "4".
+  it('with the relay up, is still Anthropic’s, so it matches the Claude app', () => {
     running.tasks = [{ id: 'shell-1', kind: 'shell' }]
     const relayUp = claudeChatLive({ live: { ...CCR_IDLE_LIVE_STATE, working: true, turnStartedAt: START, thinking: true, runningTasks: 2 }, linkPhase: 'live', connectionStatus: null, relayConnected: true })
     const root = draw('light', providerLine(relayUp))
+    expect(texts(root).map((t) => t.text)).toContain('2 running tasks')
+  })
+
+  it('with Anthropic’s stream not live, is the relay’s', () => {
+    running.tasks = [{ id: 'shell-1', kind: 'shell' }]
+    const notLive = claudeChatLive({ live: { ...CCR_IDLE_LIVE_STATE, working: true, turnStartedAt: START, thinking: true, runningTasks: 2 }, linkPhase: 'reconnecting', connectionStatus: null, relayConnected: true })
+    const root = draw('light', providerLine(notLive))
     expect(texts(root).map((t) => t.text)).toContain('1 running task')
   })
 })

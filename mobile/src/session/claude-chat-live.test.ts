@@ -22,10 +22,23 @@ describe('the chat’s live source', () => {
     expect(live).toMatchObject({ working: false, runningCount: 0, footer: null, sessionConnection: 'connected' })
   })
 
-  it('relay up: today’s sources keep working and the count; Anthropic adds only the stats', () => {
-    const live = claudeChatLive({ live: working, linkPhase: 'live', connectionStatus: 'connected', relayConnected: true })
-    expect(live).toMatchObject({ working: null, runningCount: null, sessionConnection: null })
+  // 2026-10-15, relay up: the Claude app on the claudeui session said "3 running tasks" while Code
+  // UI's tab, counting from the desktop, said "4 running tasks". The user: "Running tasks in claude
+  // and code ui must be same since we use anthropic fully now".
+  it('relay up, Anthropic live: the running count and working state are Anthropic’s, as in the Claude app', () => {
+    const live = claudeChatLive({ live: { ...working, runningTasks: 3 }, linkPhase: 'live', connectionStatus: 'connected', relayConnected: true })
+    expect(live).toMatchObject({ working: true, runningCount: 3 })
     expect(live?.footer).not.toBeNull()
+  })
+
+  it('relay up: the header keeps the relay’s label (it is the desktop’s connection)', () => {
+    const live = claudeChatLive({ live: working, linkPhase: 'live', connectionStatus: 'connected', relayConnected: true })
+    expect(live?.sessionConnection).toBeNull()
+  })
+
+  it('relay up, Anthropic says idle with no tasks: zero, not the desktop’s count', () => {
+    const live = claudeChatLive({ live: { ...CCR_IDLE_LIVE_STATE, runningTasks: 0 }, linkPhase: 'live', connectionStatus: 'connected', relayConnected: true })
+    expect(live).toMatchObject({ working: false, runningCount: 0 })
   })
 
   it('Anthropic’s stream not live (reconnecting, lost): nothing is overridden and no stats are drawn', () => {

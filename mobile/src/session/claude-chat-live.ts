@@ -8,13 +8,13 @@ import type { ConnectionState } from '../transport/types'
  * Which source drives a Claude tab's live chat state: the relay to the desktop (Orca's tab status,
  * the beacon, the screen) or Anthropic's copy of the session (ccr-live-state.ts).
  *
- *  - Relay UP: today's sources keep working/idle and the running count, where they are richer (the
- *    screen and the beacon know about work Anthropic is not told of). Anthropic adds only what no
- *    relay source has: the footer's stats ("15s · still thinking…") and the limit state.
- *  - Relay DOWN, Anthropic stream live: Anthropic drives working/idle, the running count and the
- *    header's word for the session, so the tab stays live as the Claude app does (2026-10-15
- *    12:29-12:31: the relay down, the app on the same session still "Generating… · 2 running
- *    tasks"). The terminal view and the files keep the relay's own state: they need the desktop.
+ *  - Anthropic stream live: Anthropic drives working/idle, the running count, the footer's stats
+ *    and the limit state, relay up or down, so the tab says what the Claude app says on the same
+ *    session (2026-10-15: relay up, the app "3 running tasks", the desktop's count "4").
+ *  - Relay DOWN as well: Anthropic also gives the header's word for the session, so the tab stays
+ *    live as the Claude app does (2026-10-15 12:29-12:31: the relay down, the app on the same
+ *    session still "Generating… · 2 running tasks"). The terminal view and the files keep the
+ *    relay's own state: they need the desktop.
  *  - Anthropic stream not live (reconnecting, lost, never matched): nothing is overridden.
  */
 export type ClaudeChatLive = {
@@ -57,8 +57,8 @@ export function claudeChatLive(input: {
         : null
   return {
     footer,
-    working: takeOver ? live.working : null,
-    runningCount: takeOver ? live.runningTasks : null,
+    working: linkLive ? live.working : null,
+    runningCount: linkLive ? live.runningTasks : null,
     sessionConnection,
     linkLive,
     rateLimit: live.rateLimit
