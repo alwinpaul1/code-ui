@@ -62,13 +62,17 @@ describe('a tab the phone opens over a profile the desktop sync already flagged'
     expect(oursIn(agent, launched!, hostPlatform)).toBe(1)
   })
 
-  it.each(CASES)('launches %s on %s exactly as saved when the saved args already carry the flag', async (agent, hostPlatform) => {
+  it.each(CASES)('launches %s on %s on the saved args, adding no second beacon flag, when they already carry it', async (agent, hostPlatform) => {
+    // Claude also starts in auto permission mode (claude-auto-permission-mode.ts), the one flag
+    // the phone adds in front; the saved beacon flag is still the only one.
+    const asSaved = (args: string) =>
+      agent === 'claude' ? { agentArgs: `--permission-mode auto ${args}`, agentEnv: {} } : null
     const once = withAgentHudDesktopFlag(agent, '--foo bar', hostPlatform)
-    expect(await resolveAgentHudLaunchConfig(fakeHost({ [agent]: once }, hostPlatform), agent)).toBeNull()
+    expect(await resolveAgentHudLaunchConfig(fakeHost({ [agent]: once }, hostPlatform), agent)).toEqual(asSaved(once))
     // And args that are only our flag.
     const alone = agentHudLaunchFlag(agent, hostPlatform)
     expect(buildAgentHudLaunchArgs({ agent, hostDefaultArgs: alone, hostPlatform })).toBe(alone)
-    expect(await resolveAgentHudLaunchConfig(fakeHost({ [agent]: alone }, hostPlatform), agent)).toBeNull()
+    expect(await resolveAgentHudLaunchConfig(fakeHost({ [agent]: alone }, hostPlatform), agent)).toEqual(asSaved(alone))
   })
 
   it.each([

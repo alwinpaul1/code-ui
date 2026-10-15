@@ -72,7 +72,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'const submitLiveInput = useCallback(() => {',
       'useTerminalTextFieldSubmitBinding(liveInputRef, submitLiveInput)'
     )
-    expect(slice).toContain('const submit = handleLiveInputSubmit()')
+    expect(slice).toContain('const submit = handleLiveInputSubmit(autoPermissionLaunchLine)')
     expect(slice).toContain('generation: getSendCompletionGeneration()')
     expect(slice).toContain('interaction: getLiveInteractionGeneration()')
     expect(slice).toContain('sendOrigin.interaction === getLiveInteractionGeneration()')

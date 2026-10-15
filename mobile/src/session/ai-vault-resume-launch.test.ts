@@ -200,13 +200,14 @@ describe('buildMobileAiVaultResumeLaunch', () => {
       }
     })
     expect(launch.command).toBe(
-      "cd '/Users/ada/repo' && claude-dev '--model' 'opus' '--resume' 'abc 123'"
+      "cd '/Users/ada/repo' && claude-dev '--permission-mode' 'auto' '--model' 'opus' '--resume' 'abc 123'"
     )
     expect(launch.env).toEqual({ ANTHROPIC_BASE_URL: 'http://localhost:3000' })
     expect(launch.launchAgent).toBe('claude')
     expect(launch.launchConfig).toEqual({
-      agentCommand: "claude-dev '--model' 'opus'",
-      agentArgs: '--model opus',
+      agentCommand: "claude-dev '--permission-mode' 'auto' '--model' 'opus'",
+      // Every Claude session the phone starts starts in auto mode (claude-auto-permission-mode.ts).
+      agentArgs: '--permission-mode auto --model opus',
       agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
     })
     // Only bare real-home Codex resumes request env deletion.

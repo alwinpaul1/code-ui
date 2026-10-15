@@ -197,6 +197,8 @@ function mountTerminalInputSend(
         sendingRef,
         bufferedTerminalDraftState: draftState,
         getSendCompletionGeneration: () => 0,
+        // Read when a typed line may start Claude in auto mode (claude-auto-permission-mode.ts).
+        hostPlatformRef: { current: 'darwin' },
         showToast: (message: string, durationMs?: number) =>
           effect('toast', { message, durationMs: durationMs ?? null })
       })

@@ -127,7 +127,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // 309 since 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_MAIN_HOOK_SHA256 = '7c162208bbfe71b95dd66e564e87a716d70f015352ad8f2fed3a78db39cb6889'
+const HEAD_MAIN_HOOK_SHA256 = '4210614ca345e00a25aa8cf28461a771903b58bcfe5eaa78f7398997b2d5a5d9'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -152,7 +152,7 @@ const HEAD_MAIN_HOOK_SHA256 = '7c162208bbfe71b95dd66e564e87a716d70f015352ad8f2fe
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 // 2026-10-15: the document readers' readFileTab depends on sessionTabsRef, to offer the worktree's
 // agent sessions as evidence for a file outside the worktree (a PDF on the Desktop).
-const HEAD_HOOK_BINDING_SHA256 = '4959762c7ccdd77cfe76a65308e1e8d09816e6a00fc48773a979be90c9260e5d'
+const HEAD_HOOK_BINDING_SHA256 = 'abd0d8c8fdd8cdcc6f31ef5ed1b5f5ff0fbc723b45504a221fa28f1358734de6'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -168,7 +168,7 @@ const HEAD_HOOK_BINDING_SHA256 = '4959762c7ccdd77cfe76a65308e1e8d09816e6a00fc487
 // 2026-10-15: readFileTab's dependencies gain sessionTabsRef (a Desktop PDF is granted to the
 // session that named it). Same callback count.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '68c9bb9d2a5f6c569e49bf7ae3c9a8d6e34bfe712c51fa0c36910c282c8e96c1'
+  '081f67059e31fc97a304abb95291ca370ad0e7f0dafd22d973ddeab179980a0d'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -277,7 +277,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-15: readFileTab hands resolveMobileFileTabDoc the worktree's agent sessions
 // (nativeChatContexts) for an absolute path only, and its outside_worktree note says a terminal
 // or chat vouches.
-const HEAD_CALLBACK_BODY_SHA256 = '1318fa0ff64df4d5551d544a4b5c8cb1360a0a362f217696ea23164e51327085'
+const HEAD_CALLBACK_BODY_SHA256 = 'e49f8fdee95788d2216d762338b3ee9f398e61a1f2d81b760e8e1791c809b47b'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -372,7 +372,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // sendClose, closeTerminalOptimistically and selectAfterClose, and handleCloseSessionTab's body
 // takes the tab off the strip before it sends.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'c09daf0d882f63e70f9cc6e6f0e6e01fc00556b23e13045ac03cb4b49df53ce6'
+  '8b9d17aac49015955ccbe75d48caaf55bbd352324ee829afc3bca5d2798ba317'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -493,7 +493,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 2026-10-15: the file tab's outside_worktree note reads "while a terminal or chat here still
 // shows its path": a session's transcript vouches for a path too. Same count.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'de6ee439fab09180ecd8ad7cb705d96acc7743600b6096648885f2d1b1bb985e'
+  'a0ac19dc78cb7f2f90e07683273168750de858b60dace046076bab4c0725e9d9'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1112,7 +1112,9 @@ describe('mobile session route extraction parity', () => {
     // foundation's two phone-mode refs (terminal-phone-mode-before-subscribe.ts).
     // 313 since 2026-10-14 (caption): the dictation hook's useState for the live caption above
     // the recording row (MobileNativeChatDictationCaption.tsx).
-    expect(main.hooks).toHaveLength(313)
+    // 315 since 2026-10-15: the send actions' autoPermissionLaunchLine useCallback, which starts a
+    // typed `claude` line in auto permission mode (claude-auto-permission-mode.ts).
+    expect(main.hooks).toHaveLength(315)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1121,7 +1123,8 @@ describe('mobile session route extraction parity', () => {
     // 79 since 2026-10-14: the dictation start, cancel and press handlers moved into
     // useDictationHoldMode.
     // 80 since 2026-10-14 (later): requireAnthropicSignIn.
-    expect(main.callbacks).toHaveLength(80)
+    // 81 since 2026-10-15: autoPermissionLaunchLine, which submitLiveInput now passes on.
+    expect(main.callbacks).toHaveLength(81)
     // Bodies re-pinned 2026-10-14 (resume from Home): subscribeToTerminal's server-resize reveal
     // names its reason by mode (serverResizeRevealReason). Count and identities unchanged.
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
@@ -1265,7 +1268,8 @@ describe('mobile session route extraction parity', () => {
     // 'resized' literal left. 686 - 1 = 685.
     // 688 since 2026-10-14 (caption): the live caption's state, its '' start and reset, and the
     // 'chat' target check that feeds it.
-    expect(strings).toHaveLength(688)
+    // 693 since 2026-10-15: the typed-claude auto-permission rewrite in the send actions.
+    expect(strings).toHaveLength(693)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

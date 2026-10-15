@@ -81,13 +81,13 @@ describe('a Claude tab the phone opens', () => {
 
   it('starts with Remote Control, in front of the beacon flag, when nothing was ever switched', async () => {
     const config = await resolveAgentHudLaunchConfig(fakeHost({ claude: '--verbose' }, 'darwin'), 'claude')
-    expect(config?.agentArgs).toBe(`--remote-control --verbose ${agentHudLaunchFlag('claude', 'darwin')}`)
+    expect(config?.agentArgs).toBe(`--remote-control --permission-mode auto --verbose ${agentHudLaunchFlag('claude', 'darwin')}`)
   })
 
   it('starts without it once the switch is off, and the beacon flag stays', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('off')
     const config = await resolveAgentHudLaunchConfig(fakeHost({ claude: '--verbose' }, 'darwin'), 'claude')
-    expect(config?.agentArgs).toBe(`--verbose ${agentHudLaunchFlag('claude', 'darwin')}`)
+    expect(config?.agentArgs).toBe(`--permission-mode auto --verbose ${agentHudLaunchFlag('claude', 'darwin')}`)
   })
 
   it('follows a switch flipped this session without a reload', async () => {

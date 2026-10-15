@@ -51,7 +51,9 @@ type TerminalLiveInputCommitHandlers = {
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
-  readonly handleLiveInputSubmit: () => Promise<boolean>
+  /** `rewriteLine` sees the line this field typed into the PTY and may return it
+   *  with a tail added; only the tail is sent, before the Enter. */
+  readonly handleLiveInputSubmit: (rewriteLine?: (line: string) => string | null) => Promise<boolean>
 }
 
 export function useTerminalLiveInputCommit<TTabType extends string>({
@@ -235,18 +237,32 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     waitForPendingLiveInputFlush
   })
 
-  const handleLiveInputSubmit = useCallback((): Promise<boolean> => {
-    if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
-      return Promise.resolve(false)
-    }
-    advanceLiveInputInteractionGeneration()
-    return sendControlBytesAfterPendingText(activeHandle, '\r', { endsEditingSession: true })
-  }, [
-    activeHandle,
-    advanceLiveInputInteractionGeneration,
-    liveInputTerminalHandles,
-    sendControlBytesAfterPendingText
-  ])
+  const handleLiveInputSubmit = useCallback(
+    (rewriteLine?: (line: string) => string | null): Promise<boolean> => {
+      if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+        return Promise.resolve(false)
+      }
+      advanceLiveInputInteractionGeneration()
+      // Why only an extension: the field's text is already on the PTY line, so the
+      // one safe edit is more text at the cursor. A field session that ended (a
+      // cursor move, a flush) knows no line, and nothing is rewritten.
+      const line =
+        pendingLiveInputHandleRef.current === activeHandle
+          ? sentLiveInputTextRef.current + heldLiveInputTextRef.current
+          : ''
+      const rewritten = line.length > 0 ? (rewriteLine?.(line) ?? null) : null
+      const tail = rewritten !== null && rewritten.startsWith(line) ? rewritten.slice(line.length) : ''
+      return sendControlBytesAfterPendingText(activeHandle, `${tail}\r`, {
+        endsEditingSession: true
+      })
+    },
+    [
+      activeHandle,
+      advanceLiveInputInteractionGeneration,
+      liveInputTerminalHandles,
+      sendControlBytesAfterPendingText
+    ]
+  )
 
   return {
     clearPendingLiveInputCommit,

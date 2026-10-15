@@ -331,6 +331,61 @@ has reported it since its 2026-08-13 builds, so a missing one is a failed
   without any flag an earlier build saved there, so neither fails in the
   moment before the connect sync takes it out.
 
+### Claude starts in auto permission mode (2026-10-15)
+
+The user asked that every Claude session started from the phone start in
+Claude Code's `auto` permission mode "no matter what". The flag is
+`--permission-mode auto`, checked against Claude Code 2.1.300 by reading the
+installed binary (`~/.local/share/claude/versions/2.1.300`), not by running it.
+Its modes are `acceptEdits`, `auto`, `bypassPermissions`, `default`, `dontAsk`
+and `plan`. The code is `mobile/src/session/claude-auto-permission-mode.ts`.
+Nothing is written to the host: no `defaultMode`, no settings file.
+
+- **New Tab → Claude and Claude Agent Teams** (`agent-hud-launch-config.ts`),
+  and **a Claude resume from history** (`ai-vault-resume-launch.ts`): the flag
+  goes first in the tab's `agentArgs`. It takes a required value, so it is safe
+  in front of anything, and Remote Control's optional-value flag then has a
+  flag to stand in front of. Auto wins over the host's saved args: a
+  `--permission-mode <other>` there is replaced, and
+  `--dangerously-skip-permissions` is taken out. That matters because it is
+  Orca's own default for both Claude agents (`YOLO_TUI_AGENT_ARGS`), so phone
+  tabs started in bypass mode until this change.
+  `--allow-dangerously-skip-permissions` is kept, since it only adds bypass to
+  the Shift+Tab cycle. Agent Teams is `orca claude-teams [claude args...]`,
+  which passes every argument to `claude` (Orca 1.4.224,
+  `out/cli/handlers/core.js`).
+- **A `claude` or `claudeai` line typed in a terminal from the phone**: both
+  the buffered field (`handleSend`) and live input (`handleLiveInputSubmit`)
+  append ` --permission-mode auto` before the Enter. Live input has already
+  typed the line into the PTY, so it sends only the tail. `claudeai` is this
+  user's alias (`alias claudeai='CLAUDE_CONFIG_DIR=$HOME/.claude-work claude'`
+  in `~/.zshrc`). The rule is strict, because a wrong rewrite changes a command
+  the user typed:
+  - The first word must be exactly `claude` or `claudeai`, with no leading
+    whitespace and no quoting. Paths, `claude-sub`, `claudex` and `FOO=1 claude`
+    do not count.
+  - The line must have no shell operators or `$`, and no `--` terminator.
+  - It must have no help or version flag and no Claude Code subcommand
+    (`mcp`, `config`, `doctor`, and the rest of 2.1.300's list). A bare first
+    argument that follows no flag is also refused, since it could be a
+    subcommand the list does not know yet. A quoted prompt is not refused.
+  - A permission flag the user typed (`--permission-mode`,
+    `--dangerously-skip-permissions`) stands, and the line goes out as typed.
+  - The pane must name no agent (no `launchAgent`, no `agentStatus`), because
+    `claude` typed to a running Claude Code is a prompt. The phone cannot tell
+    that agent has since exited, so `claude` typed in a Claude tab whose Claude
+    was quit is not rewritten.
+  - A live-input field session that ended before Enter (after a cursor move or
+    a flush) knows no line, so nothing is rewritten.
+- **Windows**, and a host that will not say what it is, get none of this
+  (`hostTakesAgentHudFlag`). The flag needs no quoting, but no new launch
+  argument reaches a Windows host until a launch encoding is proven there.
+- **Not covered:** a session started by hand on the desktop (the phone cannot
+  change it without writing to the host), and New Tab → Claude when the host
+  opens a structured `agentSession` instead of a terminal.
+  `agentSession.create` carries no permission field, and the only knob is a
+  host setting, which would be a change to the user's machine.
+
 ### A user's own status line is kept
 
 Claude Code's `--settings` overrides the user's `statusLine`, so the script

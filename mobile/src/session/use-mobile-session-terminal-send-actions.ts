@@ -16,6 +16,7 @@ import {
 import { normalizeTerminalTextInput } from '../terminal/terminal-text-input-normalization'
 import { useTerminalTextFieldSubmitBinding } from '../terminal/use-terminal-text-field-submit-binding'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
+import { typedClaudeLaunchWithAutoPermissionMode } from './claude-auto-permission-mode'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
@@ -51,7 +52,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     canSend,
     scheduleDelayedAction,
     showToast,
-    releaseLiveInputKeyboard
+    releaseLiveInputKeyboard,
+    hostPlatformRef
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -69,8 +71,21 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     getSendCompletionGeneration
   )
 
+  // A `claude` or `claudeai` line the phone submits at a shell starts Claude Code in
+  // auto permission mode (claude-auto-permission-mode.ts). Read at submit time, so
+  // the tab and host platform are the current ones.
+  const autoPermissionLaunchLine = useCallback(
+    (line: string): string | null =>
+      typedClaudeLaunchWithAutoPermissionMode({
+        line,
+        hostPlatform: hostPlatformRef.current,
+        tab: activeSessionTab
+      }),
+    [activeSessionTab, hostPlatformRef]
+  )
+
   const submitLiveInput = useCallback(() => {
-    const submit = handleLiveInputSubmit()
+    const submit = handleLiveInputSubmit(autoPermissionLaunchLine)
     const sendOrigin = {
       tab: activeSessionTab,
       generation: getSendCompletionGeneration(),
@@ -82,7 +97,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         accepted && sendOrigin.interaction === getLiveInteractionGeneration()
       )
     )
-  }, [activeSessionTab, dismissKeyboardAfterAgentSend, handleLiveInputSubmit])
+  }, [activeSessionTab, autoPermissionLaunchLine, dismissKeyboardAfterAgentSend, handleLiveInputSubmit])
   const bindLiveInputField = useTerminalTextFieldSubmitBinding(liveInputRef, submitLiveInput)
   // Per-render, like handleSend itself: the binding refreshes its handler every commit, so there is
   // no identity here worth pretending is stable.
@@ -99,7 +114,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     sendingRef.current = true
 
     const draft = bufferedTerminalDraftState.input
-    const text = normalizeTerminalTextInput(draft)
+    const typed = normalizeTerminalTextInput(draft)
+    const text = autoPermissionLaunchLine(typed) ?? typed
     const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(
       activeHandle,
       draft

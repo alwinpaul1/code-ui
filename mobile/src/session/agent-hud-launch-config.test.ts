@@ -39,8 +39,8 @@ describe('a tab the phone opens on a Windows host', () => {
   it('still gets the flag on macOS, after what the host saved', async () => {
     const client = fakeHost({ claude: '--verbose' }, 'darwin')
     expect(await resolveAgentHudLaunchConfig(client, 'claude')).toEqual({
-      // Claude tabs also start with Remote Control (on by default), in front.
-      agentArgs: `--remote-control --verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
+      // Claude tabs also start with Remote Control (on by default), in front, and in auto mode.
+      agentArgs: `--remote-control --permission-mode auto --verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
       agentEnv: {}
     })
   })

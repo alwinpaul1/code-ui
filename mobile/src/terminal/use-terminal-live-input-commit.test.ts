@@ -266,6 +266,41 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['\r']))
   })
 
+  // 2026-10-15: a `claude` line typed from the phone starts Claude Code in auto mode. The field has
+  // already typed (or holds) `claude` for the PTY, so only the tail may go out, ahead of the Enter.
+  // Asserted on the bytes the PTY receives in order, not on how the queue frames them.
+  it('submitting a typed claude line sends the auto-mode tail before the Enter', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'claude')
+    const seen: string[] = []
+
+    const accepted = await handlers.handleLiveInputSubmit((line) => {
+      seen.push(line)
+      return line === 'claude' ? 'claude --permission-mode auto' : null
+    })
+
+    expect(accepted).toBe(true)
+    expect(seen).toEqual(['claude'])
+    await vi.waitFor(() => expect(sent.join('')).toBe('claude --permission-mode auto\r'))
+  })
+
+  it('a line the rewrite refuses, or one it does not merely extend, is submitted as typed', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'claude mcp list')
+    await handlers.handleLiveInputSubmit(() => null)
+    changeLiveInput(handlers, 'claude')
+    await handlers.handleLiveInputSubmit(() => 'codex')
+    await vi.waitFor(() => expect(sent.join('')).toBe('claude mcp list\rclaude\r'))
+  })
+
+  it('an Enter on an empty field asks nothing and sends only the Enter', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    const rewrite = vi.fn(() => 'claude --permission-mode auto')
+    await handlers.handleLiveInputSubmit(rewrite)
+    expect(rewrite).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(sent).toEqual(['\r']))
+  })
+
   it('increments a stable interaction generation for typing, submit, and accessory Enter', async () => {
     const { getHandlers, handlers, setActiveSessionTabType } =
       createTerminalLiveInputCommitHarness()
