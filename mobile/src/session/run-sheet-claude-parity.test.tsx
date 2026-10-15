@@ -6,6 +6,7 @@ import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { darkColors, fontFamily, lightColors, space, type, type ThemeColors } from '../theme/tokens'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 
@@ -347,10 +348,14 @@ describe('the run sheet, the Claude app way', () => {
       const removed = textNodes(file).find((node) => node.props.testID === 'tool-run-diff-removed')!
       expect(added.props.children).toBe('+32')
       expect(removed.props.children).toBe('−0')
-      expect(styleOf(added).color).toBe(own(scheme).diffAddText)
-      expect(styleOf(added).backgroundColor).toBe(own(scheme).diffAddBg)
-      expect(styleOf(removed).color).toBe(own(scheme).diffDelText)
-      expect(styleOf(removed).backgroundColor).toBe(own(scheme).diffDelBg)
+      // The Claude app's tool-step row (c6b.java:1087) draws its count with `ra20.a`, whose text and
+      // tint are `ad5.J()` on `ad5.f0()` and `ad5.h()` on `ad5.s()` (ra20.java:92-93): the chip
+      // tokens, not the diff card's.
+      const chip = claudeSessionPillPalette(scheme)
+      expect(styleOf(added).color).toBe(chip.chipAddText)
+      expect(styleOf(added).backgroundColor).toBe(chip.chipAddFill)
+      expect(styleOf(removed).color).toBe(chip.chipDelText)
+      expect(styleOf(removed).backgroundColor).toBe(chip.chipDelFill)
     })
 
     it('draws no chips and no mono name on a row that is not a file edit', () => {

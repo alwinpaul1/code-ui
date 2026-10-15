@@ -1,6 +1,7 @@
 import type { AgentHudBeacon } from './agent-hud-beacon'
 import { claudeTranscriptModelName } from './claude-transcript-model'
 import { NO_SCREEN_HUD_OBSERVATION, shortTokenLabel } from './hud-agent-status-fields'
+import { beaconLimits } from './hud-rate-limit-notice'
 import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
 
 /**
@@ -51,8 +52,8 @@ export function applyAgentHudBeaconFields(
           ),
           usedLabel: shortTokenLabel(used),
           windowLabel: shortTokenLabel(window),
-          ...(beacon.limits.length > 0
-            ? { limits: beacon.limits.map((limit) => ({ ...limit, windowMinutes: null })) }
+          ...(beaconLimits(beacon).length > 0
+            ? { limits: beaconLimits(beacon).map((limit) => ({ ...limit, windowMinutes: null })) }
             : base.context?.limits
               ? { limits: base.context.limits }
               : {})

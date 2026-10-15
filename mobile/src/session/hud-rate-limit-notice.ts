@@ -256,8 +256,23 @@ export function hudRateLimitWindows(
   beacon: AgentHudBeacon | null,
   accounts: ProviderRateLimits | null
 ): RateLimitWindowReading[] {
-  if (beacon && (beacon.agent === 'claude' || beacon.limits.length > 0)) {
-    return beacon.limits.map((limit) => ({ ...limit, windowMinutes: null }))
+  if (beacon && beaconDecidesLimits(beacon)) {
+    return beaconLimits(beacon).map((limit) => ({ ...limit, windowMinutes: null }))
   }
   return hudLimitsFromRateLimits(accounts).map((row) => ({ ...row }))
+}
+
+/** Whether the beacon, not the host's feed, says which windows the session has: see
+ *  `hudRateLimitWindows`. The one rule both the notice and the HUD's figures read. */
+export function beaconDecidesLimits(beacon: AgentHudBeacon | null): boolean {
+  return beacon !== null && (beacon.agent === 'claude' || beaconLimits(beacon).length > 0)
+}
+
+/**
+ * The beacon's windows, none when it carries no list. A beacon restored at warm start is the stored
+ * record as an earlier build wrote it, not re-parsed (agent-hud-beacon-warm-start.ts), so the field
+ * the type promises can be absent; reading `.length` off it crashed the chat controller.
+ */
+export function beaconLimits(beacon: AgentHudBeacon): AgentHudBeacon['limits'] {
+  return Array.isArray(beacon.limits) ? beacon.limits : []
 }

@@ -37,10 +37,8 @@ import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import { resolveObservedPermission, terminalPromptWait, withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useActiveTabTaskReport } from './use-active-tab-task-report'
-import { useAgentHudBeacon } from './agent-hud-beacon'
-import { useAgentStatusPrompts } from './use-agent-status-prompts'
-import { useBeaconAgentMessages } from './mobile-native-chat-agent-messages'
-import { agentHudBeaconMatches } from './hud-beacon-fields'
+import { useActiveChatBeacon } from './use-active-chat-beacon'
+import { beaconDecidesLimits } from './hud-rate-limit-notice'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'
 
@@ -113,23 +111,10 @@ export function useMobileNativeChatController(
       promptCancelSupported: agentSessionPromptCancelSupported, repeatedStopSupported: agentSessionRepeatedStopSupported,
       onSendError
     })
-  const handleBeacon = useAgentHudBeacon(activeHandle)
-  // Only the beacon of the session this tab is showing: a beacon is keyed by
-  // terminal handle, and a handle outlives the process that emitted into it,
-  // so a hand-started session in a reused terminal would otherwise echo the
-  // previous session's desktop prompts (2026-09-18). `null` while the tab
-  // does not yet know its session.
-  const hudBeacon = agentHudBeaconMatches(handleBeacon, activeChatResolution?.agent ?? null, activeChatSessionId) ? handleBeacon : null
-  // What a hand-started session never beacons — a message from the desktop
-  // or the Claude app, mid-turn or not — Orca's own hooks put on the tab
-  // status as `agentStatus.prompt`, and the phone reads it there
-  // (agent-status-prompts.ts, 2026-09-19).
-  const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
-    showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
-    activeChatPromptStatus,
-    hudBeacon?.desktopPrompts, connState === 'connected', args.tabsLive
-  )
-  const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
+  const { hudBeacon, tailPrompts, statusAgentMessages, agentMessages } = useActiveChatBeacon({
+    activeHandle, agent: activeChatResolution?.agent ?? null, sessionId: activeChatSessionId ?? null,
+    readsPrompts: showNativeChat && !activeChatStructured, promptStatus: activeChatPromptStatus, connected: connState === 'connected', tabsLive: args.tabsLive
+  })
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -212,7 +197,7 @@ export function useMobileNativeChatController(
   const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: nativeChatSession.messages, epoch: lastConnectedAt, needsContext: liveHud.context === null }), claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaSettled: nativeChatSession.status === 'ready', orcaRowCount: nativeChatSession.messages.length }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: claudeApi.session?.messages ?? nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
   // The ring and usage rows of THIS tab's session and account (ccr-usage-hud.ts): what its terminal states wins, then Anthropic's figures for the matched session and account, never the host's login.
   const ccrUsage = useCcrSessionUsage({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), epoch: lastConnectedAt })
-  const ccrHud = applyCcrUsageToHud({ context: liveHud.context, limits: liveHud.limits, usedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null }, { reading: ccrUsage.reading, matchedAccount: ccrUsage.matchedAccount, hostFeedAllowed: ccrUsage.hostFeedAllowed, beaconDecidesLimits: hudLiveBeacon !== null && (hudLiveBeacon.agent === 'claude' || hudLiveBeacon.limits.length > 0) })
+  const ccrHud = applyCcrUsageToHud({ context: liveHud.context, limits: liveHud.limits, usedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null }, { reading: ccrUsage.reading, matchedAccount: ccrUsage.matchedAccount, hostFeedAllowed: ccrUsage.hostFeedAllowed, beaconDecidesLimits: beaconDecidesLimits(hudLiveBeacon) })
   const isCodexChat = activeChatResolution?.agent === 'codex', isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has
   // stated there name WHICH shell ended (the only source of that on a
