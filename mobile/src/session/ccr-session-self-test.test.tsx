@@ -99,7 +99,7 @@ describe('the one-tap check', () => {
   it('stops at the first failing stage and says why', async () => {
     context()
     const lines = await runCcrSelfTest(deps(null))
-    expect(formatCcrSelfTest(lines).split('\n').slice(1)).toEqual(['✗ Anthropic sign-in: not signed in to Anthropic on this phone (Voice settings → Sign in)'])
+    expect(formatCcrSelfTest(lines).split('\n').slice(1)).toEqual(['✗ Anthropic sign-in: not signed in to Anthropic on this phone (Settings → Anthropic accounts → Sign in)'])
   })
 
   it('asks for a Claude chat when none is open', async () => {

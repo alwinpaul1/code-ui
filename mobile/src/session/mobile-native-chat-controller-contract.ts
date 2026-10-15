@@ -1,3 +1,4 @@
+import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -116,6 +117,8 @@ export type MobileNativeChatController = {
    *  where pictures are never asked of the host (agent-image-share-ask.ts). */
   nativeChatImageShare?: AgentImageShare | null
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
+  /** What a Claude tab's chat reads (use-claude-anthropic-transcript.ts): `off` for every other tab. */
+  nativeChatAnthropicGate?: ClaudeChatGate
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */

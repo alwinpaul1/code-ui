@@ -308,8 +308,8 @@ describe('the tab’s match', () => {
 
 describe('every failure leaves the chips and one line saying why', () => {
   const cases: [string, () => ReturnType<typeof harness>, string, string][] = [
-    ['not signed in', () => harness(twoSessions(), { token: null }), 'sign-in', 'not signed in to Anthropic on this phone (Voice settings → Sign in)'],
-    ['the profile refuses the token', () => harness(apiRoutes({ profile: reply(401, {}) })), 'org', 'the sign-in was refused (HTTP 401); sign in again in Voice settings'],
+    ['not signed in', () => harness(twoSessions(), { token: null }), 'sign-in', 'not signed in to Anthropic on this phone (Settings → Anthropic accounts → Sign in)'],
+    ['the profile refuses the token', () => harness(apiRoutes({ profile: reply(401, {}) })), 'org', 'the sign-in was refused (HTTP 401); sign in again in Anthropic accounts'],
     ['a profile with no organization', () => harness(apiRoutes({ profile: reply(200, { account: {} }) })), 'org', 'the reply was not the expected shape'],
     [
       'an untrusted device',

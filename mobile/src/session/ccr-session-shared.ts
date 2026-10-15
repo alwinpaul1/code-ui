@@ -110,7 +110,7 @@ export function reasonOf(error: unknown): string {
   if (error instanceof CcrApiError) {
     switch (error.reason) {
       case 'unauthorized':
-        return `the sign-in was refused (HTTP ${error.status ?? 401}); sign in again in Voice settings`
+        return `the sign-in was refused (HTTP ${error.status ?? 401}); sign in again in Anthropic accounts`
       case 'untrusted-device':
         return `this phone is not a trusted device for the organization (HTTP ${error.status ?? 403})`
       case 'forbidden':

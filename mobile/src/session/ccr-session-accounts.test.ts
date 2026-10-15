@@ -224,7 +224,7 @@ describe('when one account cannot answer', () => {
     // The refused account is named with its reason, and its organization is asked for again next time.
     expect(h.lines).toContainEqual({
       ok: false,
-      line: '[ccr-images] sessions: failed — Personal: the sign-in was refused (HTTP 401); sign in again in Voice settings (tab tab… (5))'
+      line: '[ccr-images] sessions: failed — Personal: the sign-in was refused (HTTP 401); sign in again in Anthropic accounts (tab tab… (5))'
     })
     expect(h.kept.forgotten).toEqual([ACCOUNT_UUID])
     expect(h.kept.accounts[1]!.organizationUuid).toBe(WORK_ORG)
@@ -260,7 +260,7 @@ describe('when one account cannot answer', () => {
     expect(result.stages.at(-1)!.detail).toBe("1 of 2 Remote Control sessions could not be read, so any of them may be this tab's; not guessing")
     expect(h.lines).toContainEqual({
       ok: false,
-      line: '[ccr-images] match: failed — Personal: the sign-in was refused (HTTP 401); sign in again in Voice settings (tab tab… (5))'
+      line: '[ccr-images] match: failed — Personal: the sign-in was refused (HTTP 401); sign in again in Anthropic accounts (tab tab… (5))'
     })
   })
 
@@ -281,7 +281,7 @@ describe('when one account cannot answer', () => {
   it('names no account when only one is signed in, as before', async () => {
     const h = harness([workSide()], { [WORK_TOKEN]: workRoutes({ sessions: () => reply(401, {}) }) })
     const result = await runCcrImagePipeline(input(), h.deps)
-    expect(result.stages.at(-1)).toEqual({ stage: 'sessions', ok: false, detail: 'the sign-in was refused (HTTP 401); sign in again in Voice settings' })
+    expect(result.stages.at(-1)).toEqual({ stage: 'sessions', ok: false, detail: 'the sign-in was refused (HTTP 401); sign in again in Anthropic accounts' })
   })
 })
 
@@ -298,7 +298,7 @@ describe('with one account, or none', () => {
     const h = harness([], bothAnswers())
     const result = await runCcrImagePipeline(input(), h.deps)
     expect(h.sent).toEqual([])
-    expect(result.stages).toEqual([{ stage: 'sign-in', ok: false, detail: 'not signed in to Anthropic on this phone (Voice settings → Sign in)' }])
+    expect(result.stages).toEqual([{ stage: 'sign-in', ok: false, detail: 'not signed in to Anthropic on this phone (Settings → Anthropic accounts → Sign in)' }])
   })
 
   it('with zero accounts, re-reading the model asks nothing either', async () => {
@@ -339,7 +339,7 @@ describe('the "Check session images" self-test, with two accounts', () => {
     setCcrSelfTestContext({ tabId: 'tab-1', epoch: 1, messageIds: TAB_MESSAGES, wanted: { toolUseIds: [], userMessageIds: [] } })
     const lines = await runCcrSelfTest(h.deps)
     expect(lines.filter((line) => !line.ok).map((line) => `${line.label}: ${line.detail}`)).toEqual([
-      'Remote Control sessions: Personal: the sign-in was refused (HTTP 401); sign in again in Voice settings'
+      'Remote Control sessions: Personal: the sign-in was refused (HTTP 401); sign in again in Anthropic accounts'
     ])
     expect(lines.some((line) => line.ok && line.label === 'This tab’s session')).toBe(true)
   })
