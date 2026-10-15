@@ -1,6 +1,8 @@
 import { hydrateNativeChatOutbox, nativeChatOutboxEntries } from '../storage/native-chat-outbox'
 import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
-import { ccrEchoSeen } from './ccr-send'
+import type { CcrComposerSendDeps } from './ccr-composer-send-deps'
+import { ccrEchoSeen, ccrSessionOffline } from './ccr-send'
+import { reasonOf } from './ccr-session-shared'
 import type { CcrEvent } from './ccr-session-api'
 import type { NativeChatOutboxCcr } from '../storage/native-chat-outbox'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -174,4 +176,47 @@ export function ccrSendTargetRefusal(to: CcrTo, pinned: NativeChatOutboxCcr | un
     ]
   }
   return null
+}
+
+/** Whether the Remote Control computer is offline: the stream's word, else the row read now. Not
+ *  refused on an unread status, as the app does not refuse UNKNOWN: the POST says. */
+export async function ccrTargetOffline(streamed: string | null, to: CcrTo, deps: Pick<CcrComposerSendDeps, 'readStatus' | 'log'>): Promise<boolean> {
+  if (streamed !== null) {
+    return ccrSessionOffline(streamed)
+  }
+  try {
+    return ccrSessionOffline(await deps.readStatus(to.accountId, to.sessionId))
+  } catch (error) {
+    deps.log(`[ccr-send] could not read session ${ccrSessionTail(to.sessionId)}'s connection status: ${reasonOf(error)}`)
+    return false
+  }
+}
+
+/**
+ * The words queued on a tab, posted now ahead of a send with files, so the session gets them in the
+ * order typed (merge review of d79b81a2b, 2026-10-15: the files send skipped the queue and landed
+ * first). The phone's queue holds words only, and the Claude app's local queue goes out as an
+ * ordinary send before anything sent after it; here it goes as soon as a send with files is made
+ * behind it. A queue held for another target is left alone. Resolves false when the words were
+ * not accepted: that failure is already reported and the words are back in the composer, so the
+ * files send must not go ahead of them.
+ */
+export async function sendCcrQueueAhead(args: {
+  held: { readonly text: string; readonly target: CcrTo } | undefined
+  to: CcrTo
+  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  takeFromQueue: (taken: string) => boolean
+  sendNow: (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo) => Promise<MobileNativeChatSendOutcome>
+  log: (line: string) => void
+}): Promise<boolean> {
+  const { held, to } = args
+  if (!held || !sameCcrTarget(held.target, to)) {
+    return true
+  }
+  const origin = args.captureSendOrigin(held.text)
+  if (!origin || !args.takeFromQueue(held.text)) {
+    return origin !== null
+  }
+  args.log(`[ccr-send] queued words sent ahead of a send with files, to session ${ccrSessionTail(to.sessionId)}`)
+  return (await args.sendNow(held.text, origin, to)) === 'accepted'
 }

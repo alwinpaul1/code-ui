@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { defaultCcrComposerSendDeps, type CcrComposerSendDeps } from './ccr-composer-send-deps'
 import { ccrQueueAtTurnEnd, returnCcrQueueToComposer, type CcrQueueTurnEnd } from './ccr-local-queue'
-import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
+import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
 import { CcrApiError, type CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import { reasonOf } from './ccr-session-shared'
@@ -10,7 +10,7 @@ import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-ec
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
 import type { NativeChatOutboxCcr, NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import { recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
-import { ccrResendLanded, CcrSendFlight, ccrSendTargetRefusal, sendOlderCcrEntriesFirst } from './ccr-send-order'
+import { ccrResendLanded, CcrSendFlight, ccrSendTargetRefusal, ccrTargetOffline, sendCcrQueueAhead, sendOlderCcrEntriesFirst } from './ccr-send-order'
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 import { ccrSessionTail, sameCcrTarget, useCcrTabQueues, type CcrTo } from './use-ccr-tab-queues'
@@ -169,20 +169,7 @@ export function useCcrComposerSend(args: {
     return resolved
   }, [deps])
 
-  /** Whether the Remote Control computer is offline: the stream's word, else the row read now. */
-  const offline = useCallback(async (to: CcrTo): Promise<boolean> => {
-    const streamed = latest.current.connectionStatus
-    if (streamed !== null) {
-      return ccrSessionOffline(streamed)
-    }
-    try {
-      return ccrSessionOffline(await deps.readStatus(to.accountId, to.sessionId))
-    } catch (error) {
-      // Not refused on an unread status, as the app does not refuse UNKNOWN: the POST says.
-      deps.log(`[ccr-send] could not read session ${ccrSessionTail(to.sessionId)}'s connection status: ${reasonOf(error)}`)
-      return false
-    }
-  }, [deps])
+  const offline = useCallback((to: CcrTo): Promise<boolean> => ccrTargetOffline(latest.current.connectionStatus, to, deps), [deps])
 
   /** One POST; true on a 2xx, or on a failure whose echo was already seen. */
   const post = useCallback(async (to: CcrTo, text: string, uuid: string, priority?: CcrSendPriority, files?: readonly CcrFileAttachment[]): Promise<true | string> => {
@@ -279,6 +266,12 @@ export function useCcrComposerSend(args: {
       deps.log(refusal[0]); latest.current.onSendError(refusal[1]); return 'rejected'
     }
     if (flight.busy()) {
+      // Words typed while this tab's queue goes out at its turn's end (it holds the flight from
+      // before its status read) wait behind it; anything else is refused, as in the app.
+      const behind = !pinned && !withFiles && delivering.current.has(tab) ? latest.current.captureSendOrigin(text) : null
+      if (behind) {
+        latest.current.clearDraftForSend(behind, text); queueOnTab(tab, text, to, behind.draftKey); return 'accepted'
+      }
       latest.current.onSendError(CCR_SEND_IN_FLIGHT)
       return 'rejected'
     }
@@ -302,7 +295,8 @@ export function useCcrComposerSend(args: {
       // Steering and post-later are off (ccr-local-queue.ts): the words wait on the phone, behind
       // anything this tab already has waiting.
       // A send with files goes now, unprioritised, as the phone's queue holds words only (the app's
-      // local queue is blocked by attachments); the server holds it until Claude takes input.
+      // local queue is blocked by attachments); the server holds it until Claude takes input. The
+      // words already queued on this tab go just ahead of it (sendCcrQueueAhead), in the order typed.
       if (!pinned && !withFiles && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
         now.clearDraftForSend(origin, text)
         queueOnTab(tab, text, to, origin.draftKey)
@@ -312,11 +306,14 @@ export function useCcrComposerSend(args: {
         latest.current.onSendError(CCR_SEND_IN_FLIGHT)
         return 'rejected'
       }
+      if (withFiles && !pinned && !(await sendCcrQueueAhead({ held: queuesRef.current[tab], to, captureSendOrigin: (queued) => latest.current.captureSendOrigin(queued), takeFromQueue: (taken) => takeFromQueue(tab, taken), sendNow, log: deps.log }))) {
+        return 'rejected'
+      }
       return await sendNow(text, origin, to, pinned?.uuid, withFiles ? files : undefined)
     } finally {
       flight.release()
     }
-  }, [deps, flight, offline, queueOnTab, sendNow, sendOlderFirst, target])
+  }, [deps, flight, offline, queueOnTab, sendNow, sendOlderFirst, takeFromQueue, target])
   const sendWithOutcome = useCallback((text: string, files?: CcrSendFiles) => sendOrResend(text, undefined, files), [sendOrResend])
   // An entry from before this lane has no uuid: it goes as a new post, through Anthropic still.
   const resendFromOutbox = useCallback((text: string, entry: NativeChatOutboxEntry) => sendOrResend(text, entry.ccr), [sendOrResend])
@@ -326,7 +323,7 @@ export function useCcrComposerSend(args: {
    * back to the composer when something blocks it. Only `captured` goes; words queued meanwhile
    * stay. Resolves whether to look again (something it read changed while it waited).
    */
-  const deliverQueue = useCallback(async (tab: string, captured: string): Promise<boolean> => {
+  const deliverClaimed = useCallback(async (tab: string, captured: string, sending: boolean): Promise<boolean> => {
     const held = queuesRef.current[tab]
     if (!held || held.text !== captured) {
       return true
@@ -339,7 +336,7 @@ export function useCcrComposerSend(args: {
       return true
     }
     const verdict: CcrQueueTurnEnd = same
-      ? ccrQueueAtTurnEnd(captured, { offline: isOffline, promptUp: now.promptUp, draft: now.composerText, attachments: now.attachments(), sending: flight.busy() })
+      ? ccrQueueAtTurnEnd(captured, { offline: isOffline, promptUp: now.promptUp, draft: now.composerText, attachments: now.attachments(), sending })
       : { kind: 'to-composer', text: captured, because: resolved.kind === 'refused' ? `no send target (${resolved.reason})` : `this tab now sends to session ${ccrSessionTail(resolved.sessionId)}, not ${ccrSessionTail(held.target.sessionId)}` }
     switch (verdict.kind) {
       case 'none':
@@ -357,9 +354,8 @@ export function useCcrComposerSend(args: {
           return false
         }
         if (takeFromQueue(tab, captured)) {
-          // Claimed, so the outbox's resend waits for it; behind the tab's older messages, or back.
-          await flight.claim(async () =>
-            (await sendOlderFirst(origin, held.target)) ? sendNow(verdict.text, origin, held.target) : now.setComposerText((draft) => returnCcrQueueToComposer(verdict.text, draft)))
+          // Behind the tab's older messages, or back to the composer.
+          await ((await sendOlderFirst(origin, held.target)) ? sendNow(verdict.text, origin, held.target) : now.setComposerText((draft) => returnCcrQueueToComposer(verdict.text, draft)))
         }
         return true
       }
@@ -368,7 +364,12 @@ export function useCcrComposerSend(args: {
         return unhandled
       }
     }
-  }, [deps, flight, offline, sendNow, sendOlderFirst, takeFromQueue])
+  }, [deps, offline, sendNow, sendOlderFirst, takeFromQueue])
+  // The flight is claimed BEFORE the status read (unless a send already holds it, which sends the
+  // queue back to the composer), so nothing tapped meanwhile posts ahead of the queue, and the
+  // outbox's resend waits for it.
+  const deliverQueue = useCallback((tab: string, captured: string): Promise<boolean> =>
+    flight.busy() ? deliverClaimed(tab, captured, true) : flight.claim(() => deliverClaimed(tab, captured, false)), [deliverClaimed, flight])
 
   // The tab on screen, on this lane and idle, with a queue: its turn has ended (a queue is only
   // ever made while working), here or while the user was away, so the queue goes now.

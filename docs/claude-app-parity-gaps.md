@@ -413,7 +413,11 @@ risk sending a message whose attachment silently does not arrive.
 - A failed chip keeps a **retry** (the red disc), since the lane can upload
   it again; the app only offers remove.
 - Sends with files go out at once, never into the phone's text queue, and
-  are not recorded in the outbox.
+  are not recorded in the outbox. Words already queued on the tab are posted
+  just ahead of them, so the session gets them in the order typed (the app's
+  local queue would go as an ordinary send before anything sent after it). A
+  send with files tapped while the turn-end queue is going out is refused as
+  a send in flight; words typed then wait behind the queue.
 - The picker still caps documents at the host path's 18 MB before the lane
   sees them; the pending bubble shows image previews only; photos carry no
   extension badge.
