@@ -30,6 +30,7 @@ import { followSubagentTranscriptRunning, openSubagentTranscript } from './subag
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
 import { useBridgeBackgroundTasksToHeader } from './session-header-tasks-bridge'
+import { useClaudeAppCommandSheet } from './claude-app-command-sheets'
 import { useClaudeChatLive } from './claude-chat-live'
 
 /** An Agent sheet's "Tool calls (N)" list (parity G29). */
@@ -171,6 +172,8 @@ export function MobileNativeChatTasksProvider({
   const tasks = useMemo(() => ({ runningCount, openSheet }), [openSheet, runningCount])
   // The header menu's Background tasks entry opens this same sheet (parity gap G35).
   useBridgeBackgroundTasksToHeader(runningCount, openSheet)
+  // A matched Claude tab's typed /workflows opens this sheet, as the Claude app's does (claude-app-command-sheets.ts).
+  useClaudeAppCommandSheet('workflows', openSheet)
   return (
     <NativeChatTranscriptProvider messages={messages}>
     <AgentToolCallsSlotProvider render={renderAgentToolCalls}>

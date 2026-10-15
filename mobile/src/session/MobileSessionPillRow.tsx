@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Linking, Pressable, StyleSheet, View } from 'react-native'
 import { Copy, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -14,6 +14,7 @@ import {
 } from './session-pill-row-model'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionPills } from './use-session-pills'
+import { useClaudeAppCommandSheet } from './claude-app-command-sheets'
 
 // The Claude Android app's session pills (1.261009.20). Every one is the generic chip `jc20.c`: a
 // 14 dp radius, 12 x 8 dp padding, a 16 dp icon, an 8 dp gap, the label at 13/550, on the app's
@@ -290,6 +291,9 @@ export function MobileSessionPillRow({
   const clipboard = useClipboardWriter()
   const pills = useSessionPills(controller)
   const actions = sessionPillActions({ clipboard, showToast })
+  // A matched Claude tab's typed /diff opens the changes, as the Claude app's does
+  // (claude-app-command-sheets.ts). Published here because this row is mounted with the chat.
+  useClaudeAppCommandSheet('diff', useCallback(() => handlePanelTap('sourceControl'), [handlePanelTap]))
   return (
     <SessionPillRowView
       pills={pills}

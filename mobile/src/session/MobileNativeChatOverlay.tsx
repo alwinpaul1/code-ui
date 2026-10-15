@@ -531,7 +531,7 @@ export function MobileNativeChatOverlay({
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         skills={controller.nativeChatSkills}
-        sessionCommands={controller.nativeChatCommandSurface?.sessionCommands}
+        sessionCommands={controller.nativeChatCommandSurface?.sessionCommands ?? controller.nativeChatSessionCommands}
         conversationCommands={controller.nativeChatCommandSurface?.conversationCommands}
         // Only the structured lane has a command surface, and only a host that
         // said it will rewind THIS session gets the affordance — and only when
