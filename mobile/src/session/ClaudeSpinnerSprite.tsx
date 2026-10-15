@@ -20,7 +20,7 @@ import { CLAUDE_SPINNER, nextSpinnerFrame } from './claude-working-footer-spec'
 export function ClaudeSpinnerSprite({ color, animating }: { color: string; animating: boolean }) {
   const reducedMotion = useReducedMotion()
   const still = !animating || reducedMotion !== false
-  const [frame, setFrame] = useState(CLAUDE_SPINNER.restFrame)
+  const [frame, setFrame] = useState<number>(CLAUDE_SPINNER.restFrame)
   useEffect(() => {
     if (still) {
       setFrame(CLAUDE_SPINNER.restFrame)
