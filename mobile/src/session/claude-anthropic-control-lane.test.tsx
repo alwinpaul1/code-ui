@@ -20,7 +20,13 @@ const CONFIG_DIR = '/Users/me/.claude'
 const orca = { messages: [] as NativeChatMessage[], status: 'ready', transcriptLoading: false }
 const api: ClaudeAnthropicTranscript = { gate: { kind: 'off' }, session: null, live: null, linkPhase: null, connectionStatus: null, events: [] }
 const posted: { accountId: string; sessionId: string; body: { events: { payload: Record<string, unknown> }[] } }[] = []
+/** The switch, the relay, the events POST's status and the session's reply to a control request, per test. */
+const flags = vi.hoisted(() => ({ laneOn: true, relayUp: false, postStatus: 200, reply: null as ((requestId: string) => Record<string, unknown>) | null }))
 
+vi.mock('./ccr-control-request', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./ccr-control-request')>()
+  return { ...real, get CCR_CONTROL_LANE() { return flags.laneOn } }
+})
 vi.mock('../transport/client-context-connection-metrics', () => ({ useLastConnectedAt: () => null }))
 vi.mock('./use-mobile-session-view-mode', () => ({ useMobileSessionViewMode: () => ({ isTabChatView: () => true, toggleTabChatView: vi.fn() }) }))
 vi.mock('./use-mobile-native-chat-session', () => ({ useMobileNativeChatSession: () => orca }))
@@ -39,13 +45,13 @@ vi.mock('./ccr-link-registry', async (importOriginal) => ({
             auth: async () => ({ token: 'test-token', organizationUuid: 'org' }),
             fetch: async (_url: string, init: { method: string; body?: string }) => {
               posted.push({ accountId, sessionId, body: JSON.parse(init.body ?? 'null') })
-              return { ok: true, status: 200, json: async () => ({ results: [] }) }
+              return { ok: flags.postStatus < 300, status: flags.postStatus, json: async () => ({ results: [] }), text: async () => '' }
             }
           },
           accountId,
           sessionId
         ),
-      controlWaiters: { wait: () => ({ reply: new Promise(() => undefined), cancel: () => undefined }) }
+      controlWaiters: { wait: (id: string) => ({ reply: flags.reply ? Promise.resolve(flags.reply(id)) : new Promise(() => undefined), cancel: () => undefined }) }
     },
     release: () => undefined
   })
@@ -82,7 +88,7 @@ describe('the control actions of a Claude tab matched to its Remote Control sess
   let renderer: ReactTestRenderer | null = null
   let controller: MobileNativeChatController | null = null
   const sendRequest = vi.fn(async () => ({ ok: true }))
-  const clientStub = { sendRequest, getState: () => 'disconnected' as const, getLastConnectedAt: () => 1, notifyForeground: vi.fn() }
+  const clientStub = { sendRequest, getState: () => (flags.relayUp ? 'connected' : 'disconnected'), getLastConnectedAt: () => 1, notifyForeground: vi.fn() }
   const onSendError = vi.fn()
   const tab = {
     type: 'terminal',
@@ -96,7 +102,7 @@ describe('the control actions of a Claude tab matched to its Remote Control sess
   function Harness(): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
-      connState: 'disconnected',
+      connState: flags.relayUp ? 'connected' : 'disconnected',
       tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
@@ -106,7 +112,7 @@ describe('the control actions of a Claude tab matched to its Remote Control sess
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
-      nativeChatInputLeaseReady: false,
+      nativeChatInputLeaseReady: flags.relayUp,
       onSendError,
       onSendResolved: vi.fn()
     })
@@ -120,6 +126,7 @@ describe('the control actions of a Claude tab matched to its Remote Control sess
     setCcrMapping('tab-1', CSE, null, 'acct-personal', SESSION, CONFIG_DIR)
     bindCcrConfigDir(CONFIG_DIR, 'acct-personal')
     posted.length = 0
+    Object.assign(flags, { laneOn: true, relayUp: false, postStatus: 200, reply: null })
     sendRequest.mockClear()
     onSendError.mockClear()
     Object.assign(api, {
@@ -202,5 +209,55 @@ describe('the control actions of a Claude tab matched to its Remote Control sess
     expect(controller!.nativeChatAnthropicControl?.live).toBe(false)
     expect(controller!.nativeChatAnthropicControl?.setPermissionMode).toBeUndefined()
     expect(controller!.nativeChatPermissionMode).toBeNull()
+  })
+
+  it('still stops the turn with Escape on the terminal when Anthropic refuses the interrupt and the relay is up', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    flags.relayUp = true
+    flags.postStatus = 500
+    render()
+    await act(async () => {
+      controller!.handleNativeChatStop()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(payloads()).toEqual([expect.objectContaining({ request: { subtype: 'interrupt' } })])
+    expect(JSON.stringify(terminalWrites())).toContain('\\u001b')
+    expect(warn.mock.calls.filter((call) => String(call[0]).startsWith('[ccr-control]')).length).toBe(1)
+    warn.mockRestore()
+  })
+
+  it('says the app’s words for a refused model and leaves the pill on the model it had', async () => {
+    flags.reply = (id) => ({ type: 'control_response', response: { subtype: 'error', request_id: id, error: 'no such model' } })
+    render()
+    const before = controller!.nativeChatLiveModel
+    const options = controller!.nativeChatSessionOptions?.controller
+    const model = options?.snapshot.find((descriptor) => descriptor.category === 'model')
+    const value = model?.kind.type === 'select' ? model.kind.choices.find((choice) => choice.value !== model.kind.currentValue)?.value : undefined
+    await act(async () => {
+      void options!.setOption(model!.id, value!)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(onSendError).toHaveBeenCalledWith('That model isn’t available for this thread.')
+    expect(controller!.nativeChatLiveModel).toEqual(before)
+    const after = controller!.nativeChatSessionOptions?.controller.snapshot.find((descriptor) => descriptor.category === 'model')
+    expect(after?.kind.type === 'select' ? after.kind.currentValue : null).toBe(model?.kind.type === 'select' ? model.kind.currentValue : null)
+  })
+
+  it('with the switch off, drives nothing through Anthropic: Stop, the mode pill, the card and the composer lock are as on main', async () => {
+    flags.laneOn = false
+    api.events = [
+      event({ type: 'system', subtype: 'init', permissionMode: 'auto' }),
+      event({ type: 'control_request', request_id: 'req-1', request: { subtype: 'can_use_tool', tool_name: 'Bash', tool_use_id: 'toolu_1', input: { command: 'npm test' } } })
+    ]
+    render()
+    expect(controller!.nativeChatAnthropicControl?.live).toBe(false)
+    expect(controller!.nativeChatAnthropicControl?.setPermissionMode).toBeUndefined()
+    expect(controller!.nativeChatPermissionMode).toBeNull()
+    expect(controller!.nativeChatPermission).toBeNull()
+    await act(async () => {
+      controller!.handleNativeChatStop()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(payloads()).toEqual([])
   })
 })

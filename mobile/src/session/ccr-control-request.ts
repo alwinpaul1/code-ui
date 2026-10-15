@@ -33,6 +33,21 @@ import type { CcrContextUsageAskDeps } from './ccr-context-usage'
  * names the request and the cause.
  */
 
+/** THE switch. On: a matched Claude tab whose link is live sends Stop, mode, model and effort
+ *  picks and permission answers as control requests, draws Anthropic's permission prompt as its
+ *  card, reads its mode pill from the session's own `system` events, and lifts the composer's
+ *  terminal-lease lock. Off: every one of those keeps the path it has on main (the terminal, the
+ *  beacon, the screen). The bodies here are read from the app and NOT yet seen accepted by
+ *  Anthropic; `scratchpad/probe/p15-control-lane.cjs` proves them. Turn on only after it does.
+ *  The read-only parts stay behind it too: a mode read from a `system` event goes stale once the
+ *  terminal's Shift+Tab changes it, a card drawn here could only be answered through this lane,
+ *  and an unlocked composer could start a turn that only this lane could stop. */
+export const CCR_CONTROL_LANE = false
+
+/** How long Stop waits for the interrupt POST before it falls back to Escape on the terminal. The
+ *  app awaits nothing past the POST; 10 s is OkHttp's default read timeout, which bounds it there. */
+export const CCR_INTERRUPT_POST_TIMEOUT_MS = 10_000
+
 export const CCR_SET_MODEL_TIMEOUT_MS = 30_000
 export const CCR_SET_PERMISSION_MODE_TIMEOUT_MS = 30_000
 export const CCR_APPLY_FLAG_SETTINGS_TIMEOUT_MS = 45_000
@@ -106,14 +121,29 @@ export async function sendCcrControlRequest(deps: CcrControlDeps, sessionId: str
   return 'refused'
 }
 
-/** Posts `interrupt` and waits for nothing, as the app does. True when the POST was taken. */
-export async function postCcrInterrupt(deps: Pick<CcrControlDeps, 'post' | 'newUuid' | 'log'>, sessionId: string): Promise<boolean> {
+/** Posts `interrupt` and waits for no reply, as the app does. Null when the POST was taken, else
+ *  why not: a refused POST, or none within CCR_INTERRUPT_POST_TIMEOUT_MS. It logs nothing itself,
+ *  so the fallback's one line names the cause and what it did instead. */
+export async function postCcrInterrupt(
+  deps: Pick<CcrControlDeps, 'post' | 'newUuid'>,
+  sessionId: string,
+  setTimer: (run: () => void, ms: number) => () => void = (run, ms) => {
+    const handle = setTimeout(run, ms)
+    return () => clearTimeout(handle)
+  }
+): Promise<string | null> {
+  let cancelTimer: () => void = () => undefined
+  const timedOut = new Promise<string>((resolve) => {
+    cancelTimer = setTimer(() => resolve(`the POST had no answer within ${Math.round(CCR_INTERRUPT_POST_TIMEOUT_MS / 1000)} s`), CCR_INTERRUPT_POST_TIMEOUT_MS)
+  })
+  const posted = deps.post(buildCcrControlRequestBody({ sessionId, uuid: deps.newUuid(), requestId: deps.newUuid(), request: { subtype: 'interrupt' } })).then(
+    () => null,
+    (error: unknown) => `the request was not posted: ${reasonOf(error)}`
+  )
   try {
-    await deps.post(buildCcrControlRequestBody({ sessionId, uuid: deps.newUuid(), requestId: deps.newUuid(), request: { subtype: 'interrupt' } }))
-    return true
-  } catch (error) {
-    deps.log(`[ccr-control] interrupt failed — the request was not posted: ${reasonOf(error)}`)
-    return false
+    return await Promise.race([posted, timedOut])
+  } finally {
+    cancelTimer()
   }
 }
 

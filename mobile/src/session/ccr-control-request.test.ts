@@ -21,6 +21,8 @@ import {
   ccrModelOutcomeMessage,
   ccrModeOutcomeMessage,
   postCcrInterrupt,
+  CCR_CONTROL_LANE,
+  CCR_INTERRUPT_POST_TIMEOUT_MS,
   sendCcrControlRequest,
   type CcrControlDeps
 } from './ccr-control-request'
@@ -154,18 +156,33 @@ describe('a control request and its answer', () => {
 })
 
 describe('Stop on Anthropic', () => {
-  it('posts the interrupt and waits for nothing', async () => {
+  it('posts the interrupt and waits for no control_response', async () => {
     const h = harness()
-    expect(await postCcrInterrupt(h.deps, SESSION)).toBe(true)
+    expect(await postCcrInterrupt(h.deps, SESSION, h.timers.setTimer)).toBeNull()
     expect(h.posted).toEqual([{ session_id: CSE, events: [{ payload: { type: 'control_request', uuid: 'id-1', request_id: 'id-2', request: { subtype: 'interrupt' } } }] }])
   })
 
-  it('says why in one line when the interrupt could not be posted', async () => {
+  it('hands back why the interrupt was not posted, for the one line the fallback leaves', async () => {
     const h = harness(async () => {
-      throw new Error('events: network')
+      throw new Error('events: HTTP 500')
     })
-    expect(await postCcrInterrupt(h.deps, SESSION)).toBe(false)
-    expect(h.lines).toEqual(['[ccr-control] interrupt failed — the request was not posted: events: network'])
+    expect(await postCcrInterrupt(h.deps, SESSION, h.timers.setTimer)).toBe('the request was not posted: events: HTTP 500')
+    expect(h.lines).toEqual([])
+  })
+
+  it('gives up on an interrupt POST that never answers, so Stop can fall back instead of hanging', async () => {
+    const h = harness(() => new Promise(() => undefined))
+    const cause = postCcrInterrupt(h.deps, SESSION, h.timers.setTimer)
+    h.timers.advance(CCR_INTERRUPT_POST_TIMEOUT_MS - 1)
+    await Promise.resolve()
+    h.timers.advance(1)
+    expect(await cause).toBe('the POST had no answer within 10 s')
+  })
+})
+
+describe('the switch', () => {
+  it('ships off until the probe proves the bodies, so every control action keeps the terminal path', () => {
+    expect(CCR_CONTROL_LANE).toBe(false)
   })
 })
 

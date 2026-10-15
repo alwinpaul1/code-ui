@@ -3,10 +3,10 @@ import type { CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import type { CcrLinkPhase } from './ccr-session-link-types'
 import { ccrSessionOffline } from './ccr-send'
-import { STOP_FAILED_MESSAGE } from './native-chat-stop-words'
 import { defaultCcrUsageAskDeps, type CcrUsageAskDeps } from './use-ccr-usage-sheet'
 import {
   CCR_APPLY_FLAG_SETTINGS_TIMEOUT_MS,
+  CCR_CONTROL_LANE,
   CCR_SET_MODEL_TIMEOUT_MS,
   CCR_SET_PERMISSION_MODE_TIMEOUT_MS,
   ccrEffortOutcomeMessage,
@@ -60,13 +60,25 @@ export type CcrControlLaneArgs = {
   scope?: { hostId: string; worktreeId: string; tabId: string | null }
   /** For tests: how a request reaches the session (the shared link by default). */
   makeDeps?: CcrUsageAskDeps
+  /** Tests turn it on; the app reads the one switch (CCR_CONTROL_LANE). */
+  switchOn?: boolean
 }
+
+/** A Stop tap: `onVerdict` hears whether the stop went (use-chat-stop-button.ts). */
+export type CcrStop = (onVerdict?: (sent: boolean) => void) => void
+
+function laneSwitchedOn(args: Pick<CcrControlLaneArgs, 'enabled' | 'switchOn'>): boolean {
+  return args.enabled && (args.switchOn ?? CCR_CONTROL_LANE)
+}
+
+const passStop = (fallback: CcrStop): CcrStop => fallback
 
 export type CcrControlLane = {
   /** Whether the lane drives this tab now. */
   live: boolean
-  /** Stop through `interrupt`; undefined when the lane is not live (the terminal's Escape then). */
-  interrupt: ((onVerdict?: (sent: boolean) => void) => void) | undefined
+  /** Stop given the terminal's Stop: an `interrupt` into the session while the lane is live,
+   *  falling back to `fallback` when it fails; `fallback` itself when the lane is not live. */
+  wrapStop: (fallback: CcrStop) => CcrStop
   /** A mode pick through `set_permission_mode`: the failure's words, or null when it went.
    *  Undefined when the lane is not live (the terminal's Shift+Tab then). */
   setPermissionMode: ((mode: TerminalPermissionMode) => Promise<string | null>) | undefined
@@ -91,8 +103,9 @@ const EFFORT_COMMAND = /^\/effort\s+(\S+)\s*$/
 
 export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
   const makeDeps = args.makeDeps ?? defaultCcrUsageAskDeps
-  const target = args.enabled ? args.resolveTarget() : ({ kind: 'refused', reason: 'unmatched' } as const)
-  const live = ccrControlLaneLive({ enabled: args.enabled, target, linkSessionId: args.linkSessionId, linkPhase: args.linkPhase, connectionStatus: args.connectionStatus })
+  const on = laneSwitchedOn(args)
+  const target = on ? args.resolveTarget() : ({ kind: 'refused', reason: 'unmatched' } as const)
+  const live = ccrControlLaneLive({ enabled: on, target, linkSessionId: args.linkSessionId, linkPhase: args.linkPhase, connectionStatus: args.connectionStatus })
   const latest = useRef(args)
   latest.current = args
   const [answered, setAnswered] = useState<ReadonlySet<string>>(() => new Set())
@@ -106,28 +119,44 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
   /** Runs `run` with the target read now, when it is still the live linked session; else null. */
   const withTarget = useCallback(<T,>(run: (deps: ReturnType<CcrUsageAskDeps>['deps'], sessionId: string) => Promise<T>): Promise<T> | null => {
     const now = latest.current
-    const current = now.enabled ? now.resolveTarget() : null
-    if (!current || current.kind !== 'target' || !ccrControlLaneLive({ enabled: now.enabled, target: current, linkSessionId: now.linkSessionId, linkPhase: now.linkPhase, connectionStatus: now.connectionStatus })) {
+    const current = laneSwitchedOn(now) ? now.resolveTarget() : null
+    if (!current || current.kind !== 'target' || !ccrControlLaneLive({ enabled: true, target: current, linkSessionId: now.linkSessionId, linkPhase: now.linkPhase, connectionStatus: now.connectionStatus })) {
       return null
     }
     const held = makeDeps(current.accountId, current.sessionId)
     return run(held.deps, current.sessionId).finally(held.release)
   }, [makeDeps])
 
-  const interrupt = useCallback(
-    (onVerdict?: (sent: boolean) => void) => {
-      const sent = withTarget((deps, session) => postCcrInterrupt(deps, session))
-      void (sent ?? Promise.resolve(false)).then((ok) => {
-        if (!ok) {
-          if (!sent) {
-            console.warn('[ccr-control] interrupt not sent — the tab has no live Anthropic session now')
+  // Stop must stop the turn even when the unproven interrupt does not land: a refused or
+  // unanswered POST falls back to the terminal's Escape, which itself says the app's words when
+  // the relay is down too. One line names why the interrupt failed and what Stop did instead.
+  const makeStop = useCallback(
+    (fallback: CcrStop): CcrStop =>
+      (onVerdict) => {
+        const sent = withTarget((deps, session) => postCcrInterrupt(deps, session))
+        void (sent ?? Promise.resolve('the tab has no live Anthropic session now')).then((cause) => {
+          if (cause === null) {
+            onVerdict?.(true)
+            return
           }
-          latest.current.onSendError(STOP_FAILED_MESSAGE)
-        }
-        onVerdict?.(ok)
-      })
-    },
+          console.warn(`[ccr-control] interrupt failed (${cause}) — stopping with Escape on the terminal`)
+          fallback(onVerdict)
+        })
+      },
     [withTarget]
+  )
+  const stops = useRef(new WeakMap<CcrStop, CcrStop>())
+  const wrapStop = useCallback(
+    (fallback: CcrStop): CcrStop => {
+      const known = stops.current.get(fallback)
+      if (known) {
+        return known
+      }
+      const made = makeStop(fallback)
+      stops.current.set(fallback, made)
+      return made
+    },
+    [makeStop]
   )
 
   const setPermissionMode = useCallback(
@@ -138,7 +167,10 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
         console.warn('[ccr-control] set_permission_mode not sent — the tab has no live Anthropic session now')
         return ccrModeOutcomeMessage('unsent')
       }
-      if (outcome.result === 'applied' || outcome.result === 'unanswered') {
+      // Only a success moves the pill. The app keeps an unanswered pick (bto.java:262-273); with
+      // bodies not yet proven, an unanswered pick may not have landed, so the pill keeps what the
+      // session last stated.
+      if (outcome.result === 'applied') {
         setPickedMode({ sessionId: outcome.session, mode, statedKey: stated?.key ?? null })
       }
       return ccrModeOutcomeMessage(outcome.result)
@@ -255,7 +287,7 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
   const picked = pickedMode && pickedMode.sessionId === sessionId && (stated?.key ?? null) === pickedMode.statedKey ? pickedMode.mode : null
   return {
     live,
-    interrupt: live ? interrupt : undefined,
+    wrapStop: live ? wrapStop : passStop,
     setPermissionMode: live ? setPermissionMode : undefined,
     permissionMode: live ? (picked ?? stated?.mode ?? null) : null,
     wrapDispatch,

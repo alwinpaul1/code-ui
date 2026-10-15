@@ -75,6 +75,7 @@ function mount(make: CcrUsageAskDeps, patch: Partial<CcrControlLaneArgs> = {}): 
     events: [],
     onSendError: (message) => errors.push(message),
     makeDeps: make,
+    switchOn: true,
     ...patch
   }
   function Probe(props: { args: CcrControlLaneArgs }) {
@@ -105,32 +106,77 @@ describe('Stop on a matched tab', () => {
   it('posts an interrupt into the tab’s own session with its own account, relay or no relay', async () => {
     const session = fakeSession()
     const h = mount(session.make)
+    const terminal = vi.fn()
     const verdicts: boolean[] = []
-    h.lane().interrupt!((sent) => verdicts.push(sent))
+    h.lane().wrapStop(terminal)((sent) => verdicts.push(sent))
     await settle()
     expect(session.posted).toEqual([{ accountId: 'acct-personal', sessionId: OWN, payload: { type: 'control_request', uuid: 'id-1', request_id: 'id-2', request: { subtype: 'interrupt' } } }])
     expect(verdicts).toEqual([true])
+    expect(terminal).not.toHaveBeenCalled()
     expect(h.errors).toEqual([])
   })
 
-  it('says the app’s "Couldn’t stop" words and gives the button back when the interrupt was not posted', async () => {
+  it('still stops the turn with Escape on the terminal when the interrupt is refused, and says why in one line', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const session = fakeSession({ postFails: true })
     const h = mount(session.make)
     const verdicts: boolean[] = []
-    h.lane().interrupt!((sent) => verdicts.push(sent))
+    const terminal = vi.fn((onVerdict?: (sent: boolean) => void) => onVerdict?.(true))
+    h.lane().wrapStop(terminal)((sent) => verdicts.push(sent))
     await settle()
-    expect(verdicts).toEqual([false])
-    expect(h.errors).toEqual(["Couldn't stop the session. Try again."])
+    expect(terminal).toHaveBeenCalledTimes(1)
+    expect(verdicts).toEqual([true])
+    expect(warn.mock.calls.map((call) => call[0])).toEqual(['[ccr-control] interrupt failed (the request was not posted: events: network) — stopping with Escape on the terminal'])
+    // The terminal's own stop says its words if it cannot run; the lane adds none of its own.
+    expect(h.errors).toEqual([])
+  })
+
+  it('still stops the turn with Escape when the interrupt POST never answers', async () => {
+    vi.useFakeTimers()
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const make: CcrUsageAskDeps = () => ({ deps: { waitForResponse: () => ({ reply: new Promise(() => undefined), cancel: () => undefined }), post: () => new Promise(() => undefined), newUuid: () => 'id', log: () => undefined }, release: () => undefined })
+      const h = mount(make)
+      const terminal = vi.fn()
+      h.lane().wrapStop(terminal)()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000)
+      })
+      expect(terminal).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls.map((call) => call[0])).toEqual(['[ccr-control] interrupt failed (the POST had no answer within 10 s) — stopping with Escape on the terminal'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves Stop to the terminal when the link is not live, the session is offline, or the target is another account’s copy', () => {
     const session = fakeSession()
-    expect(mount(session.make, { linkPhase: 'reconnecting' }).lane().interrupt).toBeUndefined()
-    expect(mount(session.make, { connectionStatus: 'disconnected' }).lane().interrupt).toBeUndefined()
-    expect(mount(session.make, { resolveTarget: () => ({ kind: 'refused', reason: 'other-account' }) }).lane().interrupt).toBeUndefined()
-    expect(mount(session.make, { linkSessionId: COPY }).lane().interrupt).toBeUndefined()
+    const terminal = vi.fn()
+    expect(mount(session.make, { linkPhase: 'reconnecting' }).lane().wrapStop(terminal)).toBe(terminal)
+    expect(mount(session.make, { connectionStatus: 'disconnected' }).lane().wrapStop(terminal)).toBe(terminal)
+    expect(mount(session.make, { resolveTarget: () => ({ kind: 'refused', reason: 'other-account' }) }).lane().wrapStop(terminal)).toBe(terminal)
+    expect(mount(session.make, { linkSessionId: COPY }).lane().wrapStop(terminal)).toBe(terminal)
     expect(mount(session.make, { enabled: false }).lane().live).toBe(false)
+    expect(session.posted).toEqual([])
+  })
+})
+
+describe('with the switch off', () => {
+  it('drives nothing on a live matched tab: Stop, mode, card, picks and the composer lock all stay as on main', async () => {
+    const session = fakeSession()
+    const h = mount(session.make, { switchOn: false, events: [event({ type: 'system', subtype: 'init', permissionMode: 'auto' }), bashRequest('req-1')] })
+    const terminal = vi.fn()
+    const fallback = vi.fn<PickDispatch>(async () => 'accepted')
+    expect(h.lane().live).toBe(false)
+    expect(h.lane().wrapStop(terminal)).toBe(terminal)
+    expect(h.lane().setPermissionMode).toBeUndefined()
+    expect(h.lane().permissionMode).toBeNull()
+    expect(h.lane().permission).toBeNull()
+    await act(async () => {
+      await h.lane().wrapDispatch(fallback)('/model opus')
+    })
+    expect(fallback).toHaveBeenCalledWith('/model opus')
     expect(session.posted).toEqual([])
   })
 })
@@ -170,6 +216,17 @@ describe('the permission mode on a matched tab', () => {
       message = await h.lane().setPermissionMode!('bypassPermissions')
     })
     expect(message).toBe('That mode isn’t available right now')
+    expect(h.lane().permissionMode).toBe('default')
+  })
+
+  it('keeps the stated mode on the pill when the session never answers the pick', async () => {
+    const session = fakeSession({ reply: () => null })
+    const h = mount(session.make, { events: [event({ type: 'system', subtype: 'init', permissionMode: 'default' })] })
+    let message: string | null | undefined
+    await act(async () => {
+      message = await h.lane().setPermissionMode!('plan')
+    })
+    expect(message).toBeNull()
     expect(h.lane().permissionMode).toBe('default')
   })
 

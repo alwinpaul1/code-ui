@@ -445,6 +445,16 @@ Every control action is a `control_request` `{type, uuid, request_id,
 request: {subtype…}}` posted to the same events endpoint. Replies arrive on the
 SSE stream as `control_response` with the same `request_id`.
 
+The control lane below (Stop, model, effort, permission mode, permission
+answers, the card drawn from `can_use_tool`, the mode read from `system`
+events, and the composer lock lifted while the link is live) is built behind
+one switch, `CCR_CONTROL_LANE` in `mobile/src/session/ccr-control-request.ts`,
+OFF until probe P15 (`scratchpad/probe/p15-control-lane.cjs`) shows Anthropic
+takes the bodies. With it off every row keeps its terminal path. With it on, a
+Stop whose `interrupt` is refused or has no answer in 10 s falls back to
+Escape on the terminal, and a mode pick moves the pill only on a success
+reply.
+
 | Action | Claude app wire | Code UI via Orca | Parity without Anthropic's servers? |
 |---|---|---|---|
 | Send a prompt | POST events, `user` event (1.1) | `terminal.send` with Enter after a verified clear | Yes, done (section 1) |
