@@ -1,7 +1,7 @@
 import { FlashList } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
 import { useCallback, useMemo } from 'react'
-import { ActivityIndicator, useWindowDimensions, View } from 'react-native'
+import { useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -34,6 +34,7 @@ import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
+import { MobileNativeChatTranscriptLoading } from './ClaudeTranscriptLoading'
 import { MobileNativeChatVisualProvider } from './MobileNativeChatVisual'
 import { ChatRowOnScreenScope, useChatRowVisibility } from './native-chat-row-visibility'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
@@ -319,9 +320,7 @@ export function MobileNativeChatView({
     >
     <View style={styles.root} onLayout={onRootLayout}>
       {showLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
+        <MobileNativeChatTranscriptLoading agent={agent} style={styles.center} color={colors.textSecondary} />
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
           <ChatTextSelectionProvider selectable={textSelectable} holdSelects={holdSelects} report={reportSelection} held={held}>

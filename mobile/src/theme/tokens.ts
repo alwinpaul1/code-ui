@@ -126,6 +126,11 @@ export type ThemeColors = {
   jumpButtonGlyph: string
   /** Its shadow: `an7.c`, black at 10 % in BOTH schemes (an7.java:18). */
   jumpButtonShadow: string
+  /** Clawd, the pixel mascot the Claude app dances while a Code session's transcript loads
+   *  (`gq7`, com.anthropic.claude 1.261009.20): Body `#D97757`, Shade `#BE684D` (the column
+   *  down his trailing side) and Ink `#141413` (his eyes). The app draws them from one fixed
+   *  palette (`tq7.b`) in BOTH schemes, so both schemes hold the same values here. */
+  clawd: { body: string; shade: string; ink: string }
   /** An uploaded file's card above the user's message (`f0f.f`, com.anthropic.claude
    *  1.261009.20): fill `pl7.p`, Material `surface` (#FFFFFF / #20201F), opaque. */
   attachmentCardFill: string
@@ -258,6 +263,7 @@ export const lightColors: ThemeColors = {
   composerIcon: '#383835',
   jumpButtonGlyph: '#131313',
   jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
+  clawd: { body: '#D97757', shade: '#BE684D', ink: '#141413' },
   attachmentCardFill: '#FFFFFF',
   attachmentCardBorder: 'rgba(30, 30, 29, 0.3)',
   transcriptDividerInk: 'rgba(30, 30, 29, 0.3)',
@@ -347,6 +353,7 @@ export const darkColors: ThemeColors = {
   composerIcon: '#C3C2B7',
   jumpButtonGlyph: '#F9F9F7',
   jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
+  clawd: { body: '#D97757', shade: '#BE684D', ink: '#141413' },
   attachmentCardFill: '#20201F',
   attachmentCardBorder: 'rgba(225, 224, 217, 0.3)',
   transcriptDividerInk: 'rgba(225, 224, 217, 0.3)',

@@ -503,6 +503,80 @@ inset already is. Not copied: the 4-session LRU (the phone keeps 12, across
 restarts), and the older-page trigger stays FlashList's `onEndReached` at half
 a viewport rather than 5 items.
 
+## 10. A Code session's transcript loading (added 2026-10-15)
+
+Read for "the loading logo of transcript must be from claude app". The app draws
+no spinner and no asset: **Clawd, the Claude Code pixel mascot, dancing**, built
+frame by frame in code.
+
+- **When.** The list's `loading` item (`yv8.java:8695`) is added while
+  `rs8.Y1()` holds: the session is known, its events are not loaded yet
+  (`M0` false), there is no error and no pending send. A cache hit (section 9)
+  marks events loaded, so a session held in memory never shows it. It goes the
+  moment the first `Initialize` lands. Nothing re-shows it for a reconnect.
+- **What.** `mu20.d` draws a Box filling the list's height (`fillParentMaxHeight`),
+  centred, holding a column spaced **12 dp** (`lb1(12f)`):
+  `oq7.b(nr7.Dancing, …, width 180 dp)`, then the label in `jn7.H` (13 sp) and
+  `pl7.O`, centred, 16 dp side padding. The label is `ccr_loading_session`
+  "Loading session…" for a Code session (`q09.Code`); a Cowork task gets
+  `ccr_loading_task` and a different mark (`mc20.m`), a project
+  `ccr_loading_project`.
+- **The mark.** `fq7.Dancing` → `tr7.x` ("Dancing") → `rp7` case 8 →
+  `ur7.a` → `mz20.k(new ng7(12))`: a timeline of poses (`ClawdPose`, `ns7`)
+  rasterised onto a **55 x 37** grid (`hq7` "ClawdFraming(width=55, height=37,
+  torsoLeft=18, ground=37)"), one byte per cell, giving **40 frames**. `dz20.a`
+  turns each frame into a bitmap (`dz20.r`) with the fixed palette `tq7.b` from
+  `gq7`. Dancing uses three colours: Body `o` **#D97757**, Shade `d`
+  **#BE684D**, Ink `K` **#141413** (the eyes). The same in both schemes.
+- **Size.** The canvas is `aspectRatio(55 / oq7.a)` with `oq7.a = 17`, so
+  **180 x 55.6 dp**, and the 55 x 37 bitmap is drawn bottom-aligned at full
+  width (`eq7` case 1). Nothing is ever drawn above row 20, so the visible art
+  is rows 20 to 36.
+- **Timing.** `hr7` "Loop(from=0.1, to=0.9)" plays frames floor(0.1 x 40) = **4**
+  to floor(0.9 x 40) - 1 = **35**, then back to 4. The clock is `zx20.u`
+  ("rememberLoopingCel", fps **12**). `n1k` waits round(1000 x scale / 12) =
+  **83 ms** a frame, where scale is the motion-duration scale.
+- **Reduced motion.** `mu20.d` passes `kr7` "Still" when
+  `ValueAnimator.areAnimatorsEnabled()` is false. Still holds **frame 0**
+  (`hl` case 13, read from the bytecode with `javap`). With a duration scale of
+  0, `n1k` also stops advancing.
+- **Older history is not this.** The `history_spinner` item (`yv8.t`) is a
+  plain Material circular spinner: **20 dp**, stroke 2 dp, `pl7.Q`, in a
+  full-width box padded 16 dp.
+
+How the frames were obtained: jadx could not decompile the timeline DSL
+cleanly, so the app's own code was run. `mz20.k(new ng7((byte) 12))` was
+called through reflection from a small dex (`Dump.java`, built with `d8`) under
+`adb shell app_process`, with the 1.261009.20 `base.apk` on the class path, and
+each frame was printed as 37 rows of 55 cells. Running it on the desktop JVM
+through dex2jar failed: `VerifyError`, and wrong code with verification off.
+The 40 frames reduce to 13 distinct poses. They are in
+`mobile/src/session/claude-clawd-dancing-frames.ts` as palette-letter strings.
+
+**What Code UI does.** `ClaudeTranscriptLoading.tsx` draws the frames as one
+react-native-svg path per colour (a `0 0 55 17` viewBox at 180 dp) and plays
+4 to 35 at 83 ms, through `claude-transcript-loading-spec.ts`. The colours are
+the theme's `clawd` tokens, the same values in both schemes as in the app. The
+label uses Code UI's own `label` text style (13/18) in `text`, per the
+keep-own-sizes rule. A Claude tab gets it wherever the chat drew its bare
+`ActivityIndicator` before its first rows
+(`MobileNativeChatTranscriptLoading`). Other agents keep the spinner. Reduced
+motion holds frame 0, and so does a reduced-motion answer not yet known, as
+every decorative loop does here. Older history keeps its plain spinner.
+
+**Opening without the loader.** The app keeps a Code session's events only in
+the in-memory LRU of **4** (`tdu`, a process-wide singleton, `ja8.java:96`).
+The on-disk Room cache (`ConversationCacheDatabase`, tables `snapshot_headers`
+and `snapshot_messages`) is keyed by conversation and leaf message, which is
+the chat product, not Code sessions. So after the process dies, the app shows
+the loader again. Code UI already keeps more: 12 sessions, across restarts
+(`ccr-transcript-persist.ts`), a persisted tab-to-session match
+(`ccr-session-cache.ts`), the kept copy drawn in the first render, and the link
+seeded from it. `claude-transcript-opens-without-loader.test.tsx` pins this:
+a kept session never shows the loader, the server's delta merges with no frame
+back on it, a session with nothing kept does show it, and a corrupt copy falls
+back to it.
+
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.
