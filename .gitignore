@@ -12,3 +12,7 @@ mobile/terminal-color-repro/
 *.jks
 dist/
 build/
+
+# Local agent tooling, not part of the app: the CodeGraph index, and Claude Code worktrees and skills.
+.codegraph/
+.claude/
