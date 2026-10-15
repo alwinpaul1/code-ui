@@ -1,5 +1,6 @@
 import type { NativeChatBlock, NativeChatMessage, NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import type { CcrEvent } from './ccr-session-api'
+import { joinAdjacentThoughts } from './ccr-thought-rows'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
@@ -390,7 +391,7 @@ export function decodeCcrEvents(events: readonly CcrEvent[], cache: WeakMap<CcrE
     }
     rows.push(...decoded)
   }
-  return rows
+  return joinAdjacentThoughts(rows)
 }
 
 const defaultCache = new WeakMap<CcrEvent, NativeChatMessage[]>()
