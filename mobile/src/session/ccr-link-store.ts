@@ -74,9 +74,13 @@ export class CcrEventStore {
     if (read.reached) {
       return this.add(read.events) ? {} : null
     }
+    // The stream stays open while a truncated catch-up reads, and what it brought in meanwhile is
+    // newer than every page event: kept, or it is gone (the stream has already counted it).
+    const newest = read.events.reduce((max, event) => Math.max(max, event.sequenceNum ?? max), 0)
+    const streamed = this.ordered.filter((event) => event.sequenceNum != null && event.sequenceNum > newest)
     this.byKey.clear()
     this.ordered = []
-    this.add(read.events)
+    this.add([...read.events, ...streamed])
     return { hasOlder: read.nextCursor !== null, liveFrom: 0 }
   }
 

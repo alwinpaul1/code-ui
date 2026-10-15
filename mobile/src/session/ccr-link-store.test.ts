@@ -36,3 +36,39 @@ describe('the events a session link holds', () => {
     expect(store.ordered).toHaveLength(1)
   })
 })
+
+// Review 2026-10-15: a truncated stream reads the newest pages while the stream stays open. When the
+// pages did not reach what was held, `take` replaced everything with them, and a row the stream
+// carried while they were read (newer than every page event) was wiped; the stream had already
+// counted it, so a reconnect never asked for it again.
+describe('a catch-up that replaces what is held', () => {
+  it('keeps a row the stream brought in while the pages were being read', () => {
+    const store = new CcrEventStore(keep)
+    const kept = prompt('u-kept')
+    prompt('u-skipped')
+    const gap = [prompt('g1'), prompt('g2'), prompt('g3'), prompt('g4')]
+    const live = prompt('u-live')
+    store.add([kept])
+    store.add([live])
+    const patch = store.take({ events: [...gap].reverse(), reached: false, nextCursor: 'p3' })
+    expect(patch).toEqual({ hasOlder: true, liveFrom: 0 })
+    expect(decodeCcrEvents(store.ordered).map((row) => row.id)).toEqual(['g1', 'g2', 'g3', 'g4', 'u-live'])
+  })
+
+  it('replaces everything when the stream brought nothing newer than the pages', () => {
+    const store = new CcrEventStore(keep)
+    const kept = prompt('u-kept2')
+    prompt('u-skipped2')
+    const gap = [prompt('h1'), prompt('h2')]
+    store.add([kept])
+    store.take({ events: [...gap].reverse(), reached: false, nextCursor: null })
+    expect(decodeCcrEvents(store.ordered).map((row) => row.id)).toEqual(['h1', 'h2'])
+  })
+
+  it('an empty read replaces nothing it could not stand in for', () => {
+    const store = new CcrEventStore(keep)
+    store.add([prompt('u-kept3')])
+    store.take({ events: [], reached: false, nextCursor: null })
+    expect(decodeCcrEvents(store.ordered).map((row) => row.id)).toEqual(['u-kept3'])
+  })
+})
