@@ -5,11 +5,13 @@ import type { AgentType } from '../../../src/shared/agent-status-types'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { useReducedMotion } from '../ui/use-reduced-motion'
+import { ViewportCentred } from './viewport-centre'
 import { CLAUDE_TRANSCRIPT_LOADING, clawdLayerColor, clawdLayers, nextClawdFrame } from './claude-transcript-loading-spec'
 
 /**
  * A Claude tab's transcript loading, as the Claude app draws a Code session's (`mu20.d`, see
- * claude-transcript-loading-spec.ts): Clawd dancing, then "Loading session…", centred.
+ * claude-transcript-loading-spec.ts): Clawd dancing, then "Loading session…", centred on the
+ * screen rather than on the chat area between the header and the composer (viewport-centre.tsx).
  *
  * Clawd is drawn from the app's own frames, one SVG path per colour, in a 55 x 17 cell
  * viewBox at 180 dp wide. The frame is plain state advanced by a timer at the app's 83 ms.
@@ -35,10 +37,8 @@ export function ClaudeTranscriptLoading() {
   }, [still, spec])
   const height = (spec.width * spec.rows) / spec.columns
   return (
-    <View
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: spec.gap }}
-      testID="claude-transcript-loading"
-    >
+    <ViewportCentred testID="claude-transcript-loading">
+      <View style={{ alignItems: 'center', gap: spec.gap }}>
       <View
         style={{ width: spec.width, height }}
         testID="claude-transcript-loading-clawd"
@@ -56,7 +56,8 @@ export function ClaudeTranscriptLoading() {
           {spec.label}
         </Txt>
       </View>
-    </View>
+      </View>
+    </ViewportCentred>
   )
 }
 
@@ -75,8 +76,8 @@ export function MobileNativeChatTranscriptLoading({
     return <ClaudeTranscriptLoading />
   }
   return (
-    <View style={style}>
+    <ViewportCentred style={style}>
       <ActivityIndicator color={color} />
-    </View>
+    </ViewportCentred>
   )
 }

@@ -20,7 +20,8 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: host('Text'),
     View: host('View'),
-    useColorScheme: () => 'light'
+    useColorScheme: () => 'light',
+    useWindowDimensions: () => ({ width: 400, height: 800, scale: 3, fontScale: 1 })
   }
 })
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
