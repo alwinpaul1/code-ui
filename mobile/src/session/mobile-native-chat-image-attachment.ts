@@ -65,6 +65,11 @@ export type PendingNativeChatImage = {
    *  chip, uploaded when it was attached. `path` stays empty, since the desktop never had it, and
    *  the send references it as `file_attachments` (ccr-attachment-send.ts). */
   readonly anthropicFile?: CcrUploadedFile
+  /** Set when a send carried this chip and came back rejected (use-native-chat-anthropic-send.ts).
+   *  A POST the phone saw fail may still have reached the session (a timeout after the server took
+   *  it), so that message may reference `anthropicFile`: removing the chip then leaves the file at
+   *  Anthropic instead of deleting it (second review of the attachment lane, 2026-10-15). */
+  readonly carriedBySend?: boolean
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */

@@ -59,7 +59,8 @@ export function useNativeChatAnthropicSend(args: {
         takeSentAttachments(scope, plan.sent)
         const outcome = await lane.send(composerText, { attachments: plan.files, previewUris: plan.previewUris, accountId }).catch(() => 'rejected' as const)
         if (outcome === 'rejected') {
-          restoreSentAttachments(scope, plan.sent)
+          // Marked: the rejected POST may have reached the session, so removing these keeps the file.
+          restoreSentAttachments(scope, plan.sent.map((chip) => ({ ...chip, carriedBySend: true })))
         }
         return outcome !== 'rejected'
       }

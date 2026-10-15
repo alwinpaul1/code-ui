@@ -119,8 +119,11 @@ export function useNativeChatAttachmentScopeWriters(
         }
       }
       // A chip whose file is at Anthropic leaves nothing there: the send that would reference it
-      // will not, so the file is deleted (best effort, logged).
-      void discardCcrUploadedFile(chip?.anthropicFile)
+      // will not, so the file is deleted (best effort, logged). Not one a send already carried: that
+      // message may have reached the session and reference it (`carriedBySend`).
+      if (!chip?.carriedBySend) {
+        void discardCcrUploadedFile(chip?.anthropicFile)
+      }
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, (prev[scope] ?? []).filter((attachment) => attachment.id !== id))
       )
