@@ -9,7 +9,7 @@ import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 export function failureReason(message: string): string {
   const normalized = message.toLowerCase()
   if (normalized === 'outside_worktree') {
-    return 'the phone can reach a file outside the workspace only while a terminal here still shows its path'
+    return 'the phone can reach a file outside the workspace only while a terminal or chat here still shows its path'
   }
   if (isTerminalArtifactGrantError(normalized)) {
     return 'the desktop no longer lets the phone read it; open it again from the terminal'

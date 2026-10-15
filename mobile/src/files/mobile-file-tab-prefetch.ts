@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import { isAbsoluteTabPath, resolveMobileFileTabDoc } from './mobile-file-tab-doc'
 import {
   abandonFileTabRead,
@@ -11,9 +12,12 @@ import type { MobileFileTabDocRpcSender } from './mobile-file-tab-doc-operations
 
 /**
  * A desktop-opened tab whose file sits outside the worktree is readable on
- * the phone only while a terminal here still shows its path: the host
+ * the phone only while a terminal or chat here still shows its path: the host
  * vouches for an absolute path from the last 1024 lines / 64 KB of a
- * terminal's output (Orca 1.4.205), and the grant it mints lives ten
+ * terminal's output under the temp dir (Orca 1.4.205), or anywhere from the
+ * agent session's own transcript (`nativeChatContexts`, the last 2000
+ * messages, read in Orca's native-chat-file-provenance.ts on 2026-10-15),
+ * and the grant it mints lives ten
  * minutes. The desktop opens such a tab the moment the user clicks the
  * path, so the phone reads the file THEN, when the path is fresh, and keeps
  * what it read for as long as the tab is open. Opened hours later, the tab
@@ -44,7 +48,8 @@ export function prefetchOutsideWorktreeFileTabs(
   worktreeId: string,
   tabs: readonly { type: string; relativePath?: string; diffSource?: string }[],
   terminalHandles: readonly string[],
-  now = Date.now()
+  now = Date.now(),
+  nativeChatContexts: readonly RuntimeNativeChatFileContext[] = []
 ): void {
   for (const tab of tabs) {
     if (tab.type !== 'file' || !tab.relativePath || !isAbsoluteTabPath(tab.relativePath)) {
@@ -64,7 +69,12 @@ export function prefetchOutsideWorktreeFileTabs(
     }
     attempts.set(key, { ...attempt, inFlight: true })
     const token = beginFileTabRead(worktreeId, path)
-    void resolveMobileFileTabDoc(client, { worktreeId, relativePath: path, terminalHandles })
+    void resolveMobileFileTabDoc(client, {
+      worktreeId,
+      relativePath: path,
+      terminalHandles,
+      nativeChatContexts
+    })
       .then((doc) => {
         rememberFileTabDoc(token, doc)
         attempts.delete(key)

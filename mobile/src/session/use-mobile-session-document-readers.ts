@@ -10,6 +10,7 @@ import {
   rememberFileTabDoc
 } from '../files/mobile-file-tab-prefetch'
 import { filePreviewTextRead } from '../files/mobile-file-preview-operations'
+import { nativeChatFileContextsOf } from '../files/mobile-file-tab-session-contexts'
 import { markdownTabRead } from './mobile-session-read-operations'
 import {
   buildMarkdownDiskFallbackDoc,
@@ -20,8 +21,16 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, setMarkdownDocs, setFileDocs, terminalsRef, activeSessionTabId, sessionTabs } =
-    scope
+  const {
+    worktreeId,
+    client,
+    setMarkdownDocs,
+    setFileDocs,
+    terminalsRef,
+    activeSessionTabId,
+    sessionTabs,
+    sessionTabsRef
+  } = scope
   // The worktree's terminal handles, the active tab's first: a file outside
   // the worktree is read through a grant the host mints for the terminal
   // that printed its path.
@@ -40,7 +49,14 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
     if (!client) {
       return
     }
-    prefetchOutsideWorktreeFileTabs(client, worktreeId, sessionTabs, terminalHandlesFor())
+    prefetchOutsideWorktreeFileTabs(
+      client,
+      worktreeId,
+      sessionTabs,
+      terminalHandlesFor(),
+      Date.now(),
+      nativeChatFileContextsOf(sessionTabs)
+    )
   }, [client, sessionTabs, terminalHandlesFor, worktreeId])
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -153,7 +169,11 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource,
-          terminalHandles: terminalHandlesFor()
+          terminalHandles: terminalHandlesFor(),
+          // The worktree's agent sessions: a terminal vouches only for a path
+          // under the temp dir, so a file the agent named anywhere else (a PDF
+          // on the Desktop) is granted to the session whose transcript named it.
+          nativeChatContexts: nativeChatFileContextsOf(sessionTabsRef.current)
         })
         if (read) {
           rememberFileTabDoc(read, doc)
@@ -175,8 +195,9 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
                   // Desktop"), asked for on 2026-09-19: the phone can read a
                   // file outside the workspace only while a terminal here
                   // still shows its path (the host vouches for the last 64 KB
-                  // of a terminal's output, and a grant lives ten minutes).
-                  `${classifyMobileArtifact(tab.relativePath) === 'image' ? 'Image' : 'File'} on Desktop. The phone can show it only while a terminal here still shows its path.`
+                  // of a terminal's output under the temp dir, or for a path
+                  // in a session's transcript, and a grant lives ten minutes).
+                  `${classifyMobileArtifact(tab.relativePath) === 'image' ? 'Image' : 'File'} on Desktop. The phone can show it only while a terminal or chat here still shows its path.`
                 : `${tab.diffSource === 'staged' || tab.diffSource === 'unstaged' ? "Couldn't load diff preview" : "Couldn't load file preview"}${
                     // The desktop's own reason: without it every failure read
                     // the same and could not be told apart (2026-09-26).
@@ -189,7 +210,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         )
       }
     },
-    [client, worktreeId, terminalHandlesFor]
+    [client, worktreeId, terminalHandlesFor, sessionTabsRef]
   )
   return {
     readMarkdownTab,

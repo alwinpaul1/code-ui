@@ -150,7 +150,9 @@ const HEAD_MAIN_HOOK_SHA256 = '7c162208bbfe71b95dd66e564e87a716d70f015352ad8f2fe
 // useTerminalLiveInputFocus (the live field takes back a keyboard no field holds).
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_HOOK_BINDING_SHA256 = 'dd8ca1f518af5a888f61aec5cf97968f039b24fcb88a87779a15de23abd48bf5'
+// 2026-10-15: the document readers' readFileTab depends on sessionTabsRef, to offer the worktree's
+// agent sessions as evidence for a file outside the worktree (a PDF on the Desktop).
+const HEAD_HOOK_BINDING_SHA256 = '4959762c7ccdd77cfe76a65308e1e8d09816e6a00fc48773a979be90c9260e5d'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -163,8 +165,10 @@ const HEAD_HOOK_BINDING_SHA256 = 'dd8ca1f518af5a888f61aec5cf97968f039b24fcb88a87
 // 2026-10-14: the runtime focus effect reports screen focus (reportLiveInputScreenFocus), and
 // toggleLiveInput, dismissSoftwareKeyboard, the tab action sheet and handleSelectionMode call
 // releaseLiveInputKeyboard before they put the keyboard away. Same callback count.
+// 2026-10-15: readFileTab's dependencies gain sessionTabsRef (a Desktop PDF is granted to the
+// session that named it). Same callback count.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'df930ae06155cacbf0bee496d5fbc476b4f84929ee65637a99d395516856bf6b'
+  '68c9bb9d2a5f6c569e49bf7ae3c9a8d6e34bfe712c51fa0c36910c282c8e96c1'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -270,7 +274,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
 // 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
-const HEAD_CALLBACK_BODY_SHA256 = '631b236d34cd2d0929f34a076fcbfc98e3ebfd5fc7ba4783f7af245da9f753f5'
+// 2026-10-15: readFileTab hands resolveMobileFileTabDoc the worktree's agent sessions
+// (nativeChatContexts), and its outside_worktree note says a terminal or chat vouches.
+const HEAD_CALLBACK_BODY_SHA256 = 'ae7653a8235bddae64fe6f88664278c7e530c7f761a94f1da444b0c14c4c6d23'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -290,7 +296,9 @@ const HEAD_CALLBACK_BODY_SHA256 = '631b236d34cd2d0929f34a076fcbfc98e3ebfd5fc7ba4
 // useSoftKeyboard, visibility and height (26).
 // 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
-const HEAD_EFFECT_SHA256 = 'f75ed0e978b9f65b056ed8e0e73b13eb68af72ecb2e98d30100da9121a50105d'
+// 2026-10-15: the readers' outside-worktree prefetch effect also hands the worktree's agent
+// sessions to prefetchOutsideWorktreeFileTabs. Only that effect's body moved; still 27.
+const HEAD_EFFECT_SHA256 = '569725fa0d7647f195935333718d75b44f0ed3423d6187244a030b2fe5b002a8'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -481,8 +489,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // mic's sign-in gate.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
+// 2026-10-15: the file tab's outside_worktree note reads "while a terminal or chat here still
+// shows its path": a session's transcript vouches for a path too. Same count.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '33e30d80084f3ccf3d2344f20c40e596f77e0bccb404fa6d0dc980cd2f1dbb82'
+  'de6ee439fab09180ecd8ad7cb705d96acc7743600b6096648885f2d1b1bb985e'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp

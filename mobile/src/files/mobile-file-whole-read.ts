@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcFailure, RpcResponse } from '../transport/types'
@@ -52,6 +53,9 @@ export type MobileFileSaveSource =
       worktreeId: string
       path: string
       terminalHandles: readonly string[]
+      /** The worktree's agent sessions, for a path outside the temp dir that only a session's
+       *  transcript can vouch for (mobile-file-tab-session-contexts.ts). */
+      nativeChatContexts?: readonly RuntimeNativeChatFileContext[]
     }
 
 export type WholeDesktopFileRead =
@@ -110,7 +114,8 @@ async function resolveFileTabSource(
     client,
     `id:${tab.worktreeId}`,
     tab.path,
-    tab.terminalHandles
+    tab.terminalHandles,
+    tab.nativeChatContexts ?? []
   )
   const worktreeId = outside.worktree.replace(/^id:/, '')
   return outside.kind === 'grant'

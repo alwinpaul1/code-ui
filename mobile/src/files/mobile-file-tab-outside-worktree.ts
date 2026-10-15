@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import { terminalArtifactPathResolve } from './mobile-file-preview-operations'
 import type { MobileFileTabDocRpcSender } from './mobile-file-tab-doc-operations'
 
@@ -17,6 +18,12 @@ export function isAbsoluteTabPath(path: string): boolean {
  * A file that turns out to live in another worktree is read through that
  * worktree. Nothing vouching for the path is `outside_worktree`.
  *
+ * A terminal vouches only for a path under the temp dir (Orca's
+ * localTerminalArtifactRoots), so a file the agent wrote about anywhere else,
+ * a PDF on the Desktop say, needs the session's own transcript instead: each
+ * of `nativeChatContexts` is asked after the terminals (2026-10-15, a Desktop
+ * PDF tab said "File on Desktop" over a session that had named it).
+ *
  * Its own module so the tab's save (mobile-file-save.ts) resolves a path the
  * same way the tab's read does, without taking the PDF cache's file system
  * along with it.
@@ -25,18 +32,23 @@ export async function resolveOutsideWorktree(
   client: MobileFileTabDocRpcSender,
   worktree: string,
   absolutePath: string,
-  terminalHandles: readonly string[]
+  terminalHandles: readonly string[],
+  nativeChatContexts: readonly RuntimeNativeChatFileContext[] = []
 ): Promise<
   | { kind: 'grant'; worktree: string; grantId: string }
   | { kind: 'worktree'; worktree: string; relativePath: string }
 > {
-  const attempts: (string | null)[] = [...terminalHandles, null]
-  for (const terminal of attempts) {
+  const attempts: ({ terminal: string } | { nativeChatContext: RuntimeNativeChatFileContext } | null)[] = [
+    ...terminalHandles.map((terminal) => ({ terminal })),
+    ...nativeChatContexts.map((nativeChatContext) => ({ nativeChatContext })),
+    null
+  ]
+  for (const evidence of attempts) {
     const reply = await terminalArtifactPathResolve.request(client, {
       worktree,
       pathText: absolutePath,
       crossWorkspace: true,
-      ...(terminal ? { terminal } : {})
+      ...evidence
     })
     const outcome = terminalArtifactPathResolve.interpret(reply)
     if (!outcome.accepted) {

@@ -558,7 +558,7 @@ describe('a session file tab', () => {
       status: 'failed',
       fileName: 'plan.md',
       message:
-        "Couldn't save plan.md: the phone can reach a file outside the workspace only while a terminal here still shows its path"
+        "Couldn't save plan.md: the phone can reach a file outside the workspace only while a terminal or chat here still shows its path"
     })
   })
 })

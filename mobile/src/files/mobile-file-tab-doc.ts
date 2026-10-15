@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import { mobileFileMedia, type MobileFileMedia } from './mobile-file-media'
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
@@ -14,6 +15,7 @@ import {
   terminalArtifactTextRead
 } from './mobile-file-preview-operations'
 import { resolveMobilePdfUri } from './mobile-pdf-cache'
+import type { RpcFailure } from '../transport/types'
 import { isAbsoluteTabPath, resolveOutsideWorktree } from './mobile-file-tab-outside-worktree'
 
 export { isAbsoluteTabPath }
@@ -43,6 +45,9 @@ export type MobileFileTabDocRequest = {
    *  worktree is readable only through a grant the host mints for the
    *  terminal that printed it. */
   terminalHandles?: readonly string[]
+  /** The worktree's agent sessions: the host grants a path outside the
+   *  temp dir only to the session whose transcript named it. */
+  nativeChatContexts?: readonly RuntimeNativeChatFileContext[]
 }
 
 // Throws 'binary_file'/'file_too_large'/'outside_worktree'/the RPC error
@@ -58,7 +63,13 @@ export async function resolveMobileFileTabDoc(
     request.diffSource === 'unstaged' ||
     !isAbsoluteTabPath(relativePath)
       ? null
-      : await resolveOutsideWorktree(client, worktree, relativePath, request.terminalHandles ?? [])
+      : await resolveOutsideWorktree(
+          client,
+          worktree,
+          relativePath,
+          request.terminalHandles ?? [],
+          request.nativeChatContexts ?? []
+        )
   if (outside?.kind === 'worktree') {
     worktree = outside.worktree
     relativePath = outside.relativePath
@@ -155,9 +166,21 @@ async function readTerminalArtifactDoc(
     return { status: 'ready', kind: 'image', dataUri }
   }
   if (artifactKind === 'pdf') {
-    // The chunked worktree read has no grant form; a PDF outside the
-    // worktree stays out of reach on the phone.
-    throw new Error('outside_worktree')
+    // The chunked read has no grant form, but the grant's preview read sends a
+    // PDF whole as base64 (up to the host's 10 MiB preview cap), the same read
+    // a tapped path's preview screen draws one from.
+    const reply = await terminalArtifactImageRead.request(client, params)
+    const outcome = terminalArtifactImageRead.interpret(reply)
+    if (!outcome.accepted) {
+      // The host's reason (file_too_large past 10 MiB, a stale grant) is the tab's message.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this policy skips only a refusal, so an unaccepted reply is a failure envelope.
+      throw new Error((reply as RpcFailure).error.message || 'outside_worktree')
+    }
+    const content = outcome.value.content
+    if (outcome.value.isBinary !== true || typeof content !== 'string' || !content) {
+      throw new Error('binary_file')
+    }
+    return { status: 'ready', kind: 'pdf', uri: `data:application/pdf;base64,${content}` }
   }
   const outcome = terminalArtifactTextRead.interpret(
     await terminalArtifactTextRead.request(client, params)

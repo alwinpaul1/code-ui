@@ -45,6 +45,16 @@ const terminals: Terminal[] = [
   { handle: 'term-active', title: 'claude', isActive: true }
 ]
 
+// The Claude tab beside the file tabs: its session vouches for a path outside the temp dir.
+const claudeTab = {
+  type: 'terminal',
+  id: 'tab-claude',
+  title: 'claude',
+  terminal: 'term-active',
+  isActive: false,
+  agentStatus: { agentType: 'claude', state: 'done', providerSession: { id: 'sess-claude' } }
+} as unknown as MobileSessionTab
+
 const client = { sendRequest: vi.fn() }
 const sessionLifetime = new AbortController()
 const onScreen = vi.fn(() => true)
@@ -59,6 +69,7 @@ function actionsFor(
     client: overrides.client === undefined ? client : overrides.client,
     worktreeId: 'wt-1',
     terminals,
+    sessionTabs: [fileTab, claudeTab],
     showToast: notify,
     saveToPhonePresence: { signal: () => sessionLifetime.signal, onScreen }
   }
@@ -81,7 +92,8 @@ describe("Save to Phone in a file tab's own menu", () => {
         source: 'fileTab',
         worktreeId: 'wt-1',
         path: 'src/app.ts',
-        terminalHandles: ['term-active', 'term-other']
+        terminalHandles: ['term-active', 'term-other'],
+        nativeChatContexts: [{ tabId: 'tab-claude', sessionId: 'sess-claude' }]
       },
       notify,
       signal: sessionLifetime.signal,
