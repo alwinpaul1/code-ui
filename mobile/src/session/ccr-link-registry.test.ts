@@ -72,7 +72,7 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     const parsed = new URL(url)
     const match = /^\/v1\/code\/sessions\/([^/]+)\/events$/.exec(parsed.pathname)
     const page = match ? w.pages[decodeURIComponent(match[1]!)] : undefined
-    return page ? reply(200, page(parsed.searchParams.get('cursor'))) : reply(404, {})
+    return page ? reply(200, await page(parsed.searchParams.get('cursor'))) : reply(404, {})
   }
   const deps: CcrLinkDeps = {
     fetch,
@@ -166,6 +166,31 @@ describe('one stream per (account, session)', () => {
     expect(connects.filter((which) => which === 'B')).toHaveLength(1)
     expect(a.link.getState().phase).toBe('live')
     expect(b.link.getState().phase).toBe('live')
+  })
+
+  it('a history page still in flight at sign-out does not bring the wiped transcript back', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    let releasePage: () => void = () => undefined
+    w.pages[SESSION_A] = (cursor) => (cursor === 'c1' ? eventsReply([text('u0', 'user', 'older')]) : eventsReply([text('u1', 'user', 'newest')], 'c1'))
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    const held = new Promise<void>((resolve) => {
+      releasePage = resolve
+    })
+    const answer = w.pages[SESSION_A]!
+    w.pages[SESSION_A] = (cursor) => held.then(() => answer(cursor))
+    const older = link.loadOlder()
+    await flush()
+    notifyAnthropicAccountsChanged({ signedOut: ACCOUNT_A })
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+    releasePage()
+    await older
+    await flush()
+    await flushCcrTranscriptsForTests()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+    restartCcrTranscriptsForTests()
+    await hydrateCcrTranscripts()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
   })
 
   it('signing one account out stops only its links and wipes only its kept transcript', async () => {

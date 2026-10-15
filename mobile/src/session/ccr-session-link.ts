@@ -107,6 +107,11 @@ export class CcrSessionLink {
   }
 
   private persist(): void {
+    // A stopped link's account may have signed out, its copy just wiped: a page landing late must
+    // not write it back.
+    if (this.stopped) {
+      return
+    }
     writeCcrTranscript({
       accountId: this.accountId,
       sessionId: this.sessionId,
@@ -149,9 +154,7 @@ export class CcrSessionLink {
     }
     try {
       const page = await listCcrSessionEvents(this.deps.fetch, auth, this.sessionId, { cursor, limit: CCR_FIRST_PAGE_EVENTS })
-      if (this.stopped) {
-        return false
-      }
+      // After stop(), `set` and `persist` change nothing and connect() does not dial.
       this.add(page.events)
       // Only the first page is read here: what is older starts at its cursor.
       this.olderCursor = page.nextCursor
@@ -286,7 +289,7 @@ export class CcrSessionLink {
           this.set({})
           this.persist()
         }
-        if (stop(page) || !page.nextCursor) {
+        if (this.stopped || stop(page) || !page.nextCursor) {
           return page
         }
         cursor = page.nextCursor
