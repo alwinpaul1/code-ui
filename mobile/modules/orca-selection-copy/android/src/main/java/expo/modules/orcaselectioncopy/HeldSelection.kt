@@ -66,6 +66,8 @@ internal fun reselect(text: TextView, held: HeldSelection): Boolean {
       putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, held.start)
       putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, held.end)
     }
+  // Lit with no menu until the mode opens: a stray sweep landing in between must leave it alone.
+  LiveSelections.restored(text, SelectedRange(held.start, held.end))
   if (!text.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, arguments)) {
     Selection.setSelection(spannable, held.start, held.end)
     Log.w("OrcaSelectionCopy", "Selection put back without its menu: the Text refused ACTION_SET_SELECTION")

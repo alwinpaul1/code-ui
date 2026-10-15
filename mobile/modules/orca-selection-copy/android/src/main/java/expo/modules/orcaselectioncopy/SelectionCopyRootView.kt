@@ -111,15 +111,26 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private var selectedAtDown: Map<TextView, SelectedRange> = emptyMap()
   private var holdCancelled = false
 
+  // Which gesture is under way, and the sweep the last one armed: a sweep runs only in the gesture
+  // that armed it, never under a later finger ([GestureClock]).
+  private val gestures = GestureClock()
+  private var pendingSweep: Runnable? = null
+
   override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
     // Every touch passes here, whichever view ends up handling it, so the lift is always seen.
     when (ev.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
+        // A new gesture: the last one's sweep is not this one's (a tap to stop a fling, then a
+        // hold, must not lose the hold's word to the tap's sweep).
+        gestures.down()
+        // The cancelled sweep's baseline carries over: words the last gesture lit that still have
+        // no menu stay strays for this gesture's sweep, instead of counting as held at this down.
+        val unswept = cancelPendingSweep()
         downX = ev.x
         downY = ev.y
         downAt = ev.eventTime
         holdCancelled = false
-        selectedAtDown = selectionsBelow()
+        selectedAtDown = unswept ?: selectionsBelow()
       }
       MotionEvent.ACTION_MOVE -> {
         // A finger that moved before the long-press timeout is a drag, not a hold, as a Compose
@@ -135,18 +146,55 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
         lastUpAt = ev.eventTime
         lastUpX = ev.x
         lastUpY = ev.y
+        gestures.ended()
         // A hold's menu opens after the lift, once the text classifier answers (0.5 s on the
         // user's S23, 2026-10-15); words this gesture lit that still have none by then never will.
-        val before = selectedAtDown
-        postDelayed({ sweepStrays(before, "no menu opened $STRAY_GRACE_MS ms after the finger lifted") }, STRAY_GRACE_MS)
+        postDelayed(armSweep(gestures.gesture, "no menu opened $STRAY_GRACE_MS ms after the finger lifted"), STRAY_GRACE_MS)
       }
       MotionEvent.ACTION_CANCEL -> {
+        gestures.ended()
         // The scroll took the touch: a word a hold lit before it did will never get its menu.
-        val before = selectedAtDown
-        post { sweepStrays(before, "the touch went to the scroll before a menu opened") }
+        post(armSweep(gestures.gesture, "the touch went to the scroll before a menu opened"))
       }
     }
     return super.dispatchTouchEvent(ev)
+  }
+
+  /** The sweep for gesture [armed], kept as [pendingSweep] so the next finger down cancels it. It
+   *  also checks the gesture when it runs, in case it was already queued when that finger came. */
+  private fun armSweep(armed: Int, why: String): Runnable {
+    cancelPendingSweep()
+    val before = selectedAtDown
+    val sweep =
+      Runnable {
+        pendingSweep = null
+        pendingSweepBefore = null
+        if (!gestures.stillDue(armed)) {
+          return@Runnable
+        }
+        sweepStrays(before, why)
+      }
+    pendingSweep = sweep
+    pendingSweepBefore = before
+    return sweep
+  }
+
+  // What the pending sweep compares against, handed to the next gesture if it is cancelled.
+  private var pendingSweepBefore: Map<TextView, SelectedRange>? = null
+
+  /** Cancels the pending sweep, if any, and returns the baseline it would have compared against. */
+  private fun cancelPendingSweep(): Map<TextView, SelectedRange>? {
+    val before = pendingSweepBefore
+    pendingSweep?.let { removeCallbacks(it) }
+    pendingSweep = null
+    pendingSweepBefore = null
+    return before
+  }
+
+  override fun onDetachedFromWindow() {
+    // A sweep left queued would walk a document no longer on screen.
+    cancelPendingSweep()
+    super.onDetachedFromWindow()
   }
 
   /** What each Text below holds selected now; a Text with nothing selected is left out. */
@@ -164,11 +212,12 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
     }
   }
 
-  /** Clears each selection below that the gesture made and that has no menu ([isStraySelection]). */
+  /** Clears each selection below that the gesture made and that has no menu ([isStraySelection]).
+   *  One put back and still waiting for its menu counts as having it ([LiveSelections.isLive]). */
   private fun sweepStrays(before: Map<TextView, SelectedRange>, why: String) {
     for (text in textViewsBelow(this)) {
       val after = selectedRangeIn(text)
-      if (after != null && isStraySelection(before[text], after, LiveSelections.watching(text))) {
+      if (after != null && isStraySelection(before[text], after, LiveSelections.isLive(text, after))) {
         (text.text as? Spannable)?.let { Selection.removeSelection(it) }
         Log.w("OrcaSelectionCopy", "Cleared ${after.end - after.start} selected chars with no menu in ${text.javaClass.simpleName}: $why")
       }
@@ -341,7 +390,7 @@ internal class SelectionLifeCallback(
   private val text: TextView,
   private val run: Int,
   private val report: (Boolean, HeldSelection?) -> Unit
-) : ActionMode.Callback2(), ViewTreeObserver.OnPreDrawListener {
+) : ActionMode.Callback2(), ViewTreeObserver.OnPreDrawListener, View.OnAttachStateChangeListener {
   private var held: HeldSelection? = null
   // The words the Text drew when last looked at: a re-render that sets the same words is no change.
   private var lastText: String? = null
@@ -356,6 +405,8 @@ internal class SelectionLifeCallback(
       lastText = text.text.toString()
       liveMode = mode
       observer = text.viewTreeObserver.also { it.addOnPreDrawListener(this) }
+      // Leaving the window ends the watch, so LiveSelections (static) never keeps a dead Text.
+      text.addOnAttachStateChangeListener(this)
       // One selection at a time: a Text that kept its highlight when this one opened elsewhere
       // holds words the reader is no longer copying.
       LiveSelections.opened(text, this).forEach { it.drop("another selection opened") }
@@ -398,6 +449,11 @@ internal class SelectionLifeCallback(
   /** Ends this selection, highlight and menu, and says why in the log (rule 9). */
   fun drop(why: String) {
     Log.w("OrcaSelectionCopy", "Selection dropped in ${text.javaClass.simpleName}: $why")
+    if (!text.isAttachedToWindow) {
+      // A Text already gone: its mode went with it, and its document reports nothing any more.
+      stopWatching()
+      return
+    }
     (text.text as? Spannable)?.let { Selection.removeSelection(it) }
     val mode = liveMode
     stopWatching()
@@ -439,9 +495,19 @@ internal class SelectionLifeCallback(
     report(false, null)
   }
 
+  override fun onViewAttachedToWindow(view: View) = Unit
+
+  /** The Text left the window (its row or its document went): stop watching without reporting,
+   *  so the chat keeps the selection to put back where the message draws again. */
+  override fun onViewDetachedFromWindow(view: View) {
+    Log.i("OrcaSelectionCopy", "Stopped watching a selection: its ${text.javaClass.simpleName} left the window")
+    stopWatching()
+  }
+
   private fun stopWatching() {
     held = null
     LiveSelections.closed(text, this)
+    text.removeOnAttachStateChangeListener(this)
     // The observer it was added to, if still alive; a re-attached view has a new one.
     val added = observer?.takeIf { it.isAlive } ?: text.viewTreeObserver
     observer = null
