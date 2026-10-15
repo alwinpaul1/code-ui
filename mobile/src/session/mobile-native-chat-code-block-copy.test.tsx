@@ -28,6 +28,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Linking: { openURL: () => Promise.resolve() },
     Platform: { OS: 'android', Version: 34, select: (o: Record<string, unknown>) => o.android ?? o.default },
+    Keyboard: { metrics: () => undefined },
     Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: 'ScrollView',
@@ -45,6 +46,7 @@ vi.mock('expo-clipboard', () => ({
     return true
   }
 }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   Check: 'Check',
@@ -144,7 +146,7 @@ describe('a code block in the chat', () => {
     await press(button!)
     expect(pasteboard.written).toEqual([CODE])
     // A hold opens the message menu now; its Copy gives the prompt without its Markdown marks.
-    await holdThenChoose(tree.root, 'Copy')
+    await holdThenChoose(tree.root, 'Copy message')
     expect(pasteboard.written).toEqual([CODE, markdownPlainText(REPLY)])
   })
 

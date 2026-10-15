@@ -12,6 +12,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 // SelectionContainer (code/remote/bottomsheet/b.java). Claude's own words have no menu: they
 // select in place (chat-reply-hold-selects-in-place.test.tsx).
 
+const platform = vi.hoisted(() => ({ OS: 'android', Version: 34 }))
+const toastShow = vi.hoisted(() => vi.fn())
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): ReactNode =>
@@ -31,7 +33,9 @@ vi.mock('react-native', async () => {
     Image: Object.assign(() => null, { getSize: () => undefined }),
     Linking: { openURL: () => Promise.resolve() },
     Modal: ({ children, ...props }: { children?: ReactNode }) => React.createElement('Modal', props, children),
-    Platform: { OS: 'android', Version: 34 },
+    Platform: platform,
+    ToastAndroid: { show: toastShow, SHORT: 0 },
+    Keyboard: { metrics: () => undefined },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -86,7 +90,7 @@ vi.mock('../components/BottomDrawer', async () => {
 
 import * as Clipboard from 'expo-clipboard'
 import { ChatTextHoldSelectsContext } from '../components/chat-text-selectable-context'
-import { triggerError, triggerMediumImpact } from '../platform/haptics'
+import { triggerError, triggerMediumImpact, triggerSuccess } from '../platform/haptics'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { CHAT_HOLD_MS } from './chat-message-hold'
@@ -170,6 +174,9 @@ beforeEach(() => {
   vi.mocked(Clipboard.setStringAsync).mockResolvedValue(true)
   vi.mocked(triggerMediumImpact).mockClear()
   vi.mocked(triggerError).mockClear()
+  vi.mocked(triggerSuccess).mockClear()
+  toastShow.mockClear()
+  platform.Version = 34
 })
 afterEach(() => {
   act(() => renderer?.unmount())
@@ -186,18 +193,60 @@ describe.each([
     const target = holdTarget(root)
     expect(target.props.delayLongPress).toBe(CHAT_HOLD_MS)
     await holdStill(target, 300, 200)
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
     expect(triggerMediumImpact).toHaveBeenCalledTimes(1)
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
     // Hung from the prompt's end (the point the finger was on, where nothing measures it here).
     const card = flat(menu(root)!.props.style)
     expect(card.right).toBe(390 - 300)
     expect(card.left).toBeUndefined()
+    // Material's menu surface as the app styles it (oxb.a): surfaceContainer, the app's #FFFFFF /
+    // #20201F; 12 dp corners (ro7.a.f); 3 dp shadow, no tonal tint, and no border.
     expect(card.backgroundColor).toBe(palette.askCardFill)
-    expect(card.borderColor).toBe(palette.askDivider)
     expect(card.borderRadius).toBe(12)
-    const label = menu(root)!.find((node) => typeof node.type !== 'string' && words(node) === 'Copy' && node.props.style)
-    expect(flat(label.props.style).color).toBe(palette.askText)
+    expect(card.borderWidth ?? 0).toBe(0)
+    expect(card.borderColor).toBeUndefined()
+    expect(card.elevation).toBe(3)
+    expect(card.paddingVertical).toBe(8)
+    // The label in onSurface (the app's #131313 / #F9F9F7), the glyph in onSurfaceVariant (#7B7974 /
+    // #97958D): jql.b, s79 tokens 17 and 18.
+    const label = menu(root)!.find(
+      (node) => typeof node.type !== 'string' && words(node) === 'Copy message' && node.props.style
+    )
+    expect(flat(label.props.style).color).toBe(palette.jumpButtonGlyph)
+    const glyphs = menu(root)!.findAll(
+      (node) =>
+        typeof node.props.testID === 'string' &&
+        node.props.testID.startsWith('message-menu-glyph-') &&
+        node.props.size !== undefined
+    )
+    expect(glyphs.map((glyph) => glyph.props.testID)).toEqual(['message-menu-glyph-copy', 'message-menu-glyph-select'])
+    for (const glyph of glyphs) {
+      expect(glyph.props.color).toBe(palette.composerPlaceholder)
+      expect(glyph.props.size).toBe(20)
+    }
+  })
+
+  it('copies with no bubble tint and no buzz: Android 13 and later confirm a copy themselves', async () => {
+    // e730.A shows the app's own "Copied to clipboard" only below API 33; on the user's phone the
+    // "Copied." pill in the recording is One UI's, not the app's.
+    const root = render(message('user', PROMPT), scheme)
+    await holdStill(holdTarget(root))
+    await choose(root, 'Copy message')
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(PROMPT_WORDS)
+    expect(triggerSuccess).not.toHaveBeenCalled()
+    expect(toastShow).not.toHaveBeenCalled()
+    const tinted = root.findAll((node) => flat(node.props.style).backgroundColor === palette.successSoft)
+    expect(tinted).toEqual([])
+  })
+
+  it('says "Copied to clipboard" itself below Android 13, where the system says nothing', async () => {
+    platform.Version = 32
+    const root = render(message('user', PROMPT), scheme)
+    await holdStill(holdTarget(root))
+    await choose(root, 'Copy message')
+    expect(toastShow).toHaveBeenCalledWith('Copied to clipboard', 0)
+    expect(triggerSuccess).not.toHaveBeenCalled()
   })
 
   it('opens no menu on a reply: Claude’s words select in place', () => {
@@ -207,7 +256,7 @@ describe.each([
   it('copies the prompt as the words it shows, without its Markdown marks, and puts the message down', async () => {
     const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
-    await choose(root, 'Copy')
+    await choose(root, 'Copy message')
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith(PROMPT_WORDS)
     expect(PROMPT_WORDS).not.toMatch(/\*\*|`/)
     expect(menu(root)).toBeUndefined()
@@ -217,7 +266,7 @@ describe.each([
     vi.mocked(Clipboard.setStringAsync).mockResolvedValue(false)
     const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
-    await choose(root, 'Copy')
+    await choose(root, 'Copy message')
     expect(triggerError).toHaveBeenCalledTimes(1)
     const notice = root.findAll((node) => String(node.type) === 'Text' && words(node).startsWith("Couldn't copy"))
     expect(notice).toHaveLength(1)
@@ -289,7 +338,7 @@ describe('a scroll never opens the menu', () => {
       target.props.onTouchMove(touch(123, 304))
       target.props.onLongPress(touch(123, 304))
     })
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
   })
 
   it('opens nothing when the list starts scrolling while the hold is pending, even once it settles', async () => {
@@ -320,7 +369,7 @@ describe('a scroll never opens the menu', () => {
     expect(menu(root)).toBeUndefined()
     // The next, deliberate hold still opens it.
     await holdStill(holdTarget(root))
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
   })
 
   it('opens nothing for a long press Pressable reports with no press-in of its own', async () => {
@@ -341,7 +390,7 @@ describe('sizes at the edges', () => {
   it('offers a one-word prompt the whole menu', async () => {
     const root = render(message('user', 'go'))
     await holdStill(holdTarget(root))
-    await choose(root, 'Copy')
+    await choose(root, 'Copy message')
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('go')
   })
 
@@ -375,7 +424,7 @@ describe('the menu is reachable and does not outlive its screen', () => {
     await act(async () => {
       target.props.onAccessibilityAction(ACTION)
     })
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
   })
 
   it('ignores an accessibility action it does not offer', async () => {
@@ -427,11 +476,12 @@ describe('the menu is reachable and does not outlive its screen', () => {
     expect(menu(root)).toBeDefined()
   })
 
-  it('keeps a card from an unmeasured hold near the left edge inside the window', async () => {
+  it('hangs a card from an unmeasured hold near the left edge from that point, as Material does', async () => {
     const root = render(message('user', PROMPT))
     await holdStill(holdTarget(root), 10, 300)
     const card = flat(menu(root)!.props.style)
-    // 390 wide window, 16 dp edge, 180 dp minimum card: hung from its end, it ends 16 dp in.
-    expect(card.right).toBe(390 - 16 - 180)
+    // Start-to-start fits (10 + the card's width stays inside 390), so the card starts there.
+    expect(card.left).toBe(10)
+    expect(card.right).toBeUndefined()
   })
 })

@@ -46,7 +46,7 @@ import { ChatTextInPlaceSelectionContext } from '../components/chat-text-selecta
 import { HoldTarget, useMobileNativeChatMessageHold, type HoldHandler } from './MobileNativeChatMessageHold'
 
 /** The message container: a sent prompt is tappable (it discloses its
- *  controls) and a hold opens its menu, Copy and Select text, as the Claude
+ *  controls) and a hold opens its menu, Copy message and Select text, as the Claude
  *  app's does. A hold used to copy the prompt at once (2026-09-21:
  *  "automatic copy on long hold instead of long hold and copy button"); the
  *  menu replaces that so the words can also be selected. A waiting message
@@ -73,8 +73,7 @@ function Bubble({
     // an empty filled rectangle with its words, its document and its controls
     // mounted next to it. That is the shape of the blank bubble seen over the
     // running turn's rows on 2026-10-14; the mount fault that left it there
-    // was not caught. Always, not only with a fill: the copied tint must not
-    // flip it.
+    // was not caught. Always, not only with a fill.
     return (
       <View style={style} collapsable={false}>
         {children}
@@ -230,20 +229,21 @@ function MobileNativeChatMessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser
-  // Say so when a copy did not land. A sent prompt's bubble is briefly tinted once it did; a
-  // reply's Copy glyph becomes a check for as long as the Claude app holds it, and the reply
-  // itself is left as it is.
-  const { copied, error: copyError, copy } = useMobileNativeChatMessageCopy(
-    isUser ? MESSAGE_COPIED_MS : COPY_CHECK_HOLD_MS
-  )
+  // Say so when a copy did not land. A reply's Copy glyph becomes a check for as long as the
+  // Claude app holds it, and the reply itself is left as it is.
+  const { copied, error: copyError, copy } = useMobileNativeChatMessageCopy(COPY_CHECK_HOLD_MS)
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
+  // A sent prompt's Copy message, from the menu a hold opens: no tint and no buzz, as in the
+  // Claude app; the system confirms the copy.
+  const { error: holdCopyError, copy: holdCopy } = useMobileNativeChatMessageCopy(MESSAGE_COPIED_MS, 'system')
   const { holdOn, overlays: holdOverlays } = useMobileNativeChatMessageHold({
     messageId: message.id,
     onUndoSend: onCancelQueued,
-    copy
+    copy: holdCopy
   })
+  const copyFailure = copyError ?? holdCopyError
   // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
   const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
   const renderVisual = message.role === 'assistant' ? transcriptVisuals : undefined
@@ -408,7 +408,7 @@ function MobileNativeChatMessageRow({
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           onHold={holdBubble}
-          style={[styles.content, isUser && styles.userBubble, isUser && copied && styles.copied]}
+          style={[styles.content, isUser && styles.userBubble]}
         >
           {segments.map((segment, segmentIndex) =>
             segment.kind === 'prose' ? (
@@ -505,9 +505,9 @@ function MobileNativeChatMessageRow({
           />
         ) : null}
         {/* Under the bubble, in the page's ink rather than the bubble's. */}
-        {copyError ? (
+        {copyFailure ? (
           <Txt variant="caption" tone="danger" style={{ marginTop: 4 }} accessibilityLiveRegion="polite">
-            {copyFailedNotice(copyError)}
+            {copyFailedNotice(copyFailure)}
           </Txt>
         ) : null}
       </View>
