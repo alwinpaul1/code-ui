@@ -2,6 +2,7 @@ import {
   changeNativeChatOutbox,
   nativeChatOutboxEntries,
   type NativeChatOutboxAttachment,
+  type NativeChatOutboxCcr,
   type NativeChatOutboxEntry,
   type NativeChatOutboxRoute
 } from '../storage/native-chat-outbox'
@@ -80,14 +81,15 @@ export function findOutboxEntry(id: string | undefined): NativeChatOutboxEntry |
 export function recordOutboxSend(
   origin: MobileNativeChatSendOrigin,
   text: string,
-  extra?: { hasAttachments?: boolean; attachments?: readonly NativeChatOutboxAttachment[]; atGate?: boolean }
+  extra?: { hasAttachments?: boolean; attachments?: readonly NativeChatOutboxAttachment[]; atGate?: boolean; ccr?: NativeChatOutboxCcr }
 ): void {
   const id = origin.outboxId
   if (!id) {
     return
   }
   live.add(id)
-  const route = chatRoutes.get(origin.draftKey)
+  // An Anthropic send carries no route: the drainer would type it into the tab's terminal.
+  const route = extra?.ccr ? undefined : chatRoutes.get(origin.draftKey)
   const attachments = extra?.attachments?.length ? extra.attachments.map((item) => ({ ...item })) : undefined
   const existing = findOutboxEntry(id)
   if (existing) {
@@ -98,6 +100,10 @@ export function recordOutboxSend(
         ...(attachments && !existing.attachments ? { attachments } : {}),
         ...(route && !existing.route ? { route: { ...route } } : {})
       })
+    }
+    // An older entry resent through Anthropic is that lane's from here: its uuid, and no route.
+    if (extra?.ccr && !existing.ccr) {
+      void patchOutboxEntry(id, { ccr: { ...extra.ccr }, route: undefined })
     }
     return
   }
@@ -117,6 +123,7 @@ export function recordOutboxSend(
     ...(extra?.hasAttachments || attachments ? { hasAttachments: true as const } : {}),
     ...(attachments ? { attachments } : {}),
     ...(route ? { route: { ...route } } : {}),
+    ...(extra?.ccr ? { ccr: { ...extra.ccr } } : {}),
     ...(extra?.atGate ? { atGate: true as const } : {}),
     autoAttempts: 0
   }
@@ -247,7 +254,7 @@ export function releaseOutboxSend(id: string | undefined): boolean {
  *  desktop paths to send again. */
 export function outboxEntryDrainable(entry: NativeChatOutboxEntry): boolean {
   const route = entry.route
-  if (!route || !route.sessionId || (route.lane === 'terminal' && !route.agent)) {
+  if (entry.ccr || !route || !route.sessionId || (route.lane === 'terminal' && !route.agent)) {
     // With no session (a first message before the agent named one) the drainer has no transcript
     // to look in and no session to send to: the chat's recovery sees it through, as before.
     return false

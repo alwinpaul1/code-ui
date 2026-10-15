@@ -65,8 +65,9 @@ export type NativeChatOutboxRecoveryArgs = {
   /** A terminal agent is safe to type into: no card or dialog up, not working, nothing in
    *  its queue box, and the phone's own composer empty (so the mirror holds nothing there). */
   idle: boolean
-  /** The lane's composer send (it records, holds and retires like any press). */
-  send: (text: string) => Promise<MobileNativeChatSendOutcome>
+  /** The lane's composer send (it records, holds and retires like any press). It is handed the
+   *  entry, so the Anthropic lane resends into the entry's session under the entry's uuid. */
+  send: (text: string, entry: NativeChatOutboxEntry) => Promise<MobileNativeChatSendOutcome>
   showEcho: (entry: NativeChatOutboxEntry) => void
   removeEcho: (id: string) => void
   /** Puts words back after whatever the composer of `draftKey` holds, its stored draft included
@@ -192,7 +193,7 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       }
       offerOutboxAdoption(entry.draftKey, entry.normalizedText, entry.id, true)
       const timing = beginNativeChatSendTiming(entry.draftKey, { chars: entry.text.length })
-      const outcome = await current.send(entry.text)
+      const outcome = await current.send(entry.text, entry)
       finishNativeChatSendTiming(timing, outcome)
       // A send that refused before it took the words leaves the offer behind; a later press of
       // the same words must not inherit it.

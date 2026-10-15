@@ -8,6 +8,8 @@ import { reasonOf } from './ccr-session-shared'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
+import type { NativeChatOutboxCcr, NativeChatOutboxEntry } from '../storage/native-chat-outbox'
+import { recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 import { ccrSessionTail, sameCcrTarget, useCcrTabQueues, type CcrTo } from './use-ccr-tab-queues'
@@ -106,6 +108,8 @@ export function useCcrComposerSend(args: {
   deps?: CcrComposerSendDeps
 }): {
   sendWithOutcome: (text: string) => Promise<MobileNativeChatSendOutcome>
+  /** The outbox's resend on this lane (use-mobile-native-chat-outbox.ts `sendAnthropic`). */
+  resendFromOutbox: (text: string, entry: NativeChatOutboxEntry) => Promise<MobileNativeChatSendOutcome>
   /** The composer's send: true unless refused. */
   send: (text: string) => Promise<boolean>
   /** The queue of the tab on screen. */
@@ -201,11 +205,13 @@ export function useCcrComposerSend(args: {
     }
   }, [setDelivery])
 
-  /** Sends `text` now, its bubble drawn and its words restored on failure. */
-  const sendNow = useCallback(async (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo): Promise<MobileNativeChatSendOutcome> => {
+  /** Sends `text` now, its bubble drawn and its words restored on failure. Written to the outbox
+   *  with its session and uuid before the box empties, and kept there until the POST is answered,
+   *  so an app killed meanwhile resends it from there (under the same uuid) on the next launch. */
+  const sendNow = useCallback(async (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid = deps.newUuid()): Promise<MobileNativeChatSendOutcome> => {
     const now = latest.current
-    const uuid = deps.newUuid()
     posting.current += 1
+    recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } })
     now.clearDraftForSend(origin, text)
     const rowId = now.acceptSend(origin, text)
     setDelivery(rowId, 'sending')
@@ -213,6 +219,7 @@ export function useCcrComposerSend(args: {
     const result = await post(to, text, uuid)
     posting.current -= 1
     if (result === true) {
+      void retireOutboxSend(origin.outboxId)
       if (ccrEchoSeen(latest.current.events, uuid)) {
         settle(uuid)
       } else {
@@ -239,7 +246,9 @@ export function useCcrComposerSend(args: {
     }
   }, [args.events, settle])
 
-  const sendWithOutcome = useCallback(async (raw: string): Promise<MobileNativeChatSendOutcome> => {
+  /** A composer send, or (`pinned`) an outbox resend into the session and under the uuid its
+   *  first attempt had, which is never queued and never goes to another session. */
+  const sendOrResend = useCallback(async (raw: string, pinned?: NativeChatOutboxCcr): Promise<MobileNativeChatSendOutcome> => {
     const text = raw.trim()
     if (!text) {
       return 'rejected'
@@ -247,6 +256,11 @@ export function useCcrComposerSend(args: {
     const tab = latest.current.tabId ?? ''
     const to = target()
     if (!to) {
+      return 'rejected'
+    }
+    if (pinned && !sameCcrTarget(to, pinned)) {
+      deps.log(`[ccr-send] outbox resend refused: written for session ${ccrSessionTail(pinned.sessionId)}, this tab now sends to ${ccrSessionTail(to.sessionId)}`)
+      latest.current.onSendError('Message not sent: this tab now sends to another session than the one it was written for.')
       return 'rejected'
     }
     if (claimed.current || posting.current > 0) {
@@ -274,16 +288,19 @@ export function useCcrComposerSend(args: {
       }
       // Steering and post-later are off (ccr-local-queue.ts): the words wait on the phone, behind
       // anything this tab already has waiting.
-      if (now.working || queuesRef.current[tab] || delivering.current.has(tab)) {
+      if (!pinned && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
         now.clearDraftForSend(origin, text)
         queueOnTab(tab, text, to, origin.draftKey)
         return 'accepted'
       }
-      return await sendNow(text, origin, to)
+      return await sendNow(text, origin, to, pinned?.uuid)
     } finally {
       claimed.current = false
     }
   }, [deps, offline, queueOnTab, sendNow, target])
+  const sendWithOutcome = useCallback((text: string) => sendOrResend(text), [sendOrResend])
+  // An entry from before this lane has no uuid: it goes as a new post, through Anthropic still.
+  const resendFromOutbox = useCallback((text: string, entry: NativeChatOutboxEntry) => sendOrResend(text, entry.ccr), [sendOrResend])
 
   /**
    * `tab`'s queue at its turn's end: out as one message into the target it was queued for, or
@@ -355,5 +372,5 @@ export function useCcrComposerSend(args: {
   }, [args.active, args.working, deliverQueue, deliveryEnded, shown, tab])
 
   const send = useCallback(async (text: string) => (await sendWithOutcome(text)) !== 'rejected', [sendWithOutcome])
-  return { sendWithOutcome, send, queue: shown?.text ?? null, editQueue, deliveries }
+  return { sendWithOutcome, resendFromOutbox, send, queue: shown?.text ?? null, editQueue, deliveries }
 }
