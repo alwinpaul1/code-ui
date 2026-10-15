@@ -2,8 +2,11 @@ export type MacLockState = 'locked' | 'unlocked' | 'unknown'
 export type MacDisplayState = 'on' | 'off' | 'unknown'
 export type MacMuteState = 'muted' | 'unmuted' | 'unknown'
 
-/** What the Mac says about itself right now. Never persisted: a stale answer would
- *  offer Lock to a Mac that is already locked. */
+/** What the Mac says about itself right now. The lock is never persisted: a stale
+ *  answer would offer Lock to a Mac that is already locked, or Unlock to one that is
+ *  not. Since 2026-10-15 the display and mute halves are kept on the phone across
+ *  connections and restarts (remembered-host-state-store.ts): the first open on each
+ *  connection drew both rows of each pair, and the user sent a screenshot of it. */
 export type MacHostState = {
   lock: MacLockState
   display: MacDisplayState
@@ -100,7 +103,8 @@ export function readMacHostStateMarker(lines: string[]): MacHostState | null {
 }
 
 /** The last marker painted on the screen, or unknown. Unknown is a real answer here —
- *  it means "show every row but Unlock" rather than "assume the Mac is awake". */
+ *  it means "show every row but Unlock" rather than "assume the Mac is awake". A half
+ *  the host named before fills an unknown display or mute (withRememberedHalves). */
 export function parseMacHostState(lines: string[]): MacHostState {
   return readMacHostStateMarker(lines) ?? UNKNOWN_MAC_HOST_STATE
 }

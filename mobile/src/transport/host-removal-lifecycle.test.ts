@@ -98,6 +98,22 @@ describe('host removal lifecycle', () => {
     expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
   })
 
+  // 2026-10-15: the host menu keeps the display and sound a host last named across
+  // connections and restarts. A re-paired host must not inherit the old rows.
+  it("drops the host's remembered display and sound once it is gone, and keeps them while it is still paired", async () => {
+    const key = 'orca:host-controls-remembered-state:v1:host-1'
+    removeHostMock.mockRejectedValueOnce(new Error('storage unavailable'))
+    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(asyncStorage.removeItem).not.toHaveBeenCalledWith(key)
+
+    removeHostMock.mockResolvedValue(undefined)
+    await removeHostAndCloseClient('host-1', vi.fn())
+    // Fire-and-forget, like the watermark above: let it land.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(asyncStorage.removeItem).toHaveBeenCalledWith(key)
+  })
+
   it("forgets the host's recorded update failures once it is gone", async () => {
     removeHostMock.mockResolvedValue(undefined)
     await removeHostAndCloseClient('host-1', vi.fn())
