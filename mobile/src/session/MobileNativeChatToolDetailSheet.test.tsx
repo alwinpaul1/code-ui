@@ -52,6 +52,13 @@ vi.mock('react-native-gesture-handler', async () => {
   }
 })
 
+// A Bash call's Output keeps its box and the Prettify pill; a tool with no view
+// of its own answers under "Result" as Markdown, with neither.
+const JSON_BASH_PAIR: NativeChatToolPair = {
+  call: { type: 'tool-call', name: 'Bash', input: { command: 'curl -s localhost/ok' } },
+  result: { type: 'tool-result', output: '{"ok":true}' }
+}
+
 const SEND_MESSAGE_PAIR: NativeChatToolPair = {
   call: {
     type: 'tool-call',
@@ -180,7 +187,8 @@ describe('tool detail body: Inputs and Output', () => {
       } as NativeChatToolPair
       renderer = renderTree(createElement(ToolDetailBody, { pair }), scheme)
       const markdown = renderer.root.findAllByType('MobileMarkdown' as never)
-      expect(markdown.map((node) => node.props.content)).toEqual(['1. **CONFIRMED:** `a.ts:220`'])
+      // The message, then the call's result under "Result", both rendered.
+      expect(markdown.map((node) => node.props.content)).toEqual(['1. **CONFIRMED:** `a.ts:220`', '{"ok":true}'])
       // The other inputs stay plain text rows.
       const plain = renderer.root.findAllByType('Text' as never).map((node) => node.props.children)
       expect(plain).toContain('a4a57562399d1a73c')
@@ -191,9 +199,9 @@ describe('tool detail body: Inputs and Output', () => {
   it('lists every input by name, alphabetically, the evidenced SendMessage order', () => {
     renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }))
     const names = renderer.root
-      .findAllByProps({ testID: 'tool-detail-section' })
-      .map((row) => row.findAllByType('Text' as never)[0]!.props.children)
-      .filter((name) => name !== 'Output')
+      .findAllByType('Text' as never)
+      .filter((node) => node.props.testID === 'tool-detail-input-name')
+      .map((node) => node.props.children)
     expect(names).toEqual(['content', 'message', 'recipient', 'summary', 'to', 'type'])
   })
 
@@ -208,7 +216,7 @@ describe('tool detail body: Inputs and Output', () => {
   })
 
   it('prettifies JSON output on tap, and un-prettifies it back on a second tap', () => {
-    renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }))
+    renderer = renderTree(createElement(ToolDetailBody, { pair: JSON_BASH_PAIR }))
     expect(findText(renderer, 'tool-detail-output')).toBe('{"ok":true}')
     const pill = renderer.root.findByProps({ testID: 'tool-detail-prettify' })
     act(() => {
@@ -251,9 +259,7 @@ describe('tool detail body: Inputs and Output', () => {
       result: { type: 'tool-result', output: 'ok' }
     }
     renderer = renderTree(createElement(ToolDetailBody, { pair: huge }))
-    const value = renderer.root
-      .findAllByProps({ testID: 'tool-detail-section' })[0]!
-      .findAllByType('Text' as never)[1]!.props.children as string
+    const value = findText(renderer, 'tool-detail-input-value')
     expect(value).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(value.endsWith('…')).toBe(true)
   })
@@ -288,7 +294,7 @@ describe('tool detail body: Inputs and Output', () => {
   it.each(['light', 'dark'] as const)(
     'scrolls instead of selecting a word when a drag starts on the output (%s)',
     (scheme) => {
-      renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }), scheme)
+      renderer = renderTree(createElement(ToolDetailBody, { pair: JSON_BASH_PAIR }), scheme)
       const output = findTextNode(renderer, 'tool-detail-output')
       // Still selectable by a deliberate, still long-press.
       expect(output.props.selectable).toBe(true)
@@ -307,7 +313,7 @@ describe('tool detail body: Inputs and Output', () => {
   // Review of a1bda082: gesture-handler's detector sets user-select: none on
   // web unless told otherwise, so the web bundle lost the output's selection.
   it.each(['light', 'dark'] as const)('still lets the web bundle select the output (%s)', (scheme) => {
-    renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }), scheme)
+    renderer = renderTree(createElement(ToolDetailBody, { pair: JSON_BASH_PAIR }), scheme)
     const detector = nearestHostAncestor(findTextNode(renderer, 'tool-detail-output'))
     expect(detector?.type).toBe('GestureDetector')
     expect(detector?.props.userSelect).toBe('text')

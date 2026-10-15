@@ -602,14 +602,14 @@ describe('MobileNativeChatMessage', () => {
     const longest = () => Math.max(...textIn(tree.root).map((text) => text.length))
     expect(longest()).toBeLessThan(MAX_TOOL_DETAIL_LENGTH)
     act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
-    // An unknown tool's input is its indented JSON (2026-10-10), capped whole.
-    const detail = textIn(tree.root).find((text) => text.includes('"payload": "xxx'))
+    // An unknown tool's input is its Inputs list, each value capped whole.
+    const detail = textIn(tree.root).find((text) => text.startsWith('xxx'))
     expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(detail?.endsWith('…')).toBe(true)
     expect(longest()).toBe(MAX_TOOL_DETAIL_LENGTH + 1)
   })
 
-  it('opens a JSON-string tool input in the sheet as its indented JSON', () => {
+  it('opens a JSON-string tool input in the sheet as its Inputs list', () => {
     const tree = render(
       toolMessage([
         {
@@ -624,9 +624,7 @@ describe('MobileNativeChatMessage', () => {
     act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
     const shown = textIn(tree.root)
     // Parsed, not drawn as the escaped string the wire carried.
-    expect(shown).toEqual(
-      expect.arrayContaining(['Input', JSON.stringify({ cmd: 'git status', description: 'Inspect changes' }, null, 2)])
-    )
+    expect(shown).toEqual(expect.arrayContaining(['Inputs', 'cmd', 'git status', 'description', 'Inspect changes']))
   })
 
   it('does not echo the row label as detail when a row has nothing to expand', () => {

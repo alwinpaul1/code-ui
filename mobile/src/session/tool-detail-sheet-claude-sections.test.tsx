@@ -155,12 +155,12 @@ describe('the tool detail sheet, laid out as the Claude app lays it out', () => 
     expect(flat(output).color).toBe(darkColors.danger)
   })
 
-  it('says Running and draws no Output for a call with no result yet', () => {
+  it('says In progress and draws no Output for a call with no result yet', () => {
     const running: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'Bash', input: { command: 'sleep 5', description: 'Wait' }, state: 'running' }
     }
     renderer = renderTree(createElement(ToolDetailHeader, { pair: running }))
-    expect(textOf(hostTexts(renderer).find((n) => n.props.testID === 'tool-detail-status')!)).toBe('Running')
+    expect(textOf(hostTexts(renderer).find((n) => n.props.testID === 'tool-detail-status')!)).toBe('In progress')
     act(() => renderer!.unmount())
     renderer = renderTree(createElement(ToolDetailBody, { pair: running }))
     expect(labels(renderer)).toEqual(['Description', 'Command'])
@@ -193,7 +193,7 @@ describe('the tool detail sheet, laid out as the Claude app lays it out', () => 
     expect(renderer.root.findAllByType('MobileMarkdown' as never).map((n) => n.props.content)).toEqual(['Look at **this**'])
   })
 
-  it('shows an MCP call as its Input in indented JSON, titled by server and tool', () => {
+  it('shows an MCP call as its Inputs list, titled by server and tool', () => {
     const mcp: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'mcp__claude_ai_Gmail__search_threads', input: { query: 'from:me', limit: 5 } },
       result: { type: 'tool-result', output: '[]' }
@@ -204,8 +204,8 @@ describe('the tool detail sheet, laid out as the Claude app lays it out', () => 
     )
     act(() => renderer!.unmount())
     renderer = renderTree(createElement(ToolDetailBody, { pair: mcp }))
-    expect(labels(renderer)).toEqual(['Input', 'Output'])
-    expect(textOf(boxOf(sections(renderer)[0]!))).toBe(JSON.stringify({ query: 'from:me', limit: 5 }, null, 2))
+    expect(labels(renderer)).toEqual(['Inputs', 'Result'])
+    expect(hostTexts(renderer).filter((n) => n.props.testID === 'tool-detail-input-name').map(textOf)).toEqual(['limit', 'query'])
   })
 
   it("shows an edit's File and its Changes as the chat's diff card", () => {
@@ -286,13 +286,14 @@ describe('the tool sheet shows everything the call carried', () => {
       },
       result: { type: 'tool-result', output: 'ok' }
     })
-    expect(labels(tree)).toEqual(['Input', 'Output'])
-    expect(textOf(boxOf(sections(tree)[0]!))).toContain('print(1)')
+    expect(labels(tree)).toEqual(['Inputs', 'Output'])
+    expect(hostTexts(tree).filter((n) => n.props.testID === 'tool-detail-input-name').map(textOf)).toEqual(['cell_id', 'new_source', 'notebook_path'])
+    expect(hostTexts(tree).map(textOf)).toContain('print(1)')
   })
 
   it('prints an array input as JSON, not joined by commas', () => {
     const tree = body({ call: { type: 'tool-call', name: 'CustomTool', input: [1, { a: 2 }] } })
-    expect(textOf(boxOf(sections(tree)[0]!))).toBe(JSON.stringify([1, { a: 2 }], null, 2))
+    expect(textOf(hostTexts(tree).find((n) => n.props.testID === 'tool-detail-input-value')!)).toBe(JSON.stringify([1, { a: 2 }]))
   })
 
   it("keeps an argv's argument boundaries, and a Codex read's command beside its path", () => {

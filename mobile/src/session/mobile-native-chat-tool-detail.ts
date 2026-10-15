@@ -4,13 +4,13 @@ import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary
 import { mcpToolIdentity } from '../../../src/shared/native-chat-tool-identity'
 import { sendMessageAddressee, toolCallKind } from './mobile-native-chat-tool-sentence'
 
-/** "Completed" / "Failed" / "Running" for ONE call, the way the Claude app's
+/** "Completed" / "Failed" / "In progress" for ONE call, the way the Claude app's
  *  sheet states it under the title. A result settles the call regardless of
  *  what lifecycle state the call itself carried; absent one, the call's own
  *  `state` speaks, and absent that too the call is taken as still running —
  *  the same default the live-activity selector uses for a legacy transcript
  *  that never wrote a `state` at all. */
-export type ToolDetailStatus = 'Completed' | 'Failed' | 'Running'
+export type ToolDetailStatus = 'Completed' | 'Failed' | 'In progress'
 
 export function toolDetailStatus(pair: NativeChatToolPair): ToolDetailStatus {
   if (pair.result) {
@@ -22,7 +22,7 @@ export function toolDetailStatus(pair: NativeChatToolPair): ToolDetailStatus {
   if (pair.call?.state === 'completed') {
     return 'Completed'
   }
-  return 'Running'
+  return 'In progress'
 }
 
 /** The sheet's title: the tool's own name, the way the Claude app titles it
@@ -136,7 +136,7 @@ function normalizeInputRecord(input: unknown): Record<string, unknown> | null {
   return null
 }
 
-function formatInputValue(value: unknown): { value: string; isObject: boolean } {
+function formatInputValue(value: unknown, compact: boolean): { value: string; isObject: boolean } {
   if (value === null || value === undefined) {
     return { value: '', isObject: false }
   }
@@ -147,7 +147,7 @@ function formatInputValue(value: unknown): { value: string; isObject: boolean } 
     return { value: String(value), isObject: false }
   }
   try {
-    return { value: JSON.stringify(value, null, 2) ?? '', isObject: true }
+    return { value: (compact ? JSON.stringify(value) : JSON.stringify(value, null, 2)) ?? '', isObject: true }
   } catch {
     return { value: String(value), isObject: true }
   }
@@ -160,28 +160,32 @@ function formatInputValue(value: unknown): { value: string; isObject: boolean } 
  *  whose input is not a named record (a bare string, an array, a number)
  *  still gets one row rather than none. The sheet lists a SendMessage this
  *  way (mobile-native-chat-tool-detail-sections.ts). */
-export function toolDetailInputRows(input: unknown, toolName?: string | null): ToolDetailInputRow[] {
+export function toolDetailInputRows(
+  input: unknown,
+  toolName?: string | null,
+  { compact = false }: { compact?: boolean } = {}
+): ToolDetailInputRow[] {
   const record = normalizeInputRecord(input)
   if (record) {
     const markdownNames = (toolName ? MARKDOWN_INPUTS[toolName] : undefined) ?? []
     return Object.keys(record)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => {
-        const row = boundedRow(name, record[name])
+        const row = boundedRow(name, record[name], compact)
         return !row.isObject && markdownNames.includes(name) ? { ...row, isMarkdown: true as const } : row
       })
   }
   if (input === null || input === undefined || input === '') {
     return []
   }
-  return [boundedRow('input', input)]
+  return [boundedRow('input', input, compact)]
 }
 
 // Why: the inline row capped a call's detail before native text layout, and a
 // tap now opens this sheet instead; one 100 KB string in an Android Text
 // stalls the UI thread. Same cap, same ellipsis.
-function boundedRow(name: string, raw: unknown): ToolDetailInputRow {
-  const { value, isObject } = formatInputValue(raw)
+function boundedRow(name: string, raw: unknown, compact: boolean): ToolDetailInputRow {
+  const { value, isObject } = formatInputValue(raw, compact)
   return { name, value: truncateToolDetail(value), isObject }
 }
 

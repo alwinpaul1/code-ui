@@ -10,7 +10,7 @@ import {
 } from './mobile-native-chat-tool-detail'
 import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
 
-describe('tool detail status: Completed / Failed / Running under the sheet title', () => {
+describe('tool detail status: Completed / Failed / In progress under the sheet title', () => {
   it('reads Completed off a clean result', () => {
     const pair: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
@@ -27,18 +27,18 @@ describe('tool detail status: Completed / Failed / Running under the sheet title
     expect(toolDetailStatus(pair)).toBe('Failed')
   })
 
-  it('reads Running when there is no result yet and the call says so', () => {
+  it('reads In progress when there is no result yet and the call says so', () => {
     const pair: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'Bash', input: { command: 'sleep 5' }, state: 'running' }
     }
-    expect(toolDetailStatus(pair)).toBe('Running')
+    expect(toolDetailStatus(pair)).toBe('In progress')
   })
 
-  it('falls back to Running for a legacy call with no result and no state at all', () => {
+  it('falls back to In progress for a legacy call with no result and no state at all', () => {
     const pair: NativeChatToolPair = {
       call: { type: 'tool-call', name: 'Bash', input: { command: 'sleep 5' } }
     }
-    expect(toolDetailStatus(pair)).toBe('Running')
+    expect(toolDetailStatus(pair)).toBe('In progress')
   })
 
   it('trusts the result over a stale "running" call state — the result is the later fact', () => {

@@ -14,10 +14,12 @@ import {
   toolDetailOutputIsJson,
   toolDetailStatus,
   toolDetailTitle,
+  type ToolDetailInputRow,
   type ToolDetailStatus
 } from './mobile-native-chat-tool-detail'
 import {
   capToolDetailOutput,
+  toolDetailIsGeneric,
   toolDetailSections,
   type ToolDetailSection
 } from './mobile-native-chat-tool-detail-sections'
@@ -35,7 +37,7 @@ import { useNativeChatTranscript } from './native-chat-transcript-context'
 const STATUS_TONE: Record<ToolDetailStatus, 'secondary' | 'danger' | 'muted'> = {
   Completed: 'secondary',
   Failed: 'danger',
-  Running: 'muted'
+  'In progress': 'muted'
 }
 
 /** Diff rows the Changes section draws, the same bound as the output's lines. */
@@ -124,6 +126,7 @@ export function ToolDetailBody({ pair, agentId = null }: { pair: NativeChatToolP
   }, [pair])
   // Memoised on the pair: a running tool re-renders the sheet as it streams.
   const sections = useMemo(() => toolDetailSections(pair, { hasChanges: files !== null }), [pair, files])
+  const generic = useMemo(() => toolDetailIsGeneric(pair, files !== null), [pair, files])
   const isAgent = pair.call !== undefined && toolCallKind(pair.call.name) === 'agent'
   const renderAgentToolCalls = useAgentToolCallsSlot()
   // A background launch's acknowledgement is metadata Claude Code tells the
@@ -150,6 +153,8 @@ export function ToolDetailBody({ pair, agentId = null }: { pair: NativeChatToolP
             files?.map((file, fileIndex) => (
               <MobileNativeChatDiffCard key={`${file.path}:${fileIndex}`} file={file} rowLimit={CHANGES_ROW_LIMIT} />
             ))
+          ) : section.kind === 'inputs' ? (
+            <InputRows rows={section.rows} />
           ) : (
             <Box>
               <SectionValue section={section} />
@@ -175,7 +180,11 @@ export function ToolDetailBody({ pair, agentId = null }: { pair: NativeChatToolP
           )}
         />
       ) : output.trim().length > 0 ? (
-        <OutputSection output={output} isError={pair.result?.isError === true} />
+        generic ? (
+          <ResultSection output={output} isError={pair.result?.isError === true} />
+        ) : (
+          <OutputSection output={output} isError={pair.result?.isError === true} />
+        )
       ) : null}
       {shellOutput ? (
         <Section label="Shell output">
@@ -226,7 +235,7 @@ function Unwrapped({ children }: { children: ReactNode }) {
   )
 }
 
-function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind: 'changes' }> }) {
+function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind: 'changes' | 'inputs' }> }) {
   const { syntax } = useTheme()
   const code = section.kind === 'code' ? section : null
   const segments = useMemo(
@@ -255,6 +264,64 @@ function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind:
       return unhandled
     }
   }
+}
+
+/** The Claude app's list of a tool's inputs (`xv1`:377-410): each name a 13 sp
+ *  line in the secondary text colour, 2 dp above its value at 15 sp in the
+ *  primary one, 8 dp under each pair. No box, no code face: a value is prose,
+ *  except a Markdown input, which is drawn rendered (the user, 2026-09-28). */
+function InputRows({ rows }: { rows: ToolDetailInputRow[] }) {
+  return (
+    <View>
+      {rows.map((row, index) => (
+        <View key={`${row.name}:${index}`} style={{ gap: 2, paddingBottom: 8 }} testID="tool-detail-input-row">
+          <Txt variant="label" tone="secondary" style={{ lineHeight: 19.5 }} testID="tool-detail-input-name">
+            {row.name}
+          </Txt>
+          {row.isMarkdown ? (
+            <MobileMarkdown content={row.value} />
+          ) : (
+            <SelectableSheetText variant="body" testID="tool-detail-input-value">
+              {row.value}
+            </SelectableSheetText>
+          )}
+        </View>
+      ))}
+    </View>
+  )
+}
+
+/** The answer under a tool the Claude app has no layout for (`y030.p`:2647):
+ *  "Result" in the muted label face and the text rendered as Markdown, or, when
+ *  the call failed, "Error" in the danger colour over the text in it. No box
+ *  and no Prettify: that pill belongs to a Bash call's output. */
+function ResultSection({ output, isError }: { output: string; isError: boolean }) {
+  const { text, hiddenLines } = capToolDetailOutput(output)
+  return (
+    <View style={{ gap: 4 }} testID="tool-detail-section">
+      <Txt
+        variant="label"
+        weight="medium"
+        tone={isError ? 'danger' : 'muted'}
+        accessibilityRole="header"
+        testID="tool-detail-section-label"
+      >
+        {isError ? 'Error' : 'Result'}
+      </Txt>
+      {isError ? (
+        <SelectableSheetText variant="body" tone="danger" testID="tool-detail-output">
+          {text}
+        </SelectableSheetText>
+      ) : (
+        <MobileMarkdown content={text} />
+      )}
+      {hiddenLines > 0 ? (
+        <Txt variant="caption" tone="muted" testID="tool-detail-output-more">
+          {`${hiddenLines} more line${hiddenLines === 1 ? '' : 's'}`}
+        </Txt>
+      ) : null}
+    </View>
+  )
 }
 
 function OutputSection({ output, isError }: { output: string; isError: boolean }) {
