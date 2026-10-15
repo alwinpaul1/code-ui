@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
@@ -79,6 +79,9 @@ type Props = {
   /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
    *  and ridden along on the next send (desktop native-chat parity). */
   attachments?: PendingNativeChatImage[]
+  /** A notice drawn at the top of the card, above the chips and the field: the rate-limit banner,
+   *  where the Claude app draws it. Built by the route; nothing when it has nothing to say. */
+  banner?: ReactNode
   onRemoveAttachment?: (id: string) => void
   /** Opens the markup editor on a photo chip (the Claude app's pencil,
    *  2026-09-24). */
@@ -190,6 +193,7 @@ export function MobileNativeChatComposer({
   onPasteImageFile,
   onAttachFile,
   attachments = NO_ATTACHMENTS,
+  banner,
   onRemoveAttachment,
   onEditAttachment,
   videoFrameExtraction = null,
@@ -408,6 +412,7 @@ export function MobileNativeChatComposer({
           }}
           testID="native-chat-composer"
         >
+          {banner}
           {/* No markup while a send is out: marks made after it has written
               the photo would never reach the desktop. */}
           <MobileNativeChatAttachmentChips

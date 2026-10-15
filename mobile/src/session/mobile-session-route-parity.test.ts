@@ -662,7 +662,7 @@ const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96ea
 // microphone level for the waveform. Same records; only the overlay's moved.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_LEAF_JSX_SHA256 = '0fde985f4d0e1892ce50f27a70a5c38c7705ea8e1d3cacb44dd25b8c37097825'
+const HEAD_LEAF_JSX_SHA256 = 'c0f2b74707c26c5329d75ab54e9e4cf7c425a67140d0ff5fa27ec3bc2de3e9de'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1305,6 +1305,8 @@ describe('mobile session route extraction parity', () => {
     // Same count (78) since 2026-10-15: the header's status dot and line read
     // `chatConnection?.dot ?? connState` and `chatConnection?.label ?? terminalSummary`, a Claude
     // chat's own session state from Anthropic while the relay is down (claude-chat-live.ts).
+    // Same count (78) since 2026-10-15 (later): the rate-limit banner moved from the notice slot to
+    // the overlay's `composerBanner` slot, drawn inside the composer card as the Claude app does.
     expect(jsx.leaf).toHaveLength(78)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.

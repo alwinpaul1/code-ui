@@ -4,6 +4,7 @@ import { X } from 'lucide-react-native'
 import { useNow } from '../hooks/use-now'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { ccrRateLimitNotice } from './ccr-rate-limit-notice'
 import { rateLimitNotice, type RateLimitNotice } from './hud-rate-limit-notice'
 import { MobileUsageSheet } from './MobileContextWindowSheet'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -17,8 +18,8 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 // glyph (`e1t.c`: the X, 20 dp, `pl7.P`, named "Dismiss") when the notice can be closed.
 //
 // Not read in the decompile, so chosen: the button's horizontal padding (16) and its shape (a
-// capsule), and the banner's margins, which are the dock's (`space.md` at the sides, as the session
-// pills have).
+// capsule). The banner sits inside the composer card, above the field, as the user's screenshot of
+// the Claude app shows it (2026-10-15), 8 dp in from the card's sides and top (measured there).
 //
 // Code UI's tokens stand in where the app's have no match, each the same value: `pl7.s` is
 // `codeBlockHeader`, `pl7.P` is `composerIcon`, `pl7.x` is `composerBorder`, and 550 weight is the
@@ -53,7 +54,7 @@ export function RateLimitBannerView({
   const { colors, space } = useTheme()
   const spoken = notice.subtitle === null ? notice.title : `${notice.title}. ${notice.subtitle}`
   return (
-    <View style={{ paddingHorizontal: space.md, paddingBottom: space.xs }}>
+    <View style={{ paddingHorizontal: space.sm, paddingTop: space.sm }}>
       <View
         testID="rate-limit-banner"
         accessibilityLiveRegion="polite"
@@ -166,9 +167,13 @@ export function MobileNativeChatRateLimitBanner({
   const chat = controller.nativeChatController
   const windows = chat.nativeChatRateLimits ?? NO_WINDOWS
   useSyncExternalStore(subscribe, () => dismissals)
-  const now = useNow(CLOCK_MS, windows.length > 0)
+  const anthropicLimit = chat.nativeChatAnthropicLive?.rateLimit ?? null
+  const now = useNow(CLOCK_MS, windows.length > 0 || anthropicLimit !== null)
   const [usageOpen, setUsageOpen] = useState(false)
-  const notice = rateLimitNotice({ windows, agent: chat.nativeChatAgent ?? null, now })
+  // Anthropic's own `rate_limit_event` on a matched Claude tab is the server's call and decides;
+  // with none, or one whose reset has passed, the thresholds over the beacon and the feed do.
+  const fromAnthropic = ccrRateLimitNotice(anthropicLimit, now)
+  const notice = fromAnthropic !== undefined ? fromAnthropic : rateLimitNotice({ windows, agent: chat.nativeChatAgent ?? null, now })
   if (notice === null || dismissed.has(notice.key)) {
     // The sheet lists the windows of a notice that is gone; shut, so it does not open itself over the
     // next one (the pill row does the same for its hint).

@@ -386,12 +386,8 @@ export function MobileSessionActiveContent({
         onSelectPermissionMode={(mode) => void selectPermissionMode(mode)}
         onSelectAgentMode={(mode) => void selectAgentMode(mode)}
         sessionPills={<MobileSessionPillRow controller={controller} />}
-        notices={
-          <>
-            <MobileNativeChatConnectionRow controller={controller} />
-            <MobileNativeChatRateLimitBanner controller={controller} />
-          </>
-        }
+        notices={<MobileNativeChatConnectionRow controller={controller} />}
+        composerBanner={<MobileNativeChatRateLimitBanner controller={controller} />}
       />
       </NativeChatFileReadProvider>
       {/* Opened from a subagent row in the background-tasks sheet, through its

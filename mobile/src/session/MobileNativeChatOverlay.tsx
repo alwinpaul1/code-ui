@@ -112,9 +112,11 @@ type Props = {
   keyStrip?: MobileNativeChatKeyStripProps
   /** The session bar's diff pill: the worktree's uncommitted +/-, and what opens the changes.
    *  And the session pills drawn above the bar (MobileSessionPillRow): mounted here, owned by the route.
-   *  And `notices`, the connection row and the rate-limit banner (MobileNativeChatConnectionRow,
-   *  MobileNativeChatRateLimitBanner), drawn above the pills: the same. */
+   *  And `notices`, the connection row (MobileNativeChatConnectionRow), drawn above the pills: the
+   *  same. And `composerBanner`, the rate-limit banner (MobileNativeChatRateLimitBanner), drawn
+   *  inside the composer card: the same. */
   sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode; notices?: ReactNode
+  composerBanner?: ReactNode
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -151,7 +153,7 @@ export function MobileNativeChatOverlay({
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset,
-  keyStrip, sessionDiff = null, onOpenDiff, sessionPills, notices
+  keyStrip, sessionDiff = null, onOpenDiff, sessionPills, notices, composerBanner
 }: Props): React.JSX.Element | null {
   // A Claude tab reads Anthropic's copy of its session (use-claude-anthropic-transcript.ts), which
   // already holds what the beacon, the tab status and the screen add for Orca's: drawn, they doubled.
@@ -549,6 +551,7 @@ export function MobileNativeChatOverlay({
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
         sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills} notices={notices}
+        composerBanner={composerBanner}
       />
   )
   // The loaded transcript says whether a later call touched a created file,

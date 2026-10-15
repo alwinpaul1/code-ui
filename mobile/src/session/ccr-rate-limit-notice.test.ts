@@ -20,8 +20,8 @@ describe('the limit banner from Anthropic’s rate_limit_event', () => {
     expect(notice?.subtitle).toMatch(/^Resets /)
   })
 
-  it('rejected is "Limit reached", not closable', () => {
-    expect(ccrRateLimitNotice(limitOf(rejectedFiveHour('r1')), BEFORE)).toMatchObject({ kind: 'reached', title: RATE_LIMIT_TITLES.reached, dismissible: false, key: `reached:session:${Math.round(RESETS_AT_FIVE_HOUR / 60)}` })
+  it('rejected is "Limit reached", closable', () => {
+    expect(ccrRateLimitNotice(limitOf(rejectedFiveHour('r1')), BEFORE)).toMatchObject({ kind: 'reached', title: RATE_LIMIT_TITLES.reached, dismissible: true, key: `reached:session:${Math.round(RESETS_AT_FIVE_HOUR / 60)}` })
   })
 
   it('rejected while using overage is the credits notice', () => {

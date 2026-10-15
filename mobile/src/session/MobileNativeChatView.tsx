@@ -131,7 +131,7 @@ export function MobileNativeChatView({
   onOpenFile,
   onRevertHunk,
   keyboardInset = 0,
-  keyStrip, sessionPills, notices
+  keyStrip, sessionPills, notices, composerBanner
 }: MobileNativeChatViewProps): React.JSX.Element {
   const { colors, space } = useTheme()
   const styles = useChatViewStyles()
@@ -447,6 +447,7 @@ export function MobileNativeChatView({
       {notices}{sessionPills}
       <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
       <MobileNativeChatComposer
+        banner={composerBanner}
         value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}

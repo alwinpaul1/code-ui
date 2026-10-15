@@ -69,7 +69,8 @@ export type RateLimitNotice = {
   /** "Resets Friday at 9:05 am", "Resets at 6:20 pm", or "Try again later"; null for credits. */
   subtitle: string | null
   /** The Claude app closes an approaching notice and the credits one, never a limit reached
-   *  (`qb20.m`). */
+   *  (`qb20.m`). Code UI closes all three: the user asked for a close on "Limit reached"
+   *  (2026-10-15). */
   dismissible: boolean
   /** The same notice for as long as this holds: a different kind, window or reset cycle is a new
    *  one, which a dismissal made for the old one does not cover. */
@@ -213,7 +214,9 @@ export function rateLimitNotice(input: {
       kind: 'reached',
       title: RATE_LIMIT_TITLES.reached,
       subtitle: subtitleFor(binding.reading.resetsAt, now),
-      dismissible: false,
+      // The Claude app draws no close here (`bb8` case 4); the user asked for one (2026-10-15), so
+      // "Limit reached" closes like the others and comes back with the next window or reset.
+      dismissible: true,
       key: `reached:${binding.kind}:${resetCycle(binding.reading.resetsAt)}`
     }
   }

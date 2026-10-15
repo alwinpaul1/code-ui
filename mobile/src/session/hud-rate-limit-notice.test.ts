@@ -99,10 +99,10 @@ describe('the recorded payload (Claude Code 2.1.296)', () => {
     expect(rateLimitNotice({ windows, agent: 'claude', now: early })).toBeNull()
   })
 
-  it('says "Limit reached" at 100% and is not dismissible', () => {
+  it('says "Limit reached" at 100% and can be closed', () => {
     const windows = hudRateLimitWindows(recordedWith({ h5: '100:1791678000' }), null)
     const notice = rateLimitNotice({ windows, agent: 'claude', now: RECORDING_TIME })
-    expect(notice).toMatchObject({ kind: 'reached', title: 'Limit reached', dismissible: false })
+    expect(notice).toMatchObject({ kind: 'reached', title: 'Limit reached', dismissible: true })
     expect(notice?.subtitle).toMatch(/^Resets (at |\w+ at )\d{1,2}:\d{2} [ap]m$/)
   })
 

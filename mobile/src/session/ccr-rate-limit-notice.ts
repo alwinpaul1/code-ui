@@ -31,7 +31,7 @@ export function ccrRateLimitNotice(state: CcrRateLimitState | null | undefined, 
     case 'reached':
       return state.isUsingOverage
         ? { kind: 'credits', title: RATE_LIMIT_TITLES.credits, subtitle: null, dismissible: true, key: 'credits' }
-        : { kind: 'reached', title: RATE_LIMIT_TITLES.reached, subtitle, dismissible: false, key: `reached:${window}:${cycle}` }
+        : { kind: 'reached', title: RATE_LIMIT_TITLES.reached, subtitle, dismissible: true, key: `reached:${window}:${cycle}` }
     case 'approaching':
       return { kind: 'approaching', title: RATE_LIMIT_TITLES.approaching, subtitle, dismissible: true, key: `approaching:${window}:${cycle}` }
     case 'clear':

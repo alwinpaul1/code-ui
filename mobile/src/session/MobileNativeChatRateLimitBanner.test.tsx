@@ -35,6 +35,10 @@ import { ThemeProvider } from '../theme/theme-context'
 import { parseAgentHudBeaconPayload } from './agent-hud-beacon'
 import { applyCcrUsageToHud } from './ccr-usage-hud'
 import { hudRateLimitWindows, type RateLimitNotice } from './hud-rate-limit-notice'
+import { parseCcrEvent } from './ccr-session-api'
+import { deriveCcrLiveState } from './ccr-live-state'
+import { event } from './fixtures/ccr-session-api-2026-10-14'
+import { RESETS_AT_FIVE_HOUR, allowedFiveHour, rejectedFiveHour } from './fixtures/ccr-rate-limit-events-2026-10-15'
 import {
   MobileNativeChatRateLimitBanner,
   RateLimitBannerView,
@@ -91,7 +95,7 @@ const APPROACHING: RateLimitNotice = {
   dismissible: true,
   key: 'approaching:weekly:1'
 }
-const REACHED: RateLimitNotice = { ...APPROACHING, kind: 'reached', title: 'Limit reached', dismissible: false, key: 'reached:session:1' }
+const REACHED: RateLimitNotice = { ...APPROACHING, kind: 'reached', title: 'Limit reached', dismissible: true, key: 'reached:session:1' }
 const CREDITS: RateLimitNotice = {
   kind: 'credits',
   title: 'Now using usage credits',
@@ -173,10 +177,10 @@ describe.each(['light', 'dark'] as const)('the rate-limit banner in %s mode', (s
     })
   })
 
-  it('draws a limit reached with "View usage" and no close', () => {
+  it('draws a limit reached with "View usage" and a close, as the user asked of the Claude app\'s card', () => {
     show(REACHED)
     expect(words()).toEqual(['Limit reached', 'Resets Friday at 9:05 am', 'View usage'])
-    expect(hasHost('rate-limit-dismiss')).toBe(false)
+    expect(hasHost('rate-limit-dismiss')).toBe(true)
   })
 
   it('draws "Now using usage credits" with no subtitle and no "View usage", but a close', () => {
@@ -231,10 +235,11 @@ describe('the connected banner', () => {
     expect(hasHost('rate-limit-dismiss')).toBe(true)
   })
 
-  it('draws "Limit reached" at 100%, which cannot be closed', () => {
+  it('draws "Limit reached" at 100% with a close, and a close puts it away', () => {
     mount(controllerFor(windowsFor('100:1791678000', '73:1791997200')))
     expect(words()[0]).toBe('Limit reached')
-    expect(hasHost('rate-limit-dismiss')).toBe(false)
+    act(() => host('rate-limit-dismiss').props.onPress())
+    expect(renderer!.toJSON()).toBeNull()
   })
 
   it('draws nothing from a controller that states no windows', () => {
@@ -292,9 +297,38 @@ describe('the connected banner', () => {
     expect(words()[0]).toBe('Approaching limit')
   })
 
-  it('does not close a limit reached by pressing on it (there is nothing to press)', () => {
+  it('a closed limit reached stays closed for that reset, and a new reset brings it back', () => {
     mount(controllerFor(windowsFor('100:1791678000', '73:1791997200')))
-    expect(hasHost('rate-limit-dismiss')).toBe(false)
+    act(() => host('rate-limit-dismiss').props.onPress())
+    expect(renderer!.toJSON()).toBeNull()
+    mount(controllerFor(windowsFor('100:1791696000', '73:1791997200')))
+    expect(words()[0]).toBe('Limit reached')
+  })
+
+  // Anthropic's own `rate_limit_event` on a matched Claude tab is the server's call and decides over
+  // the thresholds (ccr-rate-limit-notice.ts), as the Claude app draws it.
+  const rateLimitOf = (payload: Record<string, unknown>) =>
+    deriveCcrLiveState([parseCcrEvent(event(payload))!], { liveFrom: 0, streamThinking: null, connectionStatus: 'connected' }).rateLimit
+  const withAnthropic = (windows: ReturnType<typeof windowsFor>, payload: Record<string, unknown>): MobileSessionController =>
+    ({
+      nativeChatController: { nativeChatRateLimits: windows, nativeChatAgent: 'claude', nativeChatAnthropicLive: { rateLimit: rateLimitOf(payload) } }
+    }) as unknown as MobileSessionController
+
+  it('says "Limit reached" when Anthropic rejects the session, though the beacon\'s windows are under every tier', () => {
+    vi.setSystemTime((RESETS_AT_FIVE_HOUR - 3600) * 1000)
+    mount(withAnthropic(windowsFor('20:1791678000', '73:1791997200'), rejectedFiveHour('r1')))
+    expect(words()[0]).toBe('Limit reached')
+  })
+
+  it('draws nothing when Anthropic says the account is clear, though a stale beacon window reads 100%', () => {
+    mount(withAnthropic(windowsFor('100:1791678000', '73:1791997200'), allowedFiveHour('r1')))
+    expect(renderer!.toJSON()).toBeNull()
+  })
+
+  it('falls back to the thresholds when Anthropic\'s event has reset', () => {
+    vi.setSystemTime((RESETS_AT_FIVE_HOUR + 60) * 1000)
+    mount(withAnthropic(windowsFor('100:1792040000', '73:1792447200'), rejectedFiveHour('r1')))
+    expect(words()[0]).toBe('Limit reached')
   })
 
   it.each(['light', 'dark'] as const)('draws in the %s scheme\'s own fill', (scheme) => {

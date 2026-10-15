@@ -15,13 +15,14 @@ describe('where the connection row and the rate-limit banner are mounted', () =>
   it('the route builds them and hands them to the chat overlay, with the controller it already holds', () => {
     const route = code('MobileSessionActiveContent.tsx')
     expect(route).toMatch(
-      /<MobileNativeChatOverlay[\s\S]*?notices=\{\s*<>\s*<MobileNativeChatConnectionRow controller=\{controller\} \/>\s*<MobileNativeChatRateLimitBanner controller=\{controller\} \/>\s*<\/>\s*\}[\s\S]*?\/>/
+      /<MobileNativeChatOverlay[\s\S]*?notices=\{\s*<MobileNativeChatConnectionRow controller=\{controller\} \/>\s*\}[\s\S]*?composerBanner=\{\s*<MobileNativeChatRateLimitBanner controller=\{controller\} \/>\s*\}[\s\S]*?\/>/
     )
   })
 
   it('the overlay forwards the slot to the chat view untouched', () => {
     const overlay = code('MobileNativeChatOverlay.tsx')
     expect(overlay).toMatch(/notices=\{notices\}/)
+    expect(overlay).toMatch(/composerBanner=\{composerBanner\}/)
     expect(overlay).not.toMatch(/MobileNativeChatRateLimitBanner|MobileNativeChatConnectionRow/)
   })
 
@@ -33,6 +34,18 @@ describe('where the connection row and the rate-limit banner are mounted', () =>
     expect(strip).toBeGreaterThan(-1)
     expect(notices).toBeGreaterThan(strip)
     expect(pills).toBeGreaterThan(notices)
+  })
+
+  it('draws the rate-limit banner inside the composer card, above its attachments and field, as the Claude app does', () => {
+    const view = code('MobileNativeChatView.tsx')
+    expect(view).toMatch(/<MobileNativeChatComposer[\s\S]*?banner=\{composerBanner\}/)
+    const composer = code('MobileNativeChatComposer.tsx')
+    const card = composer.indexOf('testID="native-chat-composer"')
+    const banner = composer.indexOf('{banner}')
+    const chips = composer.indexOf('<MobileNativeChatAttachmentChips')
+    expect(card).toBeGreaterThan(-1)
+    expect(banner).toBeGreaterThan(card)
+    expect(chips).toBeGreaterThan(banner)
   })
 
   it('the transcript\'s own notice row is not the connection row: it still draws a host-authored block', () => {
