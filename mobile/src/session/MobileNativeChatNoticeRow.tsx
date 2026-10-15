@@ -9,6 +9,8 @@ import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { compactionCaptionOf } from './compaction-caption'
 import { MobileNativeChatDivider } from './MobileNativeChatDivider'
+import { ccrRefusalCardOf } from './ccr-refusal-rows'
+import { MobileNativeChatRefusalCard } from './MobileNativeChatRefusalCard'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   contextCleared: 'Context cleared',
@@ -45,6 +47,11 @@ export function MobileNativeChatNoticeRow({
       ? block.text.trim() || NATIVE_CHAT_NOTICE_COPY.contextCleared
       : compactionCaptionOf(block.text)
     return <MobileNativeChatDivider label={label} />
+  }
+
+  const refusal = ccrRefusalCardOf(block)
+  if (refusal) {
+    return <MobileNativeChatRefusalCard card={refusal} fontScale={fontScale} />
   }
 
   if (block.presentation === 'plan-document') {

@@ -51,6 +51,7 @@ export const CCR_INTERRUPT_POST_TIMEOUT_MS = 10_000
 export const CCR_SET_MODEL_TIMEOUT_MS = 30_000
 export const CCR_SET_PERMISSION_MODE_TIMEOUT_MS = 30_000
 export const CCR_APPLY_FLAG_SETTINGS_TIMEOUT_MS = 45_000
+export const CCR_REWIND_TIMEOUT_MS = 15_000
 
 /** The app's words for each failure (res/values/strings.xml of 1.261013.20). */
 export const CCR_MODEL_REFUSED = 'That model isn’t available for this thread.' // code_project_model_rejected
@@ -58,12 +59,18 @@ export const CCR_MODEL_UNSENT = 'Model change couldn’t be applied. Try again.'
 export const CCR_EFFORT_FAILED = 'Couldn’t change effort. Try again.' // ccr_effort_change_failed
 export const CCR_MODE_REFUSED = 'That mode isn’t available right now' // ccr_permission_mode_rejected
 export const CCR_MODE_UNSENT = 'Couldn’t change mode. Try again.' // ccr_permission_mode_apply_failed
+export const CCR_REWIND_REFUSED = 'Couldn’t rewind the conversation. The session is unchanged.' // ccr_rewind_rejected_generic
+export const CCR_REWIND_TIMED_OUT = 'Rewind timed out. The session is unchanged.' // ccr_rewind_timed_out
+export const CCR_REWIND_NOT_CONNECTED = 'Can’t retry while reconnecting. The session is unchanged.' // ccr_rewind_not_connected
 
 export type CcrControlRequest =
   | { subtype: 'interrupt' }
   | { subtype: 'set_model'; model: string }
   | { subtype: 'set_permission_mode'; mode: string }
   | { subtype: 'apply_flag_settings'; settings: { effortLevel: string; ultracode?: boolean } }
+  /** A refusal card's Edit and retry (`RewindConversation`, jea.java/hea.java; sent by j7v.java
+   *  ~1517 with a 15 000 ms wait): back to before the refused prompt. */
+  | { subtype: 'rewind_conversation'; target_message_uuid: string; interrupt_if_running: boolean }
 
 export type CcrControlOutcome = 'applied' | 'refused' | 'unsent' | 'unanswered'
 
@@ -160,4 +167,10 @@ export function ccrEffortOutcomeMessage(outcome: CcrControlOutcome): string | nu
 /** What the user is told for a mode pick's outcome; null when it went (applied or unanswered). */
 export function ccrModeOutcomeMessage(outcome: CcrControlOutcome): string | null {
   return outcome === 'refused' ? CCR_MODE_REFUSED : outcome === 'unsent' ? CCR_MODE_UNSENT : null
+}
+
+/** What the user is told for a rewind's outcome; null when the session took it. Unlike a model
+ *  pick, an unanswered rewind did not go as far as anyone can tell: its prefill is not offered. */
+export function ccrRewindOutcomeMessage(outcome: CcrControlOutcome): string | null {
+  return outcome === 'applied' ? null : outcome === 'unanswered' ? CCR_REWIND_TIMED_OUT : CCR_REWIND_REFUSED
 }

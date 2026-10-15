@@ -449,3 +449,33 @@ describe('a notification’s answer on a matched tab', () => {
     expect(answerCcrPermissionFromNotification({ hostId: 'h', worktreeId: 'w', permissionKey: bannerKey, choice: 'allow' })).toBeNull()
   })
 })
+
+describe('a refusal card’s Edit and retry on a matched tab (G10)', () => {
+  it('rewinds the tab’s own session to the refused prompt with the app’s request (jea.java)', async () => {
+    const session = fakeSession()
+    const h = mount(session.make)
+    let failure: string | null | undefined
+    await act(async () => {
+      failure = await h.lane().rewindTo!('u-refused')
+    })
+    expect(session.posted).toEqual([
+      { accountId: 'acct-personal', sessionId: OWN, payload: { type: 'control_request', uuid: 'id-1', request_id: 'id-2', request: { subtype: 'rewind_conversation', target_message_uuid: 'u-refused', interrupt_if_running: true } } }
+    ])
+    expect(failure).toBeNull()
+  })
+
+  it('a rewind the session refuses comes back as the app’s words, not as a prefill', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const session = fakeSession({ reply: (id) => ({ type: 'control_response', response: { subtype: 'error', request_id: id, error: 'no such message' } }) })
+    const h = mount(session.make)
+    let failure: string | null | undefined
+    await act(async () => {
+      failure = await h.lane().rewindTo!('u-refused')
+    })
+    expect(failure).toBe('Couldn’t rewind the conversation. The session is unchanged.')
+  })
+
+  it('is not offered while the switch is off, so the card shows no button', () => {
+    expect(mount(fakeSession().make, { switchOn: false }).lane().rewindTo).toBeUndefined()
+  })
+})

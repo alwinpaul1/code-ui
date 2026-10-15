@@ -13,6 +13,9 @@ import {
   ccrEffortSettings,
   ccrModeOutcomeMessage,
   ccrModelOutcomeMessage,
+  ccrRewindOutcomeMessage,
+  CCR_REWIND_NOT_CONNECTED,
+  CCR_REWIND_TIMEOUT_MS,
   postCcrInterrupt,
   sendCcrControlRequest
 } from './ccr-control-request'
@@ -90,6 +93,9 @@ export type CcrControlLane = {
   permission: MobileChatPermission | null
   /** Answers the card's option `send`; null when the send is not this lane's. */
   respondPermission: (send: string, comment?: string) => Promise<boolean> | null
+  /** A refusal card's Edit and retry: `rewind_conversation` to the refused prompt. The failure's
+   *  words, or null when the session rewound. Undefined when the lane is not live. */
+  rewindTo: ((messageUuid: string) => Promise<string | null>) | undefined
 }
 
 /** Whether the lane drives the tab: a resolved target that IS the linked session, a live stream,
@@ -319,6 +325,14 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
     })
   }, [hostId, live, postAnswer, tabId, worktreeId])
 
+  const rewindTo = useCallback(
+    async (messageUuid: string): Promise<string | null> => {
+      const outcome = withTarget((deps, session) => sendCcrControlRequest(deps, session, { subtype: 'rewind_conversation', target_message_uuid: messageUuid, interrupt_if_running: true }, CCR_REWIND_TIMEOUT_MS))
+      return outcome ? ccrRewindOutcomeMessage(await outcome) : CCR_REWIND_NOT_CONNECTED
+    },
+    [withTarget]
+  )
+
   const stated = useMemo(() => (live ? ccrStatedPermissionMode(args.events) : null), [args.events, live])
   const picked = pickedMode && pickedMode.sessionId === sessionId && (stated?.key ?? null) === pickedMode.statedKey ? pickedMode.mode : null
   return {
@@ -332,6 +346,7 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
     permissionMode: live ? (picked ?? stated?.mode ?? null) : null,
     wrapDispatch,
     permission,
-    respondPermission
+    respondPermission,
+    rewindTo: live ? rewindTo : undefined
   }
 }

@@ -1,6 +1,7 @@
 import type { NativeChatBlock, NativeChatMessage, NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import type { CcrEvent } from './ccr-session-api'
 import { joinAdjacentThoughts } from './ccr-thought-rows'
+import { decodeCcrRefusal, withRefusalPrompts } from './ccr-refusal-rows'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
@@ -298,11 +299,13 @@ export function decodeCcrEvent(event: CcrEvent): NativeChatMessage[] {
     case 'assistant':
       return decodeMessage(payload, uuid, timestamp)
     case 'system':
-      // The app draws a row for one subtype only, `compact_boundary` (qhu.java:992-996, t330.java:
-      // 476-500); `init`, `status`, task and background-task changes, `thinking_tokens`,
-      // `permission_denied` and every other subtype feed state or nothing (qhu.java:982-1086).
-      // `model_refusal_fallback` / `model_refusal_no_fallback` are cards there (ucr/xcr); their
-      // fields have not been captured, so they draw nothing here rather than a guess.
+      // The app draws a row for `compact_boundary` (qhu.java:992-996, t330.java:476-500) and the
+      // two refusal cards (ccr-refusal-rows.ts); `init`, `status`, task and background-task
+      // changes, `thinking_tokens`, `permission_denied` and every other subtype feed state or
+      // nothing (qhu.java:982-1086).
+      if (payload.subtype === 'model_refusal_fallback' || payload.subtype === 'model_refusal_no_fallback') {
+        return decodeCcrRefusal(payload, uuid, timestamp)
+      }
       return payload.subtype === 'compact_boundary' && !str(payload.parent_tool_use_id)
         ? [{ id: uuid, role: 'system', blocks: [{ type: 'text', text: compactionCaption(readCompactionTokens(payload.compact_metadata ?? payload.compactMetadata)), presentation: 'compaction' }], timestamp, source: 'transcript' }]
         : []
@@ -392,7 +395,7 @@ export function decodeCcrEvents(events: readonly CcrEvent[], cache: WeakMap<CcrE
     }
     rows.push(...decoded)
   }
-  return joinAdjacentThoughts(rows)
+  return withRefusalPrompts(joinAdjacentThoughts(rows))
 }
 
 const defaultCache = new WeakMap<CcrEvent, NativeChatMessage[]>()
