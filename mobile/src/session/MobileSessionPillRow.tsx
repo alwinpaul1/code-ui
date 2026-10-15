@@ -16,6 +16,7 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionPills } from './use-session-pills'
 import { useClaudeAppCommandSheet } from './claude-app-command-sheets'
 import { MobileClaudePlanSheet } from './MobileClaudePlanSheet'
+import { MobileClaudeAutoDefaultNotice, claudeAutoDefaultNoticeEligible } from './MobileClaudeAutoDefaultNotice'
 
 // The Claude Android app's session pills (1.261009.20). Every one is the generic chip `jc20.c`: a
 // 14 dp radius, 12 x 8 dp padding, a 16 dp icon, an 8 dp gap, the label at 13/550, on the app's
@@ -322,6 +323,8 @@ export function MobileSessionPillRow({
         onOpenPlan={plan === null ? null : () => setPlanOpen(true)}
       />
       {plan !== null ? <MobileClaudePlanSheet visible={planOpen} plan={plan} onClose={() => setPlanOpen(false)} /> : null}
+      {/* The app's one-time "Auto mode is now Claude Code’s default" notice (jv30.java:75). */}
+      <MobileClaudeAutoDefaultNotice eligible={claudeAutoDefaultNoticeEligible(controller.nativeChatController)} />
     </>
   )
 }
