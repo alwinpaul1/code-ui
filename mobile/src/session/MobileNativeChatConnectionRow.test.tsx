@@ -13,12 +13,21 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
+const net = vi.hoisted(() => ({ offline: false, listened: 0 }))
+vi.mock('expo-network', () => ({
+  getNetworkStateAsync: async () => ({ isConnected: !net.offline }),
+  addNetworkStateListener: () => {
+    net.listened += 1
+    return { remove: () => undefined }
+  }
+}))
 vi.mock('./MobileBackgroundTasksPulse', () => ({
   MobileBackgroundTasksPulse: (props: Record<string, unknown>) => createElement('Pulse', props)
 }))
 
 import { ThemeProvider } from '../theme/theme-context'
-import { ConnectionRowView, MobileNativeChatConnectionRow, connectionNoticeOf } from './MobileNativeChatConnectionRow'
+import { ConnectionRowView, MobileNativeChatConnectionRow, NativeChatConnectionNoticeProvider, connectionNoticeOf } from './MobileNativeChatConnectionRow'
+import { useNativeChatConnectionNotice, type NativeChatConnectionNotice } from './native-chat-connection-notice'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 let renderer: ReactTestRenderer | null = null
@@ -137,5 +146,59 @@ describe('the connected row', () => {
     act(() => renderer?.unmount())
     mount(controller({ connState: 'reconnecting', verdict: 'normal', working: false }))
     expect(renderer!.toJSON()).toBeNull()
+  })
+})
+
+// A Claude tab matched to its Anthropic session: the status line's notice follows that stream and
+// the phone's own network (native-chat-connection-notice.ts), as the Claude app's line follows its
+// backplane, and not the relay to the desktop.
+describe('the notice handed to the status line of a matched Claude tab', () => {
+  let seen: NativeChatConnectionNotice | null = null
+  function Reader(): null {
+    seen = useNativeChatConnectionNotice()
+    return null
+  }
+  const matched = (over: { phase: string; turnOpen: boolean; connState?: string; working?: boolean } | null): MobileSessionController =>
+    ({
+      connState: over?.connState ?? 'connected',
+      connectionVerdict: { kind: 'normal', label: '' },
+      nativeChatController: {
+        nativeChatAgentWorking: over?.working ?? false,
+        nativeChatStructured: false,
+        nativeChatAnthropicLive: over ? { streamPhase: over.phase, turnOpen: over.turnOpen, linkLive: over.phase === 'live' } : null
+      }
+    }) as unknown as MobileSessionController
+  async function provide(value: MobileSessionController): Promise<void> {
+    await act(async () => {
+      renderer = create(
+        <NativeChatConnectionNoticeProvider controller={value}>
+          <Reader />
+        </NativeChatConnectionNoticeProvider>
+      )
+      await Promise.resolve()
+    })
+  }
+  afterEach(() => {
+    net.offline = false
+    net.listened = 0
+    seen = null
+  })
+
+  it('says "Connecting..." while the stream reconnects mid-turn, with the relay up and calling the agent idle', async () => {
+    await provide(matched({ phase: 'reconnecting', turnOpen: true }))
+    expect(seen).toMatchObject({ kind: 'connecting', text: 'Connecting...' })
+  })
+
+  it('says the app’s offline sentence while the phone has no network mid-turn', async () => {
+    net.offline = true
+    await provide(matched({ phase: 'reconnecting', turnOpen: true }))
+    expect(seen?.text).toBe('You’re offline. The rest of Claude’s reply will appear when you reconnect.')
+  })
+
+  it('leaves an unmatched tab on the relay’s words and never listens to the network for it', async () => {
+    net.offline = true
+    await provide(matched(null))
+    expect(seen).toBeNull()
+    expect(net.listened).toBe(0)
   })
 })

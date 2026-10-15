@@ -16,7 +16,8 @@ import type { ConnectionState } from '../transport/types'
  *  - Relay DOWN as well: Anthropic also gives the header's word for the session, so the tab stays
  *    live as the Claude app does (2026-10-15 12:29-12:31: the relay down, the app on the same
  *    session still "Generating… · 2 running tasks"). The terminal view and the files keep the
- *    relay's own state: they need the desktop.
+ *    relay's own state: they need the desktop. A session Anthropic calls disconnected says so in
+ *    the header with the relay up too, as the app's header does.
  *  - Anthropic stream not live (reconnecting, lost, never matched): nothing is overridden.
  */
 export type ClaudeChatLive = {
@@ -28,10 +29,16 @@ export type ClaudeChatLive = {
    *  running shells, agents and workflows (the sheet's Running list) while the session's stream is
    *  on it, else `background_tasks_changed`'s count. */
   runningCount: number | null
-  /** The chat header's word for the session while the relay is down: the app's "Connected" /
-   *  "Disconnected" (`ccr_session_connected` / `ccr_session_disconnected`, na20.java:1003-1006);
-   *  null keeps the relay's label. */
+  /** The chat header's word for the session: the app's "Disconnected" (`ccr_session_disconnected`)
+   *  whenever Anthropic says its Claude Code is detached, relay up or down; "Connected"
+   *  (`ccr_session_connected`, na20.java:1003-1006) only while the relay is down; null keeps the
+   *  relay's label. */
   sessionConnection: 'connected' | 'disconnected' | null
+  /** The stream's phase, for the status line's "Connecting..." / "Connection lost..." (native-chat-connection-notice.ts). */
+  streamPhase: CcrLinkPhase | null
+  /** Whether Anthropic last said a turn is open, live or not: the app's line stays busy over a
+   *  reconnect on the turn it last saw. */
+  turnOpen: boolean
   /** Whether the Anthropic stream is live (the relay's connection notice is then not the chat's). */
   linkLive: boolean
   /** The newest `rate_limit_event`, for the limit banner; null when none was read. */
@@ -64,10 +71,10 @@ export function claudeChatLive(input: {
   const takeOver = linkLive && !input.relayConnected
   const footer = linkLive && live.working ? { turnStartedAt: live.turnStartedAt, thinking: live.thinking, thinkingTokens: live.thinkingTokens } : null
   // Unknown connection status with a turn streaming in: the turn is the evidence its Claude Code is attached.
-  const sessionConnection = !takeOver
-    ? null
-    : input.connectionStatus === 'disconnected'
-      ? 'disconnected'
+  const sessionConnection = linkLive && input.connectionStatus === 'disconnected'
+    ? 'disconnected'
+    : !takeOver
+      ? null
       : input.connectionStatus === 'connected' || live.working
         ? 'connected'
         : null
@@ -76,6 +83,8 @@ export function claudeChatLive(input: {
     working: linkLive ? live.working : null,
     runningCount: stream ? ccrRunningTaskCount(stream.tasks) : linkLive ? live.runningTasks : null,
     sessionConnection,
+    streamPhase: input.linkPhase,
+    turnOpen: live.working,
     linkLive,
     rateLimit: live.rateLimit,
     stream
@@ -90,16 +99,18 @@ export function useClaudeChatLive(): ClaudeChatLive | null {
   return useContext(ClaudeChatLiveContext)
 }
 
-/** The session header's line while the chat is shown: the session's own word from Anthropic when
- *  the relay is down and Anthropic's stream is live, else null (the relay's label stays). The
+/** The session header's line while the chat is shown: the session's own word from Anthropic while
+ *  its stream is live (`sessionConnection`), else null (the relay's label stays). The
  *  terminal view never asks: it needs the desktop, so it says the relay's state. */
 export function claudeChatHeaderConnection(input: {
   chatShown: boolean
   live: ClaudeChatLive | null | undefined
-}): { label: 'Connected' | 'Disconnected'; dot: ConnectionState } | null {
+}): { label: string; dot: ConnectionState } | null {
   const word = input.chatShown ? (input.live?.sessionConnection ?? null) : null
   if (word === null) {
     return null
   }
-  return word === 'connected' ? { label: 'Connected', dot: 'connected' } : { label: 'Disconnected', dot: 'disconnected' }
+  // pn30.java:3280-3460: "Disconnected" and the reconnect hint, joined by " · ". The app names the
+  // machine when it knows it (`ccr_session_reconnect_hint`); Code UI says the generic one.
+  return word === 'connected' ? { label: 'Connected', dot: 'connected' } : { label: 'Disconnected · Reconnect from your computer', dot: 'disconnected' }
 }

@@ -25,7 +25,7 @@ describe('where the connection row and the rate-limit banner are mounted', () =>
       /<NativeChatConnectionNoticeProvider controller=\{controller\}>[\s\S]*?<MobileNativeChatOverlay[\s\S]*?<\/NativeChatConnectionNoticeProvider>/
     )
     expect(code('MobileNativeChatConnectionRow.tsx')).toMatch(
-      /const notice = connectionNoticeOf\(controller\)\s*return <NativeChatConnectionNoticeContext\.Provider value=\{notice\}>/
+      /const notice = connectionNoticeOf\(controller, usePhoneOffline\(controller\.nativeChatController\.nativeChatAnthropicLive != null\)\)\s*return <NativeChatConnectionNoticeContext\.Provider value=\{notice\}>/
     )
     expect(code('MobileNativeChatStatusLine.tsx')).toMatch(/useNativeChatConnectionNotice\(\)/)
   })

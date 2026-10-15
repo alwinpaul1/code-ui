@@ -71,11 +71,14 @@ export function MobileNativeChatStatusLine({
   const live: ClaudeFooterLiveInput | null = useClaudeChatLive()?.footer ?? null
   const footerStats = useClaudeFooterStats(working ? live : null)
   const notice = useNativeChatConnectionNotice()
-  if (!working && runningCount <= 0) {
+  // A matched Claude tab's notice is busy on the turn Anthropic last saw open, whatever the relay
+  // says (native-chat-connection-notice.ts), so it draws the line by itself.
+  const busy = working || notice?.anthropic === true
+  if (!busy && runningCount <= 0) {
     return null
   }
   // au8.java:73-91: a connection message stands in for the stats and the verb alike.
-  const message = working ? notice?.text ?? null : null
+  const message = busy ? notice?.text ?? null : null
   const stats = working && message === null ? footerStats : null
   const palette = claudeStatusFooterPalette(scheme)
   const text = { fontFamily: fonts.regular, fontSize: type.body.size, lineHeight: type.body.lineHeight }
@@ -107,7 +110,7 @@ export function MobileNativeChatStatusLine({
       accessibilityLiveRegion="polite"
       testID="native-chat-status-line"
     >
-      {working ? (
+      {busy ? (
         <>
           <View
             accessible
@@ -120,7 +123,8 @@ export function MobileNativeChatStatusLine({
               // The figures roll as the app's do (`z530.a`): each digit in a fixed slot.
               <ClaudeRollingText testID="native-chat-status-stats" text={stats.stats} style={[text, { color: palette.body }]} />
             ) : (
-              <Text style={[text, { color: palette.clay, flexShrink: 1 }]} numberOfLines={1}>
+              // The offline sentence is the app's footer text, drawn whole (zr8.java:1097-1099).
+              <Text style={[text, { color: palette.clay, flexShrink: 1 }]} numberOfLines={notice?.kind === 'offline' && message !== null ? undefined : 1}>
                 {message ?? `${verb}...`}
               </Text>
             )}

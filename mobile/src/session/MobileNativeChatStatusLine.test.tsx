@@ -254,6 +254,50 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
     expect(texts(renderer!.root)).toEqual(['1 running task'])
   })
 
+  // A matched Claude tab: the app's line is busy on the turn its stream last saw open, so a
+  // reconnecting stream says "Connecting..." even while the relay calls the agent idle, and the
+  // phone offline says the app's whole sentence (zr8.java:1097-1099), not one cut line.
+  function drawNotice(scheme: 'light' | 'dark', notice: { kind: 'connecting' | 'lost' | 'offline'; text: string; anthropic?: true }, runningCount = 0) {
+    act(() => {
+      renderer?.unmount()
+      renderer = create(
+        <ThemeProvider initialPreference={scheme}>
+          {createElement(
+            NativeChatConnectionNoticeContext.Provider,
+            { value: notice },
+            createElement(
+              NativeChatTasksContext.Provider,
+              { value: { runningCount, openSheet: () => {} } },
+              createElement(MobileNativeChatStatusLine, { working: false })
+            )
+          )}
+        </ThemeProvider>
+      )
+    })
+    return renderer!.root
+  }
+  for (const [scheme, want] of [
+    ['light', LIGHT],
+    ['dark', DARK]
+  ] as const) {
+    it(`a matched tab whose stream reconnects mid-turn says "Connecting..." with the relay idle (${scheme})`, () => {
+      const root = drawNotice(scheme, { kind: 'connecting', text: 'Connecting...', anthropic: true }, 2)
+      expect(texts(root)).toEqual(['Connecting...', ' · ', '2 running tasks'])
+      const byText = (t: string) => root.findAllByType('Text' as never).find((n) => n.props.children === t)!
+      expect(flat(byText('Connecting...').props.style).color).toBe(want.clay)
+      expect(star(root).length).toBeGreaterThan(0)
+    })
+
+    it(`the phone offline mid-turn says the app’s whole sentence, wrapped, not cut (${scheme})`, () => {
+      const sentence = 'You’re offline. The rest of Claude’s reply will appear when you reconnect.'
+      const root = drawNotice(scheme, { kind: 'offline', text: sentence, anthropic: true })
+      const line = root.findAllByType('Text' as never).find((n) => n.props.children === sentence)!
+      expect(line).toBeDefined()
+      expect(line.props.numberOfLines).toBeUndefined()
+      expect(flat(line.props.style).color).toBe(want.clay)
+    })
+  }
+
   it('does not say Working to a screen reader when the agent is idle', () => {
     const root = draw({ runningCount: 2, working: false })
     expect(root.findAll((n) => n.props.accessibilityLabel === 'Working')).toHaveLength(0)
