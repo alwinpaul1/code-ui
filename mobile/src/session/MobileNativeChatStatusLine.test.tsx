@@ -5,6 +5,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
 import { NativeChatConnectionNoticeContext } from './native-chat-connection-notice'
+import { CLAUDE_WORKING_VERBS } from './claude-working-footer-spec'
 
 /**
  * The line above the composer, drawn as the Claude app draws it (com.anthropic.claude
@@ -46,6 +47,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     act(() => renderer?.unmount())
     renderer = null
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   function draw(args: { runningCount: number; working: boolean; scheme?: 'light' | 'dark'; openSheet?: () => void }) {
@@ -76,10 +78,15 @@ describe('the status line above the composer, as the Claude app draws it', () =>
 
   // The headline.
   it('a working session shows "N running tasks" and the Claude spinner, not the Working star', () => {
+    // The app's own verb list holds "Working" (claude-working-footer-spec.ts), so the random pick is
+    // pinned to it: the old static "Working" label is what must be gone, not the word (a gate run on
+    // 2026-10-15 drew "Working..." by chance and failed a `not.toContain('Working')` on the joined line).
+    vi.spyOn(Math, 'random').mockReturnValue(CLAUDE_WORKING_VERBS.indexOf('Working') / CLAUDE_WORKING_VERBS.length)
     const root = draw({ runningCount: 3, working: true })
     const all = texts(root)
     expect(all.join('')).toMatch(/^[A-Za-z]+\.\.\. · 3 running tasks$/)
-    expect(all.join(' ')).not.toContain('Working')
+    expect(all.join('')).toBe('Working... · 3 running tasks')
+    expect(all).not.toContain('Working')
     expect(oldStar(root)).toHaveLength(0)
     expect(star(root).length).toBeGreaterThan(0)
   })
