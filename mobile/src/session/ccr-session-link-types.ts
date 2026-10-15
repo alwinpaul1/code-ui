@@ -21,7 +21,7 @@ export type CcrLinkDeps = {
 }
 
 /** The waits before each reconnect, as the Claude app's stream does (1, 3, 7, 15, 31 s). After
- *  the last, the stream is `lost` until `retry()` (a relay reconnect, the app back in front). */
+ *  the last, the stream is `lost` until `retry()` (a relay reconnect) or `resume()` (the app back in front). */
 export const CCR_STREAM_RECONNECT_MS: readonly number[] = [1_000, 3_000, 7_000, 15_000, 31_000]
 /** A connection starts the back-off over only when it delivered an event the link did not hold
  *  AND stayed up this long: a server that answers and closes at once, whatever it sends first, is

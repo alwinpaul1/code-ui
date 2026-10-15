@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-events'
 import type { CcrFetch } from './ccr-session-api'
-import { acquireCcrLink, CCR_LINK_LINGER_MS, openCcrLink, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
+import { acquireCcrLink, CCR_LINK_LINGER_MS, foregroundCcrLinks, openCcrLink, pauseCcrLinks, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
 import { CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
 import { ccrToolImage, ccrUserImages, resetCcrCacheForTests } from './ccr-session-cache'
 import { flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
@@ -79,7 +79,7 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
   }
   const deps: CcrLinkDeps = {
     fetch,
-    streamFetch: w.stream.fetch,
+    streamFetch: (url, init) => w.stream.fetch(url, init),
     auth: async (accountId) => {
       w.authCalls.push(accountId)
       return w.signedOut.has(accountId) ? null : (AUTH[accountId] ?? null)
@@ -457,5 +457,77 @@ describe('degenerate sizes', () => {
     const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
     await flush()
     expect(rowsOf(link)).toEqual(['user:u1'])
+  })
+})
+
+// Review 2026-10-15: retryCcrLinks() had no production caller, so a lost stream stayed lost until
+// the relay reconnected, and the streams kept running with the app in the background.
+describe('the app in the background and back in front', () => {
+  it('a lost stream reconnects when the app comes back to the foreground', async () => {
+    const w = world(() => ({ status: 200, chunks: [] }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    for (const wait of CCR_STREAM_RECONNECT_MS) {
+      w.timers.fire(wait)
+      await flush()
+    }
+    expect(link.getState().phase).toBe('lost')
+    const before = w.stream.requests.length
+    foregroundCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(before + 1)
+  })
+
+  it('the background closes the stream and schedules no redial', async () => {
+    const signals: AbortSignal[] = []
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    const recorded = w.stream.fetch
+    w.stream.fetch = (url, init) => {
+      signals.push(init.signal)
+      return recorded(url, init)
+    }
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(signals).toHaveLength(1)
+    expect(signals[0]!.aborted).toBe(false)
+    pauseCcrLinks()
+    await flush()
+    expect(signals[0]!.aborted).toBe(true)
+    expect(w.timers.pending()).toEqual([])
+    expect(signals).toHaveLength(1)
+  })
+
+  it('back in front, a paused stream resumes after the last sequence number it held', async () => {
+    const one = text('u1', 'user', 'hello')
+    const two = text('a1', 'assistant', 'streamed before the pause')
+    const w = world((_url, attempt) => (attempt === 1 ? { status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true } : { status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([one])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    pauseCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(1)
+    foregroundCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(2)
+    expect(w.stream.requests[1]!.url).toContain(`from_sequence_num=${two.sequence_num}`)
+    expect(w.pageRequests).toHaveLength(1)
+    expect(link.getState().phase).toBe('live')
+  })
+
+  it('a tab opened while the app is in the background waits for the foreground to read', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    pauseCcrLinks()
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.pageRequests).toHaveLength(0)
+    expect(w.stream.requests).toHaveLength(0)
+    foregroundCcrLinks()
+    await flush()
+    expect(w.pageRequests).toHaveLength(1)
+    expect(w.stream.requests).toHaveLength(1)
   })
 })

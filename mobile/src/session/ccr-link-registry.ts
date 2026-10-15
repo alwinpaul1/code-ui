@@ -71,6 +71,9 @@ export function acquireCcrLink(accountId: string, sessionId: string): CcrLinkHan
   if (!entry) {
     entry = { link: new CcrSessionLink(accountId, sessionId, lazyDeps()), refs: 0, cancelLinger: null }
     entries.set(key, entry)
+    if (appInBackground) {
+      entry.link.pause()
+    }
   }
   entry.cancelLinger?.()
   entry.cancelLinger = null
@@ -104,10 +107,30 @@ export function openCcrLink(accountId: string, sessionId: string): CcrSessionLin
   return entries.get(ccrTranscriptKey(accountId, sessionId))?.link ?? null
 }
 
-/** Every open link retries a lost stream now (a relay reconnect, the app back in front). */
+/** Every open link retries a lost stream now (a relay reconnect). */
 export function retryCcrLinks(): void {
   for (const entry of entries.values()) {
     entry.link.retry()
+  }
+}
+
+/** True while the app is in the background: no link streams, and a link opened meanwhile waits. */
+let appInBackground = false
+
+/** The app went to the background (client-context.tsx): every stream closes until the foreground. */
+export function pauseCcrLinks(): void {
+  appInBackground = true
+  for (const entry of entries.values()) {
+    entry.link.pause()
+  }
+}
+
+/** The app is back in front (client-context.tsx): paused streams resume after the last sequence
+ *  each held, and lost ones try again. */
+export function foregroundCcrLinks(): void {
+  appInBackground = false
+  for (const entry of entries.values()) {
+    entry.link.resume()
   }
 }
 
@@ -139,6 +162,7 @@ export function resetCcrLinksForTests(): void {
     entry.link.stop()
   }
   entries.clear()
+  appInBackground = false
   depsLoader = loadDefaultDeps
   depsPromise = null
   depsPromiseResolved = null

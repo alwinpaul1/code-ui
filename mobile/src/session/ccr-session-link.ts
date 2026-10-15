@@ -1,7 +1,8 @@
-import { CcrApiError, listCcrSessionEvents, type CcrEvent, type CcrEventPage } from './ccr-session-api'
+import { CcrApiError, type CcrEvent, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
+import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
 import { readCcrTranscript, writeCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
 import { CcrEventStore } from './ccr-link-store'
@@ -36,6 +37,7 @@ export class CcrSessionLink {
   private reconnects = 0
   private stopped = false
   private started = false
+  private paused = false
   private refreshedAuth = false
   private skippedFrames = 0
 
@@ -107,7 +109,9 @@ export class CcrSessionLink {
       return
     }
     this.started = true
-    void this.open()
+    if (!this.paused) {
+      void this.open()
+    }
   }
 
   private async open(): Promise<void> {
@@ -127,12 +131,8 @@ export class CcrSessionLink {
 
   /** One history page, newest first from `cursor`; false when it failed (the state says why). */
   private async readPage(cursor: string | null): Promise<boolean> {
-    const auth = await this.auth()
-    if (!auth) {
-      return false
-    }
     try {
-      const page = await listCcrSessionEvents(this.deps.fetch, auth, this.sessionId, { cursor, limit: CCR_FIRST_PAGE_EVENTS })
+      const page = await this.readHistory(cursor, CCR_FIRST_PAGE_EVENTS)
       // After stop(), `set` and `persist` change nothing and connect() does not dial.
       this.add(page.events)
       // Only the first page is read here: what is older starts at its cursor.
@@ -145,24 +145,20 @@ export class CcrSessionLink {
     }
   }
 
-  private async auth(): Promise<CcrLinkAuth | null> {
-    const auth = await this.deps.auth(this.accountId, false).catch(() => null)
-    if (!auth) {
-      this.set({ phase: 'error', error: 'This account is signed out on this phone. Sign in to it again in Anthropic accounts.' })
-    }
-    return this.stopped ? null : auth
+  private readHistory(cursor: string | null, limit: number): Promise<CcrEventPage> {
+    return readCcrHistoryPage(this.deps, this.accountId, this.sessionId, cursor, limit)
   }
 
-  /** Records a failure in the state; false. A 401 re-reads the sign-in once before giving up. */
+  /** Records a failure in the state; false. */
   private failed(error: unknown, what: string): false {
     // After stop() `set` changes nothing; the line still says what happened.
     this.log(`${what} failed for session …${this.sessionId.slice(-6)}: ${reasonOf(error)}`)
-    this.set({ phase: 'error', error: `Anthropic could not be read: ${reasonOf(error)}` })
+    this.set({ phase: 'error', error: error instanceof CcrSignedOutError ? CCR_SIGNED_OUT_LINE : `Anthropic could not be read: ${reasonOf(error)}` })
     return false
   }
 
   private connect(): void {
-    if (this.stopped) {
+    if (this.stopped || this.paused) {
       return
     }
     const controller = new AbortController()
@@ -173,7 +169,7 @@ export class CcrSessionLink {
         return
       }
       if (!auth) {
-        this.set({ phase: 'error', error: 'This account is signed out on this phone. Sign in to it again in Anthropic accounts.' })
+        this.set({ phase: 'error', error: CCR_SIGNED_OUT_LINE })
         return
       }
       const from = this.store.lastSequenceNum
@@ -265,27 +261,21 @@ export class CcrSessionLink {
   /** Pages back from `cursor` until `stop(page)`, the history's start or the page cap. The last
    *  page read, or null when one failed (logged, never thrown). */
   private async walkBack(cursor: string | null, limit: number, stop: (page: CcrEventPage) => boolean, what: string): Promise<CcrEventPage | null> {
-    for (let count = 0; count < CCR_MAX_EVENT_PAGES; count++) {
-      const auth = await this.auth()
-      if (!auth) {
-        return null
-      }
-      try {
-        const page = await listCcrSessionEvents(this.deps.fetch, auth, this.sessionId, { cursor, limit })
+    try {
+      return await walkCcrHistory((at) => this.readHistory(at, limit), cursor, (page) => {
         if (this.add(page.events)) {
           this.set({})
           this.persist()
         }
-        if (this.stopped || stop(page) || !page.nextCursor) {
-          return page
-        }
-        cursor = page.nextCursor
-      } catch (error) {
-        this.log(`${what} failed: ${reasonOf(error)}`)
-        return null
+        return this.stopped || stop(page)
+      })
+    } catch (error) {
+      if (error instanceof CcrSignedOutError) {
+        this.set({ phase: 'error', error: CCR_SIGNED_OUT_LINE })
       }
+      this.log(`${what} failed: ${reasonOf(error)}`)
+      return null
     }
-    return null
   }
 
   private scheduleReconnect(why: string): void {
@@ -319,19 +309,45 @@ export class CcrSessionLink {
     this.persist()
   }
 
-  /** A relay reconnect or the app back in front: a lost stream (or an error) tries again now. */
+  /** A relay reconnect: a lost stream (or an error) tries again now. */
   retry(): void {
+    if (!this.stopped && this.started && !this.paused && (this.state.phase === 'lost' || this.state.phase === 'error')) {
+      this.restart()
+    }
+  }
+
+  /** The app went to the background: the stream closes, and no redial waits, until `resume()`. */
+  pause(): void {
+    if (this.stopped || this.paused) {
+      return
+    }
+    this.paused = true
+    this.cancelTimer?.()
+    this.cancelTimer = null
+    this.abort?.abort()
+    this.abort = null
+  }
+
+  /** The app is back in front: a paused stream resumes after the last sequence held, and a lost
+   *  one (or an error) tries again. */
+  resume(): void {
+    const wasPaused = this.paused
+    this.paused = false
     if (this.stopped || !this.started) {
       return
     }
-    if (this.state.phase === 'lost' || this.state.phase === 'error') {
-      this.reconnects = 0
-      this.refreshedAuth = false
-      this.cancelTimer?.()
-      this.cancelTimer = null
-      this.abort?.abort()
-      void this.open()
+    if (wasPaused || this.state.phase === 'lost' || this.state.phase === 'error') {
+      this.restart()
     }
+  }
+
+  private restart(): void {
+    this.reconnects = 0
+    this.refreshedAuth = false
+    this.cancelTimer?.()
+    this.cancelTimer = null
+    this.abort?.abort()
+    void this.open()
   }
 
   /** Stops the stream and timers for good; the registry wipes the kept copy on a sign-out. */
