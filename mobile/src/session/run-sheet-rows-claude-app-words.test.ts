@@ -77,3 +77,39 @@ describe("a Codex run sheet's rows are unchanged", () => {
     expect(rowOf('update_plan', { plan: [{ step: 'a', status: 'pending' }] })).toBe('Used update_plan  plan')
   })
 })
+
+// Review of 7a24e2529: some lanes hand a call's input as a JSON string, which
+// the per-key reads did not look into; and a target was drawn whole however
+// long it was, where the generic label cuts at 80.
+describe("the Claude rows' targets, from any input shape and at any length", () => {
+  it('reads a web search and a listing whose input is a JSON string', () => {
+    expect(rowOf('WebSearch', '{"query":"flashlist"}')).toBe('Searched web  flashlist')
+    expect(rowOf('LS', '{"path":"/repo/src"}')).toBe('Listed  /repo/src')
+  })
+
+  it('cuts a 5000-character pattern to 80, ending in an ellipsis', () => {
+    const row = runSheetRows(one('Grep', { pattern: 'x'.repeat(5000) }), [])[0]!
+    expect(row.detail!.length).toBe(80)
+    expect(row.detail!.endsWith('…')).toBe(true)
+  })
+
+  it('cuts a long query, path, header and subject the same way', () => {
+    const long = 'y'.repeat(300)
+    for (const [name, input] of [
+      ['WebSearch', { query: long }],
+      ['LS', { path: long }],
+      ['AskUserQuestion', { questions: [{ header: long }] }],
+      ['TaskCreate', { subject: long }]
+    ] as const) {
+      expect(runSheetRows(one(name, input), [])[0]!.detail!.length).toBe(80)
+    }
+  })
+
+  it('leaves a target of exactly 80 whole', () => {
+    expect(runSheetRows(one('Grep', { pattern: 'z'.repeat(80) }), [])[0]!.detail).toBe('z'.repeat(80))
+  })
+
+  it('names a skill whose id ends in a slash by its whole id, never a bare "/"', () => {
+    expect(rowOf('Skill', { skill: 'plugin/' })).toBe('Ran skill  /plugin/')
+  })
+})

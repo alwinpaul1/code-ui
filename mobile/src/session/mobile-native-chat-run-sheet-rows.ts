@@ -107,15 +107,44 @@ function firstQuestionHeader(input: unknown): string | null {
   return Array.isArray(questions) ? readString(questions[0], 'header') : null
 }
 
-/** A skill as the app names it: "/" and the name after its last `/`. */
+/** A skill as the app names it: "/" and the name after its last `/`; the
+ *  whole id when nothing follows that slash, never a bare "/". */
 function skillName(input: unknown): string | null {
   const skill = readString(input, 'skill') ?? readString(input, 'name')
-  return skill ? `/${skill.slice(skill.lastIndexOf('/') + 1)}` : null
+  if (!skill) {
+    return null
+  }
+  const last = skill.slice(skill.lastIndexOf('/') + 1)
+  return `/${last || skill}`
+}
+
+/** Longest target a Claude row draws, the generic input label's cap
+ *  (MAX_TOOL_PREVIEW_LENGTH): longer ones end in an ellipsis at this length. */
+const TARGET_MAX = 80
+
+function capped(text: string | null): string | null {
+  return text === null || text.length <= TARGET_MAX ? text : `${cutWholeCharacters(text, TARGET_MAX - 1)}…`
+}
+
+/** A call's input as an object where it came as a JSON string (Codex, and
+ *  some lanes for Claude), else as it came. */
+function parsedInput(input: unknown): unknown {
+  if (typeof input !== 'string' || !/^\s*[{[]/.test(input)) {
+    return input
+  }
+  try {
+    const parsed: unknown = JSON.parse(input)
+    return parsed !== null && typeof parsed === 'object' ? parsed : input
+  } catch {
+    return input
+  }
 }
 
 /** The row of one of Claude Code's own tools in the Claude app's words, or
  *  null for any other name (every Codex tool among them). */
-function claudeAppRow(name: string, input: unknown, plain: (verb: string, detail: string | null) => RowFacts): RowFacts | null {
+function claudeAppRow(name: string, raw: unknown, draw: (verb: string, detail: string | null) => RowFacts): RowFacts | null {
+  const input = parsedInput(raw)
+  const plain = (verb: string, detail: string | null): RowFacts => draw(verb, capped(detail))
   switch (name) {
     case 'WebSearch':
       return plain('Searched web', readString(input, 'query'))
