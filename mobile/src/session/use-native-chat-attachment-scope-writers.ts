@@ -17,6 +17,7 @@ import {
   registerNativeChatUploadRetry
 } from './mobile-native-chat-upload-retry'
 import {
+  forgetNativeChatUploadAborts,
   nativeChatChipIdCounter,
   nativeChatRemovedUploads,
   nativeChatUploadAborts,
@@ -132,6 +133,8 @@ export function useNativeChatAttachmentScopeWriters(
   )
   const settleUploads = useCallback(
     (scope: string, batch?: string) => {
+      // The selection is over, so nothing in it can be called back any more.
+      forgetNativeChatUploadAborts(scope, batch)
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, dropUploadingNativeChatImages(prev[scope] ?? [], batch))
       )

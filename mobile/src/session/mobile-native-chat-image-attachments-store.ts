@@ -46,6 +46,23 @@ export const nativeChatRemovedUploads = { ids: new Set<string>(), uploads: new S
  *  went on and left a file at Anthropic that nothing referenced); a desktop save ignores it. */
 export const nativeChatUploadAborts = new Map<string, AbortController>()
 
+/** A failed chip's retry on its way up, by chip id (mobile-native-chat-upload-retry.ts): the remove
+ *  badge calls it back, and so does a reset, which reuses chip ids from 1 (second review of the
+ *  Anthropic lane, 2026-10-15: one left running landed on the next chip to take its id). Kept
+ *  here because the store cannot import the retry module, which imports it. */
+export const nativeChatRetryUploads = new Map<string, AbortController>()
+
+/** Drops the abort handles a selection registered, once it has ended: every picture in it has
+ *  landed, failed, or been refused by then, whichever way (a 413, or bytes that never read). */
+export function forgetNativeChatUploadAborts(scope: string, batch: string | undefined): void {
+  const prefix = batch === undefined ? `${scope}\u0000` : removedUploadKey(scope, batch, '')
+  for (const key of nativeChatUploadAborts.keys()) {
+    if (key.startsWith(prefix)) {
+      nativeChatUploadAborts.delete(key)
+    }
+  }
+}
+
 export function removedUploadKey(scope: string, batch: string | undefined, previewUri: string): string {
   return `${scope}\u0000${batch ?? ''}\u0000${previewUri}`
 }
@@ -165,6 +182,10 @@ export const useNativeChatImageAttachmentsStore = create<{
       upload.abort()
     }
     nativeChatUploadAborts.clear()
+    for (const upload of nativeChatRetryUploads.values()) {
+      upload.abort()
+    }
+    nativeChatRetryUploads.clear()
     for (const controller of videoFrameExtractionControllers.values()) {
       controller.abort()
     }

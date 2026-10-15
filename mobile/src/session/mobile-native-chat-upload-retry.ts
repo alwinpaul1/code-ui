@@ -6,6 +6,7 @@ import {
 } from './mobile-native-chat-image-attachment'
 import {
   nativeChatAttachmentsResets,
+  nativeChatRetryUploads as retryUploads,
   useNativeChatImageAttachmentsStore
 } from './mobile-native-chat-image-attachments-store'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
@@ -30,8 +31,6 @@ type NativeChatUploadRetry = {
 // The store cannot import this module (it is imported by it), so a retry records the reset
 // count it was made under and one from before the latest reset is dropped on sight.
 const retries = new Map<string, NativeChatUploadRetry & { readonly resets: number }>()
-/** A retry on its way up, by chip id: the remove badge (forget) calls it back. */
-const retryUploads = new Map<string, AbortController>()
 
 function pruneRetriesFromBeforeReset(): void {
   for (const [id, retry] of retries) {
@@ -84,8 +83,10 @@ export async function retryNativeChatUpload(id: string): Promise<boolean> {
   retryUploads.set(id, upload)
   try {
     const landed = await retry.run(upload.signal)
+    pruneRetriesFromBeforeReset()
     if (retries.get(id) !== retry) {
-      // Removed while it went up, and it landed anyway: nothing will reference its file.
+      // Removed, or the store reset, while it went up, and it landed anyway: nothing will
+      // reference its file, and its chip id may be another chip's now.
       void discardCcrUploadedFile(landed.anthropicFile)
       return false
     }
@@ -103,7 +104,12 @@ export async function retryNativeChatUpload(id: string): Promise<boolean> {
   } catch (error) {
     // Removed while it went up again (the badge shows over the ring): nothing to say. Refused as
     // too large (HTTP 413): no retry can help, so the chip goes, with the app's words.
+    pruneRetriesFromBeforeReset()
     const stillWanted = retries.get(id) === retry
+    if (!stillWanted) {
+      // Its chip is gone, or the store reset and the id may be another chip's now: leave it be.
+      return false
+    }
     const refused = error instanceof CcrFileUploadError && error.refusedBeforeUpload
     if (refused) {
       retries.delete(id)
@@ -113,9 +119,7 @@ export async function retryNativeChatUpload(id: string): Promise<boolean> {
       .update((prev) =>
         withScopeAttachments(prev, retry.scope, refused ? (prev[retry.scope] ?? []).filter((chip) => chip.id !== id) : refailNativeChatImage(prev[retry.scope] ?? [], id))
       )
-    if (stillWanted) {
-      retry.onFailed(error)
-    }
+    retry.onFailed(error)
     return false
   } finally {
     if (retryUploads.get(id) === upload) {
