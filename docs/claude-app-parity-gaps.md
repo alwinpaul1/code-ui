@@ -346,11 +346,86 @@ account's sign-in (`ccrSendTargetForTab`, `use-ccr-composer-send.ts`).
   the user names, and nothing without a name; it prints no tokens and no
   message text, only event types and a verdict: `RAN` (a local-command record
   followed), `TEXT` (Claude answered it as a prompt) or `UNKNOWN`. Not run yet.
-- **Still typed into the terminal:** photo and file sends (the app's upload,
-  `{org}/upload` on claude.ai, needs the app's own login), slash commands
+- **Still typed into the terminal:** photo and file sends while the switch in
+  §1.5 is off (it is, until probe P13 passes), slash commands
   (typed, or driven from pickers: model, effort, mode), Stop, permission and
   question answers, and every non-Claude tab and Claude tab with nothing on
   Anthropic.
+
+### 1.5 Attachments through Anthropic (2026-10-15, behind a switch, off)
+
+The user asked for attachments to be "directly uploaded to anthropic same like
+claude mobile does not to desktop terminal".
+
+**What the Claude app does** (1.261009.20, decompiled):
+
+- **Upload on attach.** `qnv` ("SessionUploader") POSTs each file to
+  `https://claude.ai/api/{org}/upload` (`sv5.a`, base `hw0.a`), multipart part
+  `file`, as soon as it is picked (`n50` case 25, `u49.a` → `zy30.p`), one
+  coroutine per chip. Auth is the app's claude.ai cookie (`sessionKey`,
+  `a22.java:12`), not a bearer token. The reply (`sul`, `"image"`/`"document"`)
+  gives `file_uuid`; `is_image` is `image/*` (`qnv.java:44-48`).
+- **Chip states** (`sj4`): uploading `rj4`, done `oj4(w7v)`, failed `pj4`, too
+  large `qj4`. The cap is `mobile_upload_config.max_file_size_bytes`, default
+  31 457 280 (`yy00`, checked in `y5k.java:118-119`); no type allow-list.
+  Failure toasts "Upload failed" (`ccr_upload_failed`); no automatic retry and
+  no tap-to-retry on a Code chip.
+- **Send** (`su8`): one user event with `file_attachments:
+  [{file_uuid, file_name, is_image}]` (`phx`/`rhx`, `u7v`/`w7v`), built from
+  done chips only. Any failed chip disables Send (`u49.d()`); a chip still
+  uploading at send is cleared with the rest (`u49.j`), so its file is lost.
+- **On the desktop**, Claude Code 2.1.300 downloads each `file_uuid` with its
+  own token from `/api/oauth/files/{id}/content` (35 MiB cap, 20 files without
+  a digest) and writes "[attachment did not arrive]" when it cannot.
+
+**Endpoint decision.** The phone holds each account's Claude Code OAuth token,
+not the app's claude.ai cookie, so `{org}/upload` is out of reach. The one
+upload that token can make is the Files API: POST `/v1/files`, part `file`,
+`purpose=user_data`, `anthropic-beta: files-api-2025-04-14,oauth-2025-04-20`,
+which Claude Code itself uses. Probe P2 (2026-10-15) got a 200 and an id of the
+shape `file_…` (not a uuid), and a session event carrying it was accepted. **Not
+yet shown:** that the desktop's `/api/oauth/files/{id}/content` serves a Files
+API id, i.e. that Claude actually reads the file. Until it is, the lane would
+risk sending a message whose attachment silently does not arrive.
+
+**What is built** (`mobile/src/session/`):
+
+- `ccr-file-upload.ts`: the switch `CCR_ATTACHMENTS_THROUGH_ANTHROPIC`
+  (**false**), the request, the app's 30 MB cap and words ("File size exceeds
+  30 MB limit", "Upload failed"), a 0-byte refusal, 401 → one fresh token,
+  413 → too large. Always the tab session's own account.
+- `ccr-file-upload-device.ts`: multipart through expo-file-system from a cache
+  file deleted afterwards.
+- `use-ccr-attachment-lane.ts`: with the switch on and a Claude tab on the
+  Anthropic lane, picks upload to Anthropic and never touch the desktop;
+  otherwise (switch off, Codex, any other tab) the desktop path, unchanged.
+- `ccr-attachment-send.ts`, `use-native-chat-anthropic-send.ts`,
+  `native-chat-send-route.ts`, `use-ccr-composer-send.ts`: words and finished
+  chips in one event with `file_attachments`; a bare attachment with no words
+  is allowed.
+- `MobileNativeChatAttachmentChips.tsx`: the chip as the app draws it (§3.4).
+
+**Where it departs from the app, on purpose:**
+
+- Send **waits** for uploads ("Waiting for attachments to upload", the app's
+  `chat_input_send_button_waiting_for_uploads`) instead of dropping a chip
+  still uploading.
+- A failed chip keeps a **retry** (the red disc), since the lane can upload
+  it again; the app only offers remove.
+- Sends with files go out at once, never into the phone's text queue, and
+  are not recorded in the outbox.
+- The picker still caps documents at the host path's 18 MB before the lane
+  sees them; the pending bubble shows image previews only; photos carry no
+  extension badge.
+
+**To turn it on.** The user runs, from
+`/private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Code-UI/211c47c2-7a42-4c86-9a59-eaa0905d39e6/scratchpad/probe/`:
+`node p13-attachments.cjs upload "<session title>"` (uploads a 2×1 PNG and a
+one-line text file, reads each back through the desktop's route, posts
+nothing), then `node p13-attachments.cjs post "<session title>"`, which **posts
+one message** into that session asking Claude for the colours and the line.
+Flip the switch only if the CLI route returns 200 with the same bytes and the
+reply names red, blue and the line. Neither prints a token.
 
 ---
 
@@ -365,7 +440,7 @@ SSE stream as `control_response` with the same `request_id`.
 | Action | Claude app wire | Code UI via Orca | Parity without Anthropic's servers? |
 |---|---|---|---|
 | Send a prompt | POST events, `user` event (1.1) | `terminal.send` with Enter after a verified clear | Yes, done (section 1) |
-| Attachments | upload to `{org}/upload`, referenced by `file_uuid` | `clipboard.*Upload` to a desktop temp file, pasted as a bracketed path | Yes, done |
+| Attachments | upload to `{org}/upload`, referenced by `file_uuid` | `clipboard.*Upload` to a desktop temp file, pasted as a bracketed path; the Files API lane (§1.5) is built behind a switch, off until probe P13 | Yes, done |
 | Stop | `interrupt`, no reply awaited; failure "Couldn't stop the session. Try again." | Escape twice, 80 ms apart (`use-mobile-native-chat-stop.ts`); structured lane `agentSession.cancel` | Yes. Done 2026-10-14 (G24): a Stop that failed, or an agent still working 10 s after it, says "Couldn't stop the session. Try again." on both lanes and Stop is live again; the cause is one `[stop] …` log line. An ack lost after the Escape went keeps "Stop unconfirmed — check chat before retrying", because it may have worked |
 | Allow once / Always allow / Deny | `control_response` with `behavior`, `updatedInput`, `updatedPermissions`, `message: "Denied by user"` | the option's digit key after a screen re-read (`mobile-native-chat-permission-send.ts`) | Yes, done |
 | Deny with comment | deny with `message` (notification inline reply) | Done 2026-10-14: typed into the dialog's "No" row with its own keys, Claude Code only | Yes (gap G21) |
@@ -484,7 +559,7 @@ match the app's (none). The one self-starting motion above reads `useReducedMoti
 | Model sheet with an **Effort row** inside, "Update Claude Code…" for models too new for the CLI. Two pickers exist in 1.261009.20: the Code section's (`n330.a`) lists the older models inline under an "Other models" header (`ccr_model_overflow_header`); the chat picker (`pij`, destinations "Select model", "More models", "Effort") puts them behind a "More models" row. Which models are older is the server's `model_selector_config[key].models[].section` (MAIN, OVERFLOW, DEPRECATED; DEPRECATED rows are dropped). | `MobileNativeChatSessionOptionPickers.tsx`: the chat picker's tap-through ("More models" row naming the running older model, a page titled "More models"), by the user's request 2026-10-14. Claude Code's `list_models` carries no section, so `model-sheet-layout.ts` stands in: the newest row of each family is first-page, the rest are older. | **Match** (chat picker; the Code section's inline header is not used) |
 | Slash popup: CLI commands plus the app's own; "/name" mono 15 in link blue; description `jn7.H` muted; ≤240 dp, 12 dp radius, hairline, 3 dp shadow, 150 ms size animation | `MobileNativeChatComposerSuggestions.tsx` | **Differs** (G7) |
 | @ mention: members only; **no @file in Code** | @files supported | **Code UI is ahead**: keep it |
-| Attachment chips 96 dp; remove at 18 dp; spinner while uploading; red failed pill; reorder | `MobileNativeChatAttachmentChips.tsx` | **In progress** (thumbnails) |
+| Attachment chips 96 dp (`l7f.d`, `cxe.c`): photo square cropped at radius 16, document card with extension badge and base name (no icon, no size); 32 dp ring in `pl7.e`, no scrim; red failed disc (`pl7.A`, 0.8); 18 dp remove disc 4 dp in; strip 12 apart (`l7s.a`); reorder | `MobileNativeChatAttachmentChips.tsx` | Match (2026-10-15), plus a retry on the failed disc; Code UI's own type sizes |
 | Voice: mic, hold-to-talk behind a flag, waveform, "Transcribing…" | `src/dictation/*`, toggle or hold in `app/voice-settings.tsx` | Match-ish |
 | Key strip | none in the Claude app | Code UI extra (needed for a TUI) |
 
