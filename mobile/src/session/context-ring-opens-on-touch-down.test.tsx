@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it } from 'vitest'
 import { vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 
 // The composer's context ring opens its sheet the way the + does
@@ -69,7 +70,7 @@ function isHost(node: { type: unknown }, tag: string): boolean {
   return node.type === tag
 }
 
-async function mountComposer(scheme: 'light' | 'dark'): Promise<void> {
+async function mountComposer(scheme: 'light' | 'dark', extra: object = {}): Promise<void> {
   await act(async () => {
     renderer = create(
       <ThemeProvider initialPreference={scheme}>
@@ -83,7 +84,8 @@ async function mountComposer(scheme: 'light' | 'dark'): Promise<void> {
           agent: 'claude',
           // The prop the composer used to draw its ring from, handed in anyway: a stray one must
           // draw nothing now.
-          ...({ contextWindow: { usedPercent: 42 } } as object)
+          ...({ contextWindow: { usedPercent: 42 } } as object),
+          ...extra
         })}
       </ThemeProvider>,
       { createNodeMock: () => ({ focus: () => {}, blur: () => {}, isFocused: () => true }) }
@@ -119,5 +121,27 @@ describe.each(['light', 'dark'] as const)('the context ring in %s mode', (scheme
     await act(async () => (ring().props.onPressIn as (() => void) | undefined)?.())
     await act(async () => (ring().props.onPress as () => void)())
     expect(sheetUp(), 'the release toggled the sheet shut').toBe(true)
+  })
+})
+
+// The Claude app's colour bands on a matched Claude tab (claude-context-ring-draws-the-app-colour-bands.test.tsx):
+// at 72% the app's ring is still blue, where the fade had already turned amber at 70.
+describe.each([
+  ['light', lightColors],
+  ['dark', darkColors]
+] as const)('the composer ring’s colour in %s mode', (scheme, palette) => {
+  const stroke = (): string => {
+    const circles = renderer!.root.findAll((node) => isHost(node, 'Circle'))
+    return (circles[1]!.props as { animatedProps: { stroke: string } }).animatedProps.stroke
+  }
+
+  it('a matched Claude tab draws the app’s blue under 75%', async () => {
+    await mountComposer(scheme, { sendRing: true, contextWindow: { usedPercent: 72 } })
+    expect(stroke()).toBe(palette.info)
+  })
+
+  it('a Codex tab keeps the fade, amber from 70%', async () => {
+    await mountComposer(scheme, { agent: 'codex', contextWindow: { usedPercent: 72 } })
+    expect(stroke()).toBe(palette.warning)
   })
 })

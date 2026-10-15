@@ -2,20 +2,27 @@ import { Pressable } from 'react-native'
 import Animated from 'react-native-reanimated'
 import Svg, { Circle } from 'react-native-svg'
 import { useTheme } from '../theme/theme-context'
+import { contextRingColor, contextRingStep } from '../session/session-header-display'
 import { useUsageProgress } from './use-usage-progress'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 /** Small ring showing how much of the model's context window is used; taps
  *  open the detail sheet. The arc and its colour ease to each new reading:
- *  green while calm, amber by 70, red from 90. */
+ *  green while calm, amber by 70, red from 90.
+ *
+ *  With `bands` (a Claude tab matched to its Anthropic session) the colour is the Claude app's
+ *  instead: stepped on the whole percent, blue under 75, yellow from 75, red from 90 (v7a.java:19-27,
+ *  q95.java:7-42 in com.anthropic.claude 1.261013.20), as the theme's info, warning and danger. */
 export function ContextWindowRing({
   usedPercent,
+  bands = false,
   onPress,
   onPressIn,
   size = 18
 }: {
   usedPercent: number
+  bands?: boolean
   onPress?: () => void
   /** Touch-down, for a caller that opens its sheet before the finger lifts. */
   onPressIn?: () => void
@@ -26,7 +33,11 @@ export function ContextWindowRing({
   const stroke = 2.5
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
-  const { ringProps } = useUsageProgress(pct, circumference)
+  const { ringProps } = useUsageProgress(
+    pct,
+    circumference,
+    bands ? contextRingColor(contextRingStep(Math.round(pct)), colors) : undefined
+  )
   return (
     <Pressable
       focusable={false}

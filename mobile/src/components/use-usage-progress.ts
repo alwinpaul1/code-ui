@@ -17,9 +17,10 @@ const USAGE_FADE_MS = 450
  * eases to its new value and the colour fades along the green→amber→red scale
  * instead of snapping at 70 and 90.
  *
- * `circumference` is only needed by the ring, for its dash offset.
+ * `circumference` is only needed by the ring, for its dash offset. `stroke`, when given, is the
+ * ring's colour in place of the fade (a matched Claude tab's stepped bands, ContextWindowRing).
  */
-export function useUsageProgress(percent: number, circumference = 1) {
+export function useUsageProgress(percent: number, circumference = 1, stroke?: string) {
   const { colors } = useTheme()
   const pct = Math.max(0, Math.min(100, percent))
   const progress = useSharedValue(pct)
@@ -39,10 +40,10 @@ export function useUsageProgress(percent: number, circumference = 1) {
   )
   const ringProps = useAnimatedProps(
     () => ({
-      stroke: interpolateColor(progress.value, stops, palette),
+      stroke: stroke ?? interpolateColor(progress.value, stops, palette),
       strokeDashoffset: circumference * (1 - progress.value / 100)
     }),
-    [progress, stops, palette, circumference]
+    [progress, stops, palette, circumference, stroke]
   )
   return { barStyle, ringProps }
 }

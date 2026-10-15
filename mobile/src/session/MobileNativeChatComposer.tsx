@@ -540,7 +540,8 @@ export function MobileNativeChatComposer({
             ) : null}
             {contextWindow ? (
               <ContextWindowRing
-                usedPercent={contextWindow.usedPercent}
+                // A matched Claude tab draws the Claude app's colour bands (ContextWindowRing.tsx).
+                usedPercent={contextWindow.usedPercent} bands={sendRing}
                 // On touch-down, as the + does: the ring sits in the dock,
                 // outside the chat list's scroll, so no scroll can claim the
                 // touch afterwards. onPress stays for a screen reader's click.
