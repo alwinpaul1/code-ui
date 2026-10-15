@@ -136,6 +136,15 @@ export function fileBaseName(path: string): string {
 
 /** The card's heading: the file for one ("Edited run.sh", `ccr_turn_edits_single_file`),
  *  the run sentence's words for several ("Edited 2 files, created a file"). */
+/**
+ * Whether the turn edits card is drawn under a finished turn. The Claude app draws it only when
+ * three server flags are on (fq6.java case 16: `ys6.c4 && k1v.c()` — `claudeai_hub_cowork_session_chat`
+ * and `claudeai_hub_code_session_chat` — `&& ccr_turn_edits_card`), and on the user's app they are
+ * off: 2026-10-15 a turn that edited a file drew only the run row "Ran 3 commands, created a file
+ * +23 −0 ›", no card. So the card is off here too; the run row keeps its "+A −R" chip.
+ */
+export const TURN_EDITS_CARD_SHOWN: boolean = false
+
 export function turnEditsTitle(files: readonly TurnEditedFile[]): string {
   if (files.length === 1) {
     const [only] = files

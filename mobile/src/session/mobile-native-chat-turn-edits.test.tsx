@@ -35,6 +35,12 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
 })
+// The card is off in the app as the user has it (TURN_EDITS_CARD_SHOWN); these tests pin how it
+// draws if the flag is turned on, so they turn it on.
+vi.mock('./mobile-native-chat-turn-edits', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-turn-edits')>()),
+  TURN_EDITS_CARD_SHOWN: true
+}))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => {
   const icons: Record<string, string> = {}

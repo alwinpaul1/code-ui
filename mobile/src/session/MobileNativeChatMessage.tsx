@@ -28,8 +28,8 @@ import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageR
 import { withTaskNotifications } from './MobileNativeChatTaskNotificationRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
 import { errorRowOf } from './mobile-native-chat-error-rows'
-import type { TurnEditedFile } from './mobile-native-chat-turn-edits'
 import { MobileNativeChatTurnEditsCard } from './MobileNativeChatTurnEditsCard'
+import { TURN_EDITS_CARD_SHOWN, type TurnEditedFile } from './mobile-native-chat-turn-edits'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
@@ -482,7 +482,7 @@ function MobileNativeChatMessageRow({
         </Bubble>}
         {/* A hold's menu, and the sheet Select text opens. */}
         {holdOverlays}
-        {isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
+        {TURN_EDITS_CARD_SHOWN && isAgent && endsTurn && turnEdits && turnEdits.length > 0 ? (
           <MobileNativeChatTurnEditsCard
             files={turnEdits}
             turnIsNewest={turnIsNewest}
