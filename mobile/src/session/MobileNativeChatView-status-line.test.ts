@@ -188,9 +188,10 @@ function statusLine(instance: ReturnType<typeof create>): string[] | null {
   if (!line) {
     return null
   }
+  // Each square separator (ClaudeFooterSeparator) reads as the " · " it draws.
   return line
-    .findAllByType('Text' as never)
-    .map((node) => node.props.children)
+    .findAll((node) => (node.type as unknown) === 'Text' || (node.props.testID === 'claude-footer-separator' && (node.type as unknown) === 'View'))
+    .map((node) => (node.props.testID === 'claude-footer-separator' ? ' · ' : node.props.children))
     .filter((child): child is string => typeof child === 'string')
 }
 

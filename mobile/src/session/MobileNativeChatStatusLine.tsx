@@ -2,6 +2,7 @@ import { Pressable, Text, View } from 'react-native'
 import { claudeStatusFooterPalette } from '../theme/claude-status-footer-palette'
 import { useTheme } from '../theme/theme-context'
 import { ClaudeRollingText } from './ClaudeRollingText'
+import { ClaudeFooterSeparator } from './ClaudeFooterSeparator'
 import { ClaudeWorkingMark } from './ClaudeWorkingMark'
 import type { WorkingMarkKind } from './claude-working-mark'
 import {
@@ -126,7 +127,15 @@ export function MobileNativeChatStatusLine({
             <View style={{ width: CLAUDE_FOOTER_MARK_GAP }} />
             {stats ? (
               // The figures roll as the app's do (`z530.a`): each digit in a fixed slot.
-              <ClaudeRollingText testID="native-chat-status-stats" text={stats.stats} style={[text, { color: palette.body }]} />
+              // "15s · 1,234 tokens": each figure rolls on its own, with the square dot between them.
+              <View testID="native-chat-status-stats" accessible accessibilityLabel={stats.stats} style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+                {stats.stats.split(CLAUDE_FOOTER_SEPARATOR).map((part, index) => (
+                  <View key={index} style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
+                    {index > 0 ? <ClaudeFooterSeparator color={palette.body} fontSize={text.fontSize} /> : null}
+                    <ClaudeRollingText text={part} style={[text, { color: palette.body }]} />
+                  </View>
+                ))}
+              </View>
             ) : (
               // The offline sentence is the app's footer text, drawn whole (zr8.java:1097-1099).
               <Text style={[text, { color: palette.clay, flexShrink: 1 }]} numberOfLines={notice?.kind === 'offline' && message !== null ? undefined : 1}>
@@ -136,15 +145,18 @@ export function MobileNativeChatStatusLine({
           </View>
           {runningCount > 0 ? (
             <>
-              {/* The separator takes the line's text colour: muted beside stats, clay beside a verb (nl7.java:257-293). */}
-              <Text style={[text, { color: stats ? palette.body : palette.clay }]}>{CLAUDE_FOOTER_SEPARATOR}</Text>
+              {/* The separator takes the line's text colour: muted beside stats, clay beside a verb (nl7.java:257-293), drawn square as the app's font draws it (ClaudeFooterSeparator). */}
+              <ClaudeFooterSeparator color={stats ? palette.body : palette.clay} fontSize={text.fontSize} />
               {countButton}
             </>
           ) : null}
           {stats?.status ? (
-            <Text testID="native-chat-status-phrase" style={[text, { color: palette.body, flexShrink: 1 }]} numberOfLines={1}>
-              {`${CLAUDE_FOOTER_SEPARATOR}${stats.status}`}
-            </Text>
+            <>
+              <ClaudeFooterSeparator color={palette.body} fontSize={text.fontSize} />
+              <Text testID="native-chat-status-phrase" style={[text, { color: palette.body, flexShrink: 1 }]} numberOfLines={1}>
+                {stats.status}
+              </Text>
+            </>
           ) : null}
         </>
       ) : quiet !== null ? (
@@ -154,7 +166,7 @@ export function MobileNativeChatStatusLine({
           </Text>
           {runningCount > 0 ? (
             <>
-              <Text style={[text, { color: palette.body }]}>{CLAUDE_FOOTER_SEPARATOR}</Text>
+              <ClaudeFooterSeparator color={palette.body} fontSize={text.fontSize} />
               {countButton}
             </>
           ) : null}

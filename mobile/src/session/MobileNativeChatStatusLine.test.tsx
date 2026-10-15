@@ -67,12 +67,15 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
     return renderer!.root
   }
 
+  // The line's words in order, each square separator (ClaudeFooterSeparator) read as the " · " it draws.
   function texts(root: ReactTestInstance): string[] {
     return root
-      .findAllByType('Text' as never)
-      .map((node) => node.props.children)
+      .findAll((node) => (node.type as unknown) === 'Text' || (node.props.testID === 'claude-footer-separator' && (node.type as unknown) === 'View'))
+      .map((node) => (node.props.testID === 'claude-footer-separator' ? ' · ' : node.props.children))
       .filter((child): child is string => typeof child === 'string')
   }
+  const separatorColour = (root: ReactTestInstance) =>
+    flat(root.find((n) => n.props.testID === 'claude-footer-separator' && (n.type as unknown) === 'View').props.style).backgroundColor
 
   const star = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'claude-working-mark' && (n.type as unknown) === 'View')
   const oldStar = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'background-tasks-pulse')
@@ -132,7 +135,7 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
           .find((n) => typeof n.props.children === 'string' && match(n.props.children))
       expect(flat(byText((t) => t.endsWith('...'))!.props.style).color).toBe(want.clay)
       expect(flat(byText((t) => t === '4 running tasks')!.props.style).color).toBe(want.link)
-      expect(flat(byText((t) => t.includes('·'))!.props.style).color).toBe(want.clay)
+      expect(separatorColour(working)).toBe(want.clay)
     }
   })
 
@@ -228,7 +231,7 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
       expect(texts(root)).toEqual(['Connecting...', ' · ', '2 running tasks'])
       const byText = (t: string) => root.findAllByType('Text' as never).find((n) => n.props.children === t)!
       expect(flat(byText('Connecting...').props.style).color).toBe(want.clay)
-      expect(flat(byText(' · ').props.style).color).toBe(want.clay)
+      expect(separatorColour(root)).toBe(want.clay)
       expect(flat(byText('2 running tasks').props.style).color).toBe(want.link)
       expect(star(root).length).toBeGreaterThan(0)
     })

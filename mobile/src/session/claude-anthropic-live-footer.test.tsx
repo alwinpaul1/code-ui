@@ -100,6 +100,12 @@ function texts(root: ReactTestInstance): Array<{ text: string; color: string }> 
       out.push({ text: node.props.children as string, color: colorOf(node) })
       return
     }
+    // The square dot the line draws for " · " (ClaudeFooterSeparator), in its fill colour.
+    if (node.props.testID === 'claude-footer-separator' && (node.type as unknown) === 'View') {
+      const style = Object.assign({}, ...([] as unknown[]).concat(node.props.style).flat().filter(Boolean)) as { backgroundColor?: string }
+      out.push({ text: ' · ', color: style.backgroundColor ?? '' })
+      return
+    }
     for (const child of node.children) {
       if (typeof child !== 'string') {
         walk(child)
@@ -119,7 +125,7 @@ describe('the footer reads Anthropic’s live state, as the Claude app’s does'
         { text: '15s', color: palette.body },
         { text: ' · ', color: palette.body },
         { text: '2 running tasks', color: palette.link },
-        { text: ' · still thinking…', color: palette.body }
+        { text: ' · ', color: palette.body }, { text: 'still thinking…', color: palette.body }
       ])
       expect(root.findAll((node) => node.props.testID === 'claude-working-mark' && (node.type as unknown) === 'View').length).toBe(1)
     })
@@ -127,11 +133,11 @@ describe('the footer reads Anthropic’s live state, as the Claude app’s does'
 
   it('counts up each second, and steps the phrase at 30 s', () => {
     const root = draw('light', line(relayDownThinking, 0))
-    expect(texts(root).map((t) => t.text)).toEqual(['15s', ' · still thinking…'])
+    expect(texts(root).map((t) => t.text)).toEqual(['15s', ' · ', 'still thinking…'])
     act(() => {
       vi.advanceTimersByTime(15_000)
     })
-    expect(texts(root).map((t) => t.text)).toEqual(['30s', ' · thinking more…'])
+    expect(texts(root).map((t) => t.text)).toEqual(['30s', ' · ', 'thinking more…'])
   })
 
   it('with no stats (not thinking, no tokens) it keeps the cycling verb in clay', () => {
@@ -173,7 +179,7 @@ describe('after thinking, and while the token figure grows, as the Claude app dr
       vi.advanceTimersByTime(8_000)
     })
     redraw(live({ thinking: false }))
-    expect(texts(root).map((t) => t.text)).toEqual(['23s', ' · thought for 8s'])
+    expect(texts(root).map((t) => t.text)).toEqual(['23s', ' · ', 'thought for 8s'])
     act(() => {
       vi.advanceTimersByTime(2_000)
     })
@@ -186,7 +192,7 @@ describe('after thinking, and while the token figure grows, as the Claude app dr
       vi.advanceTimersByTime(3_000)
     })
     redraw(live({ thinking: false, thinkingTokens: 40 }))
-    expect(texts(root).map((t) => t.text)).toEqual(['18s · 40 tokens', ' · thought for 3s'])
+    expect(texts(root).map((t) => t.text)).toEqual(['18s · 40 tokens', ' · ', 'thought for 3s'])
     act(() => {
       vi.advanceTimersByTime(2_000)
     })
@@ -210,7 +216,7 @@ describe('after thinking, and while the token figure grows, as the Claude app dr
 
   it('counts the token figure up from 1 instead of jumping to it', () => {
     const root = draw('light', line(live({ thinking: true, thinkingTokens: 1_200 }), 0))
-    expect(texts(root).map((t) => t.text)).toEqual(['15s · 1 token', ' · still thinking…'])
+    expect(texts(root).map((t) => t.text)).toEqual(['15s · 1 token', ' · ', 'still thinking…'])
     act(() => {
       vi.advanceTimersByTime(600)
     })
@@ -280,7 +286,7 @@ describe('the thinking form of the line, as the Claude app draws it (2026-10-15 
         { text: '9s', color: palette.body },
         { text: ' · ', color: palette.body },
         { text: '3 running tasks', color: palette.link },
-        { text: ' · thinking…', color: palette.body }
+        { text: ' · ', color: palette.body }, { text: 'thinking…', color: palette.body }
       ])
     })
 
@@ -290,24 +296,24 @@ describe('the thinking form of the line, as the Claude app draws it (2026-10-15 
       const root = draw(scheme, line(thinkingAt(0), 0))
       expect(texts(root)).toEqual([
         { text: '9s', color: palette.body },
-        { text: ' · thinking…', color: palette.body }
+        { text: ' · ', color: palette.body }, { text: 'thinking…', color: palette.body }
       ])
       expect(root.findAll((node) => (node.type as unknown) === 'Pressable')).toHaveLength(0)
     })
 
     it(`reads "0s" the moment the turn starts (${scheme})`, () => {
       vi.setSystemTime(START)
-      expect(texts(draw(scheme, line(thinkingAt(1), 1))).map((t) => t.text)).toEqual(['0s', ' · ', '1 running task', ' · thinking…'])
+      expect(texts(draw(scheme, line(thinkingAt(1), 1))).map((t) => t.text)).toEqual(['0s', ' · ', '1 running task', ' · ', 'thinking…'])
     })
 
     it(`turns 59s into "1m 0s" at the minute, with the last thinking phrase (${scheme})`, () => {
       vi.setSystemTime(START + 59_000)
       const root = draw(scheme, line(thinkingAt(0), 0))
-      expect(texts(root).map((t) => t.text)).toEqual(['59s', ' · thinking some more…'])
+      expect(texts(root).map((t) => t.text)).toEqual(['59s', ' · ', 'thinking some more…'])
       act(() => {
         vi.advanceTimersByTime(1_000)
       })
-      expect(texts(root).map((t) => t.text)).toEqual(['1m 0s', ' · almost done thinking…'])
+      expect(texts(root).map((t) => t.text)).toEqual(['1m 0s', ' · ', 'almost done thinking…'])
     })
   }
 })
