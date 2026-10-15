@@ -12,7 +12,7 @@ import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 let n = 0
 function call(name: string, input: Record<string, unknown> = {}): NativeChatBlock {
   n += 1
-  return { type: 'tool-call', id: `c-${name}-${n}`, name, input }
+  return { type: 'tool-call', callId: `c-${name}-${n}`, name, input }
 }
 function ok(): NativeChatBlock {
   return { type: 'tool-result', output: 'ok' }
