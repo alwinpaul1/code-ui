@@ -2,6 +2,7 @@ import type { NativeChatBlock, NativeChatMessage, NativeChatToolResultBlock } fr
 import type { CcrEvent } from './ccr-session-api'
 import { ccrRowPasses } from './ccr-row-annotations'
 import { decodeCcrRefusal } from './ccr-refusal-rows'
+import { ccrContentWithNarrationAsText } from './ccr-narration-blocks'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
@@ -346,7 +347,8 @@ function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp
     return [{ id: uuid, role, blocks: [{ type: 'text', text: CCR_MODEL_REQUIRES_NEWER_CLI }], timestamp, source: 'transcript' }]
   }
   const message = record(payload.message)
-  const { blocks: text, thinking, pictures } = contentBlocks(message?.content)
+  // A thinking block the event names as narration is the reply's words (ccr-narration-blocks.ts).
+  const { blocks: text, thinking, pictures } = contentBlocks(ccrContentWithNarrationAsText(payload, message?.content))
   if (role === 'assistant' && isLocalCommandOutput(payload, message?.model)) {
     // A slash command's own output (`/code-review …` starting its background agent): the app's
     // command-output row, with the tags it does not draw taken out (mobile-native-chat-local-command.ts).
