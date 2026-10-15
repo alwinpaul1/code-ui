@@ -43,7 +43,9 @@ let current = { enabled: true, agentSessionId: null as string | null, deps: null
 function Probe(_props: { render: number }) {
   const args = { enabled: current.enabled, tabId: 'tab-1', agentSessionId: current.agentSessionId, epoch: 1 }
   useCcrSessionModel({ ...args, messages: MESSAGES, deps: current.deps!, needsContext: false })
-  header = useCcrSessionHeader(args)
+  // The title is shown only with the session writes switch on (the header and Rename then name the
+  // same thing); claude-rename-goes-to-anthropic-only-behind-the-switch.test.tsx covers it off.
+  header = useCcrSessionHeader({ ...args, writesOn: true })
   return null
 }
 

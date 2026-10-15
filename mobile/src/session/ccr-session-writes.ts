@@ -18,7 +18,8 @@ import { ccrCseId } from './ccr-send'
  *
  * Neither has been sent with the phone's per-account OAuth token, so both are behind
  * CCR_SESSION_WRITES, OFF until probe P16 (scratchpad/probe/p16-session-writes.cjs) shows them
- * accepted. While it is off, Rename keeps renaming the Orca workspace and nothing is marked read.
+ * accepted. While it is off, Rename keeps renaming the Orca workspace, the header keeps the worktree
+ * name (use-ccr-session-header.ts), and nothing is marked read.
  *
  * Not built at all, because nothing proves the token may call them and nothing in Code UI needs
  * them yet: the list's live feed (`GET v1/code/sessions/watch`), Archive and Unarchive

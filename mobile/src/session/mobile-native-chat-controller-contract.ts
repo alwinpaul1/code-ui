@@ -130,7 +130,8 @@ export type MobileNativeChatController = {
   /** A matched Claude tab's live state from Anthropic and which source drives it (claude-chat-live.ts). */
   nativeChatAnthropicLive?: ClaudeChatLive | null
   /** A matched Claude tab's Anthropic session: its title for the header, and where a rename of it
-   *  goes (use-ccr-session-header.ts). Null for every other tab. */
+   *  goes (use-ccr-session-header.ts). Null for every other tab, and for every tab while
+   *  CCR_SESSION_WRITES is off. */
   nativeChatAnthropicSession?: CcrSessionHeader | null
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean

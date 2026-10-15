@@ -143,7 +143,8 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
 
         <View style={{ flex: 1, minWidth: 0, marginRight: space.xs }}>
           {/* A Claude chat matched to its Anthropic session shows the session's own title, as the
-              Claude app's header does; the worktree name otherwise (ccr-session-facts.ts). */}
+              Claude app's header does, while CCR_SESSION_WRITES is on (then Rename renames that
+              title); the worktree name otherwise (use-ccr-session-header.ts). */}
           <Txt variant="heading" weight="semibold" numberOfLines={1}>
             {claudeSessionHeaderTitle(controller.nativeChatController.nativeChatAnthropicSession?.title ?? null, worktreeName)}
           </Txt>

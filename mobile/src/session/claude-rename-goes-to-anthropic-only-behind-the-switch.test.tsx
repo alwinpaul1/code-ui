@@ -61,6 +61,9 @@ vi.mock('./ccr-session-writes', () => ({
 }))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+vi.mock('expo-secure-store', () => ({ setItemAsync: vi.fn(), getItemAsync: vi.fn(async () => null), deleteItemAsync: vi.fn() }))
+vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn(), digestStringAsync: vi.fn() }))
+vi.mock('expo-linking', () => ({ openURL: vi.fn() }))
 vi.mock('lucide-react-native', () => {
   const icons: Record<string, string> = {}
   return new Proxy(icons, {
@@ -108,6 +111,10 @@ vi.mock('./mobile-session-save-to-phone-action', () => ({ saveToPhoneSheetAction
 
 import { MobileSessionSheets } from './MobileSessionSheets'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useCcrSessionHeader, type CcrSessionHeader } from './use-ccr-session-header'
+import { claudeSessionHeaderTitle, noteCcrSessionFacts, resetCcrSessionFactsForTests } from './ccr-session-facts'
+import { resetCcrCacheForTests, setCcrMapping } from './ccr-session-cache'
+import { parseCcrSessionRow } from './ccr-session-row'
 
 let renderers: ReactTestRenderer[] = []
 afterEach(() => {
@@ -271,5 +278,60 @@ describe('Rename on a Claude tab matched to its Anthropic session', () => {
     await submitRename('New name')
     expect(writes.calls).toEqual([])
     expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Reported 2026-10-15 (review of the session-title branch): with the switch off the header showed
+// the Anthropic session title while Rename renamed the workspace, so a rename changed nothing on
+// screen and the dialog opened on the workspace name, not the name in the header. The header's
+// title and Rename's target are now the same thing: the session title only while the switch is
+// on, the worktree name otherwise. The header object comes from the real hook here, with the
+// switch read the way the app reads it (the CCR_SESSION_WRITES constant, mocked above).
+describe('the header and Rename name the same thing', () => {
+  const SESSION = 'cse_01QXaaaaaaaaaaaaaaaaaaaa'
+  const RENAMED_WORKTREE = 'Renamed on the desktop'
+  let headerRenderer: ReactTestRenderer | null = null
+  let header: CcrSessionHeader | null = null
+
+  function HeaderProbe() {
+    header = useCcrSessionHeader({ enabled: true, tabId: 't1', epoch: 1 })
+    return null
+  }
+
+  async function mountHeader() {
+    resetCcrCacheForTests()
+    resetCcrSessionFactsForTests()
+    setCcrMapping('t1', SESSION, 1, 'acct-1')
+    noteCcrSessionFacts('t1', 1, parseCcrSessionRow({ id: SESSION, title: 'CI failure on main' })!, Date.now())
+    await act(async () => {
+      headerRenderer = create(createElement(HeaderProbe))
+    })
+  }
+
+  afterEach(() => {
+    act(() => headerRenderer?.unmount())
+    headerRenderer = null
+    header = null
+    resetCcrSessionFactsForTests()
+    resetCcrCacheForTests()
+  })
+
+  it('shows the worktree name, which Rename renames, while the switch is off', async () => {
+    await mountHeader()
+    expect(header).toBeNull()
+    expect(claudeSessionHeaderTitle(header?.title ?? null, RENAMED_WORKTREE)).toBe(RENAMED_WORKTREE)
+    await mount(controller(vi.fn(), vi.fn(async () => ok), { worktreeName: RENAMED_WORKTREE }, { nativeChatAnthropicSession: header }))
+    await act(async () => menu().onRename?.())
+    expect(renameInput()?.defaultValue).toBe(RENAMED_WORKTREE)
+  })
+
+  it('shows the session title, and the dialog starts from it, once the switch is on', async () => {
+    writes.on = true
+    await mountHeader()
+    expect(header).toMatchObject({ sessionId: SESSION, title: 'CI failure on main' })
+    expect(claudeSessionHeaderTitle(header?.title ?? null, RENAMED_WORKTREE)).toBe('CI failure on main')
+    await mount(controller(vi.fn(), vi.fn(async () => ok), { worktreeName: RENAMED_WORKTREE }, { nativeChatAnthropicSession: header }))
+    await act(async () => menu().onRename?.())
+    expect(renameInput()?.defaultValue).toBe('CI failure on main')
   })
 })

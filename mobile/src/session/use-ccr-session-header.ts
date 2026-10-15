@@ -28,6 +28,12 @@ const defaultMarkRead: MarkRead = async (target, eventId) => {
  * not matched, or matched to another session than the one its facts were read for. The row is
  * fetched by the model pill's re-read (use-ccr-session-model.ts); nothing is fetched here.
  *
+ * Only with CCR_SESSION_WRITES on. The header's title and Rename's target must be the same thing:
+ * while the switch is off Rename renames the workspace (MobileSessionHeaderMenu.tsx), so a header
+ * showing the session title would never change on a rename and the dialog would open on a name the
+ * header does not show. Off, this is null and the header shows the worktree name, as before; the
+ * facts are still kept, so turning the switch on brings the title back.
+ *
  * With CCR_SESSION_WRITES on, an open chat whose row says `unread` is marked read once per
  * session, up to the newest event the phone holds, as the Claude app does on open. Off, nothing.
  */
@@ -54,7 +60,8 @@ export function useCcrSessionHeader(args: {
   const latest = useRef({ resolveTarget, newestEventId: args.newestEventId ?? null, markRead: args.markRead ?? defaultMarkRead })
   latest.current = { resolveTarget, newestEventId: args.newestEventId ?? null, markRead: args.markRead ?? defaultMarkRead }
   const marked = useRef<string | null>(null)
-  const unreadSession = (args.writesOn ?? CCR_SESSION_WRITES) && facts?.unread === true ? facts.sessionId : null
+  const writesOn = args.writesOn ?? CCR_SESSION_WRITES
+  const unreadSession = writesOn && facts?.unread === true ? facts.sessionId : null
   useEffect(() => {
     if (!unreadSession || marked.current === unreadSession) {
       return
@@ -72,7 +79,7 @@ export function useCcrSessionHeader(args: {
       })
   }, [unreadSession])
 
-  if (!facts) {
+  if (!facts || !writesOn) {
     return null
   }
   return { sessionId: facts.sessionId, title: facts.title, resolveTarget }
