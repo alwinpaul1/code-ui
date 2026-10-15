@@ -1,11 +1,12 @@
 import { CcrApiError, type CcrEvent, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_IDLE_STABLE_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
 import { readCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
 import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
+import { CcrStreamBackoff } from './ccr-stream-backoff'
 
 export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
@@ -35,7 +36,7 @@ export class CcrSessionLink {
   private readonly listeners = new Set<() => void>()
   private abort: AbortController | null = null
   private cancelTimer: (() => void) | null = null
-  private reconnects = 0
+  private readonly backoff = new CcrStreamBackoff()
   private stopped = false
   private started = false
   private paused = false
@@ -51,6 +52,8 @@ export class CcrSessionLink {
     this.sessionId = sessionId
     this.deps = deps
     this.store = new CcrEventStore(deps.keep)
+    // Written at once after a page, once per streamed burst (soon()). A stopped link's account may
+    // have signed out, its copy just wiped: a page landing late must not write it back (null).
     this.keptCopy = new CcrKeptCopyWriter(deps.setTimer ?? defaultCcrTimer, () =>
       this.stopped ? null : { accountId, sessionId, events: this.store.drawing(), lastSequenceNum: this.store.lastSequenceNum, olderCursor: this.olderCursor, hasOlder: this.state.hasOlder }
     )
@@ -95,16 +98,6 @@ export class CcrSessionLink {
     return this.store.ordered
   }
 
-  /** Writes the kept copy now; a streamed burst waits (persistSoon). A stopped link's account may
-   *  have signed out, its copy just wiped: a page landing late must not write it back. */
-  private persist(): void {
-    this.keptCopy.write()
-  }
-
-  private persistSoon(): void {
-    this.keptCopy.soon()
-  }
-
   /** Writes a pending streamed burst now (the app leaving, the link closing). */
   flushPersist(): void {
     this.keptCopy.flush()
@@ -144,12 +137,12 @@ export class CcrSessionLink {
   private async readPage(cursor: string | null): Promise<boolean> {
     try {
       const page = await this.readHistory(cursor, CCR_FIRST_PAGE_EVENTS)
-      // After stop(), `set` and `persist` change nothing and connect() does not dial.
+      // After stop(), `set` and the kept-copy write change nothing and connect() does not dial.
       this.add(page.events)
       // Only the first page is read here: what is older starts at its cursor.
       this.olderCursor = page.nextCursor
       this.set({ hasOlder: page.nextCursor !== null })
-      this.persist()
+      this.keptCopy.write()
       return true
     } catch (error) {
       return this.failed(error, 'history')
@@ -189,16 +182,8 @@ export class CcrSessionLink {
       const from = this.store.lastSequenceNum
       const now = this.deps.now ?? Date.now
       let openedAt: number | null = null
-      // The back-off starts over after a connection that moved the transcript on AND stayed up
-      // (CCR_STREAM_STABLE_MS), or that stayed up long with nothing new (CCR_STREAM_IDLE_STABLE_MS,
-      // an idle session). Any frame was enough before: a server that sent one `session_update` and
-      // closed was redialled every second for ever (review 2026-10-15).
-      const settle = () => {
-        const up = openedAt === null ? 0 : now() - openedAt
-        if (openedAt !== null && (up >= CCR_STREAM_IDLE_STABLE_MS || (this.store.lastSequenceNum > from && up >= CCR_STREAM_STABLE_MS))) {
-          this.reconnects = 0
-        }
-      }
+      // Whether this connection was good enough to start the back-off over (ccr-stream-backoff.ts).
+      const settle = () => this.backoff.settle(openedAt === null ? null : now() - openedAt, this.store.lastSequenceNum > from)
       try {
         const end = await readCcrEventStream({
           fetch: this.deps.streamFetch,
@@ -244,7 +229,7 @@ export class CcrSessionLink {
       case 'event':
         if (this.add([frame.event])) {
           this.set({})
-          this.persistSoon()
+          this.keptCopy.soon()
         }
         return
       case 'truncated':
@@ -281,7 +266,7 @@ export class CcrSessionLink {
       return await walkCcrHistory((at) => this.readHistory(at, limit), cursor, (page) => {
         if (this.add(page.events)) {
           this.set({})
-          this.persist()
+          this.keptCopy.write()
         }
         return this.stopped || stop(page)
       })
@@ -295,13 +280,12 @@ export class CcrSessionLink {
   }
 
   private scheduleReconnect(why: string): void {
-    const wait = CCR_STREAM_RECONNECT_MS[this.reconnects]
-    if (wait === undefined) {
-      this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.reconnects} reconnects: ${why}`)
+    const wait = this.backoff.next()
+    if (wait === null) {
+      this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.backoff.count} reconnects: ${why}`)
       this.set({ phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' })
       return
     }
-    this.reconnects += 1
     this.set({ phase: 'reconnecting' })
     this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => {
       this.cancelTimer = null
@@ -325,7 +309,7 @@ export class CcrSessionLink {
       return this.store.drawsOlderThan(oldest)
     }, 'older page')
     this.set({ loadingOlder: false, ...(last ? { hasOlder: last.nextCursor !== null } : {}) })
-    this.persist()
+    this.keptCopy.write()
   }
 
   /** A relay reconnect: a lost stream (or an error) tries again now. */
@@ -364,7 +348,7 @@ export class CcrSessionLink {
 
   private restart(): void {
     this.generation += 1
-    this.reconnects = 0
+    this.backoff.reset()
     this.refreshedAuth = false
     this.cancelTimer?.()
     this.cancelTimer = null
