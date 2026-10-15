@@ -7,7 +7,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { CCR_ATTACHMENT_NO_ACCOUNT } from './ccr-attachment-send'
+import { CCR_SEND_REFUSALS } from './use-ccr-composer-send'
 import { CCR_ATTACHMENT_TOO_LARGE, CcrFileUploadError, uploadCcrFile, type CcrUploadedFile } from './ccr-file-upload'
 import { uploadMobileNativeChatImages, type NativeChatAttachmentStore, type NativeChatUploadLanded } from './mobile-native-chat-image-attachment'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
@@ -92,17 +92,17 @@ describe("the error banner's Retry", () => {
   })
 })
 
-describe('a send with chips before the tab account is read', () => {
+describe('a send with chips while the tab has no send target yet', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
-  it('sends nothing, so the words never go without their chips, and says why', async () => {
+  it('sends nothing, so the words never go without their chips, and says the target\'s own reason', async () => {
     useNativeChatImageAttachmentsStore.getState().update((prev) => ({ ...prev, [SCOPE]: [{ id: 'img-1', path: '', previewUri: 'file:///a.jpg', anthropicFile: { ...file('file_011CA'), isImage: true } }] }))
     const laneSend = vi.fn<NativeChatAnthropicAttachments['send']>(async () => 'accepted')
-    const lane: NativeChatAnthropicAttachments = { store: () => null, accountId: () => null, send: laneSend }
+    const lane: NativeChatAnthropicAttachments = { store: () => null, account: () => ({ refused: CCR_SEND_REFUSALS.unsettled }), send: laneSend }
     const onSendError = vi.fn()
     const take = vi.fn()
     let send!: (text: string) => Promise<boolean>
@@ -120,6 +120,6 @@ describe('a send with chips before the tab account is read', () => {
     expect(sent).toBe(false)
     expect(laneSend).not.toHaveBeenCalled()
     expect(take).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith(CCR_ATTACHMENT_NO_ACCOUNT)
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith(CCR_SEND_REFUSALS.unsettled)
   })
 })

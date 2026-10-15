@@ -20,9 +20,6 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 
 export const CCR_WAITING_FOR_UPLOADS = 'Waiting for attachments to upload'
 export const CCR_ATTACHMENT_ON_DESKTOP = 'Message not sent: an attachment was put on the desktop, not uploaded to Anthropic. Remove it and attach it again.'
-/** A send with chips while the tab's session account is not known yet: refused whole, the words
- *  and chips left in the composer, never the words without the chips. */
-export const CCR_ATTACHMENT_NO_ACCOUNT = "Message not sent: this tab's Anthropic session isn't known yet, so its attachments can't be sent. Try again in a moment."
 export const CCR_ATTACHMENT_OTHER_ACCOUNT = "Message not sent: an attachment was uploaded with another Anthropic account than this tab's session. Remove it and attach it again."
 /** A failed chip blocks the send, as `u49.d()` does in the app; the app's own words for the chip
  *  are `ccr_upload_failed`, and Code UI's chip carries a retry the app's does not. */

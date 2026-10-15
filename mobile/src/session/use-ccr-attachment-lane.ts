@@ -53,9 +53,9 @@ export function ccrAttachmentLane(args: {
   }
   return {
     store: () => store,
-    accountId: () => {
+    account: () => {
       const target = args.resolveTarget()
-      return target.kind === 'target' ? target.accountId : null
+      return target.kind === 'target' ? { accountId: target.accountId } : { refused: CCR_SEND_REFUSALS[target.reason] }
     },
     send: args.send
   }

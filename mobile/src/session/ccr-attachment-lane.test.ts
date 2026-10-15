@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CCR_SEND_REFUSALS } from './use-ccr-composer-send'
 import { ccrAttachmentLane, type CcrUploadForSession } from './use-ccr-attachment-lane'
 import { CCR_ATTACHMENTS_THROUGH_ANTHROPIC, CcrFileUploadError } from './ccr-file-upload'
 import type { CcrSendTarget } from './ccr-session-cache'
@@ -23,7 +24,7 @@ describe('a Claude tab attachment on the Anthropic lane', () => {
       ['acct-personal', 'cse_01PERSONAL'],
       ['acct-work', 'cse_01WORK']
     ])
-    expect(lane.accountId()).toBe('acct-work')
+    expect(lane.account()).toEqual({ accountId: 'acct-work' })
   })
 
   it('uploads nothing while the tab has no target of its own, and says why on the chip', async () => {
@@ -33,7 +34,7 @@ describe('a Claude tab attachment on the Anthropic lane', () => {
     expect(error).toBeInstanceOf(CcrFileUploadError)
     expect((error as CcrFileUploadError).userMessage).toMatch(/^Upload failed: the session this tab is matched to belongs to another Anthropic account/)
     expect(upload).not.toHaveBeenCalled()
-    expect(lane.accountId()).toBeNull()
+    expect(lane.account()).toEqual({ refused: CCR_SEND_REFUSALS['other-account'] })
   })
 
   it('is off while the switch is off, so attachments keep the desktop path', () => {

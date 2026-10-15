@@ -20,7 +20,7 @@ describe('a Claude tab chip that a rejected send carried', () => {
     setCcrFileDiscardForTests({ remove: async (f) => { discarded.push(f); return 200 }, log: () => undefined })
     useNativeChatImageAttachmentsStore.getState().update((prev) => ({ ...prev, [SCOPE]: [{ id: 'img-1', path: '', previewUri: 'file:///a.jpg', anthropicFile: { fileId: 'file_011CA', fileName: 'a.jpg', isImage: true, accountId: 'acct-personal' } }] }))
     // The POST timed out after the server took it: rejected on the phone.
-    const lane: NativeChatAnthropicAttachments = { store: () => null, accountId: () => 'acct-personal', send: async () => 'rejected' }
+    const lane: NativeChatAnthropicAttachments = { store: () => null, account: () => ({ accountId: 'acct-personal' }), send: async () => 'rejected' }
     let send!: (text: string) => Promise<boolean>
     let writers!: ReturnType<typeof useNativeChatAttachmentScopeWriters>
     function Harness(): null {
