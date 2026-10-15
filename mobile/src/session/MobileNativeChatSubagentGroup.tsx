@@ -106,7 +106,7 @@ export function MobileNativeChatSubagentGroup({
           accessibilityLabel={accessibilityLabel}
           accessibilityLiveRegion="polite"
         >
-          <AgentRunGlyph color={own.mark.color} />
+          <AgentRunGlyph icon="agents" color={own.mark.color} />
           <ShimmerText
             text={headline}
             active={working}

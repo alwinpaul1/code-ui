@@ -74,7 +74,10 @@ row, `hu20`/`jqv` do the shimmer, `ra20` draws the line-count pill.
   "Searching web", "Messaging @name", …; anything unknown is
   `ccr_verb_used_named` "Using %s"). **No icon.**
 - If nothing is pending but background tasks started by this run still run,
-  the last one is shown as if pending, **with** a 24 dp icon in `#898781`:
+  the last one is shown as if pending (1.261013.20 takes the FIRST: `z69.v0`
+  is firstOrNull, `ei4.b`, read 2026-10-16; the described form's map holds
+  only Agent tasks with a real description, under the `ccr_transcript_turn_merge`
+  flag, `su8.I3`), **with** a 24 dp icon in `#898781`:
   `commandLinePrompt` when all are shells, `agentSimple` for exactly one
   agent, `agentsSimple` for a workflow or several agents.
 - The live row is drawn with the shimmer on; the finished row with a solid

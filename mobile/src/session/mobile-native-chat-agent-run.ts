@@ -67,15 +67,48 @@ export type NativeChatAgentRunState = {
    *  transcript it opens. */
   agentsRunning: boolean
   entries: NativeChatAgentRunEntry[]
-  /** What the collapsed row names while a call is being made, the way the
-   *  Claude app's reads "Running agent: Review: story flow" (2026-10-09): the
-   *  first unanswered call the structured lane marks live, else the last agent
-   *  call the run's own results show unanswered. Never a call that has its
-   *  answer: falling back to the last call named a finished agent while
-   *  another ran (review, 2026-10-09). Null while the run is not running, and
-   *  where the call names nothing (no description, name or type). */
+  /** What the collapsed row names: "Running agent: <subject>". The Claude app
+   *  names an agent only from the background task its call launched (the
+   *  task's description, `cs2.d`), so only while no call of the run is still
+   *  being made and a launched agent is known to run: the first such agent, by
+   *  the description its call gave. Null while a call is being made (the app's
+   *  bare "Running agent ›", 2026-10-16), when the run is not running, and for
+   *  an agent whose call gave no description (the app's task is then named by
+   *  its id, and the app draws the bare verb). The rule's lines are below. */
   subject: string | null
+  /** The leading icon of the running row: `agent` (one diamond, the app's
+   *  agentSimple) while one agent the run launched runs in the background,
+   *  `agents` (two, agentsSimple) while several do; null while a call is still
+   *  being made, and on "Ran N agents". */
+  icon: AgentRunIcon | null
 }
+
+/** The Claude app's icons for a running group (cds_icon_symbols.ttf: agentSimple
+ *  U+E11B one diamond, agentsSimple U+E11C two). */
+export type AgentRunIcon = 'agent' | 'agents'
+
+// The Claude app's rule for a running group's row (com.anthropic.claude
+// 1.261013.20, jadx, read 2026-10-16; `ei4.b`, single-ei4/.../ei4.java:930-1023):
+//  - a call of the run still Pending (`npz.t`, no answer yet): the row is the
+//    LAST pending call's verb (`bw30.f`, "Running agent"), with NO icon
+//    (`y85VarI = null` off the `z3` path, :978-980);
+//  - else, the background tasks the run's calls launched that are still Running
+//    (`cs2.f == 1`, built in `ay8` method #8, classes3 dex 0x141-0x182): the row
+//    is the FIRST one's call (`z69.v0`, firstOrNull), drawn running, with the
+//    icon of the tasks' kinds: all shells `commandLinePrompt`, one task
+//    `rt30.i(kind)` (an agent: agentSimple), several `agentsSimple`
+//    (:946-976, rt30.java:473-486);
+//  - else the summary ("Ran 5 agents"), no icon (`i430.a` has no icon slot).
+// The words: `ei4.f` (:1309-1331) draws "Running agent: %1$s"
+// (`ccr_verb_running_agent_described`) when the map from the call's tool-use id
+// to its task's description holds one, else the bare verb. That map (ay8 #8,
+// 0x1a0-0x1f4) holds only Agent tasks whose description is not their task id,
+// and only under the `ccr_transcript_turn_merge` flag (`su8.I3`, su8.java:759),
+// which the app's recordings of 2026-10-09 and 2026-10-11 show on. A call still
+// being made has no task record for the map to hold: the user's screenshot of
+// 2026-10-16, a bare "Running agent ›" over an Agent call waiting on its answer.
+// Code UI drew "Running agent: <the call's description>" with the diamonds there
+// until 2026-10-16.
 
 /** Claude Code's own names for the tool that launches a subagent. */
 const AGENT_TOOLS = new Set(['Agent', 'Task'])
@@ -135,46 +168,11 @@ function hasUnansweredAgent(blocks: readonly NativeChatBlock[]): boolean {
   return agentsWithoutResult > strayLaunches
 }
 
-/** The agent calls of a run (by their index among its Agent/Task calls) that
- *  its results show to be still unanswered, oldest first. A result that names
- *  its call (`callId`) answers that call. One that does not answers the oldest
- *  open call, as `pairToolBlocks` pairs it, which is only certain while one
- *  call is open: with two or more, it may have answered any of them, so none
- *  of those is offered. A call made after it is certain again. */
-function unansweredAgentCalls(blocks: readonly NativeChatBlock[]): number[] {
-  const open: { agentIndex: number | null; callId: string | undefined; certain: boolean }[] = []
-  let agentIndex = 0
-  for (const block of blocks) {
-    if (isToolCallBlock(block)) {
-      open.push({
-        agentIndex: AGENT_TOOLS.has(block.name) ? agentIndex++ : null,
-        callId: block.callId,
-        certain: true
-      })
-    } else if (isToolResultBlock(block)) {
-      if (block.callId !== undefined) {
-        const answered = open.findIndex((call) => call.callId === block.callId)
-        if (answered !== -1) {
-          open.splice(answered, 1)
-        }
-        continue
-      }
-      if (open.length > 1) {
-        for (const call of open) {
-          call.certain = false
-        }
-      }
-      open.shift()
-    }
-  }
-  return open.flatMap((call) => (call.certain && call.agentIndex !== null ? [call.agentIndex] : []))
-}
-
 export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
 ): NativeChatAgentRunState {
-  const calls: { title: string; description: string | null; live: boolean; named: boolean }[] = []
+  const calls: { title: string; description: string | null }[] = []
   const launched: string[] = []
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
@@ -184,9 +182,7 @@ export function agentRunState(
       const description = readString(block.input, 'description')
       calls.push({
         title: agentTitle(block.input),
-        description: description ? foldWhitespace(description) : null,
-        live: block.state === 'running',
-        named: readString(block.input, 'name') !== null || readString(block.input, 'subagent_type') !== null || description !== null
+        description: description ? foldWhitespace(description) : null
       })
     } else if (isToolResultBlock(block)) {
       const id = readLaunch({ name: 'Agent', input: null, startedAt: null }, block.output)?.id
@@ -207,19 +203,20 @@ export function agentRunState(
       launched.find((id) => call.description !== null && inputs.confirmed.get(id) === call.description) ??
       (calls.length === 1 && launched.length === 1 ? launched[0]! : null)
   }))
-  const open = launching ? unansweredAgentCalls(blocks) : []
-  // A call being made names the row first; else the first agent of the run
-  // known (by its own id) to still run. One whose id the phone cannot tie to
-  // its call names nothing: a guess could name a finished agent.
-  const liveIndex = launchedLive
+  // A call being made names nothing and draws no icon. Else the first agent of
+  // the run known (by its own id) to still run names the row. One whose id the
+  // phone cannot tie to its call names nothing: a guess could name a finished
+  // agent.
+  const background = !launching && launchedLive
+  const liveIndex = background
     ? entries.findIndex((entry) => entry.agentId !== null && live.has(entry.agentId))
     : -1
-  const subjectIndex = open.find((index) => calls[index]!.live) ?? open.at(-1) ?? (liveIndex === -1 ? undefined : liveIndex)
-  const subjectCall = subjectIndex === undefined ? undefined : calls[subjectIndex]
+  const liveCount = background ? new Set(launched.filter((id) => live.has(id))).size : 0
   return {
     running,
     agentsRunning: launched.some((id) => inputs.runningIds.has(id)),
     entries,
-    subject: subjectCall?.named ? subjectCall.title : null
+    subject: liveIndex === -1 ? null : calls[liveIndex]!.description,
+    icon: liveCount === 0 ? null : liveCount === 1 ? 'agent' : 'agents'
   }
 }

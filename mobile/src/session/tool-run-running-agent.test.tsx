@@ -63,6 +63,9 @@ const RUNNING: NativeChatAgentRuns = {
 }
 const REPORTED: NativeChatAgentRuns = { ...RUNNING, runningIds: new Set() }
 
+/** The launch answered, and the host's roster says the agent runs. */
+const LIVE: NativeChatAgentRuns = { ...RUNNING, liveTaskIds: new Set([MIXED_RUN_AGENT_ID]) }
+
 /** The run while the Agent call is still being made: its launch result not yet in. */
 function launching(): NativeChatBlock[] {
   return mixedRunWithBackgroundAgent().slice(0, -1)
@@ -145,11 +148,22 @@ describe('a mixed run whose background agent is still running', () => {
 
   const agentLabel = (tree: ReactTestRenderer) => tree.root.find(isLabel)
 
-  // 2026-10-09, same session side by side: the Claude app's row reads "Running
-  // agent: Review: story flow ›". Ours read "Running agent  2 failed  +32 −0 ›".
-  it("reads Running agent and the agent it names while a mixed run's agent launch is being made", () => {
+  // 2026-10-09, same session side by side: ours read "Running agent  2 failed
+  // +32 −0 ›". The Claude app names the agent only from the background task its
+  // call launched, never while the call is still being made (ei4.java:930-1023,
+  // 1.261013.20; the user's screenshot, 2026-10-16: a bare "Running agent ›").
+  it("reads a bare Running agent, with no icon, while a mixed run's agent launch is being made", () => {
     const tree = render({ blocks: launching(), agentRuns: RUNNING })
+    expect(headerText(tree)).toBe('Running agent')
+    expect(tree.root.findAll((node) => String(node.props.testID ?? '').startsWith('agent-run-glyph'))).toEqual([])
+  })
+
+  it('names the launched agent beside the one-diamond icon while the host says it runs', () => {
+    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: LIVE })
     expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+    expect(
+      tree.root.findAll((node) => node.props.testID === 'agent-run-glyph-agent' && String(node.type) === 'Svg')
+    ).toHaveLength(1)
   })
 
   it('reads its sentence once the launch has answered, though the background agent still runs', () => {
@@ -163,14 +177,14 @@ describe('a mixed run whose background agent is still running', () => {
     expect(tree.root.findAll(isLabel)).toHaveLength(0)
   })
 
-  it('names the first agent that still runs, not one that has reported', () => {
+  it('names no agent while two agent calls are still being made', () => {
     const blocks: NativeChatBlock[] = [
       ...mixedRunWithBackgroundAgent().slice(0, 2),
       { type: 'tool-call', name: 'Agent', input: { description: 'Review: story flow', prompt: 'p' }, state: 'running' },
       { type: 'tool-call', name: 'Agent', input: { description: 'Review: integrity', prompt: 'p' }, state: 'running' }
     ]
     const tree = render({ blocks, agentRuns: { ...RUNNING, runningIds: new Set() } })
-    expect(headerText(tree)).toBe('Running agent: Review: story flow')
+    expect(headerText(tree)).toBe('Running agent')
   })
 
   it("says only Running agent when the run's agents name nothing", () => {
@@ -183,10 +197,10 @@ describe('a mixed run whose background agent is still running', () => {
     expect(headerText(tree)).toBe('Running agent')
   })
 
-  it('draws the two-diamond glyph and a shimmering label, with the chevron after them', () => {
+  it('draws a shimmering label with the chevron after it, and no icon, while the launch is being made', () => {
     const tree = render({ blocks: launching(), agentRuns: RUNNING })
     const header = tree.root.findByProps({ testID: 'tool-run-header' })
-    expect(header.findAllByProps({ testID: 'agent-run-glyph' })).not.toHaveLength(0)
+    expect(header.findAll((node) => String(node.props.testID ?? '').startsWith('agent-run-glyph'))).toEqual([])
     const glyphs = agentLabel(tree).findAll((node) => String(node.type) === 'Text' && node !== agentLabel(tree))
     expect(glyphs.length).toBeGreaterThan(1)
     const order = header
@@ -238,7 +252,7 @@ describe('a mixed run whose background agent is still running', () => {
       agentCall!
     ]
     const tree = render({ blocks, agentRuns: RUNNING })
-    expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+    expect(headerText(tree)).toBe('Running agent')
   })
 
   // The failure count and the +A −R pill stay in the sheet (its title and its
@@ -255,7 +269,7 @@ describe('a mixed run whose background agent is still running', () => {
       { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
     )
     const tree = render({ blocks, agentRuns: RUNNING })
-    expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+    expect(headerText(tree)).toBe('Running agent')
     expect(tree.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
     expect(tree.root.findAllByProps({ testID: 'tool-run-diff-chip' })).toHaveLength(0)
   })
@@ -271,7 +285,7 @@ describe('a mixed run whose background agent is still running', () => {
   })
 
   it('announces the agent it names, as the row says it', () => {
-    const tree = render({ blocks: launching(), agentRuns: RUNNING })
+    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: LIVE })
     expect(tree.root.findByProps({ testID: 'tool-run-header' }).props.accessibilityLabel).toBe(
       `Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`
     )
@@ -286,9 +300,9 @@ describe('a mixed run whose background agent is still running', () => {
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)('keeps the label and glyph on the theme, in %s', (scheme, palette) => {
-    const tree = render({ blocks: launching(), agentRuns: RUNNING }, scheme)
+    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: LIVE }, scheme)
     expect(flattenColor(agentLabel(tree).props.style)).toBe(palette.textSecondary)
-    expect(tree.root.findByProps({ testID: 'agent-run-glyph' }).props.children.props.stroke).toBe(
+    expect(tree.root.findByProps({ testID: 'agent-run-glyph-agent' }).props.children.props.fill).toBe(
       palette.textMuted
     )
   })

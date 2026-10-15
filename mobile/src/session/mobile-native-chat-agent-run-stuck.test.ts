@@ -61,10 +61,14 @@ describe('a background Agent call whose launch result is in', () => {
 describe('a background Agent call with no result yet', () => {
   const callOnly = backgroundAgentLaunchMessages({ withResult: false })
 
-  it('runs, and names the agent, while the turn making it is live', () => {
+  // The Claude app names an agent from the background task its call launched,
+  // and a call still being made has none: a bare "Running agent", no icon
+  // (ei4.java:930-1023; the user's screenshot, 2026-10-16).
+  it('runs, naming nothing and drawing no icon, while the turn making it is live', () => {
     const state = agentRunState(drawnRun(callOnly), handStartedInputs(callOnly, true))
     expect(state.running).toBe(true)
-    expect(state.subject).toBe(BACKGROUND_AGENT.description)
+    expect(state.subject).toBeNull()
+    expect(state.icon).toBeNull()
   })
 
   it('stops once the turn has ended with the result missing', () => {
@@ -94,7 +98,7 @@ describe('degenerate runs', () => {
   const working = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
 
   it('an empty run, and a lone result, never run', () => {
-    expect(agentRunState([], working)).toEqual({ running: false, agentsRunning: false, entries: [], subject: null })
+    expect(agentRunState([], working)).toEqual({ running: false, agentsRunning: false, entries: [], subject: null, icon: null })
     expect(agentRunState([{ type: 'tool-result', output: 'orphan' }], working).running).toBe(false)
   })
 })

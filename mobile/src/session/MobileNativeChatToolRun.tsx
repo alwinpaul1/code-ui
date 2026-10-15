@@ -345,7 +345,7 @@ function ToolRunView({
         >
           {runningAgent ? (
             <>
-              <AgentRunGlyph color={colors.textMuted} />
+              {progress.icon ? <AgentRunGlyph icon={progress.icon} color={colors.textMuted} /> : null}
               <ShimmerText
                 text={runningAgentText(agentSubject)}
                 active

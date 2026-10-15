@@ -196,79 +196,87 @@ describe('an unanswered call that is not an agent', () => {
   })
 })
 
-// 2026-10-09: the Claude app's collapsed row names the agent, "Running agent:
-// Review: story flow". Three reviewers ran side by side and it named the first.
-describe('the agent the collapsed row names', () => {
-  // The row names an agent only while a call is being made, in a live turn.
-  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
-  const call = (input: unknown, state: 'running' | 'completed'): NativeChatBlock => ({
+// What the collapsed row names and which icon it draws, as the Claude app
+// decides it (ei4.java:930-1023, com.anthropic.claude 1.261013.20):
+//  - a call of the run still being made (npz.Pending): the LAST such call, its
+//    verb alone, NO icon. The agent's name comes only from a background task
+//    record for that call (bw30-side map, ay8 #8), which a call still being made
+//    does not have: the user's screenshot of 2026-10-16, "Running agent ›".
+//  - else a background task the run launched still running: the FIRST such
+//    call, named by its task's description, with agentSimple (one task) or
+//    agentsSimple (more than one).
+//  - else the summary, "Ran N agents", no icon.
+describe('the agent the collapsed row names, and its icon', () => {
+  const working = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
+  const call = (input: unknown, state: 'running' | 'completed', callId?: string): NativeChatBlock => ({
     type: 'tool-call',
     name: 'Agent',
     input,
-    state
+    state,
+    ...(callId ? { callId } : {})
+  })
+  const launch = (id: string, callId?: string): NativeChatBlock => ({
+    type: 'tool-result',
+    output: asyncAgentLaunchResult(id),
+    ...(callId ? { callId } : {})
   })
 
-  it('is none once every launch has answered, though the roster still runs two of them', () => {
-    const { subject } = agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[3].agentId, PARALLEL_AGENTS[4].agentId]))
+  it('names nothing and draws no icon while a call is still being made', () => {
+    const state = agentRunState([call({ description: 'Port Claude app live tool row' }, 'running')], working)
+    expect(state.running).toBe(true)
+    expect(state.subject).toBeNull()
+    expect(state.icon).toBeNull()
+  })
+
+  it('names nothing while one call is being made though another agent of the run is known to run', () => {
+    const blocks = [call({ description: 'one' }, 'completed', 't1'), launch('agent-one', 't1'), call({ description: 'two' }, 'running', 't2')]
+    const state = agentRunState(blocks, { ...working, liveTaskIds: new Set(['agent-one']) })
+    expect(state.subject).toBeNull()
+    expect(state.icon).toBeNull()
+  })
+
+  it('names the launched agent by its description and draws one diamond while it runs', () => {
+    const blocks = [call({ description: 'one' }, 'completed', 't1'), launch('agent-one', 't1')]
+    const state = agentRunState(blocks, { ...working, liveTaskIds: new Set(['agent-one']) })
+    expect(state.running).toBe(true)
+    expect(state.subject).toBe('one')
+    expect(state.icon).toBe('agent')
+  })
+
+  it('names the first of two running agents and draws two diamonds', () => {
+    const blocks = [
+      call({ description: 'one' }, 'completed', 't1'),
+      call({ description: 'two' }, 'completed', 't2'),
+      launch('agent-one', 't1'),
+      launch('agent-two', 't2')
+    ]
+    const confirmed = new Map([
+      ['agent-one', 'one'],
+      ['agent-two', 'two']
+    ])
+    const state = agentRunState(blocks, { ...working, confirmed, liveTaskIds: new Set(['agent-one', 'agent-two']) })
+    expect(state.subject).toBe('one')
+    expect(state.icon).toBe('agents')
+  })
+
+  it('names nothing for a running agent whose call gave no description (the task is named by its id)', () => {
+    const blocks = [call({ subagent_type: 'Explore', prompt: 'p' }, 'completed', 't1'), launch('agent-one', 't1')]
+    const state = agentRunState(blocks, { ...working, liveTaskIds: new Set(['agent-one']) })
+    expect(state.subject).toBeNull()
+    expect(state.icon).toBe('agent')
+  })
+
+  it('draws no icon once nothing runs, and none for a run with no calls', () => {
+    const blocks = [call({ description: 'one' }, 'completed', 't1'), launch('agent-one', 't1')]
+    expect(agentRunState(blocks, working).icon).toBeNull()
+    expect(agentRunState([], working).icon).toBeNull()
+    expect(agentRunState([], working).subject).toBeNull()
+  })
+
+  it('is none once every launch has answered, though the reader still counts two of them running', () => {
+    const { subject, icon } = agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[3].agentId, PARALLEL_AGENTS[4].agentId]))
     expect(subject).toBeNull()
-  })
-
-  it('is none once the turn has ended, though a call is still marked live', () => {
-    expect(agentRunState([call({ description: 'two' }, 'running')], { ...idle, agentWorking: false }).subject).toBeNull()
-  })
-
-  it('is the first agent whose call is still live', () => {
-    const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'running'), call({ description: 'three' }, 'running')]
-    expect(agentRunState(blocks, idle).subject).toBe('two')
-  })
-
-  it('falls back to the last agent call with no answer when none is marked live', () => {
-    const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'completed')]
-    expect(agentRunState(blocks, idle).subject).toBe('two')
-  })
-
-  // Review, 2026-10-09: with no running call tied to an agent id (no roster,
-  // or parallel foreground agents whose calls are not marked running), the
-  // subject fell back to the LAST call, which had already answered:
-  // "Running agent: Beta" over a finished Beta while Alpha still ran.
-  describe('when no call is tied to a running agent', () => {
-    const alpha = (callId?: string): NativeChatBlock => ({ type: 'tool-call', name: 'Agent', input: { description: 'Alpha' }, ...(callId ? { callId } : {}) })
-    const beta = (callId?: string): NativeChatBlock => ({ type: 'tool-call', name: 'Agent', input: { description: 'Beta' }, ...(callId ? { callId } : {}) })
-    const betaDone = (callId?: string): NativeChatBlock => ({ type: 'tool-result', output: 'Beta finished: all checks pass.', ...(callId ? { callId } : {}) })
-    const probe = { runningIds: new Set(['alpha-agent']), confirmed: new Map<string, string>(), agentWorking: true }
-
-    it('never names an agent whose call has its answer', () => {
-      const state = agentRunState([alpha(), beta(), betaDone()], probe)
-      expect(state.running).toBe(true)
-      expect(state.subject).not.toBe('Beta')
-    })
-
-    it('names the agent still unanswered when the results say which call they answer', () => {
-      expect(agentRunState([alpha('t1'), beta('t2'), betaDone('t2')], probe).subject).toBe('Alpha')
-    })
-
-    it('reads the bare label when the answers cannot say which agent is left', () => {
-      // No call ids: the one answer could be Alpha's or Beta's.
-      expect(agentRunState([alpha(), beta(), betaDone()], probe).subject).toBeNull()
-    })
-
-    it('names the last agent launched after the only answer came', () => {
-      const gamma: NativeChatBlock = { type: 'tool-call', name: 'Agent', input: { description: 'Gamma' } }
-      expect(agentRunState([alpha(), betaDone(), gamma], probe).subject).toBe('Gamma')
-    })
-
-    it('reads the bare label when every agent has answered', () => {
-      expect(agentRunState([alpha('t1'), { type: 'tool-result', output: 'done', callId: 't1' }], probe).subject).toBeNull()
-    })
-  })
-
-  it('is the one agent of a run of one', () => {
-    expect(agentRunState([call({ description: 'only' }, 'running')], idle).subject).toBe('only')
-  })
-
-  it('is null for a run with no agent, and for an agent that names nothing', () => {
-    expect(agentRunState([], idle).subject).toBeNull()
-    expect(agentRunState([call({ prompt: 'p' }, 'running')], idle).subject).toBeNull()
+    expect(icon).toBeNull()
   })
 
   it('reads as the bare label with no subject, and with one as "Running agent: <subject>"', () => {
