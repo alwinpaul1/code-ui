@@ -11,7 +11,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatStreamPreview } from './use-mobile-native-chat-stream-preview'
-import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'; import { useClaudeAnthropicTranscript } from './use-claude-anthropic-transcript'
+import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'; import { claudeRowsAreHistory, useClaudeAnthropicTranscript } from './use-claude-anthropic-transcript'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
@@ -113,6 +113,8 @@ export function useMobileNativeChatController(
       promptCancelSupported: agentSessionPromptCancelSupported, repeatedStopSupported: agentSessionRepeatedStopSupported,
       onSendError
     })
+  // A Claude tab is drawn from Anthropic: what retires the phone's own bubbles (drafts, outbox) reads the rows DRAWN, never Orca's (claude-anthropic-echo-rows.test.tsx).
+  const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaSettled: nativeChatSession.status === 'ready', orcaRowCount: nativeChatSession.messages.length }), drawnSession = claudeApi.session ?? nativeChatSession
   const handleBeacon = useAgentHudBeacon(activeHandle)
   // Only the beacon of the session this tab is showing: a beacon is keyed by
   // terminal handle, and a handle outlives the process that emitted into it,
@@ -146,17 +148,14 @@ export function useMobileNativeChatController(
     acceptSend,
     holdUnconfirmedSend, removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   } = useMobileNativeChatDrafts({
-    hostId, worktreeId,
-    tabId: activeSessionTabId,
-    sessionId: activeChatSessionId,
-    messages: nativeChatSession.messages,
+    hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId,
+    messages: drawnSession.messages,
     launchDraft: activeSessionTab?.launchDraft ?? null,
     launchDraftCreatedAt: activeSessionTab?.launchDraftCreatedAt ?? null,
     // Why: pass the raw draft plus this flag rather than nulling it off-chat — a
     // null reads as a host retraction, and a peek would decline the prefill forever.
     chatActive: showNativeChat,
-    transcriptLoading: nativeChatSession.transcriptLoading,
-    transcriptSettled: nativeChatSession.status === 'ready',
+    transcriptLoading: claudeApi.session ? !claudeRowsAreHistory(claudeApi) : nativeChatSession.transcriptLoading, transcriptSettled: drawnSession.status === 'ready',
     onUnconfirmedSendLanded: onSendResolved,
     beaconPromptReceipts: tailPrompts
   })
@@ -165,7 +164,7 @@ export function useMobileNativeChatController(
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   // Orca's `working` outlives the lead's turn while a background agent runs,
   // and the transcript is what says that turn is over (claude-lead-turn-ended.ts).
-  const lastConnectedAt = useLastConnectedAt(hostId), nativeChatHostConnection = useMemo(() => ({ connected: connState === 'connected', lastConnectedAt }), [connState, lastConnectedAt])
+  const nativeChatHostConnection = useMemo(() => ({ connected: connState === 'connected', lastConnectedAt }), [connState, lastConnectedAt])
   const nativeChatLeadTurnEnded = claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeChatAgentStatus)
   const nativeChatStreamLive = activeChatStructured ? structuredNativeChat.isWorking : activeTabAgentWorking && !nativeChatLeadTurnEnded
   const nativeChatAgentWorking =
@@ -209,7 +208,7 @@ export function useMobileNativeChatController(
   // A model command written after the beacon last heard is newer than it (a switch made while the phone was away).
   const claudeReported = claudeReportedOverLive(claudeLive, transcriptModel.fallback)
   // Anthropic's copy of the session (Remote Control on): the model/effort it reports, used when fresh and nothing in the terminal states one (ccr-session-model.ts), and the pictures the desktop cannot send (use-ccr-session-images.ts).
-  const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: nativeChatSession.messages, epoch: lastConnectedAt, needsContext: liveHud.context === null }), claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaSettled: nativeChatSession.status === 'ready', orcaRowCount: nativeChatSession.messages.length }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: claudeApi.session?.messages ?? nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
+  const ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: nativeChatSession.messages, epoch: lastConnectedAt, needsContext: liveHud.context === null }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), messages: claudeApi.session?.messages ?? nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
   // The ring and usage rows of THIS tab's session and account (ccr-usage-hud.ts): what its terminal states wins, then Anthropic's figures for the matched session and account, never the host's login.
   const ccrUsage = useCcrSessionUsage({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), epoch: lastConnectedAt })
   const ccrHud = applyCcrUsageToHud({ context: liveHud.context, limits: liveHud.limits, usedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null }, { reading: ccrUsage.reading, matchedAccount: ccrUsage.matchedAccount, hostFeedAllowed: ccrUsage.hostFeedAllowed, beaconDecidesLimits: hudLiveBeacon !== null && (hudLiveBeacon.agent === 'claude' || hudLiveBeacon.limits.length > 0) })
@@ -534,7 +533,7 @@ export function useMobileNativeChatController(
   })
 
   // What a closed app or an expired hold left in the outbox: resent once when safe, or handed back (use-native-chat-outbox-recovery.ts).
-  const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, agent: activeChatResolution?.agent ?? null, terminal: activeHandle, transcriptPath: activeChatResolution?.transcriptPath ?? null, promptBefore: activeChatPromptStatus?.prompt, messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
+  const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, agent: activeChatResolution?.agent ?? null, terminal: activeHandle, transcriptPath: activeChatResolution?.transcriptPath ?? null, promptBefore: activeChatPromptStatus?.prompt, messages: drawnSession.messages, transcriptSettled: drawnSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
 
   // The composer's Stop: a ring while stopping, back on when the stop failed or the agent kept working (G24).
   // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
@@ -563,7 +562,7 @@ export function useMobileNativeChatController(
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
     chatImagePreviewsByMessageId, nativeChatImageShare,
-    nativeChatSession: claudeApi.session ?? nativeChatSession, nativeChatAnthropicGate: claudeApi.gate,
+    nativeChatSession: drawnSession, nativeChatAnthropicGate: claudeApi.gate,
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,

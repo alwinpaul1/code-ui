@@ -70,6 +70,13 @@ export function ccrLinkSession(link: CcrSessionLink, state: CcrLinkState, rows: 
   }
 }
 
+/** Whether the rows a gated Claude tab draws are its session's history, so a pending bubble or a
+ *  launch prefill may be judged against them. Signed out, unmatched, still finding, or a link with
+ *  nothing read yet: the chat draws no rows, and none of that says the conversation is empty. */
+export function claudeRowsAreHistory(api: { gate: ClaudeChatGate; session: MobileNativeChatSession | null }): boolean {
+  return api.gate.kind === 'new' || (api.gate.kind === 'matched' && api.session?.status === 'ready')
+}
+
 export function useClaudeAnthropicTranscript(args: {
   /** A Claude Code tab on the terminal lane, its chat shown. */
   enabled: boolean

@@ -610,7 +610,9 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       launchDraft: 'https://github.com/o/r/issues/12',
       launchDraftCreatedAt: 7,
       chatActive: true,
-      transcriptLoading: false
+      // A Claude tab draws Anthropic's rows, and here nobody is signed in to Anthropic: the chat
+      // shows the sign-in line, and no row it draws may decline the prefill (claudeRowsAreHistory).
+      transcriptLoading: true
     })
   })
 
