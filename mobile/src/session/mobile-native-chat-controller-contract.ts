@@ -258,6 +258,9 @@ export type MobileNativeChatController = {
   /** The same tab: takes the Claude app's own `/model`, `/diff`, `/workflows` (opens their sheet,
    *  true) before a send (use-claude-app-commands.ts); undefined on every other tab. */
   nativeChatAppCommand?: (text: string) => boolean
+  /** The same tab: the plan Claude proposed, for the session bar's "Plan" pill, null while its
+   *  approval is asked or when none was (claude-session-plan.ts); undefined on every other tab. */
+  nativeChatClaudePlan?: string | null
   loadNativeChatSkills: () => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>

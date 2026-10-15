@@ -214,10 +214,25 @@ describe('the app’s slash commands on a Claude tab matched to its Anthropic se
     expect(controller!.nativeChatAppCommand).toBeUndefined()
   })
 
-  it('leaves a Codex tab exactly as it was: no session list, no app commands', () => {
+  it('leaves a Codex tab exactly as it was: no session list, no app commands, no Plan pill', () => {
     agent = 'codex'
     render()
     expect(controller!.nativeChatSessionCommands).toBeUndefined()
     expect(controller!.nativeChatAppCommand).toBeUndefined()
+    expect(controller!.nativeChatClaudePlan).toBeUndefined()
+  })
+
+  // The app's session bar "Plan" pill (ns30.java:610-651): the plan Claude proposed, from the
+  // matched session's own rows (claude-session-plan.ts).
+  it('hands the session bar the plan Claude proposed, and none before one was', () => {
+    render()
+    expect(controller!.nativeChatClaudePlan).toBeNull()
+    act(() => renderer?.unmount())
+    api.session = {
+      ...api.session!,
+      messages: [{ id: 'p1', role: 'assistant', blocks: [{ type: 'tool-call', name: 'ExitPlanMode', input: { plan: '# Ship it' } }], timestamp: null, source: 'transcript' }]
+    }
+    render()
+    expect(controller!.nativeChatClaudePlan).toBe('# Ship it')
   })
 })

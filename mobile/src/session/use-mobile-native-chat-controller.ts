@@ -16,7 +16,7 @@ import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
 import { useMobileChatCommandPeek } from './use-mobile-chat-command-peek'
-import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'; import { useClaudeAppCommands } from './use-claude-app-commands'; import { ccrSessionSlashCommands } from './ccr-slash-commands'
+import { useCodexChatCommandIntercept } from './use-codex-chat-command-intercept'; import { useClaudeAppCommands } from './use-claude-app-commands'; import { ccrSessionSlashCommands } from './ccr-slash-commands'; import { claudeSessionPlan } from './claude-session-plan'
 import { applyCcrUsageToHud } from './ccr-usage-hud'; import { useCcrSessionUsage } from './use-ccr-session-usage'; import { ccrUsageFallbackFigure, useCcrUsageSheet } from './use-ccr-usage-sheet'; import { mergeImagePreviews, useHostImagePreviews } from './use-host-image-previews'; import { useCcrSessionImages } from './use-ccr-session-images'; import { useCcrSessionModel } from './use-ccr-session-model'; import { claudeConfigDirFromTranscriptPath } from './mobile-native-chat-session-agent'; import { preferCcrModelPair } from './ccr-session-model'; import { useAgentImageShareAsks } from './agent-image-share-context'; import { lockedShareAskSend, withoutAskDraftRestore, withoutAskRetry } from './agent-image-share-ask'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -605,7 +605,7 @@ export function useMobileNativeChatController(
     nativeChatSkills,
     // Only a structured session reports its own `/` surface; the PTY lane keeps
     // the curated catalog plus the disk scan.
-    nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined, nativeChatSessionCommands: ccrMatched ? ccrSessionSlashCommands(claudeApi.events) : undefined, nativeChatAppCommand: claudeAppCommand, // a matched Claude tab's menu is its session's own (ccr-slash-commands.ts)
+    nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined, nativeChatSessionCommands: ccrMatched ? ccrSessionSlashCommands(claudeApi.events) : undefined, nativeChatAppCommand: claudeAppCommand, nativeChatClaudePlan: ccrMatched ? claudeSessionPlan(drawnSession.messages, legacyRenderedPermission) : undefined, // a matched Claude tab's menu is its session's own (ccr-slash-commands.ts)
     loadNativeChatSkills,
     handleNativeChatQuestionAnswer: activeChatStructured ? structuredNativeChat.respondQuestion : answerQuestion,
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
