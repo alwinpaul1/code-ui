@@ -13,7 +13,9 @@ import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
  *  - USAGE ROWS: a Claude beacon decides alone, as before (`hudRateLimitWindows`). Otherwise a tab
  *    MATCHED to an Anthropic account shows that account's windows and nothing else: when they could
  *    not be read it shows no rows, never the host's feed, which is whichever login Orca holds and may
- *    be the other account. A tab not matched to any account keeps the host's feed, as it always had.
+ *    be the other account. A tab whose account is not known (no match, its config dir unbound) keeps
+ *    the host's feed only while at most one account is signed in; with several it shows no rows.
+ *    Its account is known through its Claude config dir before the match lands (ccr-session-usage.ts).
  */
 
 export type CcrHudInput = {
@@ -27,14 +29,16 @@ export function applyCcrUsageToHud(
   args: {
     /** The fresh reading for this tab's matched session and account, or null. */
     reading: CcrUsageReading | null
-    /** The tab is matched to an account (even when no reading is fresh). */
+    /** The tab's account is known, matched or through its config dir (even when no reading is fresh). */
     matchedAccount: boolean
+    /** With no account known: the host's feed may stand in (at most one account is signed in). */
+    hostFeedAllowed: boolean
     /** A live Claude beacon is believed for this session: it decides the usage rows alone. */
     beaconDecidesLimits: boolean
   }
 ): CcrHudInput {
-  const { reading, matchedAccount, beaconDecidesLimits } = args
-  const accountRows: RateLimitWindowReading[] | null = beaconDecidesLimits || !matchedAccount ? null : (reading?.limits ?? []).map((row) => ({ ...row }))
+  const { reading, matchedAccount, hostFeedAllowed, beaconDecidesLimits } = args
+  const accountRows: RateLimitWindowReading[] | null = beaconDecidesLimits || (!matchedAccount && hostFeedAllowed) ? null : (matchedAccount ? (reading?.limits ?? []) : []).map((row) => ({ ...row }))
   let context = today.context
   let usedTokens = today.usedTokens
   if (accountRows !== null && context) {

@@ -1,6 +1,7 @@
 import type { CcrSessionRow } from './ccr-session-api'
 import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-session-cache'
 import { findAccountSessionRow } from './ccr-session-lists'
+import { noteCcrRowContext } from './ccr-session-usage'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
 import {
   defaultLog,
@@ -14,6 +15,7 @@ import {
 
 /** Keeps the matched row's reported model and effort for the pill (ccr-session-model.ts). */
 export function noteModel(tabId: string, epoch: number | null, row: CcrSessionRow, report: (stage: CcrStage, ok: boolean, detail: string) => void): void {
+  noteCcrRowContext(tabId, epoch, row)
   const read = ccrModelOfRow(row)
   if ('skip' in read) {
     forgetCcrModel(tabId)
