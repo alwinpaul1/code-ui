@@ -76,15 +76,12 @@ type Props = {
   onPasteImageFile?: (uri: string) => void
   /** Any document via the system file picker; shown as a named chip. */
   onAttachFile?: () => void
-  /** Images picked-and-uploaded but not yet sent — shown as removable thumbnails
-   *  and ridden along on the next send (desktop native-chat parity). */
+  /** Images uploaded but not yet sent: removable thumbnails, sent with the next send. */
   attachments?: PendingNativeChatImage[]
-  /** A notice drawn at the top of the card, above the chips and the field: the rate-limit banner,
-   *  where the Claude app draws it. Built by the route; nothing when it has nothing to say. */
+  /** The rate-limit banner, drawn at the top of the card where the Claude app draws it. */
   banner?: ReactNode
   onRemoveAttachment?: (id: string) => void
-  /** Opens the markup editor on a photo chip (the Claude app's pencil,
-   *  2026-09-24). */
+  /** Opens the markup editor on a photo chip (the Claude app's pencil, 2026-09-24). */
   onEditAttachment?: (id: string, uri: string) => void
   /** A document attach is reading an over-the-cap video's frames. */
   videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
@@ -192,8 +189,7 @@ export function MobileNativeChatComposer({
   onAttachImage,
   onPasteImageFile,
   onAttachFile,
-  attachments = NO_ATTACHMENTS,
-  banner,
+  attachments = NO_ATTACHMENTS, banner,
   onRemoveAttachment,
   onEditAttachment,
   videoFrameExtraction = null,

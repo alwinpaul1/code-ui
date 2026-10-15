@@ -447,8 +447,7 @@ export function MobileNativeChatView({
       {notices}{sessionPills}
       <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
       <MobileNativeChatComposer
-        banner={composerBanner}
-        value={composerText}
+        banner={composerBanner} value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}
         keyboardUp={keyboardInset > 0}

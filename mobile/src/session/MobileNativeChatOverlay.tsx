@@ -112,11 +112,8 @@ type Props = {
   keyStrip?: MobileNativeChatKeyStripProps
   /** The session bar's diff pill: the worktree's uncommitted +/-, and what opens the changes.
    *  And the session pills drawn above the bar (MobileSessionPillRow): mounted here, owned by the route.
-   *  And `notices`, the connection row (MobileNativeChatConnectionRow), drawn above the pills: the
-   *  same. And `composerBanner`, the rate-limit banner (MobileNativeChatRateLimitBanner), drawn
-   *  inside the composer card: the same. */
-  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode; notices?: ReactNode
-  composerBanner?: ReactNode
+   *  And `notices` (the connection row) above the pills, and `composerBanner` (the rate-limit banner) inside the composer card: the same. */
+  sessionDiff?: SessionDiffTotals | null; onOpenDiff?: () => void; sessionPills?: ReactNode; notices?: ReactNode; composerBanner?: ReactNode
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -550,8 +547,7 @@ export function MobileNativeChatOverlay({
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
-        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills} notices={notices}
-        composerBanner={composerBanner}
+        sessionDiff={sessionDiff} onOpenDiff={onOpenDiff} sessionPills={sessionPills} notices={notices} composerBanner={composerBanner}
       />
   )
   // The loaded transcript says whether a later call touched a created file,

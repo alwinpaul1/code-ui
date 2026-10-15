@@ -50,7 +50,7 @@ describe('a catch-up that replaces what is held', () => {
     const live = prompt('u-live')
     store.add([kept])
     store.add([live])
-    const patch = store.take({ events: [...gap].reverse(), reached: false, nextCursor: 'p3' })
+    const patch = store.take({ events: gap.toReversed(), reached: false, nextCursor: 'p3' })
     expect(patch).toEqual({ hasOlder: true, liveFrom: 0 })
     expect(decodeCcrEvents(store.ordered).map((row) => row.id)).toEqual(['g1', 'g2', 'g3', 'g4', 'u-live'])
   })
@@ -61,7 +61,7 @@ describe('a catch-up that replaces what is held', () => {
     prompt('u-skipped2')
     const gap = [prompt('h1'), prompt('h2')]
     store.add([kept])
-    store.take({ events: [...gap].reverse(), reached: false, nextCursor: null })
+    store.take({ events: gap.toReversed(), reached: false, nextCursor: null })
     expect(decodeCcrEvents(store.ordered).map((row) => row.id)).toEqual(['h1', 'h2'])
   })
 
