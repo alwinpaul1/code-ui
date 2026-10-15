@@ -25,6 +25,7 @@ import {
   taskNotification
 } from './fixtures/ccr-background-task-events-2.1.300'
 import { DESKTOP_MESSAGES, NOW, PROMPT, colorOf, pressable, renderSheet, rerenderSheet, textOf, texts } from './MobileBackgroundTasksSheet.anthropic.test-support'
+import type { AgentToolCallsProps } from './native-chat-agent-tool-calls-slot'
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -151,13 +152,14 @@ describe("an agent's View transcript opens its Agent call's page in the same she
       expect(colorOf(status)).toBe((scheme === 'light' ? lightColors : darkColors).textSecondary)
       expect(texts(renderer)).toContain('Prompt')
       expect(renderer.root.findAll((node) => String(node.type) === 'MobileMarkdown' && node.props.content === PROMPT)).toHaveLength(1)
-      expect(texts(renderer)).toContain('Tool calls (1)')
+      // No file reader in this harness: the stream's calls alone are a floor, never an exact count.
+      expect(texts(renderer)).toContain('Tool calls (1+)')
       // The list stays mounted underneath, out of sight.
       expect(renderer.root.findAll((node) => node.props.style?.display === 'none')).toHaveLength(1)
 
       const more = [...events, ...subagentBashCall('toolu_sub2', 'pwd', 'Print the directory', T0 + 3_000), taskNotification({ taskId: BACKGROUND_AGENT.agentId, toolUseId: AGENT_CALL, status: 'completed', at: NOW })]
       rerenderSheet(renderer, { events: more, messages: conversation, scheme })
-      expect(texts(renderer)).toContain('Tool calls (2)')
+      expect(texts(renderer)).toContain('Tool calls (2+)')
       expect(textOf(renderer.root.find((node) => node.props.testID === 'task-transcript-status' && String(node.type) === 'Text'))).toBe('Completed')
     })
   }
@@ -181,7 +183,7 @@ describe("an agent's View transcript opens its Agent call's page in the same she
   })
 
   // The agent's file holds the calls made before the loaded window; the stream's own text is no call.
-  const fileToolCalls = () => createElement('FileToolCalls', { testID: 'agent-file-tool-calls' })
+  const fileToolCalls = (props: AgentToolCallsProps) => createElement('FileToolCalls', { testID: 'agent-file-tool-calls', toolUseId: props.toolUseId })
   const fileListShown = (shown: ReactTestRenderer) => shown.root.findAll((node) => String(node.type) === 'FileToolCalls').length
 
   it("reads the agent's calls from its file while the stream holds only the agent's text", () => {
@@ -191,12 +193,15 @@ describe("an agent's View transcript opens its Agent call's page in the same she
     expect(fileListShown(renderer)).toBe(1)
   })
 
-  it("reads the agent's calls from the stream once it holds one, not from the file", () => {
+  // Review 2026-10-15: the tab's store drops a subagent's older events, so the stream alone
+  // undercounts a long agent. The Agent sheet's own list (the file as the baseline, the stream added
+  // to it; subagent-stream-file-union.ts) stays in charge once the stream holds a call.
+  it("keeps the agent's file as the baseline once the stream holds one of its calls", () => {
     const events = [...calls, ...agentAndShellStarted(), subagentText('Looking at the sheet first.', T0 + 1_500), ...subagentBashCall('toolu_sub1', 'ls', 'List the session files', T0 + 2_000)]
     renderer = renderSheet({ events, messages: conversation, fileToolCalls })
     openTranscript(renderer)
-    expect(fileListShown(renderer)).toBe(0)
-    expect(texts(renderer)).toContain('Tool calls (1)')
+    expect(fileListShown(renderer)).toBe(1)
+    expect(renderer.root.find((node) => String(node.type) === 'FileToolCalls').props.toolUseId).toBe(AGENT_CALL)
   })
 
   it("reads the file for an agent the stream has nothing of yet", () => {

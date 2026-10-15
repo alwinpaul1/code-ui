@@ -524,20 +524,41 @@ describe('the subagent transcript viewer', () => {
     expect(dark.colors).not.toContain(lightColors.text)
   })
 
-  // G8: opened from Anthropic's stream, the viewer draws the agent's own events and never asks the
-  // desktop for the file (Claude Code 2.1.300 shapes, fixtures/ccr-background-task-events-2.1.300.ts).
-  it('draws an agent opened from the stream from its streamed events, without subscribing to its file', async () => {
+  // G8: opened from Anthropic's stream, the viewer adds the agent's own events to its file (Claude
+  // Code 2.1.300 shapes, fixtures/ccr-background-task-events-2.1.300.ts). Review 2026-10-15: it
+  // used to draw the stream alone and never read the file, and the tab's store drops a
+  // subagent's older events, so a long agent opened on its newest calls only.
+  it('draws an agent opened from the stream from its streamed events while its file is unread', async () => {
     const events = [...agentCallEvents('Launched.', 'Fix it'), ...subagentBashCall('toolu_sub_1', 'pnpm test', 'Run the suite', T0 + 1_000), subagentText('Done.', T0 + 2_000)]
     await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events } })
-    expect(subscribe).not.toHaveBeenCalled()
     expect(rows().map((row) => row.split(':').at(-1))).toEqual(['assistant', 'assistant']) // the call's result folds into its row
     expect(readTree(renderer!).texts).not.toContain('Nothing written yet')
   })
 
+  it('an agent opened from the stream still reads its file, and draws the file’s turns the stream dropped', async () => {
+    const events = [...agentCallEvents('Launched.', 'Fix it'), subagentText('Done.', T0 + 2_000)]
+    await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events } })
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message('a1')], hasMore: false }))
+    const drawn = rows()
+    expect(drawn).toContain('row:a1:assistant')
+    expect(drawn).toContain('row:u1:user')
+    expect(drawn).toHaveLength(3)
+  })
+
+  it('a row in both the file and the stream is drawn once', async () => {
+    const events = [...agentCallEvents('Launched.', 'Fix it'), subagentText('Done.', T0 + 2_000)]
+    const streamedId = String(events.at(-1)!.payload.uuid)
+    await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events } })
+    act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message(streamedId)], hasMore: false }))
+    expect(rows()).toEqual([`row:${streamedId}:assistant`, 'row:u1:user'])
+  })
+
   it('an agent with nothing in the stream yet reads as not written, not as an error', async () => {
     await mount('dark', { ...request(), stream: { toolUseId: AGENT_CALL, events: agentCallEvents('Launched.', 'Fix it') } })
-    expect(subscribe).not.toHaveBeenCalled()
+    act(() => emit({ type: 'snapshot', messages: [], hasMore: false, pending: true }))
     expect(rows()).toEqual([])
+    expect(readTree(renderer!).texts).toContain('Nothing written yet')
     expect(readTree(renderer!).texts.some((text) => /could not|failed|error/i.test(text))).toBe(false)
   })
 })

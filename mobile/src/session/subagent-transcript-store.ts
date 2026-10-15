@@ -13,8 +13,8 @@ import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
 export type SubagentTranscriptRequest = {
   target: SubagentTranscriptTarget
   running: boolean
-  /** The agent's own events in Anthropic's stream, when it held some at the tap: the viewer draws
-   *  them instead of reading the file (mobile-subagent-transcript.ts `streamedSubagentMessages`). */
+  /** The agent's own events in Anthropic's stream, when it held some at the tap: the viewer adds
+   *  them to the file's rows (subagent-stream-file-union.ts). */
   stream?: SubagentTranscriptStream | null
 }
 

@@ -17,6 +17,7 @@ import { MobileNativeChatJumpToLatest, MobileNativeChatLoadEarlier } from './mob
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useChatViewStyles } from './mobile-native-chat-view-styles'
 import { streamedSubagentMessages, subagentTranscriptBodyState } from './mobile-subagent-transcript'
+import { unionSubagentMessages } from './subagent-stream-file-union'
 import {
   closeSubagentTranscript,
   useSubagentTranscriptRequest,
@@ -87,7 +88,8 @@ export function MobileSubagentTranscriptScreen({
   onClose: () => void
 }): React.JSX.Element {
   const { target, running } = request
-  // Opened from Anthropic's stream (G8): its rows, and no read of the file at all.
+  // Opened from Anthropic's stream (G8): its rows add what the file does not hold yet. The file is
+  // still read: the tab's store drops a subagent's older events (subagent-stream-file-union.ts).
   const streamed = useMemo(() => streamedSubagentMessages(request), [request])
   const { colors, space } = useTheme()
   const styles = useChatViewStyles()
@@ -99,12 +101,13 @@ export function MobileSubagentTranscriptScreen({
     // Its own retention slot: the parent tab's identity is host+worktree, and a
     // subagent must never be seeded from, or captured into, the parent's cache.
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId, 'subagent']),
-    agent: streamed ? null : target.agent,
-    sessionId: streamed ? null : target.sessionId,
+    agent: target.agent,
+    sessionId: target.sessionId,
     transcriptPath: target.transcriptPath,
     lastConnectedAt
   })
-  const folded = useMemo(() => foldMobileNativeChatMessages(streamed ?? session.messages), [session.messages, streamed])
+  const merged = useMemo(() => unionSubagentMessages(session.messages, streamed ?? []), [session.messages, streamed])
+  const folded = useMemo(() => foldMobileNativeChatMessages(merged), [merged])
   const newestFirst = useMemo(() => folded.toReversed(), [folded])
   const tail = useMobileNativeChatTailFollow<NativeChatMessage>({
     rows: newestFirst,
@@ -114,7 +117,7 @@ export function MobileSubagentTranscriptScreen({
   })
   const contentPosition = useChatListContentPosition(tail.detachedFromTail)
   const body = subagentTranscriptBodyState({
-    status: streamed ? 'ready' : session.status,
+    status: session.status,
     messageCount: folded.length,
     error: session.error
   })

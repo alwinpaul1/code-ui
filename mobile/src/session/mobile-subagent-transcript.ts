@@ -116,8 +116,8 @@ export function subagentTranscriptTarget(args: {
   }
 }
 
-/** The viewer's rows when it was opened from Anthropic's stream (the agent's own events, decoded
- *  as the lead's are); null when it reads the agent's file through the desktop. */
+/** The agent's own events from Anthropic's stream, decoded as the lead's are, when the viewer was
+ *  opened with them; null otherwise. They add to the file's rows, never replace them. */
 export function streamedSubagentMessages(request: SubagentTranscriptRequest): NativeChatMessage[] | null {
   return request.stream ? ccrSubagentMessages(request.stream.events, request.stream.toolUseId) : null
 }

@@ -9,7 +9,10 @@ import { ClaudeChatLiveContext, type ClaudeChatLive } from './claude-chat-live'
 import { BACKGROUND_AGENT, BACKGROUND_AGENT_LAUNCH_TEXT } from './fixtures/claude-background-agent-launch-2.1.296'
 import { AGENT_CALL, SESSION, T0, agentCallEvents, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
 import { orcaTranscriptRows, probeARecords } from './fixtures/claude-subagent-transcripts-2.1.296'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { ccrSubagentMessages } from './ccr-background-tasks'
 import { streamedSubagentMessages, subagentTranscriptTarget } from './mobile-subagent-transcript'
+import { unionSubagentMessages } from './subagent-stream-file-union'
 import { MobileNativeChatAgentToolCalls } from './MobileNativeChatAgentToolCalls'
 import { ToolDetailBody } from './MobileNativeChatToolDetailSheet'
 import { AgentToolCallsSlotProvider } from './native-chat-agent-tool-calls-slot'
@@ -116,11 +119,12 @@ afterEach(() => {
 })
 
 describe('the chat’s Agent sheet reads the agent’s calls from Anthropic’s stream', () => {
-  it('lists the calls the agent made under Tool calls (N), without asking the desktop for its file', () => {
+  it('lists the calls the agent made under Tool calls (N) once its file has answered', () => {
     const tree = render(sheet(live(STREAM)))
+    expect(peekSubagentActivityRequest()?.targets.map((target) => target.agentId)).toEqual([BACKGROUND_AGENT.agentId])
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, ccrSubagentMessages(STREAM, AGENT_CALL)))
     expect(labels(tree)).toContain('Tool calls (2)')
     expect(callRows(tree)).toHaveLength(2)
-    expect(peekSubagentActivityRequest()).toBeNull()
   })
 
   it('falls back to the agent’s file through the desktop when the stream holds none of its calls', () => {
@@ -134,7 +138,89 @@ describe('the chat’s Agent sheet reads the agent’s calls from Anthropic’s 
     render(sheet(live(null)))
     expect(peekSubagentActivityRequest()?.targets).toHaveLength(1)
   })
+})
 
+// Review 2026-10-15: the tab's store drops undrawn events past CCR_HELD_UNDRAWN_EVENTS, and a
+// subagent's own events draw nothing in the lead's chat, so a long agent keeps only its newest
+// calls in the stream. Reading the stream alone, one streamed call against four in the file read
+// "Tool calls (1)". The file is the baseline now, and the stream adds what the file lacks.
+describe('the Agent sheet counts the agent’s calls from its file and the stream together', () => {
+  const FOUR = [1, 2, 3, 4].flatMap((n) => subagentBashCall(`toolu_sub_union_${n}`, `step ${n}`, `Step ${n}`, T0 + n * 1_000))
+  const FILE = () => ccrSubagentMessages([...agentCallEvents(BACKGROUND_AGENT_LAUNCH_TEXT, PROMPT), ...FOUR], AGENT_CALL)
+  const withStream = (events: readonly CcrEvent[]) => live([...agentCallEvents(BACKGROUND_AGENT_LAUNCH_TEXT, PROMPT), ...events])
+  const tail = (tree: ReactTestRenderer) => labels(tree).filter((label) => label.startsWith('Tool calls'))
+
+  it('a stream that kept one of the agent’s four calls still reads Tool calls (4)', () => {
+    const tree = render(sheet(withStream(FOUR.slice(-2))))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, FILE()))
+    expect(tail(tree)).toEqual(['Tool calls (4)'])
+    expect(callRows(tree)).toHaveLength(4)
+  })
+
+  it('a call the stream holds and the file does not yet is added to the file’s', () => {
+    const fifth = subagentBashCall('toolu_sub_union_5', 'step 5', 'Step 5', T0 + 5_000)
+    const tree = render(sheet(withStream([...FOUR.slice(-2), ...fifth])))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, FILE()))
+    expect(tail(tree)).toEqual(['Tool calls (5)'])
+  })
+
+  it('with the file unread or failed, the stream’s calls show and the count is a floor', () => {
+    const tree = render(sheet(withStream(FOUR.slice(-2))))
+    expect(tail(tree)).toEqual(['Tool calls (1+)'])
+    expect(callRows(tree)).toHaveLength(1)
+  })
+
+  it('with no stream, the file’s calls are counted exactly', () => {
+    const tree = render(sheet(live(null)))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, FILE()))
+    expect(tail(tree)).toEqual(['Tool calls (4)'])
+  })
+
+  it('with nothing in either, no Tool calls section and View transcript stays', () => {
+    const tree = render(sheet(withStream([])))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, []))
+    expect(tail(tree)).toEqual([])
+    expect(tree.root.findAll((n) => n.props.testID === 'agent-view-transcript' && String(n.type) === 'Pressable')).toHaveLength(1)
+  })
+
+  it('one call held by both reads Tool calls (1), not 2', () => {
+    const one = subagentBashCall('toolu_sub_union_only', 'only', 'Only', T0 + 1_000)
+    const tree = render(sheet(withStream(one)))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, ccrSubagentMessages(one, AGENT_CALL)))
+    expect(tail(tree)).toEqual(['Tool calls (1)'])
+  })
+
+  it('a call in both under different row ids is counted once, by its tool_use id', () => {
+    const file = FILE().map((message) => ({ ...message, id: `file-${message.id}` }))
+    const tree = render(sheet(withStream(FOUR)))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, file))
+    expect(tail(tree)).toEqual(['Tool calls (4)'])
+  })
+})
+
+describe('unionSubagentMessages', () => {
+  const call = (id: string, callId: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {}, callId }] })
+  const result = (id: string, callId: string): NativeChatMessage => ({ id, role: 'tool', blocks: [{ type: 'tool-result', output: 'ok', callId }] })
+
+  it('is empty for two empty sources', () => {
+    expect(unionSubagentMessages([], [])).toEqual([])
+  })
+
+  it('keeps a lone file row and a lone streamed row', () => {
+    expect(unionSubagentMessages([call('a', 'c1')], []).map((m) => m.id)).toEqual(['a'])
+    expect(unionSubagentMessages([], [call('a', 'c1')]).map((m) => m.id)).toEqual(['a'])
+  })
+
+  it('drops a streamed row the file holds, by row id or by tool_use id', () => {
+    expect(unionSubagentMessages([call('a', 'c1')], [call('a', 'c1'), call('b', 'c1'), call('c', 'c2')]).map((m) => m.id)).toEqual(['a', 'c'])
+  })
+
+  it('keeps a streamed result whose call the file holds without its result yet', () => {
+    expect(unionSubagentMessages([call('a', 'c1')], [result('r', 'c1')]).map((m) => m.id)).toEqual(['a', 'r'])
+  })
+})
+
+describe('View transcript from the Agent sheet', () => {
   it('View transcript opens the agent’s rows from the stream, and they follow the stream as it grows', () => {
     const tree = render(sheet(live(STREAM)))
     press(tree, 'agent-view-transcript')

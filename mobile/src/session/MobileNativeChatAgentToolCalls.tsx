@@ -15,6 +15,7 @@ import {
   useSubagentFeedsWindowed,
   watchSubagentActivity
 } from './subagent-activity-store'
+import { unionSubagentMessages } from './subagent-stream-file-union'
 import { openSubagentTranscript } from './subagent-transcript-store'
 
 /**
@@ -22,17 +23,18 @@ import { openSubagentTranscript } from './subagent-transcript-store'
  * sheet lists them (1.261009.20, `y030.A`; parity gap G29), and "View
  * transcript" for the whole of it in the subagent viewer.
  *
- * With Anthropic's stream live (a matched Claude tab), the calls come from the stream: the events
- * whose `parent_tool_use_id` is this Agent call, as the Claude app keeps them with the call (G8;
- * 1009 nq8.java:937-949), and View transcript opens those rows. When the stream holds no call of
- * the agent's (none yet, an older window, no live stream), they come from the file, as follows.
- *
- * The calls come from the agent's own transcript, read through the feed the
- * Background tasks sheet uses (`subagent-activity-store.ts`, fed by the
- * session screen's MobileSubagentActivityFeeds) for as long as this is on
- * screen; the two sheets never stand open together. Nothing is listed until
- * that read has rows, and nothing for an agent that made no call. The rows are
- * the run sheet's, inert: drilling in is what the transcript viewer is for.
+ * The agent's file is the baseline, read through the feed the Background tasks
+ * sheet uses (`subagent-activity-store.ts`, fed by the session screen's
+ * MobileSubagentActivityFeeds) for as long as this is on screen; the two sheets
+ * never stand open together. With Anthropic's stream live (a matched Claude
+ * tab), the events whose `parent_tool_use_id` is this Agent call add what the
+ * file does not hold yet, as the Claude app keeps them with the call (G8; 1009
+ * nq8.java:937-949), de-duplicated by row and tool_use id
+ * (`subagent-stream-file-union.ts`). The stream alone is never the count: the
+ * tab's store drops a subagent's older events. Until the file has answered,
+ * the stream's calls show with the count as a floor ("Tool calls (1+)").
+ * Nothing is listed for an agent that made no call. The rows are the run
+ * sheet's, inert: drilling in is what the transcript viewer is for.
  */
 export function MobileNativeChatAgentToolCalls({ agentId, title, inSection, toolUseId = null }: AgentToolCallsProps) {
   const { space } = useTheme()
@@ -40,29 +42,25 @@ export function MobileNativeChatAgentToolCalls({ agentId, title, inSection, tool
   const target = useMemo(() => runs.transcriptTarget?.(agentId, title) ?? null, [runs.transcriptTarget, agentId, title])
   const streamEvents = useClaudeChatLive()?.stream?.events ?? null
   const streamed = useMemo(() => (streamEvents && toolUseId ? ccrSubagentMessages(streamEvents, toolUseId) : []), [streamEvents, toolUseId])
-  const streamedRows = useMemo(() => toolCallRows(streamed), [streamed])
-  const fromStream = streamedRows.length > 0
   const [owner] = useState(() => ({}))
   useEffect(() => {
-    if (!target || fromStream) {
+    if (!target) {
       return undefined
     }
     watchSubagentActivity(owner, [target])
     return () => stopWatchingSubagentActivity(owner)
-  }, [fromStream, owner, target])
+  }, [owner, target])
   const feeds = useSubagentActivityFeeds()
-  // The feed reads the transcript's latest page only; with earlier pages
-  // unread the count is a floor, and says so ("Tool calls (40+)").
-  const windowedIds = useSubagentFeedsWindowed()
-  const windowed = !fromStream && windowedIds.has(agentId)
   const messages = target ? feeds.get(target.agentId) : undefined
-  const fileRows = useMemo(() => (messages ? toolCallRows(messages) : []), [messages])
-  const rows = fromStream ? streamedRows : fileRows
+  const rows = useMemo(() => toolCallRows(unionSubagentMessages(messages ?? [], streamed)), [messages, streamed])
+  // A floor, never an exact count: the feed reads the transcript's latest page only (earlier
+  // pages unread), or the file has not answered and the rows are the stream's alone.
+  const windowed = useSubagentFeedsWindowed().has(agentId) || messages === undefined
   if (!target) {
     return null
   }
   const running = runs.runningIds.has(agentId)
-  // The viewer draws the stream's rows when the stream holds any of the agent's, text included.
+  // The viewer adds the stream's rows (text included) to the file's when the stream holds any.
   const stream = streamEvents && toolUseId && streamed.length > 0 ? { toolUseId, events: streamEvents } : null
   return (
     <>

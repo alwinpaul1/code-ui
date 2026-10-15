@@ -1236,9 +1236,11 @@ live, the sheet lists what the app lists, from the same events; the desktop's la
   that task ends. Each button's label names its task ("Stop task: <title>").
 - **View transcript** (`MobileBackgroundTaskTranscriptPage.tsx`): the app pushes the Agent call's
   `ToolCallDetail` onto the same sheet (mm8.java); here the chat's own Agent sheet body, under a
-  back arrow, "Agent" and its status. Its "Tool calls (N)" come from the stream's events whose
-  `parent_tool_use_id` is the Agent call, live; while those hold no call (none yet, or only the
-  agent's text), from the agent's file as before. The link is drawn only on Anthropic's lane: a
+  back arrow, "Agent" and its status. Its "Tool calls (N)" read the agent's file as the baseline and add
+  the stream's events whose `parent_tool_use_id` is the Agent call, live, de-duplicated by row and
+  tool_use id (`subagent-stream-file-union.ts`). The stream alone undercounts: the tab's store
+  drops a subagent's older events past `CCR_HELD_UNDRAWN_EVENTS` (review 2026-10-15). Until the
+  file answers, the stream's calls show and the count is a floor ("Tool calls (1+)"). The link is drawn only on Anthropic's lane: a
   desktop agent row with the stream down offers none.
 
 Not proven offline: no live session was driven, so the task events in the tests are built from

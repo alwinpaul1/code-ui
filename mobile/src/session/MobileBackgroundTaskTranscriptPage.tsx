@@ -25,10 +25,10 @@ import { AgentToolCallsSlotProvider, useAgentToolCallsSlot, type AgentToolCallsP
  * `ccr_tool_calls_count`; parity gap G29). Here it is the chat's own Agent sheet body
  * (`ToolDetailBody`), so the two never drift apart.
  *
- * The agent's calls: while Anthropic's stream is live, from the stream itself (the events whose
- * `parent_tool_use_id` is the Agent call, ccr-background-tasks.ts), live as they arrive; else, or
- * while the stream holds none of them, from the agent's transcript file through the desktop, as
- * the Agent sheet reads them (MobileNativeChatAgentToolCalls.tsx).
+ * The agent's calls are the Agent sheet's own list (MobileNativeChatAgentToolCalls.tsx): the
+ * agent's transcript file through the desktop as the baseline, with the stream's events whose
+ * `parent_tool_use_id` is the Agent call added live (subagent-stream-file-union.ts). The stream
+ * alone undercounts: the tab's store drops a subagent's older events (review 2026-10-15).
  */
 
 /** The page's status, in the app's tool-status words (`ccr_tool_status_*`) and, for a task Claude
@@ -92,13 +92,13 @@ export function MobileBackgroundTaskTranscriptBody({
   const outer = useAgentToolCallsSlot()
   const toolUseId = task.toolUseId ?? pair?.call?.callId ?? null
   const rows = useMemo(() => (stream && toolUseId ? streamedToolCallRows(ccrSubagentMessages(stream.events, toolUseId)) : []), [stream, toolUseId])
-  // The stream's calls once it has one; until then the agent's file, which also holds the calls
-  // made before the loaded window and keeps the full viewer's link. Text alone is not a call.
+  // The Agent sheet's list whenever the tab provides it, told the call's id. Only with no file
+  // reader at all does the page list the stream's calls itself, and then as a floor ("(N+)").
   const render = useMemo(
     () =>
       (props: AgentToolCallsProps): ReactNode =>
-        rows.length > 0 ? <StreamedToolCalls rows={rows} inSection={props.inSection} /> : (outer?.(props) ?? null),
-    [outer, rows]
+        outer ? outer({ ...props, toolUseId: props.toolUseId ?? toolUseId }) : rows.length > 0 ? <StreamedToolCalls rows={rows} inSection={props.inSection} /> : null,
+    [outer, rows, toolUseId]
   )
   if (!pair) {
     // The sheet offers the link only where the call is found; the call can still leave the
@@ -130,7 +130,7 @@ function StreamedToolCalls({ rows, inSection }: { rows: readonly RunSheetRow[]; 
   return (
     <>
       {inSection(
-        `Tool calls (${rows.length})`,
+        `Tool calls (${rows.length}+)`,
         <View style={{ gap: space.xs }}>
           {rows.map((row, index) => (
             <RunSheetRowView key={index} row={row} testID="agent-tool-call-row" />
