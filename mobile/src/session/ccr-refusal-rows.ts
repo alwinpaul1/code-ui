@@ -31,6 +31,8 @@ import { claudeTranscriptModelName } from './claude-transcript-model'
  */
 
 export type CcrRefusalCard = {
+  /** The card's row id (the event's uuid): what its open Why? is kept by (ccr-refusal-expanded.ts). */
+  rowId: string
   kind: 'fallback' | 'paused'
   originalModel: string
   fallbackModel: string | null
@@ -69,6 +71,7 @@ export function decodeCcrRefusal(payload: Record<string, unknown>, uuid: string,
     return []
   }
   const card: CcrRefusalCard = {
+    rowId: uuid,
     kind,
     originalModel,
     fallbackModel,
@@ -92,7 +95,7 @@ export function ccrRefusalCardOf(block: NativeChatTextBlock): CcrRefusalCard | n
   }
   try {
     const card = JSON.parse(block.presentation.slice(PRESENTATION.length)) as CcrRefusalCard
-    return (card.kind === 'fallback' || card.kind === 'paused') && typeof card.originalModel === 'string' ? card : null
+    return (card.kind === 'fallback' || card.kind === 'paused') && typeof card.originalModel === 'string' && typeof card.rowId === 'string' ? card : null
   } catch {
     return null
   }

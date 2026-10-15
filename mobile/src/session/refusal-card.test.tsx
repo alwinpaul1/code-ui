@@ -4,6 +4,7 @@ import { isTextBlock, type NativeChatTextBlock } from '../../../src/shared/nativ
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { decodeCcrEvents } from './ccr-transcript-decode'
+import { resetCcrRefusalExpandedForTests } from './ccr-refusal-expanded'
 import { resetCcrRefusalRetryForTests, useCcrRefusalRetryHost } from './ccr-refusal-retry'
 import { prompt, refusalFallback, refusalNoFallback } from './fixtures/ccr-refusal-suggestion-events-2.1.300'
 import { isRenderableNativeChatNotice } from './mobile-native-chat-notice-kind'
@@ -42,6 +43,7 @@ afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
   resetCcrRefusalRetryForTests()
+  resetCcrRefusalExpandedForTests()
   openURL.mockClear()
 })
 
@@ -124,6 +126,29 @@ describe('a refusal card in a matched Claude tab', () => {
     expect(setComposerText).not.toHaveBeenCalled()
     expect(warn.mock.calls[0]![0]).toContain('rewind_conversation to u-refused failed')
     warn.mockRestore()
+  })
+
+  // Review 2026-10-15: the list virtualises its rows, so a card scrolled out and back is a new
+  // mount, and an opened Why? came back closed. The open state is keyed by the row's id now.
+  it('keeps Why? open across an unmount and remount of the same row', () => {
+    let root = render(SWITCHED)
+    act(() => byId(root, 'refusal-why')[0]!.props.onPress())
+    expect(byId(root, 'refusal-reason')).toHaveLength(1)
+    act(() => renderer?.unmount())
+    root = render(SWITCHED)
+    expect(byId(root, 'refusal-reason')).toHaveLength(1)
+    expect(words(byId(root, 'refusal-why')[0]!)).toContain('Hide')
+    act(() => byId(root, 'refusal-why')[0]!.props.onPress())
+    act(() => renderer?.unmount())
+    expect(byId(render(SWITCHED), 'refusal-reason')).toHaveLength(0)
+  })
+
+  it('opening one card’s Why? leaves another card closed', () => {
+    const other = blockOf([prompt('u-other', 'Scan it again'), refusalFallback({ original: 'claude-opus-5', fallback: 'claude-sonnet-5', category: 'cyber', refused: 'u-other' })])
+    const root = render(SWITCHED)
+    act(() => byId(root, 'refusal-why')[0]!.props.onPress())
+    act(() => renderer?.unmount())
+    expect(byId(render(other), 'refusal-reason')).toHaveLength(0)
   })
 
   it('a refusal whose prompt is not loaded offers no Edit and retry even with the lane live', () => {

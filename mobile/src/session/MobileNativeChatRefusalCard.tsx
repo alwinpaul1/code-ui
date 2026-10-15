@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { Linking, Pressable, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { CCR_REFUSAL_COPY, CCR_REFUSAL_LEARN_MORE_URL, ccrRefusalWords, type CcrRefusalCard } from './ccr-refusal-rows'
+import { useCcrRefusalExpanded } from './ccr-refusal-expanded'
 import { useCcrRefusalRetry } from './ccr-refusal-retry'
 
 /**
@@ -16,7 +16,8 @@ import { useCcrRefusalRetry } from './ccr-refusal-retry'
 export function MobileNativeChatRefusalCard({ card, fontScale = 1 }: { card: CcrRefusalCard; fontScale?: number }) {
   const { colors, space, radius } = useTheme()
   const retry = useCcrRefusalRetry()
-  const [open, setOpen] = useState(false)
+  // Kept above the list by row id: a virtualised row that remounts keeps its Why? open.
+  const [open, toggleOpen] = useCcrRefusalExpanded(card.rowId)
   const canRetry = retry !== null && card.refusedUuid !== null && card.promptText !== null
   const words = ccrRefusalWords(card, { rewindable: canRetry })
   const details = words.details ? (
@@ -67,7 +68,7 @@ export function MobileNativeChatRefusalCard({ card, fontScale = 1 }: { card: Ccr
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         testID="refusal-why"
-        onPress={() => setOpen((value) => !value)}
+        onPress={toggleOpen}
         hitSlop={6}
         style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 }}
       >
