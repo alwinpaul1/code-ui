@@ -7,6 +7,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { CCR_ATTACHMENT_NOT_ON_DESKTOP, chipsHeldByAnthropic } from './ccr-attachment-send'; import { useNativeChatAnthropicSend, type NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
@@ -90,6 +91,8 @@ type Args = {
   readonly onError?: () => void
   // Injected so the settle between image paste and submit is instant in tests.
   readonly sleep?: (ms: number) => Promise<void>
+  /** Set on a Claude tab sending through Anthropic with its attachments. */
+  readonly anthropic?: NativeChatAnthropicAttachments | null
 }
 
 export type MobileNativeChatImageAttachments = {
@@ -111,6 +114,9 @@ export type MobileNativeChatImageAttachments = {
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
   readonly sendNativeChat: (text: string) => Promise<boolean>
+  /** The Anthropic lane's send: the words and every chip that finished uploading, in one event,
+   *  nothing through the desktop (ccr-attachment-send.ts decides which chips go). */
+  readonly sendAnthropic: (text: string) => Promise<boolean>
   /** A document attach is reading an over-the-cap video's frames, for the
    *  active scope only — null once it settles, extracted or not. */
   readonly videoFrameExtraction: NativeChatVideoFrameExtractionState | null
@@ -141,7 +147,8 @@ export function useMobileNativeChatImageAttachments({
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
-  sleep = defaultSleep
+  sleep = defaultSleep,
+  anthropic = null
 }: Args): MobileNativeChatImageAttachments {
   const attachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.byScope)
   const videoFrameExtractionByScope = useNativeChatImageAttachmentsStore(
@@ -203,7 +210,8 @@ export function useMobileNativeChatImageAttachments({
     onUploadSettled: settleUploads,
     onVideoFrameExtractionProgress: setVideoFrameExtractionProgress,
     onAttachSuccess,
-    onError
+    onError,
+    ...(anthropic ? { anthropicStore: anthropic.store } : {})
   })
   const videoFrameExtraction = (scopeKey ? videoFrameExtractionByScope[scopeKey] : undefined) ?? null
 
@@ -216,8 +224,12 @@ export function useMobileNativeChatImageAttachments({
     [scopeKey, removeScopeAttachment]
   )
 
+  const sendAnthropic = useNativeChatAnthropicSend({ anthropic, scopeKey, onError, onSendError, takeSentAttachments, restoreSentAttachments })
+
   const sendNativeChat = useCallback(
     (composerText: string): Promise<boolean> => {
+      // A chip whose file is at Anthropic has no desktop path to paste (the tab left that lane after the pick): refuse, words and chips kept.
+      if (chipsHeldByAnthropic(attachments)) { onError?.(); onSendError(CCR_ATTACHMENT_NOT_ON_DESKTOP); return Promise.resolve(false) }
       const operationTerminal = activeHandleRef.current
       // One budget for the whole user action. The paste loop, the settle, and the
       // text body that follows are a single send from the composer's point of view;
@@ -440,7 +452,7 @@ export function useMobileNativeChatImageAttachments({
     },
     [
       activeHandleRef,
-      attachments.length,
+      attachments,
       baseSend,
       beforeImagePaste,
       beginImageSend,
@@ -468,6 +480,7 @@ export function useMobileNativeChatImageAttachments({
     removeAttachment,
     replaceAttachment,
     sendNativeChat,
+    sendAnthropic,
     videoFrameExtraction,
     cancelVideoFrameExtraction
   }

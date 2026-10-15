@@ -69,7 +69,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage'
+export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage' | 'files'
 
 export class CcrApiError extends Error {
   constructor(

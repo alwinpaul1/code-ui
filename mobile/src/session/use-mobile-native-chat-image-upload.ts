@@ -1,4 +1,4 @@
-import type { UploadingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { NativeChatAttachmentStore, NativeChatUploadLanded, UploadingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
@@ -11,6 +11,7 @@ import {
 // A file the composer already holds and a named document are this fork's own attach paths, and
 // the media seam's contract has no member for either, so they stay on the phone's picker.
 import { pickMobileDocuments, pickMobileImageFiles } from './mobile-image-source-picker'
+import { CcrFileUploadError } from './ccr-file-upload'
 import {
   NATIVE_CHAT_ATTACHMENT_LIMIT,
   NATIVE_CHAT_ATTACHMENT_LIMIT_LINE,
@@ -72,7 +73,7 @@ export function useMobileNativeChatImageUpload(args: {
   onImageFailed?: (
     scope: string,
     image: UploadingNativeChatImage & { batch: string },
-    retry: () => Promise<{ path: string; previewUri: string }>
+    retry: () => Promise<NativeChatUploadLanded>
   ) => boolean
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
@@ -83,6 +84,8 @@ export function useMobileNativeChatImageUpload(args: {
   ) => void
   onAttachSuccess?: () => void
   onError?: () => void
+  /** A Claude tab on the Anthropic lane: where its picks go instead of the desktop, read at the pick (ccr-file-upload.ts). */
+  anthropicStore?: () => NativeChatAttachmentStore | null
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
   attachImageFile: (uri: string) => Promise<void>
@@ -96,6 +99,7 @@ export function useMobileNativeChatImageUpload(args: {
 } {
   const {
     activeHandleRef,
+    anthropicStore,
     client,
     connState,
     getActiveWorktreeConnectionId,
@@ -141,11 +145,11 @@ export function useMobileNativeChatImageUpload(args: {
       batchOverride?: string
     ): Promise<void> => {
       const scope = scopeKey
+      // An Anthropic-lane pick needs no desktop: its bytes go to Anthropic, and only there.
+      const store = anthropicStore?.() ?? null
       if (
-        !client ||
         !scope ||
-        connState !== 'connected' ||
-        (!activeHandleRef.current && !structuredNativeChat)
+        (!store && (!client || connState !== 'connected' || (!activeHandleRef.current && !structuredNativeChat)))
       ) {
         return
       }
@@ -161,6 +165,7 @@ export function useMobileNativeChatImageUpload(args: {
       try {
         await uploadMobileNativeChatImages(source, {
           client,
+          ...(store ? { store } : {}),
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages,
           onImageUploaded: (image) => {
@@ -175,7 +180,9 @@ export function useMobileNativeChatImageUpload(args: {
             onImagesUploaded(scope, [{ ...image, batch }])
           },
           onImageFailed: onImageFailed
-            ? (image, _error, retry) => {
+            ? (image, error, retry) => {
+                // A file Anthropic would refuse (empty, over the cap) is not retried: its chip goes with the selection's sweep, the app's words say why.
+                if (error instanceof CcrFileUploadError && error.refusedBeforeUpload) { showToast(error.userMessage, 2500); return false }
                 const kept = onImageFailed(scope, { ...image, batch }, retry)
                 chipFailed ||= kept
                 return kept
@@ -261,7 +268,7 @@ export function useMobileNativeChatImageUpload(args: {
         }
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
-        if (connStateRef.current !== 'connected') {
+        if (!store && connStateRef.current !== 'connected') {
           showToast('Attach failed (disconnected)', 1500)
           return
         }
@@ -282,6 +289,7 @@ export function useMobileNativeChatImageUpload(args: {
         }
         // The Claude app's words (chat_input_file_too_large, ccr_upload_failed),
         // with Orca's own cap: its slot RPCs take 24 MiB of base64, 18 MB of file.
+        if (uploadError instanceof CcrFileUploadError) { showToast(uploadError.userMessage, 1500); return }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
           showToast('File size exceeds 18 MB limit', 1500)
           return
@@ -291,6 +299,7 @@ export function useMobileNativeChatImageUpload(args: {
     },
     [
       activeHandleRef,
+      anthropicStore,
       client,
       connState,
       getActiveWorktreeConnectionId,

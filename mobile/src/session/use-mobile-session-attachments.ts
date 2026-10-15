@@ -104,7 +104,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       showToast,
       onNativeChatSendError: nativeChatSendError.show,
       onSuccess: triggerSelection,
-      onError: triggerError
+      onError: triggerError,
+      nativeChatAnthropic: nativeChatController.nativeChatAnthropicAttachments ?? null
     })
 
   // Why: refresh canPaste on mount, AppState active, after paste.

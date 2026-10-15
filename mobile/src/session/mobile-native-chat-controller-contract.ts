@@ -53,6 +53,7 @@ import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-ta
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
+import type { NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -227,6 +228,10 @@ export type MobileNativeChatController = {
   /** The composer's attachment count, reported by the overlay that holds the image hook: the
    *  Anthropic queue reads it at a turn's end (the app moves the queue back over attachments). */
   setNativeChatComposerAttachments?: (count: number) => void
+  /** A Claude tab that sends its attachments through Anthropic too (ccr-file-upload.ts, behind
+   *  `CCR_ATTACHMENTS_THROUGH_ANTHROPIC`): picks upload to Anthropic and the send references them.
+   *  Null on every other tab, and while the switch is off. */
+  nativeChatAnthropicAttachments?: NativeChatAnthropicAttachments | null
   handleNativeChatStop: () => void
   /** A Stop went out and the turn has not ended (use-chat-stop-button.ts). */
   nativeChatStopping?: boolean

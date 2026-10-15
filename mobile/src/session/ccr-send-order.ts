@@ -1,6 +1,8 @@
 import { hydrateNativeChatOutbox, nativeChatOutboxEntries } from '../storage/native-chat-outbox'
+import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
 import { ccrEchoSeen } from './ccr-send'
 import type { CcrEvent } from './ccr-session-api'
+import type { NativeChatOutboxCcr } from '../storage/native-chat-outbox'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { OUTBOX_MAX_RESEND_AGE_MS, OUTBOX_SESSION_AUTO_ATTEMPTS } from './native-chat-outbox-recovery-plan'
@@ -155,4 +157,21 @@ export async function sendOlderCcrEntriesFirst(args: {
     }
   }
   return true
+}
+
+/** Why a send to `to` must be refused before anything is posted, as [log line, user notice], or
+ *  null to go on: files uploaded under another account than the session's (the desktop reads a
+ *  file with the session account's own sign-in), or an outbox resend whose tab now sends to
+ *  another session than the one it was written for. */
+export function ccrSendTargetRefusal(to: CcrTo, pinned: NativeChatOutboxCcr | undefined, filesAccountId: string | null): [string, string] | null {
+  if (filesAccountId !== null && filesAccountId !== to.accountId) {
+    return [`[ccr-send] refused: attachments were uploaded under another account than session ${ccrSessionTail(to.sessionId)}'s`, CCR_ATTACHMENT_OTHER_ACCOUNT]
+  }
+  if (pinned && !sameCcrTarget(to, pinned)) {
+    return [
+      `[ccr-send] outbox resend refused: written for session ${ccrSessionTail(pinned.sessionId)}, this tab now sends to ${ccrSessionTail(to.sessionId)}`,
+      'Message not sent: this tab now sends to another session than the one it was written for.'
+    ]
+  }
+  return null
 }

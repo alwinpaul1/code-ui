@@ -79,7 +79,7 @@ function attachmentOfBlock(block: NativeChatBlock): CcrAttachmentRef | null {
 
 /** The extension the Claude app badges (p530.java:104-126): what follows the last dot, unless it is
  *  empty, holds a space or a bidi control, or is only digits ("version 2.5" has none). */
-function splitAttachmentName(name: string): { stem: string; ext: string } {
+export function splitAttachmentName(name: string): { stem: string; ext: string } {
   const dot = name.lastIndexOf('.')
   const ext = dot === -1 ? '' : name.slice(dot + 1)
   if (ext === '' || /[\s\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/.test(ext) || /^\d+$/.test(ext)) {

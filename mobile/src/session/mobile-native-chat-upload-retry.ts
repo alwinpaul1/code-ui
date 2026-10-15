@@ -1,7 +1,8 @@
 import {
   refailNativeChatImage,
   replaceNativeChatImageAttachment,
-  retryFailedNativeChatImage
+  retryFailedNativeChatImage,
+  type NativeChatUploadLanded
 } from './mobile-native-chat-image-attachment'
 import {
   nativeChatAttachmentsResets,
@@ -18,7 +19,7 @@ import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
  */
 type NativeChatUploadRetry = {
   readonly scope: string
-  readonly run: () => Promise<{ path: string; previewUri: string }>
+  readonly run: () => Promise<NativeChatUploadLanded>
   readonly onFailed: (error: unknown) => void
 }
 
