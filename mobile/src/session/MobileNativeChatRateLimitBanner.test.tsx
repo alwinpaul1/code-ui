@@ -33,6 +33,7 @@ vi.mock('../components/BottomDrawer', () => ({
 
 import { ThemeProvider } from '../theme/theme-context'
 import { parseAgentHudBeaconPayload } from './agent-hud-beacon'
+import { applyCcrUsageToHud } from './ccr-usage-hud'
 import { hudRateLimitWindows, type RateLimitNotice } from './hud-rate-limit-notice'
 import {
   MobileNativeChatRateLimitBanner,
@@ -313,6 +314,56 @@ describe('the connected banner', () => {
 
   it('draws nothing for an agent with no rule of its own, however full', () => {
     mount(controllerFor([{ name: 'Session', usedPercent: 90, windowMinutes: 300, resetsAt: SESSION_RESETS }], 'omp'))
+    expect(renderer!.toJSON()).toBeNull()
+  })
+})
+
+// Two Anthropic accounts signed in, each tab on its own. The banner reads what the tab's matched
+// account says (ccr-usage-hud.ts), never the host feed, which is whichever login Orca holds.
+describe('the banner of a tab matched to an Anthropic account', () => {
+  const FULL = [{ name: 'Session', usedPercent: 100, windowMinutes: 300, resetsAt: SESSION_RESETS }]
+  const hostFeed = { context: null, limits: FULL, usedTokens: null }
+  const accountReading = (limits: typeof FULL | null, accountId: string) => ({
+    sessionId: `cse_${accountId}`,
+    accountId,
+    epoch: 1,
+    fetchedAt: 0,
+    limits: limits === null ? null : limits.map((row) => ({ ...row, name: 'Session' as const })),
+    context: null
+  })
+  const bannerOf = (args: { reading: ReturnType<typeof accountReading> | null; matchedAccount: boolean; hostFeedAllowed: boolean }) => {
+    const merged = applyCcrUsageToHud(hostFeed, { ...args, beaconDecidesLimits: false })
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatRateLimitBanner
+            controller={{ nativeChatController: { nativeChatRateLimits: merged.limits, nativeChatAgent: 'claude' } } as unknown as MobileSessionController}
+          />
+        </ThemeProvider>
+      )
+    })
+  }
+
+  it('never shows the personal account\u2019s full limit on a work tab that is at 20%', () => {
+    bannerOf({ reading: accountReading([{ ...FULL[0]!, usedPercent: 20 }], 'work'), matchedAccount: true, hostFeedAllowed: true })
+    expect(renderer!.toJSON()).toBeNull()
+  })
+
+  it('shows its own account\u2019s full limit on the tab that is at 100%', () => {
+    bannerOf({ reading: accountReading(FULL, 'personal'), matchedAccount: true, hostFeedAllowed: true })
+    expect(words()[0]).toBe('Limit reached')
+  })
+
+  it('draws nothing, not the host feed\u2019s limit, when the matched account\u2019s usage could not be read', () => {
+    bannerOf({ reading: accountReading(null, 'work'), matchedAccount: true, hostFeedAllowed: true })
+    expect(renderer!.toJSON()).toBeNull()
+    act(() => renderer?.unmount())
+    bannerOf({ reading: null, matchedAccount: true, hostFeedAllowed: true })
+    expect(renderer!.toJSON()).toBeNull()
+  })
+
+  it('draws nothing for an account with no plan window at all', () => {
+    bannerOf({ reading: accountReading([], 'api-key'), matchedAccount: true, hostFeedAllowed: true })
     expect(renderer!.toJSON()).toBeNull()
   })
 })
