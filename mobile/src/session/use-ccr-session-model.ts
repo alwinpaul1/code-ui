@@ -72,9 +72,8 @@ export function useCcrSessionModel(args: {
         )
       }
       // The matched account's plan usage and this session's context, for the ring (ccr-session-usage.ts).
-      if (ccrSessionForTab(tabId, epoch, agentSessionId)) {
-        await refreshCcrUsage(tabId, epoch, await deps(), agentSessionId, needsContextRef.current)
-      }
+      // An unmatched tab is read through its config dir's account (ccr-session-usage.ts).
+      await refreshCcrUsage(tabId, epoch, await deps(), agentSessionId, needsContextRef.current, configDir)
       if (active) {
         setTick((tick) => tick + 1)
         // Not found yet: a session just started may be listed a moment later, so the quick

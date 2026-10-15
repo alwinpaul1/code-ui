@@ -118,6 +118,7 @@ describe('reading the replies', () => {
           activeAt: Date.parse('2026-10-14T16:20:00Z'),
           model: 'claude-opus-5-5',
           effortLevel: 'high',
+          contextUsage: null,
           branches: []
         }
       ],

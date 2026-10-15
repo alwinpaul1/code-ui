@@ -4,6 +4,7 @@ import { resetCcrCacheForTests, setCcrMapping } from './ccr-session-cache'
 import {
   ccrContextOfEvents,
   ccrUsageForTab,
+  noteCcrRowContext,
   CCR_USAGE_FRESH_MS,
   refreshCcrUsage,
   resetCcrUsageForTests
@@ -54,13 +55,10 @@ describe('the session context read from its events', () => {
     expect(context).toEqual({ usedTokens: 72_545, windowTokens: null })
   })
 
-  it('takes the window only from the session itself: the result’s modelUsage for that model', () => {
-    const context = ccrContextOfEvents(payloads([assistant({ input: 2, creation: 43_257, read: 29_286 }), result(1_000_000)]))
-    expect(context).toEqual({ usedTokens: 72_545, windowTokens: 1_000_000 })
-  })
-
-  it('states no window when the result names another model, rather than guess from the name', () => {
-    const context = ccrContextOfEvents(payloads([assistant({ input: 2, creation: 43_257, read: 29_286 }), result(200_000, 'claude-sonnet-5')]))
+  // Live 2026-10-15 (the work session): the `result` event's `modelUsage` is `{}`, so events never state a
+  // window; a populated one must not become a denominator either (the row's context_usage is the source).
+  it('states no window from events, whatever a result carries and whatever the model is called', () => {
+    const context = ccrContextOfEvents(payloads([assistant({ input: 2, creation: 43_257, read: 29_286 }), result(1_000_000), event({ type: 'result', subtype: 'success', modelUsage: {} })]))
     expect(context).toEqual({ usedTokens: 72_545, windowTokens: null })
   })
 
@@ -87,6 +85,25 @@ describe('the session context read from its events', () => {
 describe('the account usage reply', () => {
   const answer = (body: unknown) => fakeFetch([() => reply(200, body)]).fetch
 
+  // Live 2026-10-15, both accounts, shapes only: five_hour 1 and seven_day 3 on the personal account.
+  it('reads the live reply: percent numbers, ISO resets with microseconds and an offset, the rest null', async () => {
+    const windows = await fetchCcrAccountUsage(
+      answer({
+        five_hour: { utilization: 1, resets_at: '2026-10-15T10:30:00.089221+00:00', limit_dollars: null, used_dollars: null, remaining_dollars: null, locked_reason: null },
+        seven_day: { utilization: 3, resets_at: '2026-10-21T17:00:00.089241+00:00', limit_dollars: null, used_dollars: null, remaining_dollars: null, locked_reason: null },
+        seven_day_opus: null,
+        seven_day_sonnet: null,
+        limits: [{ kind: 'session', group: 'session', percent: 1, severity: 'normal', resets_at: '2026-10-15T10:30:00.089221+00:00', scope: null, is_active: false }],
+        extra_usage: { is_enabled: false }
+      }),
+      'tok'
+    )
+    expect(windows).toEqual([
+      { name: 'Session', usedPercent: 1, windowMinutes: 300, resetsAt: Math.floor(Date.parse('2026-10-15T10:30:00.089Z') / 1000) },
+      { name: 'Weekly', usedPercent: 3, windowMinutes: 10_080, resetsAt: Math.floor(Date.parse('2026-10-21T17:00:00.089Z') / 1000) }
+    ])
+  })
+
   it('reads the 5-hour and weekly windows as percent, with the reset', async () => {
     const windows = await fetchCcrAccountUsage(answer({ five_hour: { utilization: 37.4, resets_at: '2026-10-15T14:00:00Z' }, seven_day: { utilization: 61, resets_at: '2026-10-19T09:00:00Z' }, seven_day_opus: null }), 'tok')
     expect(windows).toEqual([
@@ -110,6 +127,7 @@ describe('the account usage reply', () => {
     await fetchCcrAccountUsage(fetch, 'tok-work')
     expect(requests[0]!.url).toBe('https://api.anthropic.com/api/oauth/usage')
     expect(requests[0]!.headers.Authorization).toBe('Bearer tok-work')
+    expect(requests[0]!.headers['Anthropic-Beta']).toBeUndefined()
   })
 })
 
@@ -130,7 +148,7 @@ describe('two tabs on two accounts, side by side', () => {
           return null
         }
         return decodeURIComponent(match[1]!) === WORK_SESSION
-          ? reply(200, eventsReply([assistant({ input: 3, creation: 20_000, read: 60_000 }), result(1_000_000)]))
+          ? reply(200, eventsReply([assistant({ input: 3, creation: 20_000, read: 60_000 })]))
           : reply(200, eventsReply([assistant({ input: 5, creation: 1_000, read: 3_000 })]))
       }
     ]
@@ -154,6 +172,10 @@ describe('two tabs on two accounts, side by side', () => {
 
   it('each tab holds its own account’s limits and its own session’s context', async () => {
     const { deps } = world()
+    // The work row states its own context (Claude Code's external_metadata.context_usage); the personal
+    // row states none, so its tokens come from its events and no window is invented.
+    noteCcrRowContext('tab-work', 1, { id: WORK_SESSION, contextUsage: { usedTokens: 80_003, maxTokens: 1_000_000 } })
+    noteCcrRowContext('tab-personal', 1, { id: PERSONAL_SESSION, contextUsage: null })
     await refreshCcrUsage('tab-work', 1, deps, 'claude-work-1', true)
     await refreshCcrUsage('tab-personal', 1, deps, 'claude-personal-1', true)
     const now = Date.now()
@@ -187,6 +209,7 @@ describe('two tabs on two accounts, side by side', () => {
 
   it('leaves the context when the usage call is refused, and the limits unread', async () => {
     const { deps } = world({ workUsage: () => reply(401, {}) })
+    noteCcrRowContext('tab-work', 1, { id: WORK_SESSION, contextUsage: { usedTokens: 80_003, maxTokens: 1_000_000 } })
     await refreshCcrUsage('tab-work', 1, deps, 'claude-work-1', true)
     const work = ccrUsageForTab('tab-work', 1, WORK_SESSION, WORK.id)
     expect(work?.limits).toBeNull()
@@ -195,6 +218,7 @@ describe('two tabs on two accounts, side by side', () => {
 
   it('reads no events when a live source already states the context', async () => {
     const { deps, eventRequests } = world()
+    noteCcrRowContext('tab-work', 1, { id: WORK_SESSION, contextUsage: null })
     await refreshCcrUsage('tab-work', 1, deps, 'claude-work-1', false)
     expect(eventRequests).toHaveLength(0)
     expect(ccrUsageForTab('tab-work', 1, WORK_SESSION, WORK.id)?.context).toBeNull()
@@ -206,6 +230,21 @@ describe('two tabs on two accounts, side by side', () => {
     const signedOut = { ...deps, accounts: fakeAccounts([PERSONAL]).source }
     await refreshCcrUsage('tab-work', 1, signedOut, 'claude-work-1', true)
     expect(ccrUsageForTab('tab-work', 1, WORK_SESSION, WORK.id)).toBeNull()
+  })
+
+  it('takes the row’s own statement over the events, with no events read', async () => {
+    const { deps, eventRequests } = world()
+    noteCcrRowContext('tab-work', 1, { id: WORK_SESSION, contextUsage: { usedTokens: 120_000, maxTokens: 200_000 } })
+    await refreshCcrUsage('tab-work', 1, deps, 'claude-work-1', true)
+    expect(ccrUsageForTab('tab-work', 1, WORK_SESSION, WORK.id)?.context).toEqual({ usedTokens: 120_000, windowTokens: 200_000 })
+    expect(eventRequests).toHaveLength(0)
+  })
+
+  it('ignores a row statement kept for another session of the tab', async () => {
+    const { deps } = world()
+    noteCcrRowContext('tab-work', 1, { id: PERSONAL_SESSION, contextUsage: { usedTokens: 1, maxTokens: 2 } })
+    await refreshCcrUsage('tab-work', 1, deps, 'claude-work-1', true)
+    expect(ccrUsageForTab('tab-work', 1, WORK_SESSION, WORK.id)?.context).toEqual({ usedTokens: 80_003, windowTokens: null })
   })
 
   it('does nothing for a tab that is not matched', async () => {

@@ -173,6 +173,12 @@ export type CcrSessionRow = {
    *  absent or not a string. */
   model: string | null
   effortLevel: string | null
+  /** The session's own context statement, `external_metadata.context_usage` (`used_tokens`,
+   *  `max_tokens`): Claude Code writes it each turn (2.1.300, `ct()`: the latest response's input +
+   *  cache creation + cache read, and the window it works to), and the Claude app's ring reads it
+   *  (`SessionContextUsage`, afu.java; `SessionExternalMetadata.context_usage`, iju.java:29). Null
+   *  when absent, or when `max_tokens` is not positive or `used_tokens` negative (afu.java:17). */
+  contextUsage?: { usedTokens: number; maxTokens: number } | null
   /** The repo and branch pairs the session works on, as the Claude app asks the branch status
    *  about them (`vy20.i`, jadx): `external_metadata.current_branches` (repo to branch) first, then
    *  each branch of `config.outcomes[].git_info` (`ojn`, `tjn`: `repo`, `branches`). Empty when the
@@ -209,6 +215,13 @@ export function branchesOfRow(row: Record<string, unknown>): CcrBranchRef[] {
     }
   }
   return pairs
+}
+
+function contextUsageOf(value: unknown): { usedTokens: number; maxTokens: number } | null {
+  const stated = record(value)
+  const used = stated?.used_tokens
+  const max = stated?.max_tokens
+  return typeof used === 'number' && Number.isFinite(used) && used >= 0 && typeof max === 'number' && Number.isFinite(max) && max > 0 ? { usedTokens: used, maxTokens: max } : null
 }
 
 function timeOf(row: Record<string, unknown>): number {
@@ -259,6 +272,7 @@ export async function listCcrSessions(
       activeAt: timeOf(row),
       model: stringOrNull(record(row.external_metadata)?.model),
       effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
+      contextUsage: contextUsageOf(record(row.external_metadata)?.context_usage),
       branches: branchesOfRow(row)
     })
   }
@@ -331,18 +345,18 @@ const USAGE_WINDOWS = [
 
 /**
  * The account's own 5-hour and weekly plan usage: `GET /api/oauth/usage` with THAT account's token,
- * the call Claude Code's `/usage` makes (2.1.300, `fetchUtilization`; the headers of its profile call
- * plus the OAuth beta). Its `five_hour` and `seven_day` carry `utilization` in percent
+ * the call Claude Code's `/usage` makes (2.1.300, `fetchUtilization`), with the profile call's headers
+ * (live 2026-10-15: 200 for both accounts with and without the OAuth beta header, so none is sent).
+ * Its `five_hour` and `seven_day` carry `utilization` in percent
  * (`${Math.floor(limit.utilization)}% used`) and `resets_at`. A window the reply omits or leaves null
  * is not drawn; a reply with none is an account with no plan window (an API key): no rows.
- * Shapes read from the binary, not yet from a live reply (see the probe in the commit notes).
+ * Live shape, 2026-10-15 (shapes only): `five_hour` and `seven_day` are `{utilization: number, resets_at:
+ * ISO string with microseconds and an offset, limit_dollars, used_dollars, remaining_dollars,
+ * locked_reason}`; the other windows are null; `limits: [{kind, percent, ...}]` also comes.
  */
 export async function fetchCcrAccountUsage(fetchImpl: CcrFetch, token: string): Promise<CcrUsageWindow[]> {
   const body = record(
-    await getJson(fetchImpl, 'usage', `${CCR_API_BASE_URL}/api/oauth/usage`, {
-      ...ccrProfileHeaders(token),
-      'Anthropic-Beta': 'oauth-2025-04-20'
-    })
+    await getJson(fetchImpl, 'usage', `${CCR_API_BASE_URL}/api/oauth/usage`, ccrProfileHeaders(token))
   )
   if (!body) {
     throw new CcrApiError('usage', 'malformed')
