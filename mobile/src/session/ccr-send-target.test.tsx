@@ -80,12 +80,13 @@ describe('a phone send on a tab whose session was copied between profiles', () =
   function Harness(): null {
     api = useCcrComposerSend({
       active: true,
+      tabId: TAB,
       resolveTarget: () => ccrSendTargetForTab(TAB, 1, CLAUDE_SESSION, configDir.current),
       events: [],
       connectionStatus: 'connected',
       working: false,
       promptUp: false,
-      attachments: 0,
+      attachments: () => 0,
       composerText: '',
       setComposerText: vi.fn(),
       captureSendOrigin: origin,

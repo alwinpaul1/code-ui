@@ -104,9 +104,9 @@ describe("Clawd, the Claude app's transcript loading mark", () => {
     })
     expect(CLAWD_DANCING_POSES[CLAWD_DANCING_FRAMES[10]!]!.join('')).toContain('d')
     const fills = renderer!.root.findAll((node) => node.type === ('Path' as never)).map((node) => node.props.fill)
-    expect(fills).toEqual([colors.clawd.body, colors.clawd.shade, colors.clawd.ink])
+    expect(fills).toEqual([colors.clawdBody, colors.clawdShade, colors.clawdInk])
     // The app's palette is one fixed set (`tq7.b`) in both schemes.
-    expect([colors.clawd.body, colors.clawd.shade, colors.clawd.ink]).toEqual(['#D97757', '#BE684D', '#141413'])
+    expect([colors.clawdBody, colors.clawdShade, colors.clawdInk]).toEqual(['#D97757', '#BE684D', '#141413'])
     const label = renderer!.root.find((node) => node.type === ('Text' as never))
     expect(label.props.children).toBe('Loading session…')
   })

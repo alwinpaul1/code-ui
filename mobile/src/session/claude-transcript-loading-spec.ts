@@ -48,8 +48,9 @@ export function nextClawdFrame(frame: number): number {
   return frame + 1
 }
 
-/** The app's palette letters (`gq7`) to the `clawd` theme tokens that hold their colours. */
-const CELL_TOKENS = { o: 'body', d: 'shade', K: 'ink' } as const
+/** The app's palette letters (`gq7`) to the theme tokens that hold their colours. Flat strings,
+ *  not one nested object: screens that index the colours by name type every token as a colour. */
+const CELL_TOKENS = { o: 'clawdBody', d: 'clawdShade', K: 'clawdInk' } as const
 type CellLetter = keyof typeof CELL_TOKENS
 
 /** One path per colour: every run of same-coloured cells in a row becomes a 1-cell-tall
@@ -88,5 +89,5 @@ export function clawdLayers(frame: number): readonly ClawdLayer[] {
 
 /** The colour of each of Clawd's layers in a scheme. */
 export function clawdLayerColor(colors: ThemeColors, layer: ClawdLayer): string {
-  return colors.clawd[layer.token]
+  return colors[layer.token]
 }
