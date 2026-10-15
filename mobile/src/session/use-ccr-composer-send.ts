@@ -252,6 +252,8 @@ export function useCcrComposerSend(args: {
       latest.current.onSendError(CCR_SEND_IN_FLIGHT)
       return 'rejected'
     }
+    // Claimed BEFORE the status read: two sends tapped together must not both pass while it runs.
+    claimed.current = true
     try {
       if (await offline(to)) {
         deps.log(`[ccr-send] refused: session ${ccrSessionTail(to.sessionId)} is offline (connection_status disconnected)`)
