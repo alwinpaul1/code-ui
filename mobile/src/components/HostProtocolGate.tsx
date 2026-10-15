@@ -8,6 +8,9 @@ import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 type Props = {
   hostId: string | undefined
   children: ReactNode
+  /** Drawn in place of the bare spinner while the check holds the routes: the host layout passes
+   *  Clawd and "Loading session…" when the route opens on a Claude chat (2026-10-16). */
+  pendingView?: ReactNode
 }
 
 const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
@@ -22,7 +25,7 @@ export function useHostProtocolGates(): HostStatusGates {
 
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
 // whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
-export function HostProtocolGate({ hostId, children }: Props) {
+export function HostProtocolGate({ hostId, children, pendingView }: Props) {
   const { colors } = useTheme()
   const styles = useThemedStyles(hostProtocolGateStyles)
   const { client, state } = useHostClient(hostId)
@@ -56,10 +59,12 @@ export function HostProtocolGate({ hostId, children }: Props) {
     // rather than letting them mount (and fire their connect RPCs) pre-verdict.
     return (
       <View style={styles.pending}>
-        <ActivityIndicator
-          color={colors.textSecondary}
-          accessibilityLabel="Checking host compatibility"
-        />
+        {pendingView ?? (
+          <ActivityIndicator
+            color={colors.textSecondary}
+            accessibilityLabel="Checking host compatibility"
+          />
+        )}
       </View>
     )
   }
@@ -90,10 +95,12 @@ export function HostProtocolGate({ hostId, children }: Props) {
             pointerEvents="auto"
             accessibilityViewIsModal
           >
-            <ActivityIndicator
-              color={colors.textSecondary}
-              accessibilityLabel="Checking host compatibility"
-            />
+            {pendingView ?? (
+              <ActivityIndicator
+                color={colors.textSecondary}
+                accessibilityLabel="Checking host compatibility"
+              />
+            )}
           </View>
         ) : null}
       </View>

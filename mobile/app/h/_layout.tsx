@@ -11,6 +11,8 @@ import {
   saveHostSidebarWidth
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
+import { ClaudeTranscriptLoading } from '../../src/session/ClaudeTranscriptLoading'
+import { cachedSessionRouteOpensClaude } from '../../src/session/claude-session-route-loading'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
 
@@ -110,7 +112,10 @@ export default function HostGroupLayout() {
   // changes so a fold/rotation doesn't remount the navigator and reset the
   // navigation stack — only the sidebar pane toggles in and out.
   return (
-    <HostProtocolGate hostId={hostId}>
+    <HostProtocolGate
+      hostId={hostId}
+      pendingView={cachedSessionRouteOpensClaude(pathname, hostId) ? <ClaudeTranscriptLoading /> : undefined}
+    >
       <View style={styles.row}>
         {showSidebar && sidebarOpen ? (
           <View style={[styles.sidebar, { width: sidebarWidth }]}>

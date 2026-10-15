@@ -59,10 +59,10 @@ function MountProbe() {
   return createElement('MountProbe')
 }
 
-function gateElement() {
+function gateElement(pendingView?: ReturnType<typeof createElement>) {
   return createElement(
     HostProtocolGate,
-    { hostId: 'host-1' },
+    { hostId: 'host-1', pendingView },
     createElement('HostContent', null, createElement(GateConsumer), createElement(MountProbe))
   )
 }
@@ -205,6 +205,39 @@ describe('HostProtocolGate', () => {
       .findAllByType('View')
       .find((node) => node.props.accessibilityViewIsModal === true)
     expect(overlay?.props.pointerEvents).toBe('auto')
+  })
+
+  // 2026-10-16, from the device: a Claude session opening drew this check's bare spinner on an
+  // empty screen; the layout hands the gate Clawd and "Loading session…" for a Claude session.
+  it('draws the loading view it is given instead of the bare spinner, held back or overlaid', async () => {
+    const client = {
+      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
+    } as unknown as RpcClient
+    hostClient.current = { client, state: 'connected' }
+    const clawd = createElement('ClaudeSessionLoading')
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(gateElement(clawd))
+      await Promise.resolve()
+    })
+    expect(renderer.root.findAllByType('ClaudeSessionLoading' as never)).toHaveLength(1)
+    expect(renderer.root.findAllByType('ActivityIndicator' as never)).toHaveLength(0)
+    act(() => renderer.unmount())
+
+    hostClient.current = { client: null, state: 'connecting' }
+    await act(async () => {
+      renderer = create(gateElement(clawd))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      hostClient.current = { client, state: 'connected' }
+      renderer.update(gateElement(clawd))
+      await Promise.resolve()
+    })
+    expect(renderedText(renderer)).toContain('HostContent')
+    expect(renderer.root.findAllByType('ClaudeSessionLoading' as never)).toHaveLength(1)
+    expect(renderer.root.findAllByType('ActivityIndicator' as never)).toHaveLength(0)
+    act(() => renderer.unmount())
   })
 
   it('still replaces mounted routes when the verdict comes back blocked', async () => {
