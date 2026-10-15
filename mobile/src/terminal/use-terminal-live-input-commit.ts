@@ -114,12 +114,20 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     (handle: string): boolean => emptyLineHandlesRef.current.delete(handle),
     []
   )
-  const forgetLiveInputLineEmpty = useCallback((handle: string | null) => {
-    if (handle) {
-      emptyLineHandlesRef.current.delete(handle)
-    }
-    liveSessionOnEmptyLineRef.current = null
-  }, [])
+  const forgetLiveInputLineEmpty = useCallback(
+    (handle: string | null) => {
+      if (handle) {
+        emptyLineHandlesRef.current.delete(handle)
+      }
+      liveSessionOnEmptyLineRef.current = null
+      // Why also an interaction: an Enter still in flight marks the line empty when it lands
+      // unless the generation moved. A buffered handle's strip keys skip the live path's own
+      // onInteraction, so without this, ↑ and Home tapped during a composer send were undone by
+      // its late mark, and the next `claude ` got the tail in front of the recalled line.
+      advanceLiveInputInteractionGeneration()
+    },
+    [advanceLiveInputInteractionGeneration]
+  )
 
   useEffect(() => {
     // Why: what reached the PTY is unknowable across an outage — stale mirror state corrupts the first post-reconnect send.
