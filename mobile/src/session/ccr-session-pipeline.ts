@@ -188,7 +188,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     /** The bound account's match on an older message, held while every account is judged: it stands
      *  when no account holds a newer shared message (a tie on the copied history included, review
      *  2026-10-15), so a tab whose newest message reached no session yet still settles. */
-    let settleBound: (() => void) | null = null
+    const held: { settleBound?: () => void } = {}
     const matchAmong = async (
       group: readonly CcrAuth[],
       final: boolean,
@@ -270,7 +270,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       const newestId = input.messageIds.at(-1)
       if (outcome.kind === 'matched' && !final && !rejudge && newestId !== undefined && !outcome.pages.uuids.has(newestId)) {
         report('match', true, `${accountCount > 1 ? `${group[0]!.label}: ` : ''}session ${maskId(outcome.candidate.row.id)} holds only older messages of this tab; asking every account`)
-        settleBound = () => settle(outcome)
+        held.settleBound = () => settle(outcome)
         return { kind: 'older' }
       }
       if (outcome.kind === 'matched') {
@@ -312,7 +312,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
           return all.result
         }
         if (all.kind !== 'matched') {
-          settleBound?.()
+          held.settleBound?.()
         }
         break
       }
