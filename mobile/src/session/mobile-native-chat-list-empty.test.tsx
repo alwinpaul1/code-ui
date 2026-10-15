@@ -27,6 +27,9 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatListEmpty } from './mobile-native-chat-list-edges'
 import { mobileNativeChatEmptyState } from './mobile-native-chat-empty-state'
+import type { CcrSessionLink } from './ccr-session-link'
+import type { CcrLinkState } from './ccr-session-link-types'
+import { ccrLinkSession } from './use-claude-anthropic-transcript'
 
 let renderer: ReactTestRenderer | null = null
 
@@ -149,6 +152,20 @@ describe('the empty chat of a Claude tab read from Anthropic', () => {
     // The overlay draws the view through its shell-command wrapper, which passes every prop on.
     expect(code('MobileNativeChatOverlay.tsx')).toMatch(/<MobileNativeChatShellConfirmView[^>]*?\banthropicTab=\{apiTab\}/)
     expect(code('MobileNativeChatView.tsx')).toMatch(/mobileNativeChatEmptyState\(status, agent \?\? null, error, \{\s*agentStatus, sessionIdentity, anthropicTab,/)
+    // And whether older history is unread (review 2026-10-15), from the same list's `hasMore`.
+    expect(code('MobileNativeChatView.tsx')).toMatch(/mobileNativeChatEmptyState\([^)]*?\bhasOlder: hasMore === true\b/)
+  })
+
+  // Review 2026-10-15: a link that ends `live` with older history unread and zero rows is not an
+  // empty session; the list's load-older spinner stands instead of the title.
+  it('shows no title while the link has older history and nothing is drawn; a reconnecting empty link keeps it', () => {
+    const link = { sessionId: 'cse_x', loadOlder: async () => undefined } as unknown as CcrSessionLink
+    const state = (phase: CcrLinkState['phase'], hasOlder: boolean): CcrLinkState => ({ events: [], phase, error: null, hasOlder, loadingOlder: false, connectionStatus: null, liveFrom: 0, streamThinking: null, version: 1 })
+    const emptyFor = (session: ReturnType<typeof ccrLinkSession>) =>
+      mobileNativeChatEmptyState(session.status, 'claude', session.error, { anthropicTab: true, hasOlder: session.hasMore === true, transcriptMessageCount: session.messages.length })
+    expect(emptyFor(ccrLinkSession(link, state('live', true), []))).toBeNull()
+    expect(emptyFor(ccrLinkSession(link, state('reconnecting', false), []))?.title).toBe('What are we building?')
+    expect(emptyFor(ccrLinkSession(link, state('live', false), []))?.title).toBe('What are we building?')
   })
 
   it('leaves a Codex tab’s invitation as it was', () => {
