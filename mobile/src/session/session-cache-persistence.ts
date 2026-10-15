@@ -47,6 +47,8 @@ export function createPersistedMap<T>(args: {
   set: (key: string, value: T) => void
   /** Drops one entry, in memory and (debounced) in storage. */
   delete: (key: string) => void
+  /** Every entry held in memory, oldest first. */
+  entries: () => [string, T][]
   /** Reads the stored copy into memory. Resolves once it has been read, or
    *  once the read failed; never rejects. A call after a failure reads
    *  again, and concurrent calls share one read. */
@@ -172,6 +174,7 @@ export function createPersistedMap<T>(args: {
         scheduleWrite()
       }
     },
+    entries: () => [...map.entries()],
     hydrate: async () => {
       // Visits made while the blob was unread are only in memory; once it
       // has been read, write them with the rest.

@@ -9,8 +9,10 @@ export const CCR_MAX_LIST_PAGES = 3
  *  few: on 2026-10-15 the work tab's session was the sixth newest of 28 written that day, and never
  *  compared. Their events are read all at once, so this costs one round trip, not sixteen. */
 export const CCR_MAX_CANDIDATES = 16
-/** How long one account's session list serves every tab that asks (ccr-session-lists.ts). */
-export const CCR_LIST_SHARE_MS = 5_000
+/** How long a finished session list still serves another tab that asks (ccr-session-lists.ts): tabs
+ *  opened together share it. Shorter than the first quick retry (CCR_QUICK_RETRY_MS, 500 ms), so a
+ *  retry for a session not listed yet reads a fresh list. */
+export const CCR_LIST_SHARE_MS = 400
 /** Events per page. Observed live 2026-10-14 (the user's account, 4,000
  *  events): 84% are `system` events, so a small page holds few messages to
  *  match or pictures to find; `limit=100` was accepted. */
@@ -32,6 +34,9 @@ export type CcrPipelineInput = {
   /** The Claude Code session the tab shows (the hook's `session_id`), when known: a match is kept
    *  for it across restarts, and does not stand for another session of the tab. */
   agentSessionId?: string | null
+  /** The Claude config dir the tab's session writes under (`~/.claude`, `~/.claude-work`), from its
+   *  transcript path: the account it was last matched under is asked first. */
+  configDir?: string | null
   wanted: CcrWanted
 }
 

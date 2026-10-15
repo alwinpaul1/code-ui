@@ -6,19 +6,22 @@
  * Not fired for a token refresh: that changes no account, and it happens on the hot path.
  */
 
-const listeners = new Set<() => void>()
+/** What changed, when it is a sign-out: the account that left, or every account. */
+export type AnthropicAccountsChange = { signedOut?: string | 'all' }
 
-export function subscribeAnthropicAccountsChanged(listener: () => void): () => void {
+const listeners = new Set<(change: AnthropicAccountsChange) => void>()
+
+export function subscribeAnthropicAccountsChanged(listener: (change: AnthropicAccountsChange) => void): () => void {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
   }
 }
 
-export function notifyAnthropicAccountsChanged(): void {
+export function notifyAnthropicAccountsChanged(change: AnthropicAccountsChange = {}): void {
   for (const listener of listeners) {
     try {
-      listener()
+      listener(change)
     } catch (error) {
       console.warn(`[anthropic-accounts] a listener failed: ${error instanceof Error ? error.message : String(error)}`)
     }

@@ -45,7 +45,7 @@ export async function runCcrSelfTest(deps: CcrPipelineDeps): Promise<CcrSelfTest
   const agentSessionId = context.agentSessionId ?? null
   forgetCcrMapping(context.tabId, agentSessionId)
   const result = await runCcrImagePipeline(
-    { tabId: context.tabId, epoch: context.epoch, agentSessionId, messageIds: context.messageIds, wanted: context.wanted },
+    { tabId: context.tabId, epoch: context.epoch, agentSessionId, configDir: context.configDir ?? null, messageIds: context.messageIds, wanted: context.wanted },
     deps
   )
   const stages = [...result.stages]

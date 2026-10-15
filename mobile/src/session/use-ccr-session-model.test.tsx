@@ -238,3 +238,42 @@ describe('one attempt at once on each event, never a wait carried over', () => {
     expect(requests.filter((request) => request.url.includes('/events')).length).toBe(before + 1)
   })
 })
+
+// A session just started may not be listed for a moment after launch (2026-10-15: "when I open a
+// new tab on desktop and open claude, that session must match"). Not found is retried after 0.5,
+// 1, 2 and 4 s, not after the 30 s back-off.
+describe('a brand-new session listed a moment late', () => {
+  it('is caught by the quick retries within the first seconds', async () => {
+    let listedYet = false
+    const { fetch, requests } = fakeFetch(
+      apiRoutes({
+        sessions: () => {
+          const rows = listedYet ? [sessionRow(SESSION_A, { external_metadata: { model: 'claude-opus-5-5', effort_level: 'high' } })] : []
+          listedYet = true
+          return reply(200, sessionsReply(rows))
+        },
+        events: { [SESSION_A]: () => reply(200, eventsReply([assistantEvent('m1', 'toolu_A', '/x.png')])) }
+      })
+    )
+    await mount({ deps: { fetch, accounts: singleAccountSource(), keep: (_key, uri) => uri, maxBytes: 1, log: () => undefined } })
+    expect(reading).toBeNull()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600)
+    })
+    await settle()
+    expect(reading).toMatchObject({ sessionId: SESSION_A, model: 'claude-opus-5-5' })
+    expect(requests.filter((request) => new URL(request.url).pathname === '/v1/code/sessions')).toHaveLength(2)
+  })
+
+  it('stops the quick retries after four and waits the back-off, so a session that never appears does not spin', async () => {
+    const { fetch, requests } = fakeFetch(apiRoutes({ sessions: () => reply(200, sessionsReply([])) }))
+    await mount({ deps: { fetch, accounts: singleAccountSource(), keep: (_key, uri) => uri, maxBytes: 1, log: () => undefined } })
+    for (let step = 0; step < 20; step += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+    }
+    // The first try, four quick ones over 7.5 s, then nothing until the 30 s wait is out.
+    expect(requests.filter((request) => new URL(request.url).pathname === '/v1/code/sessions')).toHaveLength(5)
+  })
+})

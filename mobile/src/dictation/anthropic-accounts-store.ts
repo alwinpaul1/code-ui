@@ -205,7 +205,7 @@ export function upsertAccount(credential: StoredCredential, profile: CcrProfile 
       at = accounts.findIndex((account) => account.accountUuid === null && !isAccountUsable(account, now))
     }
     await writeAccounts(at === -1 ? [...accounts, fresh] : accounts.map((account, index) => (index === at ? fresh : account)))
-  }).then(notifyAnthropicAccountsChanged)
+  }).then(() => notifyAnthropicAccountsChanged())
 }
 
 /** Of two entries for one account, the one whose credential to keep: one that still works over one
@@ -266,7 +266,7 @@ export function removeAccount(id: string): Promise<void> {
   return withAccounts(async () => {
     const accounts = await loadAccounts()
     await writeAccounts(accounts.filter((account) => account.id !== id))
-  }).then(notifyAnthropicAccountsChanged)
+  }).then(() => notifyAnthropicAccountsChanged({ signedOut: id }))
 }
 
 /** Writes a refreshed credential over the account that held the old one (matched by its refresh
@@ -319,5 +319,5 @@ export async function clearAccounts(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined)
     await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
   })
-  notifyAnthropicAccountsChanged()
+  notifyAnthropicAccountsChanged({ signedOut: 'all' })
 }

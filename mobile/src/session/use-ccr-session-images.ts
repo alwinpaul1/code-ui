@@ -82,6 +82,8 @@ export function useCcrSessionImages(args: {
   epoch: number | null
   /** The Claude Code session the tab shows, when known: the match is the one made for it. */
   agentSessionId?: string | null
+  /** The Claude config dir the session writes under: its account is asked first. */
+  configDir?: string | null
   deps?: CcrPipelineDeps
 }): CcrRemoteImages {
   const { enabled, tabId, messages, localPreviews, epoch } = args
@@ -106,10 +108,11 @@ export function useCcrSessionImages(args: {
       tabId,
       epoch,
       agentSessionId: args.agentSessionId ?? null,
+      configDir: args.configDir ?? null,
       messageIds,
       wanted: { toolUseIds: reads.map((slot) => slot.toolUseId), userMessageIds: pasted }
     })
-  }, [args.agentSessionId, enabled, epoch, messageIds, pasted, reads, tabId])
+  }, [args.agentSessionId, args.configDir, enabled, epoch, messageIds, pasted, reads, tabId])
   useEffect(
     () => () => {
       setCcrSelfTestContext(null)
@@ -138,7 +141,7 @@ export function useCcrSessionImages(args: {
     }
     const injected = depsRef.current
     void (injected ? Promise.resolve(injected) : loadDefaultCcrPipelineDeps())
-      .then((deps) => runCcrImagePipeline({ tabId, epoch, agentSessionId: args.agentSessionId ?? null, messageIds, wanted }, deps))
+      .then((deps) => runCcrImagePipeline({ tabId, epoch, agentSessionId: args.agentSessionId ?? null, configDir: args.configDir ?? null, messageIds, wanted }, deps))
       .then((result) => {
         // A run that failed before it looked at any events may be asked again
         // once its back-off is over; a run that read the events has its answer.

@@ -501,6 +501,16 @@ describe('telling the sessions path the accounts changed', () => {
     ear.stop()
   })
 
+  it('names the account that signed out, so the phone forgets what it learned for that account alone', async () => {
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    const changes: unknown[] = []
+    const stop = subscribeAnthropicAccountsChanged((change) => changes.push(change))
+    await removeAccount(DEFAULT_ACCOUNT)
+    await clearCredential()
+    expect(changes).toEqual([{ signedOut: DEFAULT_ACCOUNT }, { signedOut: 'all' }])
+    stop()
+  })
+
   it('says nothing when a sign-in could not be written', async () => {
     const ear = heard()
     fake.failWrites = true

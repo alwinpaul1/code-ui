@@ -30,9 +30,37 @@ function keptKey(tabId: string, agentSessionId: string): string {
   return `${tabId}\0${agentSessionId}`
 }
 
-/** Reads the kept matches into memory (app start, session-caches-hydrate.ts). */
+/**
+ * Which account a Claude config dir's sessions were last matched under: `~/.claude` (a tab started
+ * with `claude`) and `~/.claude-work` (one started with `CLAUDE_CONFIG_DIR=~/.claude-work`) belong
+ * to different accounts, and a new tab of either is asked of its own account first. Read from the
+ * transcript path Orca reports for the tab, so nothing is set up on the desktop. Learned from a
+ * match, overwritten by a later match that says otherwise, dropped when the account signs out.
+ */
+const CONFIG_DIR_ACCOUNTS_KEY = 'codeui:ccr-config-dir-account-v1'
+const configDirAccounts = createPersistedMap<string>({ storageKey: CONFIG_DIR_ACCOUNTS_KEY, maxEntries: 50 })
+
+export function ccrAccountForConfigDir(configDir: string): string | null {
+  return configDirAccounts.get(configDir) ?? null
+}
+
+export function bindCcrConfigDir(configDir: string, accountId: string): void {
+  if (configDirAccounts.get(configDir) !== accountId) {
+    configDirAccounts.set(configDir, accountId)
+  }
+}
+
+function unbindSignedOut(signedOut: string | 'all'): void {
+  for (const [configDir, accountId] of configDirAccounts.entries()) {
+    if (signedOut === 'all' || accountId === signedOut) {
+      configDirAccounts.delete(configDir)
+    }
+  }
+}
+
+/** Reads the kept matches and config-dir accounts into memory (app start, session-caches-hydrate.ts). */
 export function hydrateCcrSessionMappings(): Promise<void> {
-  return keptMappings.hydrate()
+  return Promise.all([keptMappings.hydrate(), configDirAccounts.hydrate()]).then(() => undefined)
 }
 
 /** `tool:<toolu id>` → URI, `user:<uuid>` → URIs. Both ids are unique across sessions. */
@@ -142,6 +170,9 @@ export function ccrAccountForTab(tabId: string, epoch: number | null, agentSessi
 
 const BACKOFF_FIRST_MS = 30_000
 const BACKOFF_MAX_MS = 10 * 60_000
+/** A tab whose session is not found yet tries again after these waits before the long back-off:
+ *  a session just started may be listed, or carry the tab's first messages, a moment later. */
+export const CCR_QUICK_RETRY_MS: readonly number[] = [500, 1_000, 2_000, 4_000]
 const backoffByTab = new Map<string, { until: number; tries: number; epoch: number | null }>()
 
 /** Whether the tab may run now: no failure on record, its wait is over, or
@@ -152,10 +183,21 @@ export function ccrMayRun(tabId: string, epoch: number | null, now = Date.now())
   return !backoff || backoff.epoch !== epoch || backoff.until <= now
 }
 
-export function recordCcrFailure(tabId: string, epoch: number | null, now: number): void {
+/** `quick`: the session was not found (rather than a sign-in or the API refusing), so the first
+ *  CCR_QUICK_RETRY_MS waits apply before the back-off doubles from BACKOFF_FIRST_MS. */
+export function recordCcrFailure(tabId: string, epoch: number | null, now: number, quick = false): void {
   const before = backoffByTab.get(tabId)
   const tries = before && before.epoch === epoch ? before.tries + 1 : 1
-  backoffByTab.set(tabId, { until: now + Math.min(BACKOFF_FIRST_MS * 2 ** (tries - 1), BACKOFF_MAX_MS), tries, epoch })
+  const quickWait = quick ? CCR_QUICK_RETRY_MS[tries - 1] : undefined
+  const slowTries = quick ? tries - CCR_QUICK_RETRY_MS.length : tries
+  const wait = quickWait ?? Math.min(BACKOFF_FIRST_MS * 2 ** (slowTries - 1), BACKOFF_MAX_MS)
+  backoffByTab.set(tabId, { until: now + wait, tries, epoch })
+}
+
+/** When the tab may try again, if it is waiting: the hook times its quick retries by this. */
+export function ccrRetryAt(tabId: string, epoch: number | null): number | null {
+  const backoff = backoffByTab.get(tabId)
+  return backoff && backoff.epoch === epoch ? backoff.until : null
 }
 
 export function clearCcrFailure(tabId: string): void {
@@ -193,7 +235,10 @@ export function onCcrAccountsChanged(listener: () => void): () => void {
   }
 }
 
-export function triggerCcrRematch(reason: 'accounts' | 'foreground'): void {
+export function triggerCcrRematch(reason: 'accounts' | 'foreground', signedOut?: string | 'all'): void {
+  if (signedOut) {
+    unbindSignedOut(signedOut)
+  }
   backoffByTab.clear()
   if (reason === 'accounts') {
     for (const listener of accountChangeListeners) {
@@ -206,7 +251,7 @@ export function triggerCcrRematch(reason: 'accounts' | 'foreground'): void {
   }
 }
 
-subscribeAnthropicAccountsChanged(() => triggerCcrRematch('accounts'))
+subscribeAnthropicAccountsChanged((change) => triggerCcrRematch('accounts', change.signedOut))
 
 /** A cold start: memory goes, what was written to storage stays (the debounced write is let land). */
 export async function restartCcrCacheForTests(): Promise<void> {
@@ -214,11 +259,14 @@ export async function restartCcrCacheForTests(): Promise<void> {
   mappingByTab.clear()
   backoffByTab.clear()
   keptMappings.reset()
+  configDirAccounts.reset()
 }
 
 export function resetCcrCacheForTests(): void {
   keptMappings.reset()
+  configDirAccounts.reset()
   void AsyncStorage.removeItem(KEPT_MAPPINGS_KEY)
+  void AsyncStorage.removeItem(CONFIG_DIR_ACCOUNTS_KEY)
   mappingByTab.clear()
   toolImages.clear()
   userImages.clear()

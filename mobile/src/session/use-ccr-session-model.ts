@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ccrModelForTab, ccrModelVersion, CCR_MODEL_REFRESH_MS, subscribeCcrModel, type CcrModelReading } from './ccr-session-model'
-import { ccrMayRun, ccrSessionForTab, ccrTriggerVersion, clearCcrFailure, refreshCcrModel, runCcrImagePipeline, subscribeCcrTriggers, type CcrPipelineDeps } from './ccr-session-pipeline'
+import { CCR_QUICK_RETRY_MS, ccrMayRun, ccrRetryAt, ccrSessionForTab, ccrTriggerVersion, clearCcrFailure, refreshCcrModel, runCcrImagePipeline, subscribeCcrTriggers, type CcrPipelineDeps } from './ccr-session-pipeline'
 import { loadDefaultCcrPipelineDeps } from './use-ccr-session-images'
 
 /**
@@ -20,11 +20,15 @@ import { loadDefaultCcrPipelineDeps } from './use-ccr-session-images'
  * spaces the timed retries of a tab left open. Keyed on those events, never
  * on a render ("it must match the session when i open asap", 2026-10-15).
  */
+const QUICK_RETRY_LONGEST_MS = Math.max(...CCR_QUICK_RETRY_MS)
+
 export function useCcrSessionModel(args: {
   enabled: boolean
   tabId: string | null
   /** The Claude Code session the tab shows, when known (the hook's `session_id`). */
   agentSessionId?: string | null
+  /** The Claude config dir the session writes under, from its transcript path. */
+  configDir?: string | null
   messages: readonly NativeChatMessage[]
   epoch: number | null
   deps?: CcrPipelineDeps
@@ -33,6 +37,7 @@ export function useCcrSessionModel(args: {
 }): CcrModelReading | null {
   const { enabled, tabId, messages, epoch } = args
   const agentSessionId = args.agentSessionId ?? null
+  const configDir = args.configDir ?? null
   const depsRef = useRef(args.deps)
   depsRef.current = args.deps
   const messagesRef = useRef(messages)
@@ -55,14 +60,22 @@ export function useCcrSessionModel(args: {
         await refreshCcrModel(tabId, epoch, await deps(), agentSessionId)
       } else if (ccrMayRun(tabId, epoch)) {
         await runCcrImagePipeline(
-          { tabId, epoch, agentSessionId, messageIds: messagesRef.current.map((message) => message.id), wanted: { toolUseIds: [], userMessageIds: [] } },
+          { tabId, epoch, agentSessionId, configDir, messageIds: messagesRef.current.map((message) => message.id), wanted: { toolUseIds: [], userMessageIds: [] } },
           await deps()
         )
       }
       if (active) {
         setTick((tick) => tick + 1)
+        // Not found yet: a session just started may be listed a moment later, so the quick
+        // retries (0.5, 1, 2, 4 s) are timed here rather than left to the minute's tick.
+        const retryAt = ccrSessionForTab(tabId, epoch, agentSessionId) ? null : ccrRetryAt(tabId, epoch)
+        const wait = retryAt === null ? null : retryAt - Date.now()
+        if (wait !== null && wait <= QUICK_RETRY_LONGEST_MS) {
+          quickRetry = setTimeout(() => void run(), Math.max(0, wait))
+        }
       }
     }
+    let quickRetry: ReturnType<typeof setTimeout> | null = null
     // Why: the real deps load with import() and can reject (the secure store or the chunk fails,
     // or, under Node, react-native under expo-modules-core). Uncaught, that rejection escaped on
     // every mount and every tick with nothing naming the pill; the pill keeps today's sources.
@@ -77,8 +90,11 @@ export function useCcrSessionModel(args: {
     return () => {
       active = false
       clearInterval(timer)
+      if (quickRetry) {
+        clearTimeout(quickRetry)
+      }
     }
-  }, [agentSessionId, enabled, epoch, hasMessages, tabId, trigger])
+  }, [agentSessionId, configDir, enabled, epoch, hasMessages, tabId, trigger])
 
   if (!enabled || !tabId) {
     return null
