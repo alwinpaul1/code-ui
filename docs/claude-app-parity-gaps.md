@@ -310,6 +310,30 @@ Sources: `mobile/src/session/use-mobile-native-chat-message-send.ts`,
 
 **Batch S (send path) gaps.** S1 to S6 are in the table in section 4.
 
+### 1.4 The Anthropic send lane (2026-10-15)
+
+The user asked for sends "from anthropic api for that session transcript like
+remote control, not from terminal". A Claude tab whose chat is matched to its
+Remote Control session (or is still being matched) now sends its composer's
+text-only messages as the Claude app does: POST `v1/code/sessions/{cse}/events`
+with a client uuid, into the session of the tab's own profile, with that
+account's sign-in (`ccrSendTargetForTab`, `use-ccr-composer-send.ts`).
+
+- Refused, words left in the composer, nothing typed into the terminal: no
+  target for the tab's profile (unknown profile, unmatched, another account's
+  copy, an unconfirmed match), the session's `connection_status` is
+  `disconnected` (the app's `ccr_remote_control_offline_error`), or a send is
+  in flight.
+- The bubble dims until the 2xx and goes when the stream echoes its uuid. A
+  failed POST puts the words back with Retry and a `[ccr-send]` log line.
+- While Claude works the words wait in the phone's one-string queue, drawn as
+  the app's `hb20.e` bubble, sent at the turn's end or moved back to the
+  composer when something blocks it.
+- **Still typed into the terminal:** photo and file sends (the app's upload,
+  `{org}/upload` on claude.ai, needs the app's own login), slash commands
+  driven from pickers (model, effort, mode), Stop, permission and question
+  answers, and every non-Claude tab and Claude tab with nothing on Anthropic.
+
 ---
 
 ## 2. How the Claude app drives a Claude Code session, and Code UI's path

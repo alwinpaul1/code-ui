@@ -217,6 +217,12 @@ export type MobileNativeChatController = {
    *  queue. Resolves to whether the host accepted the write. */
   sendNativeChatQueueNow?: () => Promise<boolean>
   nativeChatQueueEditor?: InlineQueueEditor | null
+  /** A Claude tab that sends through Anthropic: its phone-kept queue (use-ccr-composer-send.ts),
+   *  drawn in place of the screen-read queue box. Absent on every other tab. */
+  nativeChatLocalQueue?: { text: string | null; onEdit: () => void } | null
+  /** A Claude tab that sends through Anthropic: the composer's text-only send (a POST into its
+   *  Remote Control session, never the terminal). Absent on every other tab. */
+  nativeChatAnthropicSend?: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
   /** A Stop went out and the turn has not ended (use-chat-stop-button.ts). */
   nativeChatStopping?: boolean

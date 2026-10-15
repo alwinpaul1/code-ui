@@ -178,6 +178,6 @@ describe('a Claude tab reads only from Anthropic', () => {
 
   it('a tab of another agent is left to the desktop’s transcript, as before', async () => {
     await mount({ enabled: false })
-    expect(last()).toEqual({ gate: { kind: 'off' }, session: null, live: null, linkPhase: null, connectionStatus: null })
+    expect(last()).toEqual({ gate: { kind: 'off' }, session: null, live: null, linkPhase: null, connectionStatus: null, events: [] })
   })
 })

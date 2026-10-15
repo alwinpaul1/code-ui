@@ -205,6 +205,43 @@ export function ccrAccountForTab(tabId: string, epoch: number | null, agentSessi
   return currentMapping(tabId, epoch, agentSessionId, configDir)?.accountId ?? null
 }
 
+/** Where a Claude tab's message may be posted (ccr-send.ts), or why it may not. */
+export type CcrSendTarget =
+  | { kind: 'target'; sessionId: string; accountId: string }
+  | { kind: 'refused'; reason: 'profile-unknown' | 'unmatched' | 'other-account' | 'unsettled' }
+
+/**
+ * The tab's send target: the Remote Control session it is matched to, under the account its own
+ * Claude config dir belongs to, and nothing else (the user, 2026-10-15: "it must work for that
+ * claude session and that profile of that session exactly"). A session copied between profiles
+ * exists in both accounts (`~/.claude` and `~/.claude-work` each publish their own `cse_…`), so
+ * reading a match is not enough to post into it:
+ *  - the tab's config dir must be known (`profile-unknown` otherwise: there is no telling which
+ *    copy is this tab's);
+ *  - the match must stand for it (`unmatched`: none, or dropped by `currentMapping` because the
+ *    tab moved to another config dir or another Claude session);
+ *  - the config dir must not be bound to another account than the match's (`other-account`);
+ *  - and the match must have been made under this very config dir, or the dir be bound to its
+ *    account (`unsettled`: a match kept by an older build with no config dir, not yet confirmed).
+ */
+export function ccrSendTargetForTab(tabId: string, epoch: number | null, agentSessionId: string | null | undefined, configDir: string | null | undefined): CcrSendTarget {
+  if (!configDir) {
+    return { kind: 'refused', reason: 'profile-unknown' }
+  }
+  const mapping = currentMapping(tabId, epoch, agentSessionId, configDir)
+  if (!mapping) {
+    return { kind: 'refused', reason: 'unmatched' }
+  }
+  const bound = configDirAccounts.get(configDir)
+  if (bound !== undefined && bound !== mapping.accountId) {
+    return { kind: 'refused', reason: 'other-account' }
+  }
+  if (mapping.configDir !== configDir && bound !== mapping.accountId) {
+    return { kind: 'refused', reason: 'unsettled' }
+  }
+  return { kind: 'target', sessionId: mapping.sessionId, accountId: mapping.accountId }
+}
+
 // ─── Back-off ─────────────────────────────────────────────────────────────
 
 const BACKOFF_FIRST_MS = 30_000
