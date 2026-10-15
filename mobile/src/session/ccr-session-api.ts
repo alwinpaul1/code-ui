@@ -65,7 +65,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'events' | 'branches'
+export type CcrRequestStage = 'org' | 'sessions' | 'events' | 'branches' | 'usage'
 
 export class CcrApiError extends Error {
   constructor(
@@ -300,4 +300,60 @@ export async function listCcrSessionEvents(
 /** A POST with a JSON body to the code API, errors as the other stages' (`getJson`'s). */
 export function postCcrJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
   return getJson(fetchImpl, stage, url, { ...headers, 'Content-Type': 'application/json' }, { body: JSON.stringify(body) })
+}
+
+/** One plan-usage window of an account, as the phone's rows draw it. */
+export type CcrUsageWindow = {
+  name: 'Session' | 'Weekly'
+  /** Percent of the window used, 0 to 100 (Claude Code floors it for `/usage`). */
+  usedPercent: number
+  windowMinutes: number
+  /** Epoch SECONDS, or null when the reply states none. */
+  resetsAt: number | null
+}
+
+/** The reply's reset: an ISO time, or epoch seconds (milliseconds when it is that large). */
+function resetOf(value: unknown): number | null {
+  if (typeof value === 'string') {
+    const at = Date.parse(value)
+    return Number.isFinite(at) ? Math.floor(at / 1000) : null
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value > 1e12 ? value / 1000 : value)
+  }
+  return null
+}
+
+const USAGE_WINDOWS = [
+  { key: 'five_hour', name: 'Session', windowMinutes: 300 },
+  { key: 'seven_day', name: 'Weekly', windowMinutes: 10_080 }
+] as const
+
+/**
+ * The account's own 5-hour and weekly plan usage: `GET /api/oauth/usage` with THAT account's token,
+ * the call Claude Code's `/usage` makes (2.1.300, `fetchUtilization`; the headers of its profile call
+ * plus the OAuth beta). Its `five_hour` and `seven_day` carry `utilization` in percent
+ * (`${Math.floor(limit.utilization)}% used`) and `resets_at`. A window the reply omits or leaves null
+ * is not drawn; a reply with none is an account with no plan window (an API key): no rows.
+ * Shapes read from the binary, not yet from a live reply (see the probe in the commit notes).
+ */
+export async function fetchCcrAccountUsage(fetchImpl: CcrFetch, token: string): Promise<CcrUsageWindow[]> {
+  const body = record(
+    await getJson(fetchImpl, 'usage', `${CCR_API_BASE_URL}/api/oauth/usage`, {
+      ...ccrProfileHeaders(token),
+      'Anthropic-Beta': 'oauth-2025-04-20'
+    })
+  )
+  if (!body) {
+    throw new CcrApiError('usage', 'malformed')
+  }
+  const windows: CcrUsageWindow[] = []
+  for (const { key, name, windowMinutes } of USAGE_WINDOWS) {
+    const window = record(body[key])
+    const used = window?.utilization
+    if (window && typeof used === 'number' && Number.isFinite(used)) {
+      windows.push({ name, usedPercent: Math.max(0, Math.min(100, used)), windowMinutes, resetsAt: resetOf(window.resets_at) })
+    }
+  }
+  return windows
 }
