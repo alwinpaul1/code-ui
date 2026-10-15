@@ -882,8 +882,8 @@ describe('MobileNativeChatView', () => {
 
         expect(rowProps('u1').turnStatus).toBeNull()
         expect(rowProps('a1').activeTurnIsWorking).toBe(true)
-        // Stop lives in the composer's send slot now; the composer is mocked here.
-        expect(renderer!.root.findByType('Composer' as never).props.canStop).toBe(true)
+        // Stop lives in the composer's send slot (mocked here); the ask card takes the composer's place (ask-card-takes-the-composer-place.test.ts).
+        expect(renderer!.root.findAll((n) => n.type === 'Composer').map((c) => c.props.canStop)).toEqual(testCase.cardType === 'ChatAsk' ? [] : [true])
         expect(renderer!.root.findAll((node) => node.type === testCase.cardType)).toHaveLength(1)
 
         await update(working)

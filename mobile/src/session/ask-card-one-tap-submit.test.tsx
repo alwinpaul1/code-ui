@@ -33,7 +33,9 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(name, props, children)
   return {
+    ActivityIndicator: passthrough('ActivityIndicator'),
     Pressable: passthrough('Pressable'),
+    StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
     ScrollView: passthrough('ScrollView'),
     Text: passthrough('Text'),
     TextInput: passthrough('TextInput'),
@@ -41,7 +43,13 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight'
+}))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 // The other two cards are not under test; the ask card wins over both anyway.
@@ -195,7 +203,11 @@ function isHost(node: ReactTestInstance, tag: string): boolean {
 }
 
 function card(): ReactTestInstance | null {
-  return renderer!.root.findAll((node) => isHost(node, 'Button') && node.props.label === 'Submit')[0] ?? null
+  return (
+    renderer!.root.findAll(
+      (node) => isHost(node, 'Pressable') && node.props.testID === 'ask-send' && node.props.accessibilityLabel === 'Submit'
+    )[0] ?? null
+  )
 }
 
 function pick(label: string): void {
@@ -258,7 +270,7 @@ function askCard(): ReactTestInstance | null {
   return (
     renderer!.root.findAll(
       (node) =>
-        (isHost(node, 'Button') && node.props.variant === 'accent') ||
+        (isHost(node, 'Pressable') && node.props.testID === 'ask-send') ||
         (isHost(node, 'View') && node.props.testID === 'ask-sent')
     )[0] ?? null
   )

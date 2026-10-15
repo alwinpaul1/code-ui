@@ -10,7 +10,9 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: unknown }) =>
       React.createElement(name, props, children)
   return {
+    ActivityIndicator: passthrough('ActivityIndicator'),
     Pressable: passthrough('Pressable'),
+    StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
     ScrollView: passthrough('ScrollView'),
     TextInput: passthrough('TextInput'),
     View: passthrough('View'),
@@ -18,7 +20,13 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 400, height: 900 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight'
+}))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 // The real row so its onPress is reachable; only its leaf pieces are stubbed.
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))

@@ -33,7 +33,9 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(name, props, children)
   return {
+    ActivityIndicator: passthrough('ActivityIndicator'),
     Pressable: passthrough('Pressable'),
+    StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
     ScrollView: passthrough('ScrollView'),
     TextInput: passthrough('TextInput'),
     View: passthrough('View'),
@@ -41,7 +43,13 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight'
+}))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('../notifications/notification-plain-text', () => ({
@@ -100,8 +108,15 @@ function tap(label: string): void {
   act(() => row(label).props.onPress())
 }
 
+/** A footer control: the Skip pill, or the round send button by what it says. */
 function button(label: string): ReactTestInstance {
-  return root().find((node) => (node.type as unknown) === 'Button' && node.props.label === label)
+  return root().find(
+    (node) =>
+      ((node.type as unknown) === 'Button' && node.props.label === label) ||
+      ((node.type as unknown) === 'Pressable' &&
+        node.props.testID === 'ask-send' &&
+        node.props.accessibilityLabel === label)
+  )
 }
 
 async function press(label: string): Promise<void> {
@@ -246,11 +261,13 @@ describe('an ask card, choose first and Submit after', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
   })
 
-  it('sends nothing when the question is cancelled after a pick', async () => {
+  // Cancel became the Claude app's Skip (2026-10-16): on a lone question it
+  // lets go of the pick and, with nothing left to send, declines the question.
+  it('sends nothing when the question is skipped after a pick', async () => {
     const onAnswer = render(ASK_USER_QUESTION_CONTEXT_RING)
 
     tap('Tap to refresh')
-    await press('Cancel')
+    await press('Skip')
     await waitLong()
 
     expect(onAnswer).not.toHaveBeenCalled()
