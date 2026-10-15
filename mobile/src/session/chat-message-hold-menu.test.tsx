@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -113,10 +113,12 @@ const touch = (x: number, y: number) => ({ nativeEvent: { pageX: x, pageY: y } }
 let renderer: ReactTestRenderer | null = null
 
 function tree(row: NativeChatMessage, scheme: 'light' | 'dark', listAtRest: boolean): ReactElement {
-  return createElement(
-    ThemeProvider,
-    { initialPreference: scheme },
-    createElement(ChatTextHoldSelectsContext.Provider, { value: listAtRest }, createElement(MobileNativeChatMessage, { message: row }))
+  return (
+    <ThemeProvider initialPreference={scheme}>
+      <ChatTextHoldSelectsContext.Provider value={listAtRest}>
+        <MobileNativeChatMessage message={row} />
+      </ChatTextHoldSelectsContext.Provider>
+    </ThemeProvider>
   )
 }
 
