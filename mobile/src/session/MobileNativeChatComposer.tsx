@@ -579,7 +579,7 @@ export function MobileNativeChatComposer({
               showStop={showStop}
               stopping={stopping}
               onStop={onStop}
-              canSend={canSend}
+              canSend={canSend} sending={sending && agent === 'claude'}
               onSend={() => void handleSend()}
               iconButton={iconButton}
             />

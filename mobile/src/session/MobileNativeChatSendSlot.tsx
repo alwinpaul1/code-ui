@@ -1,4 +1,4 @@
-import { Pressable, View, type ViewStyle } from 'react-native'
+import { ActivityIndicator, Pressable, View, type ViewStyle } from 'react-native'
 import { ArrowUp, Square } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
@@ -14,12 +14,17 @@ import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
  * white arrow on clay (`yg9.f`: `pl7.H` on `pl7.e`), Stop an outline square in the text colour on
  * the control fill (`yg9.g`: `pl7.O` on `pl7.x0`). The row's 8 dp gap spaces them from the mic.
  * Glyph sizes match what the recording of 2026-10-14 measures (arrow about 11 dp, square 14 dp).
+ *
+ * `sending`: a send is in flight. The app's composer hands its button `Send(enabled, processing)`
+ * (1.261013.20, `j28` at ui7.java:150 into `oj9.f`), and processing draws a progress ring in the
+ * button in place of the arrow until the post returns. The circle stays clay and takes no tap.
  */
 export function MobileNativeChatSendSlot({
   showStop,
   stopping,
   onStop,
   canSend,
+  sending = false,
   onSend,
   iconButton
 }: {
@@ -27,6 +32,8 @@ export function MobileNativeChatSendSlot({
   stopping: boolean
   onStop?: () => void
   canSend: boolean
+  /** A send is in flight: the ring in place of the arrow (Claude tabs only, the composer decides). */
+  sending?: boolean
   onSend: () => void
   iconButton: ViewStyle
 }): React.JSX.Element {
@@ -70,19 +77,23 @@ export function MobileNativeChatSendSlot({
       hitSlop={COMPOSER_BUTTON_HIT_SLOP}
       accessibilityLabel="Send message"
       accessibilityRole="button"
-      accessibilityState={{ disabled: !canSend }}
+      accessibilityState={{ disabled: !canSend, busy: sending }}
       // The clay circle always; with nothing to send its fill and its arrow each go to 40%, as
       // the Claude app draws it, not swapped for a grey one and not faded as a group.
-      style={[iconButton, { backgroundColor: canSend ? colors.composerSend : colors.composerSendDisabled }]}
+      style={[iconButton, { backgroundColor: canSend || sending ? colors.composerSend : colors.composerSendDisabled }]}
       pressedScale={0.9}
       onPress={onSend}
       disabled={!canSend}
     >
-      <ArrowUp
-        size={18}
-        color={canSend ? colors.composerSendGlyph : colors.composerSendGlyphDisabled}
-        strokeWidth={2.4}
-      />
+      {sending ? (
+        <ActivityIndicator testID="native-chat-send-ring" size="small" color={colors.composerSendGlyph} />
+      ) : (
+        <ArrowUp
+          size={18}
+          color={canSend ? colors.composerSendGlyph : colors.composerSendGlyphDisabled}
+          strokeWidth={2.4}
+        />
+      )}
     </PressScale>
   )
 }
