@@ -23,15 +23,16 @@ type Seen = { gate: ClaudeChatGate; session: MobileNativeChatSession | null }
 let renderer: ReactTestRenderer | null = null
 const seen: Seen[] = []
 
-function Probe(props: { enabled?: boolean; epoch?: number; orcaSettled?: boolean; orcaRowCount?: number }) {
+function Probe(props: { enabled?: boolean; epoch?: number; orcaSettled?: boolean; orcaRowCount?: number; orcaStatus?: MobileNativeChatSession['status']; orcaError?: string }) {
   seen.push(
     useClaudeAnthropicTranscript({
       enabled: props.enabled ?? true,
       tabId: TAB,
       agentSessionId: AGENT_SESSION,
       epoch: props.epoch ?? EPOCH,
-      orcaSettled: props.orcaSettled ?? true,
-      orcaRowCount: props.orcaRowCount ?? 3
+      orcaRowCount: props.orcaRowCount ?? 3,
+      orcaStatus: props.orcaStatus ?? ((props.orcaSettled ?? true) ? 'ready' : 'loading'),
+      orcaError: props.orcaError
     })
   )
   return null
@@ -112,6 +113,26 @@ describe('a Claude tab reads only from Anthropic', () => {
     await mount({ orcaSettled: true, orcaRowCount: 0 })
     expect(last().gate).toEqual({ kind: 'new' })
     expect(last().session).toMatchObject({ status: 'ready', messages: [] })
+  })
+
+  // Review 2026-10-15: the match runs only on Orca's rows, so a tab with none that never became
+  // `ready` sat on the loading spinner for ever.
+  it('a session the desktop has no transcript for yet says so, not an endless spinner', async () => {
+    await mount({ orcaSettled: false, orcaRowCount: 0, orcaStatus: 'awaiting-transcript' })
+    expect(last().gate.kind).not.toBe('finding')
+    expect(last().session).toMatchObject({ status: 'awaiting-transcript', messages: [], transcriptLoading: false })
+  })
+
+  it('a tab whose desktop read failed with no rows shows the error and its reason', async () => {
+    await mount({ orcaSettled: false, orcaRowCount: 0, orcaStatus: 'error', orcaError: 'The host could not read the transcript' })
+    expect(last().gate.kind).not.toBe('finding')
+    expect(last().session).toMatchObject({ status: 'error', error: 'The host could not read the transcript', messages: [] })
+  })
+
+  it('a desktop read still in flight with no rows is still loading', async () => {
+    await mount({ orcaSettled: false, orcaRowCount: 0, orcaStatus: 'loading' })
+    expect(last().gate).toEqual({ kind: 'finding' })
+    expect(last().session).toMatchObject({ status: 'loading', messages: [] })
   })
 
   it('matched, the rows are Anthropic’s and only Anthropic’s', async () => {

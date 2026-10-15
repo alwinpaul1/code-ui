@@ -275,6 +275,23 @@ describe('refreshing each account', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  // Review 2026-10-15: a session stream or page refused with 401 asked for a fresh token, and got the
+  // same one back, because a token with life left was never refreshed.
+  it('refreshes an account whose token has life left when asked to, after the server refused it', async () => {
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    const stored = (await listAccounts())[0]!
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ access_token: 'a2', refresh_token: 'r2', expires_in: 3600 }) }))
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT))[0]!.accessToken).toBe(stored.credential.accessToken)
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT, { refresh: true }))[0]!.accessToken).toBe('a2')
+    expect((await listAccounts())[0]!.credential.accessToken).toBe('a2')
+  })
+
+  it('keeps the token it has when a forced refresh fails, while it has life left', async () => {
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 503, json: async () => ({}) }))
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT, { refresh: true }))[0]!.accessToken).toBe('a1')
+  })
+
   it('reading one account for the model pill refreshes that account and no other', async () => {
     await twoAccountsDue()
     refreshEndpoint({})
@@ -489,6 +506,31 @@ describe('telling the sessions path the accounts changed', () => {
     await rememberAccountProfile(pending.id, { accountUuid: DEFAULT_ACCOUNT, organizationUuid: DEFAULT_ORG, organizationName: 'Personal' })
     expect(ear.count()).toBe(1)
     ear.stop()
+  })
+
+  // Review 2026-10-15: the entry merged away was gone with no sign-out named, so the sessions path
+  // kept its open streams and its kept transcripts under an account id that no longer exists.
+  it('names the entry a merge removed', async () => {
+    await signIn('known', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    await signIn('mystery', 'unreadable')
+    const pending = (await listAccounts())[1]!
+    const changes: unknown[] = []
+    const stop = subscribeAnthropicAccountsChanged((change) => changes.push(change))
+    await rememberAccountProfile(pending.id, { accountUuid: DEFAULT_ACCOUNT, organizationUuid: DEFAULT_ORG, organizationName: 'Personal' })
+    expect(changes).toEqual([{ removed: [pending.id] }])
+    stop()
+  })
+
+  it('names the signed-out unidentified entry a new sign-in took the place of', async () => {
+    await signIn('mystery', 'unreadable')
+    const dead = (await listAccounts()).map((account) => ({ ...account, refreshRefused: true, credential: { ...account.credential, expiresAt: 0 } }))
+    fake.store.set('anthropic-accounts-v1', JSON.stringify({ accounts: dead }))
+    const changes: unknown[] = []
+    const stop = subscribeAnthropicAccountsChanged((change) => changes.push(change))
+    await signIn('w1', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+    expect((await listAccounts()).map((account) => account.id)).toEqual([WORK_ACCOUNT])
+    expect(changes).toEqual([{ removed: [dead[0]!.id] }])
+    stop()
   })
 
   it('says nothing when the sessions path only names an account or forgets its organization', async () => {

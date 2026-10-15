@@ -21,6 +21,7 @@ import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 import { triggerCcrRematch } from '../session/ccr-session-cache'
+import { foregroundCcrLinks, pauseCcrLinks } from '../session/ccr-link-registry'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
   HostClientAcquisitionRegistry,
@@ -376,8 +377,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return subscribeConnectionRevivalTriggers((reason) => {
       // Back in the foreground: the open chat's tab is matched to its Remote Control session at
       // once, whatever back-off was recorded while the app was away (ccr-session-cache.ts).
+      // Its Anthropic streams, closed in the background, resume after the last event each held,
+      // and a lost one tries again (ccr-link-registry.ts).
       if (reason === 'app-resume') {
         triggerCcrRematch('foreground')
+        foregroundCcrLinks()
       }
       // The background watcher is already replacing the relay. A second nudge
       // from this tree would start another dial on top of that one.
@@ -395,7 +399,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           // One broken physical session must not block recovery for other hosts.
         }
       }
-    })
+    }, { onBackground: pauseCcrLinks })
   }, [])
 
   const value = useMemo<RpcClientContextValue>(

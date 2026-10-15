@@ -179,7 +179,7 @@ import {
   type MobileNativeChatController
 } from './use-mobile-native-chat-controller'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
-import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
+import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'; import { setAnthropicSignInReaderForTests } from './anthropic-sign-in-presence'
 import { API_ERROR_HOST_STATUS, API_ERROR_TURN, CONTINUE_PROMPT, STOP_HOST_STATUS, STOP_TURN } from './fixtures/claude-turn-end-2.1.281'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
@@ -594,12 +594,13 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
     viewMode.isTabChatView = () => true
     sessionState.messages = []
     sessionState.status = 'ready'
-    sessionState.transcriptLoading = false
+    // Signed in, not left to whichever test read the real store first: a settled empty Claude tab is then `new`.
+    sessionState.transcriptLoading = false; setAnthropicSignInReaderForTests(async () => 1)
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
-    renderer = null
+    renderer = null; setAnthropicSignInReaderForTests(null)
   })
 
   it('forwards the tab launch draft and chat-active flag for a chat-resolved tab', () => {

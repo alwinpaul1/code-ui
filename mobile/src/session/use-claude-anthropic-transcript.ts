@@ -21,6 +21,10 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
  *    asked. The chat says why.
  *  - `new`: the tab's session has no message yet, so there is nothing to match it by. The chat
  *    is empty and its composer works (a phone-launched tab's first message is sent from here).
+ *  - `orca-empty`: Orca holds no row for the tab and will not soon (no transcript yet, no session
+ *    named, or its read failed), so there is nothing to match by either. The chat shows what
+ *    Orca's state means, as it did before (the empty state's line, or the error and its reason),
+ *    never a spinner that cannot end.
  *  - `matched`: the transcript is the session link's (ccr-session-link.ts).
  *
  * Orca's rows still decide WHICH session the tab is (their uuids are what the match compares,
@@ -32,6 +36,7 @@ export type ClaudeChatGate =
   | { kind: 'signed-out' }
   | { kind: 'finding' }
   | { kind: 'new' }
+  | { kind: 'orca-empty'; status: 'awaiting-transcript' | 'waiting-session' | 'error'; error?: string }
   | { kind: 'unmatched'; detail: string }
   | { kind: 'matched'; accountId: string; sessionId: string }
 
@@ -70,6 +75,13 @@ export function ccrLinkSession(link: CcrSessionLink, state: CcrLinkState, rows: 
   }
 }
 
+/** Whether the rows a gated Claude tab draws are its session's history, so a pending bubble or a
+ *  launch prefill may be judged against them. Signed out, unmatched, still finding, or a link with
+ *  nothing read yet: the chat draws no rows, and none of that says the conversation is empty. */
+export function claudeRowsAreHistory(api: { gate: ClaudeChatGate; session: MobileNativeChatSession | null }): boolean {
+  return api.gate.kind === 'new' || (api.gate.kind === 'matched' && api.session?.status === 'ready')
+}
+
 export function useClaudeAnthropicTranscript(args: {
   /** A Claude Code tab on the terminal lane, its chat shown. */
   enabled: boolean
@@ -77,9 +89,10 @@ export function useClaudeAnthropicTranscript(args: {
   agentSessionId: string | null
   /** `useLastConnectedAt(hostId)`: a match is made per relay connection, and a new one retries a lost stream. */
   epoch: number | null
-  /** Orca's read of the tab, for the gate only: has it settled, and with how many rows. */
-  orcaSettled: boolean
+  /** Orca's read of the tab, for the gate only: its status, how many rows, and why it failed. */
+  orcaStatus: MobileNativeChatSession['status']
   orcaRowCount: number
+  orcaError?: string
 }): { gate: ClaudeChatGate; session: MobileNativeChatSession | null } {
   const { enabled, tabId, agentSessionId, epoch } = args
   useSyncExternalStore(subscribeAnthropicSignInPresence, anthropicSignInPresenceVersion, anthropicSignInPresenceVersion)
@@ -99,14 +112,30 @@ export function useClaudeAnthropicTranscript(args: {
     if (sessionId && accountId) {
       return { kind: 'matched', accountId, sessionId }
     }
-    if (args.orcaSettled && args.orcaRowCount === 0) {
-      return { kind: 'new' }
+    if (args.orcaRowCount === 0) {
+      switch (args.orcaStatus) {
+        case 'ready':
+          return { kind: 'new' }
+        case 'awaiting-transcript':
+        case 'waiting-session':
+          return { kind: 'orca-empty', status: args.orcaStatus }
+        case 'error':
+          return { kind: 'orca-empty', status: 'error', ...(args.orcaError ? { error: args.orcaError } : {}) }
+        case 'idle':
+        case 'loading':
+          break
+        default: {
+          // A status this does not know is treated as a read still in flight.
+          const unhandled: never = args.orcaStatus
+          void unhandled
+        }
+      }
     }
     if (outcome?.kind === 'unmatched' && outcome.stage === 'sign-in' && signedIn === null) {
       return { kind: 'signed-out' }
     }
     return outcome?.kind === 'unmatched' ? { kind: 'unmatched', detail: outcome.detail } : { kind: 'finding' }
-  }, [accountId, args.orcaRowCount, args.orcaSettled, enabled, outcome, sessionId, signedIn, tabId])
+  }, [accountId, args.orcaError, args.orcaRowCount, args.orcaStatus, enabled, outcome, sessionId, signedIn, tabId])
 
   const link = useMatchedLink(gate.kind === 'matched' ? gate : null)
   const state = useSyncExternalStore(link?.subscribe ?? subscribeNothing, link?.getState ?? noState, link?.getState ?? noState)
@@ -139,6 +168,8 @@ export function useClaudeAnthropicTranscript(args: {
         return emptySession('loading')
       case 'new':
         return emptySession('ready')
+      case 'orca-empty':
+        return emptySession(gate.status, gate.status === 'error' ? (gate.error ?? 'The desktop could not read this session.') : undefined)
       case 'signed-out':
       case 'unmatched':
         return emptySession('error', gate.kind === 'signed-out' ? CLAUDE_SIGNED_OUT_LINE : CLAUDE_UNMATCHED_LINE)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NATIVE_CHAT_INTERRUPTED_STATUS_TEXT } from '../../../src/shared/native-chat-types'
 import { parseCcrEvent, type CcrEvent } from './ccr-session-api'
-import { ccrKeptImages, decodeCcrEvent, decodeCcrEvents, slimCcrEvent } from './ccr-transcript-decode'
+import { ccrEventDrawsRow, ccrKeptImages, decodeCcrEvent, decodeCcrEvents, slimCcrEvent } from './ccr-transcript-decode'
 import { PNG_1PX, SESSION_A, assistantEvent, event, imageBlock, pasteEvent, readResultEvent, systemEvent } from './fixtures/ccr-session-api-2026-10-14'
 
 // Payload shapes: fixtures/ccr-session-api-2026-10-14.ts (observed live) and the SDK messages
@@ -118,5 +118,24 @@ describe('a matched Claude tab draws Anthropic’s events as the Claude app does
 
   it('an event with no uuid and no event id is refused, not drawn under a made-up id', () => {
     expect(decodeCcrEvent({ eventId: null, payload: { type: 'user', message: { role: 'user', content: 'x' } } })).toEqual([])
+  })
+})
+
+// Review 2026-10-15: every streamed event re-decoded every held event (persist filters by
+// ccrEventDrawsRow, which decoded afresh each call).
+describe('deciding whether an event draws a row', () => {
+  it('reuses the decode already made for the event instead of decoding it again', () => {
+    const held = asEvent(user('u-cache', 'hello'))
+    expect(ccrEventDrawsRow(held)).toBe(true)
+    // What a fresh decode would now say differs; the decision made once stands for this event.
+    ;(held.payload as Record<string, unknown>).type = 'system'
+    expect(ccrEventDrawsRow(held)).toBe(true)
+    expect(decodeCcrEvents([held]).map((row) => row.id)).toEqual(['u-cache'])
+  })
+
+  it('an undrawn event is remembered as undrawn', () => {
+    const status = asEvent(systemEvent('s-cache'))
+    expect(ccrEventDrawsRow(status)).toBe(false)
+    expect(decodeCcrEvents([status])).toEqual([])
   })
 })

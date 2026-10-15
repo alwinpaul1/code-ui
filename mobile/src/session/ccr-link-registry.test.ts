@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-events'
 import type { CcrFetch } from './ccr-session-api'
-import { acquireCcrLink, CCR_LINK_LINGER_MS, openCcrLink, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
-import { CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
+import { acquireCcrLink, CCR_LINK_LINGER_MS, foregroundCcrLinks, openCcrLink, pauseCcrLinks, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
+import { CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
 import { ccrToolImage, ccrUserImages, resetCcrCacheForTests } from './ccr-session-cache'
-import { flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
+import { CCR_PERSISTED_EVENTS, flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
 import { decodeCcrEvents } from './ccr-transcript-decode'
 import { PNG_1PX, SESSION_A, SESSION_B, event, eventsReply, imageBlock, pasteEvent, readResultEvent, reply } from './fixtures/ccr-session-api-2026-10-14'
 import { sseBody, sseFrame, streamFetch, type StreamReply } from './fixtures/ccr-session-stream'
@@ -20,6 +20,9 @@ const AUTH: Record<string, { token: string; organizationUuid: string }> = {
 function text(uuid: string, role: 'user' | 'assistant', words: string) {
   return event({ type: role, uuid, session_id: SESSION_A, parent_tool_use_id: null, message: { role, content: role === 'user' ? words : [{ type: 'text', text: words }] } })
 }
+
+/** A history page's answer standing for a 401. */
+const UNAUTHORIZED = Symbol('401')
 
 type Timers = { fire: (ms?: number) => void; pending: () => number[] }
 
@@ -53,8 +56,12 @@ type World = {
   stream: { fetch: CcrStreamFetch; requests: { url: string; headers: Record<string, string> }[] }
   logs: string[]
   authCalls: string[]
+  /** The accounts whose sign-in was read afresh (after a 401). */
+  freshAuthCalls: string[]
   timers: ReturnType<typeof manualTimers>
   signedOut: Set<string>
+  /** The link's clock: each read returns `at`, then moves it on by `step`. */
+  clock: { at: number; step: number }
 }
 
 function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promise<StreamReply>): World {
@@ -64,26 +71,40 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     stream: streamFetch(streamAnswer),
     logs: [],
     authCalls: [],
+    freshAuthCalls: [],
     timers: manualTimers(),
-    signedOut: new Set()
+    signedOut: new Set(),
+    clock: { at: 0, step: 0 }
   }
   const fetch: CcrFetch = async (url, init) => {
     w.pageRequests.push({ url, auth: init.headers.Authorization, org: init.headers['X-Organization-Uuid'] })
     const parsed = new URL(url)
     const match = /^\/v1\/code\/sessions\/([^/]+)\/events$/.exec(parsed.pathname)
     const page = match ? w.pages[decodeURIComponent(match[1]!)] : undefined
-    return page ? reply(200, await page(parsed.searchParams.get('cursor'))) : reply(404, {})
+    if (!page) {
+      return reply(404, {})
+    }
+    const body = await page(parsed.searchParams.get('cursor'))
+    return body === UNAUTHORIZED ? reply(401, {}) : reply(200, body)
   }
   const deps: CcrLinkDeps = {
     fetch,
-    streamFetch: w.stream.fetch,
-    auth: async (accountId) => {
+    streamFetch: (url, init) => w.stream.fetch(url, init),
+    auth: async (accountId, fresh) => {
       w.authCalls.push(accountId)
+      if (fresh) {
+        w.freshAuthCalls.push(accountId)
+      }
       return w.signedOut.has(accountId) ? null : (AUTH[accountId] ?? null)
     },
     keep: (key) => `file:///cache/${encodeURIComponent(key)}`,
     log: (line) => w.logs.push(line),
-    setTimer: w.timers.timer
+    setTimer: w.timers.timer,
+    now: () => {
+      const at = w.clock.at
+      w.clock.at += w.clock.step
+      return at
+    }
   }
   setCcrLinkDepsLoader(async () => deps)
   setCcrLinkTimerForTests(w.timers.timer)
@@ -209,6 +230,34 @@ describe('one stream per (account, session)', () => {
   })
 })
 
+describe('an account entry merged into another', () => {
+  // Review 2026-10-15: only a sign-out closed an account's links. An entry merged away (or replaced
+  // by a new sign-in) left its stream open and its kept transcript on the phone under a dead id.
+  it('closes that entry’s links and wipes its kept transcript, and only that entry’s', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'a')])
+    w.pages[SESSION_B] = () => eventsReply([text('u2', 'user', 'b')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    acquireCcrLink(ACCOUNT_B, SESSION_B)
+    await flush()
+    notifyAnthropicAccountsChanged({ removed: [ACCOUNT_A] })
+    expect(openCcrLink(ACCOUNT_A, SESSION_A)).toBeNull()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+    expect(openCcrLink(ACCOUNT_B, SESSION_B)?.getState().phase).toBe('live')
+    expect(readCcrTranscript(ACCOUNT_B, SESSION_B)).not.toBeNull()
+  })
+
+  it('a change that removed nobody closes nothing', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'a')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    notifyAnthropicAccountsChanged({ removed: [] })
+    notifyAnthropicAccountsChanged()
+    expect(openCcrLink(ACCOUNT_A, SESSION_A)?.getState().phase).toBe('live')
+  })
+})
+
 describe('the transcript a link holds', () => {
   it('an event on both the newest page and the stream draws one row, not two', async () => {
     const one = text('u1', 'user', 'hello')
@@ -276,6 +325,91 @@ describe('the transcript a link holds', () => {
     expect(new URL(w.pageRequests[1]!.url).searchParams.get('cursor')).toBe('c2')
   })
 
+  // Review 2026-10-15: a kept copy cut to its newest 200 rows knows no older cursor, so the first
+  // scroll to the top walked from the newest page and stopped as soon as anything new was held,
+  // which that page's undrawn system events always were: nothing older was drawn (200 > 200).
+  it('cold start from a cut kept copy: the first scroll to the top draws rows older than it held', async () => {
+    const oldest = text('u-old', 'user', 'from before the kept copy')
+    const kept = Array.from({ length: CCR_PERSISTED_EVENTS + 20 }, (_row, index) => text(`k${index}`, index % 2 ? 'assistant' : 'user', `row ${index}`))
+    const status = Array.from({ length: 30 }, (_row, index) => event({ type: 'system', subtype: 'status', uuid: `s${index}`, session_id: SESSION_A }))
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    // Everything once, newest first: the copy is written cut to its newest 200 rows.
+    w.pages[SESSION_A] = () => eventsReply([...kept, ...status])
+    acquireCcrLink(ACCOUNT_A, SESSION_A).release()
+    await flush()
+    await flushCcrTranscriptsForTests()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toMatchObject({ olderCursor: null, hasOlder: true })
+    resetCcrLinksForTests()
+    restartCcrTranscriptsForTests()
+    await hydrateCcrTranscripts()
+    const w2 = world(() => ({ status: 200, chunks: [], hold: true }))
+    w2.pages[SESSION_A] = (cursor) => (cursor === 'c2' ? eventsReply([oldest, ...kept.slice(0, 20)], null) : eventsReply([...kept.slice(20), ...status], 'c2'))
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS)
+    await link.loadOlder()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS + 21)
+    expect(rowsOf(link)[0]).toBe('user:u-old')
+    expect(link.getState().hasOlder).toBe(false)
+  })
+
+  it('cold start from a cut copy whose history holds nothing older stops at the start, drawing nothing new', async () => {
+    const kept = Array.from({ length: CCR_PERSISTED_EVENTS + 1 }, (_row, index) => text(`k${index}`, 'user', `row ${index}`))
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply(kept)
+    acquireCcrLink(ACCOUNT_A, SESSION_A).release()
+    await flush()
+    await flushCcrTranscriptsForTests()
+    resetCcrLinksForTests()
+    restartCcrTranscriptsForTests()
+    await hydrateCcrTranscripts()
+    const w2 = world(() => ({ status: 200, chunks: [], hold: true }))
+    w2.pages[SESSION_A] = () => eventsReply(kept.slice(1), null)
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await link.loadOlder()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS)
+    expect(link.getState().hasOlder).toBe(false)
+  })
+
+  // Review 2026-10-15: each streamed event wrote the whole kept copy (a trim and a JSON size check
+  // of up to 200 rows) at once; a burst of events now writes once.
+  it('events streamed in a burst are kept once, after the burst', async () => {
+    const one = text('u1', 'user', 'hello')
+    const burst = Array.from({ length: 5 }, (_row, index) => text(`a${index}`, 'assistant', `part ${index}`))
+    const w = world(() => ({ status: 200, chunks: sseBody(burst.map((raw) => sseFrame('client_event', raw))), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([one])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(rowsOf(link)).toHaveLength(6)
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(1)
+    expect(w.timers.pending()).toEqual([CCR_PERSIST_STREAM_MS])
+    w.timers.fire(CCR_PERSIST_STREAM_MS)
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(6)
+  })
+
+  it('the app going to the background keeps what streamed in at once', async () => {
+    const two = text('a1', 'assistant', 'streamed')
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hello')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    pauseCcrLinks()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)?.events).toHaveLength(2)
+    expect(w.timers.pending()).toEqual([])
+  })
+
+  it('a sign-out with a write pending writes nothing back', async () => {
+    const two = text('a1', 'assistant', 'streamed')
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hello')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    notifyAnthropicAccountsChanged({ signedOut: ACCOUNT_A })
+    w.timers.fire()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+  })
+
   it('pictures arrive as files, are drawn from the image cache, and no base64 is held or kept', async () => {
     const paste = pasteEvent('u-paste', [imageBlock(PNG_1PX)], '[Image #1] look')
     const read = readResultEvent('u-read', 'toolu_1', [imageBlock(PNG_1PX)])
@@ -308,6 +442,61 @@ describe('when reading fails', () => {
     link.retry()
     await flush()
     expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 2)
+  })
+
+  /** Fires every reconnect wait until the link is lost (or 30 firings): the waits it asked for. */
+  async function fireUntilLost(w: World, link: CcrSessionLink): Promise<number[]> {
+    const waits: number[] = []
+    for (let firing = 0; firing < 30 && link.getState().phase !== 'lost'; firing++) {
+      waits.push(...w.timers.pending().filter((ms) => ms !== CCR_PERSIST_STREAM_MS))
+      w.timers.fire()
+      await flush()
+    }
+    return waits
+  }
+
+  // Review 2026-10-15: any frame reset the back-off, so a server that answers with one frame and
+  // closes was redialled every second for ever (31 requests in 30 firings, never `lost`).
+  it('a server that sends one session_update and closes backs off 1/3/7/15/31 s, then is lost', async () => {
+    const w = world(() => ({ status: 200, chunks: sseBody([sseFrame('session_update', { connection_status: 'connected' })]) }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(await fireUntilLost(w, link)).toEqual([...CCR_STREAM_RECONNECT_MS])
+    expect(link.getState().phase).toBe('lost')
+    expect(w.stream.requests).toHaveLength(CCR_STREAM_RECONNECT_MS.length + 1)
+  })
+
+  it('a server that hands over a new event and closes at once still backs off, then is lost', async () => {
+    let seq = 0
+    const w = world(() => {
+      seq += 1
+      return { status: 200, chunks: sseBody([sseFrame('client_event', text(`u${seq}`, 'user', `again ${seq}`))]) }
+    })
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(await fireUntilLost(w, link)).toEqual([...CCR_STREAM_RECONNECT_MS])
+    expect(link.getState().phase).toBe('lost')
+  })
+
+  it('a stream that delivered new events and stayed up starts the back-off over at 1 s', async () => {
+    let seq = 0
+    const w = world(() => {
+      seq += 1
+      return { status: 200, chunks: sseBody([sseFrame('client_event', text(`u${seq}`, 'user', `turn ${seq}`))]) }
+    })
+    // Every connection lasts a minute by the link's clock.
+    w.clock.step = 60_000
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    for (let firing = 0; firing < 8; firing++) {
+      expect(w.timers.pending().filter((ms) => ms !== CCR_PERSIST_STREAM_MS)).toEqual([CCR_STREAM_RECONNECT_MS[0]])
+      w.timers.fire()
+      await flush()
+    }
+    expect(link.getState().phase).toBe('reconnecting')
   })
 
   it('a stream refused for this sign-in stops and says why, with no redial, as the app does', async () => {
@@ -358,6 +547,49 @@ describe('when reading fails', () => {
     expect(w.stream.requests).toHaveLength(0)
   })
 
+  it('a history page refused with 401 reads the sign-in afresh once and reads the page again', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    let calls = 0
+    w.pages[SESSION_A] = () => {
+      calls += 1
+      return eventsReply([text('u1', 'user', 'hi')])
+    }
+    const pages = w.pages[SESSION_A]!
+    let refused = false
+    w.pages[SESSION_A] = (cursor) => {
+      if (!refused) {
+        refused = true
+        return UNAUTHORIZED
+      }
+      return pages(cursor)
+    }
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(calls).toBe(1)
+    expect(rowsOf(link)).toEqual(['user:u1'])
+    expect(link.getState().phase).toBe('live')
+  })
+
+  it('a history page refused with 401 twice says so, after one fresh read', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => UNAUTHORIZED
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(link.getState().phase).toBe('error')
+    expect(link.getState().error).toMatch(/HTTP 401/)
+  })
+
+  it('a stream refused with 401 connects again with a sign-in read afresh', async () => {
+    const w = world((_url, attempt) => (attempt === 1 ? { status: 401, chunks: [] } : { status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(link.getState().phase).toBe('live')
+  })
+
   it('an account signed out under a link says so rather than reading with nothing', async () => {
     const w = world(() => ({ status: 200, chunks: [], hold: true }))
     w.signedOut.add(ACCOUNT_A)
@@ -394,5 +626,77 @@ describe('degenerate sizes', () => {
     const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
     await flush()
     expect(rowsOf(link)).toEqual(['user:u1'])
+  })
+})
+
+// Review 2026-10-15: retryCcrLinks() had no production caller, so a lost stream stayed lost until
+// the relay reconnected, and the streams kept running with the app in the background.
+describe('the app in the background and back in front', () => {
+  it('a lost stream reconnects when the app comes back to the foreground', async () => {
+    const w = world(() => ({ status: 200, chunks: [] }))
+    w.pages[SESSION_A] = () => eventsReply([])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    for (const wait of CCR_STREAM_RECONNECT_MS) {
+      w.timers.fire(wait)
+      await flush()
+    }
+    expect(link.getState().phase).toBe('lost')
+    const before = w.stream.requests.length
+    foregroundCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(before + 1)
+  })
+
+  it('the background closes the stream and schedules no redial', async () => {
+    const signals: AbortSignal[] = []
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    const recorded = w.stream.fetch
+    w.stream.fetch = (url, init) => {
+      signals.push(init.signal)
+      return recorded(url, init)
+    }
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(signals).toHaveLength(1)
+    expect(signals[0]!.aborted).toBe(false)
+    pauseCcrLinks()
+    await flush()
+    expect(signals[0]!.aborted).toBe(true)
+    expect(w.timers.pending()).toEqual([])
+    expect(signals).toHaveLength(1)
+  })
+
+  it('back in front, a paused stream resumes after the last sequence number it held', async () => {
+    const one = text('u1', 'user', 'hello')
+    const two = text('a1', 'assistant', 'streamed before the pause')
+    const w = world((_url, attempt) => (attempt === 1 ? { status: 200, chunks: sseBody([sseFrame('client_event', two)]), hold: true } : { status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([one])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    pauseCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(1)
+    foregroundCcrLinks()
+    await flush()
+    expect(w.stream.requests).toHaveLength(2)
+    expect(w.stream.requests[1]!.url).toContain(`from_sequence_num=${two.sequence_num}`)
+    expect(w.pageRequests).toHaveLength(1)
+    expect(link.getState().phase).toBe('live')
+  })
+
+  it('a tab opened while the app is in the background waits for the foreground to read', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    pauseCcrLinks()
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.pageRequests).toHaveLength(0)
+    expect(w.stream.requests).toHaveLength(0)
+    foregroundCcrLinks()
+    await flush()
+    expect(w.pageRequests).toHaveLength(1)
+    expect(w.stream.requests).toHaveLength(1)
   })
 })

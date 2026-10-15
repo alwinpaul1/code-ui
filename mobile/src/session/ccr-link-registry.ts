@@ -49,7 +49,8 @@ function lazyDeps(): CcrLinkDeps {
     // Pictures are kept as they arrive; until the deps load nothing has arrived to keep.
     keep: (key, dataUri) => (depsPromiseResolved?.keep(key, dataUri) ?? null),
     log: (line) => (depsPromiseResolved?.log ?? ((text: string) => console.log(text)))(line),
-    setTimer: (run, ms) => (depsPromiseResolved?.setTimer ?? lingerTimer)(run, ms)
+    setTimer: (run, ms) => (depsPromiseResolved?.setTimer ?? lingerTimer)(run, ms),
+    now: () => (depsPromiseResolved?.now ?? Date.now)()
   }
 }
 
@@ -70,6 +71,9 @@ export function acquireCcrLink(accountId: string, sessionId: string): CcrLinkHan
   if (!entry) {
     entry = { link: new CcrSessionLink(accountId, sessionId, lazyDeps()), refs: 0, cancelLinger: null }
     entries.set(key, entry)
+    if (appInBackground) {
+      entry.link.pause()
+    }
   }
   entry.cancelLinger?.()
   entry.cancelLinger = null
@@ -90,6 +94,7 @@ export function acquireCcrLink(accountId: string, sessionId: string): CcrLinkHan
       }
       held.cancelLinger = lingerTimer(() => {
         if (held.refs === 0 && entries.get(key) === held) {
+          held.link.flushPersist()
           held.link.stop()
           entries.delete(key)
         }
@@ -103,10 +108,30 @@ export function openCcrLink(accountId: string, sessionId: string): CcrSessionLin
   return entries.get(ccrTranscriptKey(accountId, sessionId))?.link ?? null
 }
 
-/** Every open link retries a lost stream now (a relay reconnect, the app back in front). */
+/** Every open link retries a lost stream now (a relay reconnect). */
 export function retryCcrLinks(): void {
   for (const entry of entries.values()) {
     entry.link.retry()
+  }
+}
+
+/** True while the app is in the background: no link streams, and a link opened meanwhile waits. */
+let appInBackground = false
+
+/** The app went to the background (client-context.tsx): every stream closes until the foreground. */
+export function pauseCcrLinks(): void {
+  appInBackground = true
+  for (const entry of entries.values()) {
+    entry.link.pause()
+  }
+}
+
+/** The app is back in front (client-context.tsx): paused streams resume after the last sequence
+ *  each held, and lost ones try again. */
+export function foregroundCcrLinks(): void {
+  appInBackground = false
+  for (const entry of entries.values()) {
+    entry.link.resume()
   }
 }
 
@@ -126,6 +151,10 @@ subscribeAnthropicAccountsChanged((change) => {
   if (change.signedOut) {
     closeCcrLinksOfAccount(change.signedOut)
   }
+  // An entry merged into another, or replaced by a new sign-in, is gone like a signed-out one.
+  for (const removed of change.removed ?? []) {
+    closeCcrLinksOfAccount(removed)
+  }
 })
 
 export function setCcrLinkTimerForTests(timer: (run: () => void, ms: number) => () => void): void {
@@ -138,6 +167,7 @@ export function resetCcrLinksForTests(): void {
     entry.link.stop()
   }
   entries.clear()
+  appInBackground = false
   depsLoader = loadDefaultDeps
   depsPromise = null
   depsPromiseResolved = null

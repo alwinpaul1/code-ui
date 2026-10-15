@@ -55,6 +55,18 @@ describe('subscribeConnectionRevivalTriggers', () => {
     expect(nudge).toHaveBeenCalledTimes(1)
   })
 
+  it('tells a background listener when the app goes to the background, and only then', async () => {
+    const onBackground = vi.fn()
+    subscribeConnectionRevivalTriggers(nudge, { onBackground })
+    appStateListener?.('inactive')
+    expect(onBackground).not.toHaveBeenCalled()
+    appStateListener?.('background')
+    expect(onBackground).toHaveBeenCalledTimes(1)
+    expect(nudge).not.toHaveBeenCalled()
+    appStateListener?.('active')
+    expect(onBackground).toHaveBeenCalledTimes(1)
+  })
+
   it('nudges when the network comes back online', async () => {
     await subscribeAndSeed(nudge)
     networkListener?.({ isConnected: false, type: 'NONE' })

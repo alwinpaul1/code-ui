@@ -6,12 +6,17 @@ import { addNetworkStateListener, getNetworkStateAsync, type NetworkState } from
 // without an onclose. Both leave clients waiting out long backoff timers or
 // parked at the reconnect give-up cap (issue #5049). Surface every "the link
 // probably just came back" OS signal as a single nudge callback.
+// `onBackground`: the app went to the background (not `inactive`, a passing dialog or the
+// notification shade), for work that must not run there (the Claude session streams).
 export function subscribeConnectionRevivalTriggers(
-  nudge: (reason: 'app-resume' | 'network-change') => void
+  nudge: (reason: 'app-resume' | 'network-change') => void,
+  options: { onBackground?: () => void } = {}
 ): () => void {
   const appStateSub = AppState.addEventListener('change', (next) => {
     if (next === 'active') {
       nudge('app-resume')
+    } else if (next === 'background') {
+      options.onBackground?.()
     }
   })
   let lastNetwork: Pick<NetworkState, 'isConnected' | 'type'> | null = null
