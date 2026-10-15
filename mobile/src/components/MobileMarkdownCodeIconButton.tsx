@@ -11,11 +11,13 @@ export type CodeGlyph = ComponentType<{
   size?: number
   color?: string
   strokeWidth?: number
-  style?: { transform: { rotate: string }[] }
 }>
 
 /** Lucide's Copy turned half a turn: the front square upper left, the back one lower right, as
- *  the Claude app draws it (anthropicon "copy"). */
+ *  the Claude app draws it (anthropicon "copy"). It goes on a View AROUND the glyph, never on the
+ *  glyph: react-native-svg's Svg moves a style transform onto its inner <G>, which turns about the
+ *  drawing's origin (0,0), so half a turn swung the glyph out of its box and Copy drew nothing
+ *  (2026-10-15, "Claude has a copy button"). A View turns about its centre. */
 const COPY_GLYPH_TURN = { transform: [{ rotate: '180deg' }] }
 
 /**
@@ -105,13 +107,17 @@ export function CodeCopyGlyph({
   const turn = copied ? undefined : COPY_GLYPH_TURN
   return (
     <View style={{ width: size, height: size }}>
-      <Glyph size={size} color={color} strokeWidth={2} style={turn} />
+      <View style={[{ width: size, height: size }, turn]}>
+        <Glyph size={size} color={color} strokeWidth={2} />
+      </View>
       <Animated.View
         testID="markdown-code-copy-tint"
         pointerEvents="none"
         style={[{ position: 'absolute', top: 0, left: 0, width: size, height: size }, tintStyle]}
       >
-        <Glyph size={size} color={copiedColor} strokeWidth={2} style={turn} />
+        <View style={[{ width: size, height: size }, turn]}>
+          <Glyph size={size} color={copiedColor} strokeWidth={2} />
+        </View>
       </Animated.View>
     </View>
   )

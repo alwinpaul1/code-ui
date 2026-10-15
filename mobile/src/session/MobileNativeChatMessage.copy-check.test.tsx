@@ -142,11 +142,18 @@ describe.each([
   // fa20.a) has its FRONT square at the upper left and the back one peeking out at the lower
   // right. Lucide's Copy has them the other way round, which read as a different icon beside
   // Claude's (2026-10-15: "the copy ... isn't fixed yet"). Turned half a turn, it matches.
-  it('draws the copy glyph with its front square upper left, as the Claude app does', () => {
-    const resting = glyphs(render(scheme)).filter((glyph) => glyph.type === 'Copy')
+  // 2026-10-15, from the device: "Claude has a copy button". Code UI's Copy under a reply and on a
+  // code block drew NOTHING. The turn sat on the glyph's own style, and react-native-svg's Svg
+  // moves a style transform onto its inner <G> as an SVG transform (Svg.tsx, react-native-svg
+  // 15), which turns about the drawing's origin (0,0), not its centre: half a turn swung the whole
+  // glyph up and left out of its box. The turn belongs to a plain View around the glyph, which
+  // React Native turns about its centre.
+  it('draws the copy glyph with its front square upper left, turned by a View around it so it stays in its box', () => {
+    const resting = copyButton(render(scheme)).findAll((node) => String(node.type) === 'Copy')
     expect(resting.length).toBeGreaterThan(0)
     for (const glyph of resting) {
-      expect(flat(glyph.style).transform).toEqual([{ rotate: '180deg' }])
+      expect(flat(glyph.props.style).transform).toBeUndefined()
+      expect(flat(glyph.parent?.props.style).transform).toEqual([{ rotate: '180deg' }])
     }
   })
 
