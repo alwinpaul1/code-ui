@@ -3,6 +3,7 @@ import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-sess
 import { findAccountSessionRow } from './ccr-session-lists'
 import { noteCcrRowContext } from './ccr-session-usage'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
+import { forgetCcrSessionFacts, noteCcrSessionFacts } from './ccr-session-facts'
 import {
   defaultLog,
   maskId,
@@ -13,9 +14,11 @@ import {
   type CcrStageReport
 } from './ccr-session-shared'
 
-/** Keeps the matched row's reported model and effort for the pill (ccr-session-model.ts). */
+/** Keeps the matched row's reported model and effort for the pill (ccr-session-model.ts), and its
+ *  title, list state and unread mark for the header and the list (ccr-session-facts.ts). */
 export function noteModel(tabId: string, epoch: number | null, row: CcrSessionRow, report: (stage: CcrStage, ok: boolean, detail: string) => void): void {
   noteCcrRowContext(tabId, epoch, row)
+  noteCcrSessionFacts(tabId, epoch, row)
   const read = ccrModelOfRow(row)
   if ('skip' in read) {
     forgetCcrModel(tabId)
@@ -67,6 +70,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
         // Signed out: the match cannot be read with it again. Dropped, the tab's next run matches
         // it afresh across the accounts still signed in, instead of re-reading a dead one forever.
         forgetCcrMapping(tabId, agentSessionId)
+        forgetCcrSessionFacts(tabId)
       }
       report(
         'model',
@@ -86,6 +90,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
     }
     forgetCcrModel(tabId)
     forgetCcrMapping(tabId, agentSessionId)
+    forgetCcrSessionFacts(tabId)
     report('model', false, `session ${maskId(sessionId)} is no longer in the account's list; the tab is matched again`)
   } catch (error) {
     forgetCcrModel(tabId)

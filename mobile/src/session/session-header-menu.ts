@@ -11,7 +11,9 @@ import { sessionWorkspaceRename } from './mobile-session-write-operations'
  *
  * - Copy branch: the workspace's branch, from the `worktree.show` record the title comes from.
  * - Background tasks: the chat's own Background tasks sheet, only while tasks run (the app's rule).
- * - Rename: the workspace display name, which is the header's title, through `worktree.set`.
+ * - Rename: the workspace display name, through `worktree.set`. On a Claude tab matched to its
+ *   Anthropic session the app renames the session itself (`PUT v1/code/sessions/{id}`); that goes
+ *   there only while CCR_SESSION_WRITES is on (ccr-session-writes.ts), and is the workspace until then.
  * - Copy session ID: the agent's own session id, as the agent stated it (an internal entry in the
  *   app; here it is the id `claude --resume` takes).
  * - Change model: opens the composer's own model sheet. The app's string (`session_menu_change_model`)
@@ -151,6 +153,9 @@ export function sessionHeaderMenuActions(deps: {
   sessionId: string | null
   clipboard: ClipboardWriter
   showToast: (message: string, durationMs?: number) => void
+  /** Renames the tab's Anthropic session instead of the workspace: given only while
+   *  CCR_SESSION_WRITES is on and the tab is matched (ccr-session-writes.ts). */
+  renameAnthropicSession?: ((name: string) => Promise<SessionRenameOutcome>) | null
 }) {
   const copy = async (value: string | null, done: string, failed: string) => {
     if (!value) {
@@ -168,9 +173,11 @@ export function sessionHeaderMenuActions(deps: {
     copyBranch: () => copy(deps.branch, 'Branch name copied', "Couldn't copy branch name"),
     copySessionId: () => copy(deps.sessionId, 'Session ID copied', "Couldn't copy session ID"),
     renameSession: async (name: string) => {
-      const outcome = deps.client
-        ? await renameSessionWorkspace(deps.client, deps.worktreeId, name)
-        : 'failed'
+      const outcome = deps.renameAnthropicSession
+        ? await deps.renameAnthropicSession(name)
+        : deps.client
+          ? await renameSessionWorkspace(deps.client, deps.worktreeId, name)
+          : 'failed'
       if (outcome !== 'renamed') {
         deps.showToast("Couldn't rename the session", 1500)
       }

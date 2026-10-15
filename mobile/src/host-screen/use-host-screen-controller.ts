@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { visibleHostRouteNotice } from '../host-route-notice'
 import { resolveHostRouteActionState } from '../host-route-action-state'
-import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
 import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useForgetHostClient, useForceReconnect, useHostClient } from '../transport/client-context'
@@ -132,11 +131,9 @@ export function useHostScreenController({
     workspaceStatuses: state.workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
-  const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)
 
   return {
     actions,
-    activeWorktreeScroll,
     catalog,
     client,
     connState,

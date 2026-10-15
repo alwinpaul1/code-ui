@@ -58,7 +58,7 @@ export type CcrFetchResponse = {
   json: () => Promise<unknown>
   text?: () => Promise<string>
 }
-export type CcrFetch = (url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }) => Promise<CcrFetchResponse>
+export type CcrFetch = (url: string, init: { method: 'GET' | 'POST' | 'PUT'; headers: Record<string, string>; body?: string }) => Promise<CcrFetchResponse>
 
 export type CcrFailureReason =
   | 'unauthorized'

@@ -79,14 +79,16 @@ describe('the verbs for every kind of call', () => {
     ).toBe('Created  NEW.md')
   })
 
-  it('says searched, fetched and searched the web for the calls that did', () => {
+  // The app's verbs (1.261013.20 `ccr_verb_searched_web`, `ccr_verb_ran_skill`
+  // with "/name"); run-sheet-rows-claude-app-words.test.ts has the rest.
+  it('says searched, fetched and searched web for the calls that did', () => {
     expect(drawn(rowsOf(call('Grep', { pattern: 'TODO' }))[0]!)).toBe('Searched  TODO')
     expect(drawn(rowsOf(call('WebFetch', { url: 'https://example.com/a' }))[0]!)).toBe('Fetched  https://example.com/a')
-    expect(drawn(rowsOf(call('WebSearch', { query: 'rn flashlist' }))[0]!)).toBe('Searched the web  rn flashlist')
+    expect(drawn(rowsOf(call('WebSearch', { query: 'rn flashlist' }))[0]!)).toBe('Searched web  rn flashlist')
   })
 
   it('names a skill and a message by what they name', () => {
-    expect(drawn(rowsOf(call('Skill', { skill: 'unslop' }))[0]!)).toBe('Ran skill  unslop')
+    expect(drawn(rowsOf(call('Skill', { skill: 'unslop' }))[0]!)).toBe('Ran skill  /unslop')
     expect(
       drawn(rowsOf(call('SendMessage', { to: 'probe', summary: 'ack the plan', message: 'long text' }))[0]!)
     ).toBe('Messaged  @probe ack the plan')

@@ -20,7 +20,7 @@ import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { useMobileNativeChatTaskProgress } from './mobile-native-chat-composer-tasks'
 import { MobileNativeChatSessionBar } from './MobileNativeChatSessionBar'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'; import { MobileNativeChatPendingDim } from './MobileNativeChatPendingDim'
+import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'; import { MobileNativeChatPendingDim } from './MobileNativeChatPendingDim'; import { drawsStoppedTurnRow } from './mobile-native-chat-error-rows'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
@@ -255,7 +255,7 @@ export function MobileNativeChatView({
         {dividerLabels.has(item.id) ? (
           <MobileNativeChatTimeDivider label={dividerLabels.get(item.id) as string} />
         ) : null}
-        <MobileNativeChatPendingDim delivery={outboxDeliveries?.[item.id]}><MobileNativeChatMessage
+        {drawsStoppedTurnRow(item, agent) ? <MobileNativeChatPendingDim delivery={outboxDeliveries?.[item.id]}><MobileNativeChatMessage
         message={item}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
@@ -277,11 +277,11 @@ export function MobileNativeChatView({
         // another turn's status.
         {...turns.resolveRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
-        /></MobileNativeChatPendingDim>{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
+        /></MobileNativeChatPendingDim> : null}{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
       </ChatRowOnScreenScope>
     ),
     [
-      dividerLabels,
+      agent, dividerLabels,
       toolsExpanded,
       fontScale,
       onOpenFile,

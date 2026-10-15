@@ -7,6 +7,8 @@ import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
+import { ClaudeSessionFilterChips } from '../components/ClaudeSessionFilterChips'
+import { useFilteredWorkspaceList } from './use-filtered-workspace-list'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
@@ -19,7 +21,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
   const { colors, space } = useTheme()
   const {
     actions,
-    activeWorktreeScroll,
     catalog,
     connState,
     contentMaxWidth,
@@ -41,7 +42,11 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
-  const { rawSections, sections, uniqueRepoColors } = sectionsResult
+  const { rawSections, uniqueRepoColors } = sectionsResult
+  // The Claude app's session filters, over Claude agents only (claude-session-list-filter.ts), and
+  // the scroll to the active workspace over the same filtered sections the SectionList draws.
+  const { sessionFilter, activeWorktreeScroll } = useFilteredWorkspaceList(displayWorktrees, sectionsResult.sections, now)
+  const { sections } = sessionFilter
 
   return (
     <>
@@ -99,11 +104,22 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         </View>
       )}
 
+      {sessionFilter.offered ? (
+        <ClaudeSessionFilterChips value={sessionFilter.value} onChange={sessionFilter.setValue} />
+      ) : null}
+      {sessionFilter.emptyNotice ? (
+        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.lg }}>
+          <Txt variant="body" tone="muted">
+            {sessionFilter.emptyNotice}
+          </Txt>
+        </View>
+      ) : null}
+
       <HostWorkspaceListStates
         connState={connState}
         worktreesLoaded={state.worktreesLoaded}
         displayCount={displayWorktrees.length}
-        sectionCount={sections.length}
+        sectionCount={sectionsResult.sections.length}
         catalogError={state.catalogError}
         search={state.search}
         activeFilterCount={settings.activeFilterCount}

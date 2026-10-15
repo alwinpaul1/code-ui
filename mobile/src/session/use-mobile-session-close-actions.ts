@@ -1,5 +1,6 @@
 import { forgetSessionTab, pickNextSessionTabAfterClose } from './mobile-session-tab-history'
 import { forgetFileTabDoc } from '../files/mobile-file-tab-read-cache'
+import { forgetCcrSessionFacts } from './ccr-session-facts'
 import { planSessionTabClose } from './mobile-session-tab-close-plan'
 import {
   CLOSE_IN_FLIGHT_TOMBSTONE_MS,
@@ -275,6 +276,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     if (stripStillOurs) {
       closedTabTombstonesRef.current.set(tab.id, Date.now() + CLOSED_TAB_TOMBSTONE_MS)
     }
+    // The tab's Anthropic session facts (its title, list state and Unread mark) have no owner now.
+    forgetCcrSessionFacts(tab.id)
     if (plan.via === 'terminal-handle') {
       return
     }
