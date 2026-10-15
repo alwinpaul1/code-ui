@@ -47,7 +47,7 @@ describe('a Claude tab attachment on the Anthropic lane', () => {
     const getConnectionId = vi.fn(async () => 'conn-1')
     let fail = true
     const store = vi.fn(async () => {
-      if (fail) throw new CcrFileUploadError('Upload failed', 'HTTP 500')
+      if (fail) { throw new CcrFileUploadError('Upload failed', 'HTTP 500') }
       return { path: '', anthropicFile: uploaded('acct-tab') }
     })
     let retry: (() => Promise<unknown>) | null = null

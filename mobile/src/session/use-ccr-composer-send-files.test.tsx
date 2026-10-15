@@ -18,7 +18,7 @@ let fail = false
 const deps: CcrComposerSendDeps = {
   post: async (accountId, sessionId, body) => {
     posts.push({ accountId, sessionId, body })
-    if (fail) throw new Error('network')
+    if (fail) { throw new Error('network') }
   },
   readStatus: async () => 'connected',
   log: () => undefined,

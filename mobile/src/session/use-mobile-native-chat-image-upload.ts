@@ -84,8 +84,7 @@ export function useMobileNativeChatImageUpload(args: {
   ) => void
   onAttachSuccess?: () => void
   onError?: () => void
-  /** A Claude tab on the Anthropic lane: where its picks go instead of the desktop, read at the
-   *  pick. Null (or absent) keeps the desktop path (ccr-file-upload.ts). */
+  /** A Claude tab on the Anthropic lane: where its picks go instead of the desktop, read at the pick (ccr-file-upload.ts). */
   anthropicStore?: () => NativeChatAttachmentStore | null
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
@@ -182,12 +181,8 @@ export function useMobileNativeChatImageUpload(args: {
           },
           onImageFailed: onImageFailed
             ? (image, error, retry) => {
-                // A file Anthropic would refuse (empty, over the cap) is not retried: its chip
-                // goes with the selection's sweep and the app's words say why.
-                if (error instanceof CcrFileUploadError && error.refusedBeforeUpload) {
-                  showToast(error.userMessage, 2500)
-                  return false
-                }
+                // A file Anthropic would refuse (empty, over the cap) is not retried: its chip goes with the selection's sweep, the app's words say why.
+                if (error instanceof CcrFileUploadError && error.refusedBeforeUpload) { showToast(error.userMessage, 2500); return false }
                 const kept = onImageFailed(scope, { ...image, batch }, retry)
                 chipFailed ||= kept
                 return kept
@@ -294,10 +289,7 @@ export function useMobileNativeChatImageUpload(args: {
         }
         // The Claude app's words (chat_input_file_too_large, ccr_upload_failed),
         // with Orca's own cap: its slot RPCs take 24 MiB of base64, 18 MB of file.
-        if (uploadError instanceof CcrFileUploadError) {
-          showToast(uploadError.userMessage, 1500)
-          return
-        }
+        if (uploadError instanceof CcrFileUploadError) { showToast(uploadError.userMessage, 1500); return }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
           showToast('File size exceeds 18 MB limit', 1500)
           return

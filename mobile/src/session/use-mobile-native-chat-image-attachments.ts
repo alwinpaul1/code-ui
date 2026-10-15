@@ -6,9 +6,8 @@ import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-inp
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
-import type { NativeChatAttachmentStore, PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import { CCR_ATTACHMENT_NOT_ON_DESKTOP, chipsHeldByAnthropic, planCcrAttachmentSend } from './ccr-attachment-send'
-import type { CcrSendFiles } from './use-ccr-composer-send'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { CCR_ATTACHMENT_NOT_ON_DESKTOP, chipsHeldByAnthropic } from './ccr-attachment-send'; import { useNativeChatAnthropicSend, type NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
@@ -38,16 +37,6 @@ import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-i
 import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { INPUT_BOX_REFUSALS, SEND_WAITS_FOR_DESKTOP } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
 
 type CurrentRef<T> = { readonly current: T }
-
-/** A Claude tab that sends through Anthropic with its attachments (ccr-file-upload.ts): picks go
- *  to Anthropic, and the send references them in one event with the words. */
-export type NativeChatAnthropicAttachments = {
-  /** The upload for this tab now; null while the tab is not on that lane (the desktop path then). */
-  readonly store: () => NativeChatAttachmentStore | null
-  /** The account the tab's session belongs to now (ccrSendTargetForTab), or null with no target. */
-  readonly accountId: () => string | null
-  readonly send: (text: string, files?: CcrSendFiles) => Promise<MobileNativeChatSendOutcome>
-}
 type ShowToast = (message: string, durationMs?: number) => void
 
 type Args = {
@@ -235,52 +224,12 @@ export function useMobileNativeChatImageAttachments({
     [scopeKey, removeScopeAttachment]
   )
 
-  const anthropicRef = useRef(anthropic)
-  anthropicRef.current = anthropic
-  const sendAnthropic = useCallback(async (composerText: string): Promise<boolean> => {
-    const lane = anthropicRef.current
-    const scope = scopeKey
-    if (!lane || !scope) {
-      return false
-    }
-    const chips = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
-    const accountId = lane.accountId()
-    if (chips.length === 0 || accountId === null) {
-      // No chips, or no target: the plain send, which refuses with the target's own reason.
-      return (await lane.send(composerText)) !== 'rejected'
-    }
-    const plan = planCcrAttachmentSend(chips, composerText, accountId)
-    switch (plan.kind) {
-      case 'nothing':
-        return false
-      case 'refuse':
-        onError?.()
-        onSendError(plan.message)
-        return false
-      case 'send': {
-        takeSentAttachments(scope, plan.sent)
-        const outcome = await lane.send(composerText, { attachments: plan.files, previewUris: plan.previewUris, accountId }).catch(() => 'rejected' as const)
-        if (outcome === 'rejected') {
-          restoreSentAttachments(scope, plan.sent)
-        }
-        return outcome !== 'rejected'
-      }
-      default: {
-        const unhandled: never = plan
-        return unhandled
-      }
-    }
-  }, [onError, onSendError, restoreSentAttachments, scopeKey, takeSentAttachments])
+  const sendAnthropic = useNativeChatAnthropicSend({ anthropic, scopeKey, onError, onSendError, takeSentAttachments, restoreSentAttachments })
 
   const sendNativeChat = useCallback(
     (composerText: string): Promise<boolean> => {
-      // A chip whose file is at Anthropic has no desktop path to paste: the tab left that lane
-      // after the pick. Refuse, words and chips kept, rather than paste an empty path.
-      if (chipsHeldByAnthropic(attachments)) {
-        onError?.()
-        onSendError(CCR_ATTACHMENT_NOT_ON_DESKTOP)
-        return Promise.resolve(false)
-      }
+      // A chip whose file is at Anthropic has no desktop path to paste (the tab left that lane after the pick): refuse, words and chips kept.
+      if (chipsHeldByAnthropic(attachments)) { onError?.(); onSendError(CCR_ATTACHMENT_NOT_ON_DESKTOP); return Promise.resolve(false) }
       const operationTerminal = activeHandleRef.current
       // One budget for the whole user action. The paste loop, the settle, and the
       // text body that follows are a single send from the composer's point of view;

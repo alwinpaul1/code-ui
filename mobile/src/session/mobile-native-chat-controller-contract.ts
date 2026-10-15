@@ -53,7 +53,7 @@ import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-ta
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
-import type { NativeChatAnthropicAttachments } from './use-mobile-native-chat-image-attachments'
+import type { NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */

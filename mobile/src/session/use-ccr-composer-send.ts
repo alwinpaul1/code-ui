@@ -221,9 +221,7 @@ export function useCcrComposerSend(args: {
     const now = latest.current
     const withFiles = files !== undefined && files.attachments.length > 0
     posting.current += 1
-    if (!withFiles) {
-      recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } })
-    }
+    if (!withFiles) { recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } }) }
     now.clearDraftForSend(origin, text)
     const rowId = files && files.previewUris.length > 0 ? now.acceptSend(origin, text, [...files.previewUris]) : now.acceptSend(origin, text)
     setDelivery(rowId, 'sending')
@@ -231,9 +229,7 @@ export function useCcrComposerSend(args: {
     const result = await post(to, text, uuid, undefined, files?.attachments)
     posting.current -= 1
     if (result === true) {
-      if (!withFiles) {
-        void retireOutboxSend(origin.outboxId)
-      }
+      if (!withFiles) { void retireOutboxSend(origin.outboxId) }
       if (ccrEchoSeen(latest.current.events, uuid)) {
         settle(uuid)
       } else {
@@ -273,11 +269,8 @@ export function useCcrComposerSend(args: {
     if (!to) {
       return 'rejected'
     }
-    if (withFiles && files.accountId !== to.accountId) {
-      // The desktop reads a file with the session account's own sign-in: another account's is not its.
-      deps.log(`[ccr-send] refused: attachments were uploaded under another account than session ${ccrSessionTail(to.sessionId)}'s`)
-      latest.current.onSendError(CCR_ATTACHMENT_OTHER_ACCOUNT)
-      return 'rejected'
+    if (withFiles && files.accountId !== to.accountId) { // the desktop reads a file with the session account's own sign-in
+      deps.log(`[ccr-send] refused: attachments were uploaded under another account than session ${ccrSessionTail(to.sessionId)}'s`); latest.current.onSendError(CCR_ATTACHMENT_OTHER_ACCOUNT); return 'rejected'
     }
     if (pinned && !sameCcrTarget(to, pinned)) {
       deps.log(`[ccr-send] outbox resend refused: written for session ${ccrSessionTail(pinned.sessionId)}, this tab now sends to ${ccrSessionTail(to.sessionId)}`)

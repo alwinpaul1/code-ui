@@ -41,7 +41,7 @@ describe('which chips one Anthropic send references (only finished uploads, as t
 
   it('puts the files and the words in ONE user event, file_attachments beside the plain-string content', () => {
     const plan = planCcrAttachmentSend([photo('a'), doc('d')], 'look', ACCOUNT)
-    if (plan.kind !== 'send') throw new Error('expected a send')
+    if (plan.kind !== 'send') { throw new Error('expected a send') }
     const body = buildCcrUserEventBody({ sessionId: 'session_01ABC', uuid: 'u-1', text: 'look', fileAttachments: plan.files })
     expect(body).toEqual({
       session_id: 'cse_01ABC',

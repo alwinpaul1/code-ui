@@ -4,7 +4,7 @@ import { CCR_ATTACHMENTS_THROUGH_ANTHROPIC, CcrFileUploadError, type CcrUploaded
 import type { CcrSendTarget } from './ccr-session-cache'
 import type { NativeChatAttachmentStore } from './mobile-native-chat-image-attachment'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import type { NativeChatAnthropicAttachments } from './use-mobile-native-chat-image-attachments'
+import type { NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 
 export type CcrUploadForSession = (accountId: string, sessionId: string, file: { base64: string; name?: string | null; mimeType?: string | null }) => Promise<CcrUploadedFile>
 
@@ -42,12 +42,17 @@ export function ccrAttachmentLane(args: {
   }
 }
 
+/** The device upload, loaded on the first pick: ccr-file-upload-device.ts pulls in expo-file-system,
+ *  which the chat's own tests cannot load, the same reason the attachment card loads
+ *  ccr-attachment-open.ts with `import()` (MobileNativeChatFileCard.tsx). */
+const uploadOnDevice: CcrUploadForSession = async (accountId, sessionId, file) => (await import('./ccr-file-upload-device')).uploadCcrFileForSession(accountId, sessionId, file)
+
 export function useCcrAttachmentLane(args: {
   /** The tab is on the Anthropic lane now. */
   active: boolean
   resolveTarget: () => CcrSendTarget
   send: (text: string, files?: CcrSendFiles) => Promise<MobileNativeChatSendOutcome>
-  upload: CcrUploadForSession
+  upload?: CcrUploadForSession
   /** Tests turn it on; the app reads the one switch. */
   switchOn?: boolean
 }): NativeChatAnthropicAttachments | null {
@@ -60,7 +65,7 @@ export function useCcrAttachmentLane(args: {
         enabled,
         resolveTarget: () => latest.current.resolveTarget(),
         send: (text, files) => latest.current.send(text, files),
-        upload: (accountId, sessionId, file) => latest.current.upload(accountId, sessionId, file)
+        upload: (accountId, sessionId, file) => (latest.current.upload ?? uploadOnDevice)(accountId, sessionId, file)
       }),
     [enabled]
   )

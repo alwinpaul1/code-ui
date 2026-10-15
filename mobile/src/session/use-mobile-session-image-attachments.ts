@@ -8,9 +8,9 @@ import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-st
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   useMobileNativeChatImageAttachments,
-  type MobileNativeChatImageAttachments,
-  type NativeChatAnthropicAttachments
+  type MobileNativeChatImageAttachments
 } from './use-mobile-native-chat-image-attachments'
+import type { NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
 
 type CurrentRef<T> = { readonly current: T }
 
