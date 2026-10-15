@@ -6,7 +6,7 @@
  */
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import type { CcrUsageAskDeps } from './use-ccr-usage-sheet'
@@ -108,7 +108,7 @@ describe('Stop on a matched tab', () => {
     const h = mount(session.make)
     const terminal = vi.fn()
     const verdicts: boolean[] = []
-    h.lane().wrapStop(terminal)((sent) => verdicts.push(sent))
+    h.lane().wrapStop(terminal, true)((sent) => verdicts.push(sent))
     await settle()
     expect(session.posted).toEqual([{ accountId: 'acct-personal', sessionId: OWN, payload: { type: 'control_request', uuid: 'id-1', request_id: 'id-2', request: { subtype: 'interrupt' } } }])
     expect(verdicts).toEqual([true])
@@ -123,7 +123,7 @@ describe('Stop on a matched tab', () => {
     const h = mount(session.make)
     const verdicts: boolean[] = []
     const terminal = vi.fn((onVerdict?: (sent: boolean) => void) => onVerdict?.(true))
-    h.lane().wrapStop(terminal)((sent) => verdicts.push(sent))
+    h.lane().wrapStop(terminal, true)((sent) => verdicts.push(sent))
     await settle()
     expect(terminal).toHaveBeenCalledTimes(1)
     expect(verdicts).toEqual([true])
@@ -139,7 +139,7 @@ describe('Stop on a matched tab', () => {
       const make: CcrUsageAskDeps = () => ({ deps: { waitForResponse: () => ({ reply: new Promise(() => undefined), cancel: () => undefined }), post: () => new Promise(() => undefined), newUuid: () => 'id', log: () => undefined }, release: () => undefined })
       const h = mount(make)
       const terminal = vi.fn()
-      h.lane().wrapStop(terminal)()
+      h.lane().wrapStop(terminal, true)()
       await act(async () => {
         await vi.advanceTimersByTimeAsync(10_000)
       })
@@ -150,13 +150,82 @@ describe('Stop on a matched tab', () => {
     }
   })
 
+  describe('a hung interrupt POST (review 2026-10-15)', () => {
+    const hung: CcrUsageAskDeps = () => ({ deps: { waitForResponse: () => ({ reply: new Promise(() => undefined), cancel: () => undefined }), post: () => new Promise(() => undefined), newUuid: () => 'id', log: () => undefined }, release: () => undefined })
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('types no Escape into an idle Claude when the turn ended before the 10 s fallback', async () => {
+      const h = mount(hung)
+      const terminal = vi.fn()
+      h.lane().wrapStop(terminal, true)()
+      // The turn ends by itself (or the interrupt did land): the button's canStop goes false.
+      h.update({})
+      h.lane().wrapStop(terminal, false)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000)
+      })
+      expect(terminal).not.toHaveBeenCalled()
+    })
+
+    it('types nothing into the last terminal after the chat unmounted, and leaves no timer running', async () => {
+      const h = mount(hung)
+      const terminal = vi.fn()
+      h.lane().wrapStop(terminal, true)()
+      act(() => renderer!.unmount())
+      renderer = null
+      expect(vi.getTimerCount()).toBe(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000)
+      })
+      expect(terminal).not.toHaveBeenCalled()
+    })
+
+    it('types nothing into the last terminal when the interrupt POST is refused after the chat unmounted', async () => {
+      let refuse: (error: Error) => void = () => undefined
+      const late: CcrUsageAskDeps = () => ({ deps: { waitForResponse: () => ({ reply: new Promise(() => undefined), cancel: () => undefined }), post: () => new Promise((_resolve, reject) => (refuse = reject)), newUuid: () => 'id', log: () => undefined }, release: () => undefined })
+      const h = mount(late)
+      const terminal = vi.fn()
+      h.lane().wrapStop(terminal, true)()
+      act(() => renderer!.unmount())
+      renderer = null
+      await act(async () => {
+        refuse(new Error('events: HTTP 503'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(terminal).not.toHaveBeenCalled()
+    })
+
+    it('lets only the newest Stop fall back, so a new turn and a second Stop give at most two Escapes', async () => {
+      const h = mount(hung)
+      const terminal = vi.fn()
+      h.lane().wrapStop(terminal, true)()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000)
+      })
+      // The first turn ended and a new one began; the user taps Stop again.
+      h.lane().wrapStop(terminal, false)
+      h.lane().wrapStop(terminal, true)()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000)
+      })
+      // One fallback is one Stop of the terminal lane: its two paced Escapes.
+      expect(terminal).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('leaves Stop to the terminal when the link is not live, the session is offline, or the target is another account’s copy', () => {
     const session = fakeSession()
     const terminal = vi.fn()
-    expect(mount(session.make, { linkPhase: 'reconnecting' }).lane().wrapStop(terminal)).toBe(terminal)
-    expect(mount(session.make, { connectionStatus: 'disconnected' }).lane().wrapStop(terminal)).toBe(terminal)
-    expect(mount(session.make, { resolveTarget: () => ({ kind: 'refused', reason: 'other-account' }) }).lane().wrapStop(terminal)).toBe(terminal)
-    expect(mount(session.make, { linkSessionId: COPY }).lane().wrapStop(terminal)).toBe(terminal)
+    expect(mount(session.make, { linkPhase: 'reconnecting' }).lane().wrapStop(terminal, true)).toBe(terminal)
+    expect(mount(session.make, { connectionStatus: 'disconnected' }).lane().wrapStop(terminal, true)).toBe(terminal)
+    expect(mount(session.make, { resolveTarget: () => ({ kind: 'refused', reason: 'other-account' }) }).lane().wrapStop(terminal, true)).toBe(terminal)
+    expect(mount(session.make, { linkSessionId: COPY }).lane().wrapStop(terminal, true)).toBe(terminal)
     expect(mount(session.make, { enabled: false }).lane().live).toBe(false)
     expect(session.posted).toEqual([])
   })
@@ -169,7 +238,7 @@ describe('with the switch off', () => {
     const terminal = vi.fn()
     const fallback = vi.fn<PickDispatch>(async () => 'accepted')
     expect(h.lane().live).toBe(false)
-    expect(h.lane().wrapStop(terminal)).toBe(terminal)
+    expect(h.lane().wrapStop(terminal, true)).toBe(terminal)
     expect(h.lane().setPermissionMode).toBeUndefined()
     expect(h.lane().permissionMode).toBeNull()
     expect(h.lane().permission).toBeNull()
@@ -367,7 +436,7 @@ describe('a notification’s answer on a matched tab', () => {
   it('reaches the prompt this lane holds and posts its control_response', async () => {
     const session = fakeSession()
     mount(session.make, { scope, events: [bashRequest('r1')] })
-    let sent: boolean | null | undefined
+    let sent: boolean | 'stale' | null | undefined
     await act(async () => {
       sent = await answerCcrPermissionFromNotification({ hostId: 'h', worktreeId: 'w', permissionKey: bannerKey, choice: 'deny', comment: 'not now' })
     })

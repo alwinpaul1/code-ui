@@ -71,14 +71,14 @@ function laneSwitchedOn(args: Pick<CcrControlLaneArgs, 'enabled' | 'switchOn'>):
   return args.enabled && (args.switchOn ?? CCR_CONTROL_LANE)
 }
 
-const passStop = (fallback: CcrStop): CcrStop => fallback
-
 export type CcrControlLane = {
   /** Whether the lane drives this tab now. */
   live: boolean
   /** Stop given the terminal's Stop: an `interrupt` into the session while the lane is live,
-   *  falling back to `fallback` when it fails; `fallback` itself when the lane is not live. */
-  wrapStop: (fallback: CcrStop) => CcrStop
+   *  falling back to `fallback` when it fails; `fallback` itself when the lane is not live.
+   *  `canStop` is whether the turn works now (the Stop button's own flag): a fallback due after
+   *  it went false types nothing. */
+  wrapStop: (fallback: CcrStop, canStop: boolean) => CcrStop
   /** A mode pick through `set_permission_mode`: the failure's words, or null when it went.
    *  Undefined when the lane is not live (the terminal's Shift+Tab then). */
   setPermissionMode: ((mode: TerminalPermissionMode) => Promise<string | null>) | undefined
@@ -130,23 +130,59 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
   // Stop must stop the turn even when the unproven interrupt does not land: a refused or
   // unanswered POST falls back to the terminal's Escape, which itself says the app's words when
   // the relay is down too. One line names why the interrupt failed and what Stop did instead.
+  // The fallback runs only for the newest tap, while the turn still works and the chat is still
+  // mounted: a late one typed Escape twice into an idle Claude, into the last terminal after the
+  // chat closed, or into the next turn on top of that turn's own Stop (review 2026-10-15).
+  const tapRef = useRef(0)
+  const turnWorking = useRef(false)
+  const mounted = useRef(true)
+  const timers = useRef(new Set<() => void>())
+  useEffect(() => {
+    mounted.current = true
+    const pending = timers.current
+    return () => {
+      mounted.current = false
+      for (const cancel of pending) {
+        cancel()
+      }
+      pending.clear()
+    }
+  }, [])
+  const setTimer = useCallback((run: () => void, ms: number): (() => void) => {
+    const cancel = (): void => {
+      clearTimeout(handle)
+      timers.current.delete(cancel)
+    }
+    const handle = setTimeout(() => {
+      timers.current.delete(cancel)
+      run()
+    }, ms)
+    timers.current.add(cancel)
+    return cancel
+  }, [])
   const makeStop = useCallback(
     (fallback: CcrStop): CcrStop =>
       (onVerdict) => {
-        const sent = withTarget((deps, session) => postCcrInterrupt(deps, session))
+        const tap = (tapRef.current += 1)
+        const sent = withTarget((deps, session) => postCcrInterrupt(deps, session, setTimer))
         void (sent ?? Promise.resolve('the tab has no live Anthropic session now')).then((cause) => {
           if (cause === null) {
             onVerdict?.(true)
+            return
+          }
+          const skip = !mounted.current ? 'the chat closed' : tap !== tapRef.current ? 'a newer Stop took over' : !turnWorking.current ? 'the turn already ended' : null
+          if (skip) {
+            console.warn(`[ccr-control] interrupt failed (${cause}) — no Escape: ${skip}`)
             return
           }
           console.warn(`[ccr-control] interrupt failed (${cause}) — stopping with Escape on the terminal`)
           fallback(onVerdict)
         })
       },
-    [withTarget]
+    [setTimer, withTarget]
   )
   const stops = useRef(new WeakMap<CcrStop, CcrStop>())
-  const wrapStop = useCallback(
+  const wrapLiveStop = useCallback(
     (fallback: CcrStop): CcrStop => {
       const known = stops.current.get(fallback)
       if (known) {
@@ -287,7 +323,11 @@ export function useCcrControlLane(args: CcrControlLaneArgs): CcrControlLane {
   const picked = pickedMode && pickedMode.sessionId === sessionId && (stated?.key ?? null) === pickedMode.statedKey ? pickedMode.mode : null
   return {
     live,
-    wrapStop: live ? wrapStop : passStop,
+    wrapStop: (fallback, canStop) => {
+      // Read at each render, as `latest` is: whether the turn still works when a fallback is due.
+      turnWorking.current = canStop
+      return live ? wrapLiveStop(fallback) : fallback
+    },
     setPermissionMode: live ? setPermissionMode : undefined,
     permissionMode: live ? (picked ?? stated?.mode ?? null) : null,
     wrapDispatch,
