@@ -105,6 +105,7 @@ vi.mock('./MobileNativeChatComposer', async () => {
       onSend: (text: string) => Promise<boolean>
       disabled?: boolean
       placeholder?: string
+      canStop?: boolean
     }) =>
       React.createElement('Composer', {
         ...props,
@@ -165,13 +166,13 @@ describe('the ask card in the dock', () => {
   const count = (type: string): number => renderer!.root.findAll((node) => String(node.type) === type).length
 
   it('hides the composer while an unanswered question card is up', async () => {
-    await render({ ask: ASK, askKey: 'ask-1' })
+    await render({ ask: ASK, askKey: 'ask-1', askLive: true })
     expect(count('ChatAsk')).toBe(1)
     expect(count('Composer')).toBe(0)
   })
 
   it('brings the composer back once the answer is sent', async () => {
-    await render({ ask: ASK, askKey: 'ask-1', askSentAt: 1 })
+    await render({ ask: ASK, askKey: 'ask-1', askLive: true, askSentAt: 1 })
     expect(count('ChatAsk')).toBe(1)
     expect(count('Composer')).toBe(1)
   })
@@ -180,5 +181,103 @@ describe('the ask card in the dock', () => {
     await render({})
     expect(count('ChatAsk')).toBe(0)
     expect(count('Composer')).toBe(1)
+  })
+
+  // Review of f00febd4a: the transcript's copy of a question is not gated on the
+  // agent waiting (use-mobile-native-chat-prompts.ts), so it can be stale. Hiding
+  // the composer under it took Stop away from a working agent, with Skip's
+  // Escape the only key left on screen.
+  it('keeps the composer and its Stop under a question only the transcript shows', async () => {
+    await render({ ask: ASK, askKey: 'ask-1', askLive: false, canStop: true })
+    expect(count('ChatAsk')).toBe(1)
+    expect(count('Composer')).toBe(1)
+    const composer = renderer!.root.find((node) => String(node.type) === 'Composer')
+    expect(composer.props.canStop).toBe(true)
+  })
+
+  it('declines a question only the transcript shows without writing Escape while the agent works', async () => {
+    const onCancelAsk = vi.fn().mockResolvedValue(true)
+    const onDismissAsk = vi.fn()
+    await render({ ask: ASK, askKey: 'ask-1', askLive: false, onCancelAsk, onDismissAsk })
+    const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    let declined: boolean | undefined
+    await act(async () => {
+      declined = await card.props.onCancel()
+    })
+    expect(declined).toBe(true)
+    expect(onCancelAsk).not.toHaveBeenCalled()
+    expect(onDismissAsk).toHaveBeenCalledTimes(1)
+  })
+
+  it('still writes Escape to decline a question the agent is waiting on', async () => {
+    const onCancelAsk = vi.fn().mockResolvedValue(true)
+    await render({ ask: ASK, askKey: 'ask-1', askLive: true, onCancelAsk, onDismissAsk: vi.fn() })
+    const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    await act(async () => {
+      await card.props.onCancel()
+    })
+    expect(onCancelAsk).toHaveBeenCalledTimes(1)
+  })
+
+  // Review of f00febd4a: the recording row lives in the composer, so a question
+  // arriving mid-dictation unmounted it and left the mic on with no control.
+  it.each([
+    ['recording', { micActive: true }],
+    ['transcribing', { micTranscribing: true }]
+  ] as const)('keeps the composer while dictation is %s when a question arrives', async (_state, mic) => {
+    await render({ ask: ASK, askKey: 'ask-1', askLive: true, ...mic })
+    expect(count('ChatAsk')).toBe(1)
+    expect(count('Composer')).toBe(1)
+  })
+
+  it('tells the question card how much of the window the keyboard takes', async () => {
+    await render({ ask: ASK, askKey: 'ask-1', askLive: true, keyboardInset: 330 })
+    const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    expect(card.props.keyboardInset).toBe(330)
+  })
+})
+
+describe('the pins the question card must not move', () => {
+  let renderer: ReturnType<typeof create> | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  async function render(extra: Partial<Parameters<typeof MobileNativeChatView>[0]>): Promise<void> {
+    const messages = [turn]
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatView, {
+          messages,
+          folded: foldMobileNativeChatMessages(messages),
+          status: 'ready',
+          streaming: null,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: () => 0,
+          getComposerEditGeneration: () => 0,
+          pending: [],
+          composerText: '',
+          onComposerTextChange: vi.fn(),
+          agentWorking: true,
+          canStop: true,
+          ...extra
+        })
+      )
+    })
+  }
+  const composers = () => renderer!.root.findAll((node) => String(node.type) === 'Composer')
+
+  it('keeps Stop on screen under a permission prompt', async () => {
+    await render({ permission: { title: 'Allow Bash?', options: [{ label: 'Yes', send: '1' }] } })
+    expect(renderer!.root.findAll((node) => String(node.type) === 'ChatPermission')).toHaveLength(1)
+    expect(composers()).toHaveLength(1)
+    expect(composers()[0]!.props.canStop).toBe(true)
+  })
+
+  it('keeps the structured lane’s composer, where the controller hands the view no ask', async () => {
+    await render({ structuredActivityUi: true, ask: null, askLive: false })
+    expect(composers()).toHaveLength(1)
   })
 })

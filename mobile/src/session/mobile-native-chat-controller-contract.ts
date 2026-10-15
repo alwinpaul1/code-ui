@@ -200,6 +200,10 @@ export type MobileNativeChatController = {
   /** When this phone's answer to the shown ask was accepted, while its card
    *  shows it as sent (the hook row still has the question); else null. */
   nativeChatAskSentAt: number | null
+  /** The agent is confirmed waiting on the shown ask (its hook row is
+   *  waiting/blocked and carries it). False for the transcript's copy alone,
+   *  which may be stale: the composer and its Stop stay under that card. */
+  nativeChatAskLive: boolean
   /** Hide the current ask until a genuinely different question arrives; an
    *  'answered' one stays up as sent until the hook row lets go of it. */
   dismissNativeChatAsk: (outcome?: AskDismissOutcome) => void

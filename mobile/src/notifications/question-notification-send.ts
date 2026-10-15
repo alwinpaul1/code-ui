@@ -1,5 +1,4 @@
 import {
-  buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
   hasAskAnswer,
   nativeChatAskDismissKey,
@@ -12,6 +11,7 @@ import {
   shouldStepNativeChatAskAnswer
 } from '../../../src/shared/native-chat-agent-support'
 import { stepAskAnswerKeyGroups } from '../session/mobile-native-chat-answer-stepping'
+import { buildClaudeAskAnswerKeys } from '../session/ask-skipped-pages'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome,
@@ -60,7 +60,7 @@ function keysFor(
   }
   return resolveNativeChatTranscriptAgent(agent) === 'codex'
     ? buildCodexAskAnswerKeys(prompt, selections)
-    : buildAskAnswerKeys(prompt, selections)
+    : buildClaudeAskAnswerKeys(prompt, selections)
 }
 
 /**

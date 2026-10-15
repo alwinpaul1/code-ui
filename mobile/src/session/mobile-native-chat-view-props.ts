@@ -200,6 +200,11 @@ export type MobileNativeChatViewProps = {
   /** When this phone's answer was accepted; the card shows it sent until the
    *  agent's hook row lets go of the question. */
   askSentAt?: number | null
+  /** The agent is confirmed waiting on `ask`: its hook row is waiting/blocked
+   *  and carries the question (`liveAsk` from useMobileNativeChatPrompts). The
+   *  transcript's copy alone is not, and may be stale: under it the composer and
+   *  its Stop stay, and declining writes no Escape while the agent works. */
+  askLive?: boolean
   /** Hide the answered/dismissed ask until a different question arrives. */
   onDismissAsk?: (outcome?: AskDismissOutcome) => void
   /** Deliver the ask answer as per-question selections; the send hook turns them

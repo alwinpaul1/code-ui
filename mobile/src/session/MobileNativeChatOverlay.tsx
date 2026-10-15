@@ -461,7 +461,7 @@ export function MobileNativeChatOverlay({
         streaming={streaming}
         onStop={controller.handleNativeChatStop} stopping={controller.nativeChatStopping === true}
         ask={controller.nativeChatAsk}
-        askKey={controller.nativeChatAskKey} askSentAt={controller.nativeChatAskSentAt}
+        askKey={controller.nativeChatAskKey} askSentAt={controller.nativeChatAskSentAt} askLive={controller.nativeChatAskLive}
         onDismissAsk={controller.dismissNativeChatAsk}
         onAnswerAsk={controller.handleNativeChatAnswerAsk}
         onCancelAsk={controller.handleNativeChatCancelAsk}

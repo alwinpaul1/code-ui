@@ -31,6 +31,9 @@ type Props = {
   /** When the controller recorded this card's answer as accepted, so the sent
    *  state survives the card remounting (a chat↔terminal toggle). */
   sentAt?: number | null
+  /** How much of the window the keyboard takes (the chat view's inset). The
+   *  window does not shrink for it, so the card's cap must. */
+  keyboardInset?: number
 }
 
 /** How far the choices fade once a single-select answer is typed in the free
@@ -54,20 +57,30 @@ const LOCKED_ROW_OPACITY = 0.38
  *  pick; this card keeps the footer for that reason.
  *
  *  Skip is the app's: it lets go of the page's answer and turns the page, or
- *  sends from the last one, a skipped page going out unanswered (the key
- *  builders step past it). When nothing at all is answered there is nothing to
- *  send, so Skip declines the question instead, which writes Escape: the old
- *  Cancel, and Claude Code's own "no answer". */
-export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null }: Props): React.JSX.Element {
+ *  sends from the last one. From the last page every page still untouched is
+ *  skipped too, one the chevron passed by included, as the app does. A skipped
+ *  page leaves the card unanswered (`{ indices: [] }`); what each agent is sent
+ *  for it is in ask-skipped-pages.ts. When nothing at all is answered there is
+ *  nothing to send, so Skip declines the question instead, which writes Escape:
+ *  the old Cancel, and Claude Code's own "no answer". */
+export function MobileNativeChatAsk({
+  prompt,
+  onAnswer,
+  onCancel,
+  sentAt = null,
+  keyboardInset = 0
+}: Props): React.JSX.Element {
   const { colors, space } = useTheme()
   // A fixed 400 grew the dock past the viewport with the keyboard up on a short
   // phone and clipped the card's own question off the top. The dock is
   // bottom-anchored and has no cap of its own, so the card carries one that
   // follows the screen. It is 60 % since the card took the composer's place
   // (2026-10-16): the composer's room is the card's now, and the old cap
-  // (52 %, at most 400) slid "Something else" under the footer.
+  // (52 %, at most 400) slid "Something else" under the footer. The window
+  // does not shrink for the keyboard, so with it up the share is of the room
+  // above it (askCardMaxHeight).
   const { height: windowHeight } = useWindowDimensions()
-  const cardMaxHeight = askCardMaxHeight(windowHeight)
+  const cardMaxHeight = askCardMaxHeight(windowHeight, keyboardInset)
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -159,13 +172,27 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     [otherText, prompt.questions, selections, skipped]
   )
   const canAdvance = !locked && (isLast ? allAnswered : currentAnswered)
+  // The last page is answered but Submit stays off because a page before it
+  // was passed over with the chevron: say which, or the grey arrow reads as a
+  // dead button. Skip still sends from here, that page skipped.
+  const heldBackBy =
+    isLast && currentAnswered && !locked
+      ? prompt.questions.findIndex((_, i) => i !== index && !isDealtWith(i))
+      : -1
 
   // `skipPage` is the page Skip just let go of: its state has not rendered yet.
-  const submit = async (skipPage: number | null = null): Promise<void> => {
+  // `skipUntouched` is Skip from the last page: as in the Claude app, a page no
+  // one answered goes out skipped (t52.java:83,97), the chevron having passed
+  // it by included. Without it Skip refused in silence there.
+  const submit = async (
+    skipPage: number | null = null,
+    skipUntouched = false
+  ): Promise<void> => {
     const answers = prompt.questions.map((_, i) =>
-      i === skipPage ? { indices: [] } : selectionFor(i)
+      i === skipPage || (skipUntouched && !isAnswered(i)) ? { indices: [] } : selectionFor(i)
     )
-    const dealtWith = prompt.questions.every((_, i) => i === skipPage || isDealtWith(i))
+    const dealtWith =
+      skipUntouched || prompt.questions.every((_, i) => i === skipPage || isDealtWith(i))
     const anyAnswered = answers.some((a) => a.indices.length > 0 || (a.other ?? '').length > 0)
     if (!dealtWith || !anyAnswered || busyRef.current || answeredAt !== null) {
       return
@@ -212,7 +239,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     }
     const anyAnswered = prompt.questions.some((_, i) => i !== index && isAnswered(i))
     if (anyAnswered) {
-      await submit(index)
+      // Every page still untouched is skipped with this one.
+      setSkipped((prev) => prev.map((cur, i) => cur || !isAnswered(i)))
+      await submit(index, true)
     } else {
       await cancel()
     }
@@ -379,6 +408,10 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
             // have started, so it goes, and the slot says what the card waits on.
             <Txt variant="label" style={{ color: colors.askLabel }} accessibilityLiveRegion="polite">
               {waitingLong ? ASK_SENT_WAITING_LINE : ''}
+            </Txt>
+          ) : heldBackBy >= 0 ? (
+            <Txt variant="label" style={{ color: colors.askMuted }} accessibilityLiveRegion="polite">
+              {`Question ${heldBackBy + 1} has no answer yet`}
             </Txt>
           ) : q.multiSelect ? (
             // question_card_selected_count: the same words for one and many.

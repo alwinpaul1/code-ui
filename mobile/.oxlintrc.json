@@ -666,7 +666,10 @@
             // 2026-09-28: +13 for the case that pins an answered ask card up
             // as sent until the hook row lets go of the question (its
             // `liveAsk` stand-in and reset come with it).
-            "max": 864,
+            // 2026-10-16: +10 for the case that pins `nativeChatAskLive` to the
+            // hook row's question, not the transcript's copy: the ask card hides
+            // the composer (and Stop) only while the agent waits on it.
+            "max": 874,
             "skipBlankLines": true,
             "skipComments": true
           }

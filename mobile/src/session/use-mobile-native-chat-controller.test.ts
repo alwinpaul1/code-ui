@@ -850,6 +850,20 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     expect(controller?.nativeChatAsk).toBeNull()
   })
 
+  // Review of f00febd4a: the card hid the composer (and Stop) under any ask,
+  // the transcript's possibly stale copy included. Only the hook row carrying
+  // the question proves the agent waits on it.
+  it('calls the question live only while the hook row carries it, not on the transcript copy alone', () => {
+    const live = (liveAsk: typeof PROMPT | null): boolean | undefined => {
+      promptsState.liveAsk = liveAsk
+      step()
+      return controller?.nativeChatAsk != null ? controller.nativeChatAskLive : undefined
+    }
+    expect([live(null), live(PROMPT)]).toEqual([false, true])
+    act(() => controller?.dismissNativeChatAsk())
+    expect(controller?.nativeChatAskLive).toBe(false)
+  })
+
   it('still retires the dismissal once a settled transcript reports no prompt', () => {
     // The load-window guard must not swallow the genuine reset: a prompt that
     // clears with the read settled means the agent moved on.

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import {
-  buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
@@ -10,6 +9,7 @@ import {
 } from '../../../src/shared/native-chat-ask'
 import type { RpcClient } from '../transport/rpc-client'
 import { stepAskAnswerKeyGroups } from './mobile-native-chat-answer-stepping'
+import { buildClaudeAskAnswerKeys } from './ask-skipped-pages'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome
@@ -296,7 +296,8 @@ export function useMobileNativeChatAnswerSend(args: {
         const groups =
           resolveNativeChatTranscriptAgent(agentRef.current) === 'codex'
             ? buildCodexAskAnswerKeys(prompt, selections)
-            : buildAskAnswerKeys(prompt, selections)
+            : // A skipped page goes out "[No preference]" (ask-skipped-pages.ts).
+              buildClaudeAskAnswerKeys(prompt, selections)
         // The stepping (order, pacing, budget credit) is shared with the
         // notification shade's sender; only the transport and the cancellation
         // are this hook's.

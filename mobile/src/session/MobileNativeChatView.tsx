@@ -33,7 +33,7 @@ import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
-import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
+import { askTakesComposerPlace, MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
 import { MobileNativeChatTranscriptLoading } from './ClaudeTranscriptLoading'
 import { MobileNativeChatVisualProvider } from './MobileNativeChatVisual'
@@ -118,7 +118,7 @@ export function MobileNativeChatView({
   onNeedSkills,
   sessionOptions,
   ask,
-  askKey, askSentAt,
+  askKey, askSentAt, askLive = false,
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
@@ -437,7 +437,7 @@ export function MobileNativeChatView({
           height is measured with the dock, which is what the list's spacer
           clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
-        ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk}
+        ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk} askDeclineLocally={!askLive && agentWorking === true} keyboardInset={keyboardInset}
         onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}
@@ -449,8 +449,8 @@ export function MobileNativeChatView({
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}
       {notices}{sessionPills}
       <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
-      {/* Like the Claude app, an unanswered question card takes the composer's place (2026-10-16). */}
-      {ask && askSentAt == null ? null : (<MobileNativeChatComposer
+      {/* Like the Claude app, a live question card takes the composer's place (askTakesComposerPlace). */}
+      {askTakesComposerPlace({ ask, askLive, askSentAt, micActive, micTranscribing }) ? null : (<MobileNativeChatComposer
         banner={composerBanner} value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}

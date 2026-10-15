@@ -14,6 +14,12 @@ export type MobileNativeChatPromptCardProps = {
   askKey?: string | null
   /** When this phone's answer to `ask` was accepted; the card shows it sent. */
   askSentAt?: number | null
+  /** Declining the ask only takes the card down, writing no Escape: the
+   *  question is the transcript's copy alone while the agent works, so an
+   *  Escape would interrupt the turn instead of answering anything. */
+  askDeclineLocally?: boolean
+  /** The chat view's keyboard inset, for the ask card's height cap. */
+  keyboardInset?: number
   onDismissAsk?: (outcome?: AskDismissOutcome) => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
@@ -29,6 +35,22 @@ export type MobileNativeChatPromptCardProps = {
   onOpenTerminal?: () => void
 }
 
+/** Like the Claude app, a question card takes the composer's place (2026-10-16),
+ *  but only while the agent is confirmed waiting on it (`askLive`). The
+ *  transcript's copy alone can be stale, and hiding the composer under it took
+ *  Stop from a working agent. A sent answer gives it back, and so does dictation:
+ *  the recording row lives in the composer and is the mic's only control. */
+export function askTakesComposerPlace(args: {
+  ask: AskPrompt | null | undefined
+  askLive: boolean
+  askSentAt: number | null | undefined
+  micActive: boolean | undefined
+  micTranscribing: boolean | undefined
+}): boolean {
+  const { ask, askLive, askSentAt, micActive, micTranscribing } = args
+  return ask != null && askLive && askSentAt == null && micActive !== true && micTranscribing !== true
+}
+
 /** The pending agent prompt above the composer: a structured AskUserQuestion
  *  wins, then a heuristic permission, then a heuristic question, and with none
  *  of them, a notice that the agent waits in the terminal. The controller
@@ -40,6 +62,8 @@ export function MobileNativeChatPromptCard({
   ask,
   askKey,
   askSentAt,
+  askDeclineLocally = false,
+  keyboardInset = 0,
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
@@ -61,6 +85,7 @@ export function MobileNativeChatPromptCard({
         key={askKey ?? 'ask'}
         prompt={ask}
         sentAt={askSentAt ?? null}
+        keyboardInset={keyboardInset}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
           if (accepted) {
@@ -69,6 +94,10 @@ export function MobileNativeChatPromptCard({
           return accepted
         }}
         onCancel={async () => {
+          if (askDeclineLocally) {
+            onDismissAsk?.()
+            return true
+          }
           const accepted = (await onCancelAsk?.()) ?? false
           if (accepted) {
             onDismissAsk?.()

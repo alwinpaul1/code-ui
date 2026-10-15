@@ -589,7 +589,8 @@ export function useMobileNativeChatController(
     nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: promptCard, dialogKind: terminalDialogKind, dialogBeforeAnswer: noticeHeld, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
     openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
-    nativeChatAskKey, nativeChatAskSentAt,
+    // Live: the hook row is waiting/blocked and carries the question (`liveAsk` is `ask` whenever set).
+    nativeChatAskKey, nativeChatAskSentAt, nativeChatAskLive: !activeChatStructured && showNativeChatAsk && nativeChatLiveAsk != null,
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,

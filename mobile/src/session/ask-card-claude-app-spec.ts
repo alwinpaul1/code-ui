@@ -53,10 +53,25 @@ export const ASK_FOOTER = {
 /** Skip's label (`question_card_skip`, strings.xml:3609). */
 export const ASK_SKIP_LABEL = 'Skip'
 
-/** How tall the card may grow, from the window height. The card takes the
- *  composer's place while it is up (the composer is not drawn under it), so it
- *  may use the room the composer left: four described options and "Something
- *  else" fit on a 915 dp phone without the last row sliding under the footer. */
-export function askCardMaxHeight(windowHeight: number): number {
-  return Math.max(240, Math.round(windowHeight * 0.6))
+/** The least the card keeps with the keyboard up: the question and one row. */
+const ASK_CARD_KEYBOARD_FLOOR = 120
+
+/** How tall the card may grow. The card takes the composer's place while the
+ *  agent waits on it (askTakesComposerPlace), so with the keyboard down it may use
+ *  the room the composer left: 60 % of the window, so four described options and
+ *  "Something else" fit on a 915 dp phone without the last row sliding under the
+ *  footer.
+ *
+ *  The window does not shrink for the keyboard (the dock is padded by the inset
+ *  instead), so a share of the window is wrong with the keyboard up: focusing
+ *  "Something else" raised it, and a card sized from the whole window pushed its
+ *  own question off the top. With the keyboard up the share is taken of the room
+ *  above it, which the app's header and the dock's other rows share with the
+ *  card. The floor keeps the question and a row drawn when even that is tiny. */
+export function askCardMaxHeight(windowHeight: number, keyboardInset = 0): number {
+  if (keyboardInset <= 0) {
+    return Math.max(240, Math.round(windowHeight * 0.6))
+  }
+  const room = Math.max(0, windowHeight - keyboardInset)
+  return Math.max(ASK_CARD_KEYBOARD_FLOOR, Math.round(room * 0.6))
 }
