@@ -20,6 +20,13 @@ describe('a failed call’s error in the tool sheet', () => {
     })
   })
 
+  // Review of this change: the tags were stripped from every output, so a
+  // Read of a file that quotes them showed altered source.
+  it('leaves a file that quotes the tag mid-text exactly as it is', () => {
+    const source = "const x = '<tool_use_error>no</tool_use_error>'\nconst y = 1"
+    expect(capToolDetailOutput(source).text).toBe(source)
+  })
+
   it('leaves output with no wrapper, and an empty one, as it was', () => {
     expect(capToolDetailOutput('exit 1').text).toBe('exit 1')
     expect(capToolDetailOutput('').text).toBe('')

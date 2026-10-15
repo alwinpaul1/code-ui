@@ -203,11 +203,13 @@ function layoutFor(
 }
 
 /** Claude Code wraps a failed call's error in `<tool_use_error>`; the Claude app
- *  shows only the words inside (1.261013.20, `u5a.i`). */
-const TOOL_USE_ERROR = /<tool_use_error[^>]*>([\s\S]*?)<\/tool_use_error>/g
+ *  shows only the words inside (1.261013.20, `u5a.i`). Only an output that is
+ *  that wrapper whole is unwrapped: a file or a grep that quotes the tag
+ *  mid-text is shown as it is. */
+const TOOL_USE_ERROR = /^\s*<tool_use_error[^>]*>([\s\S]*?)<\/tool_use_error>\s*$/
 
 function withoutToolUseErrorTags(output: string): string {
-  return output.includes('<tool_use_error') ? output.replace(TOOL_USE_ERROR, '$1') : output
+  return TOOL_USE_ERROR.exec(output)?.[1] ?? output
 }
 
 /** The output's first {@link TOOL_DETAIL_OUTPUT_LINE_CAP} lines, then the
