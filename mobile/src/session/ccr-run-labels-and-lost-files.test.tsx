@@ -153,6 +153,13 @@ describe('files that did not reach Claude (file_attachments_missing)', () => {
     expect(uploadsOf(rows).map((card) => card.attachment?.missing ?? false)).toEqual([false, false, true])
   })
 
+  // Matches the Claude app on purpose (review 2026-10-15): its s8u.a takes a report only with a
+  // non-empty set, else nothing, so an empty `missing` never clears a mark an earlier report set.
+  it('an empty report after a lost-files report leaves the mark, as the Claude app’s s8u.a ignores an empty set', () => {
+    const rows = decodeCcrEvents([SENT, filesMissing('u-sent', [{ file_uuid: 'file_01A' }]), filesMissing('u-sent', [])], new WeakMap())
+    expect(uploadsOf(rows).map((card) => card.attachment?.missing ?? false)).toEqual([true, false, false])
+  })
+
   it('draws no line for a report with no uuid, an empty or malformed list, another prompt, a subagent’s, or a file not in the prompt', () => {
     for (const report of [
       filesMissing(null, [{ file_uuid: 'file_01A' }]),
