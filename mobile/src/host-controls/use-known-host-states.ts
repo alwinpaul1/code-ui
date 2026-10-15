@@ -129,24 +129,3 @@ export function useKnownHostStates(clients: { hostId: string; client: RpcClient;
 
   return { recordProbe, recordAction, actionStarted, actionFailed, drawFor }
 }
-
-/**
- * The first state the open menu drew for `hostId`, kept until the menu closes or
- * turns to another host; null before one is drawn. The sheet keeps that state's rows,
- * dimmed where the answer since says they would do nothing, so an answer arriving
- * while the menu is up never changes its height (the user, 2026-10-14).
- */
-export function useFirstDrawnHostState(
-  hostId: string | null,
-  drawn: MacHostState | 'checking'
-): MacHostState | null {
-  const [first, setFirst] = useState<{ hostId: string; state: MacHostState } | null>(null)
-  useEffect(() => {
-    if (!hostId) {
-      setFirst(null)
-    } else if (drawn !== 'checking' && first?.hostId !== hostId) {
-      setFirst({ hostId, state: drawn })
-    }
-  }, [hostId, drawn, first])
-  return first && first.hostId === hostId ? first.state : null
-}

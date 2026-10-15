@@ -14,7 +14,7 @@ import { macHostSheetState, type MacHostSheetOptions } from './mac-host-sheet-ac
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
-import { connectedAtOf, useFirstDrawnHostState, useKnownHostStates } from './use-known-host-states'
+import { connectedAtOf, useKnownHostStates } from './use-known-host-states'
 import { WINDOWS_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
 import { WINDOWS_HOST_ACTION_PROGRESS, buildWindowsHostCommand, isWindowsHostAction } from './windows-host-commands'
 
@@ -362,9 +362,6 @@ export function useMacHostControls(args: {
   )
 
   const openDrawn = drawFor(openHostId, probed?.hostId === openHostId ? probed.state : null, settlingHostIds)
-  // The rows this open started with stay drawn when the answer narrows them, so
-  // the sheet keeps its height (mac-host-sheet-actions.ts).
-  const openFirstDrawn = useFirstDrawnHostState(openHostId, openDrawn)
 
   const macOptions: MacHostSheetOptions | undefined = openHostId
     ? {
@@ -372,7 +369,6 @@ export function useMacHostControls(args: {
         worktreeId: worktreeIdForHost(openHostId),
         // An expectation already holds the probe's answer laid over it.
         state: macHostSheetState(openHostConnection, openDrawn),
-        keep: openFirstDrawn,
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)

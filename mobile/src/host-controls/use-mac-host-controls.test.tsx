@@ -479,8 +479,7 @@ const HOSTS = [
 type FakeHost = ReturnType<typeof fakeHost>
 type MenuProps = Omit<Props, 'openHostId'>
 
-/** The rows a tap acts on. Rows kept only so the sheet holds its height are dimmed
- *  (disabled) and left out. */
+/** The rows a tap acts on: rows off for want of a workspace are left out. */
 function rows(): string[] {
   return getMacHostSheetActions(latest?.macOptions)
     .filter((row) => !row.disabled)
@@ -859,7 +858,9 @@ describe('the host menu opened a second time on the same connection', () => {
 // connection still hid the Mac or PC rows behind "Checking…" until the host answered,
 // and the sheet changed height when it did. Nothing about these rows needs the
 // answer first: each is harmless on a host already in that state, except Unlock,
-// which is never offered before the Mac says it is locked.
+// which is never offered before the Mac says it is locked. Since 2026-10-15 the
+// answer narrows the sheet to the rows that would do something (the user's call),
+// so its height does change then.
 describe('the host menu opened for the first time on a connection', () => {
   const FIRST_ROWS = {
     darwin: ['Lock Mac', 'Sleep display', 'Wake display', 'Mute Mac', 'Unmute Mac'],
@@ -887,17 +888,17 @@ describe('the host menu opened for the first time on a connection', () => {
       expect(rowStates()).toEqual(FIRST_ROWS[platform])
     })
 
-    it(`keeps the ${noun} sheet the same height when the first answer arrives`, async () => {
+    // 2026-10-15, the user: "when a display is awake, only show sleep display, and when
+    // a display sleeps, show wake display. Also for mute and unmute." The rows the
+    // answer rules out go, rather than stay dimmed to hold the sheet's height.
+    it(`shows only the ${noun} rows that would do something once the ${noun} answers, none dimmed`, async () => {
       const host = fakeHost('host', platform)
       const props = propsFor(host)
       await openFirst(host, props)
       host.answer = marker(true, 'on')
       await elapse(400)
-      // Same rows, same order; the ones that would do nothing now are dimmed.
       expect(rowStates()).toEqual(
-        platform === 'win32'
-          ? ['Lock PC', 'Mute PC (off)', 'Unmute PC']
-          : ['Lock Mac', 'Sleep display', 'Wake display (off)', 'Mute Mac (off)', 'Unmute Mac']
+        platform === 'win32' ? ['Lock PC', 'Unmute PC'] : ['Lock Mac', 'Sleep display', 'Unmute Mac']
       )
       expect(states).not.toContain('checking')
     })
@@ -944,7 +945,7 @@ describe('the host menu opened for the first time on a connection', () => {
     expect(rowStates()).not.toContain('Unlock Mac')
     host.answer = LOCKED_MUTED
     await elapse(400)
-    expect(rowStates()).toEqual(['Unlock Mac', 'Sleep display (off)', 'Wake display', 'Mute Mac (off)', 'Unmute Mac'])
+    expect(rowStates()).toEqual(['Unlock Mac', 'Wake display', 'Unmute Mac'])
   })
 
   it('draws the narrower rows the host named on the next open', async () => {

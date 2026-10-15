@@ -97,32 +97,36 @@ describe('the Mac controls in both themes', () => {
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })
 
-  // 2026-10-14: the first open keeps every row drawn when the Mac answers, and dims
-  // the ones that would do nothing, so the sheet holds its height. Dimmed in both
-  // schemes, with the label's colour from the live theme.
-  it('dims the rows the answer ruled out, from the live theme in both schemes', () => {
-    const keptRows = () =>
+  // 2026-10-15, the user: a display that is off shows Wake display alone, a muted Mac
+  // Unmute alone, and nothing is drawn dimmed.
+  it('shows only Wake display and Unmute Mac for a sleeping, muted Mac, none dimmed, in both schemes', () => {
+    const answeredRows = () =>
       createElement(ActionSheetContent, {
         actions: getMacHostSheetActions({
           hostPlatform: 'darwin',
           worktreeId: 'wt-1',
           state: { lock: 'unlocked', display: 'off', mute: 'muted' },
-          keep: { lock: 'unknown', display: 'unknown', mute: 'unknown' },
           onAction: vi.fn()
         })
       })
-    const light = renderInScheme('light', keptRows())
-    const dark = renderInScheme('dark', keptRows())
-    const sleepLabelStyle = (renderer: ReactTestRenderer) =>
+    const light = renderInScheme('light', answeredRows())
+    const dark = renderInScheme('dark', answeredRows())
+    const wakeLabelStyle = (renderer: ReactTestRenderer) =>
       JSON.stringify(
-        renderer.root.find((node) => String(node.type) === 'Text' && node.children.includes('Sleep display')).props.style
+        renderer.root.find((node) => String(node.type) === 'Text' && node.children.includes('Wake display')).props.style
       )
     for (const renderer of [light, dark]) {
+      const labels = renderer.root
+        .findAll((node) => String(node.type) === 'Text')
+        .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+      expect(labels).toEqual(expect.arrayContaining(['Lock Mac', 'Wake display', 'Unmute Mac']))
+      expect(labels).not.toEqual(expect.arrayContaining(['Sleep display']))
+      expect(labels).not.toEqual(expect.arrayContaining(['Mute Mac']))
       const rows = renderer.root.findAll((node) => String(node.type) === 'Pressable')
-      expect(rows).toHaveLength(5)
-      expect(rows.map((row) => row.props.disabled === true)).toEqual([false, true, false, true, false])
+      expect(rows).toHaveLength(3)
+      expect(rows.every((row) => row.props.disabled !== true)).toBe(true)
     }
-    expect(sleepLabelStyle(dark)).not.toEqual(sleepLabelStyle(light))
+    expect(wakeLabelStyle(dark)).not.toEqual(wakeLabelStyle(light))
   })
 
   // 2026-09-26: a PC's sheet shows no lock status; its lock half is one Lock PC row.
