@@ -94,6 +94,7 @@ describe('a phone-sent prompt on a Claude tab drawn from Anthropic', () => {
       worktreeId: 'w',
       activeSessionTab: tab as never,
       activeSessionTabId: 'tab-1',
+      activeHandle: 'term-1',
       activeHandleRef: { current: 'term-1' },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,

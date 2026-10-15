@@ -30,7 +30,6 @@ function Probe(props: { enabled?: boolean; epoch?: number; orcaSettled?: boolean
       tabId: TAB,
       agentSessionId: AGENT_SESSION,
       epoch: props.epoch ?? EPOCH,
-      orcaSettled: props.orcaSettled ?? true,
       orcaRowCount: props.orcaRowCount ?? 3,
       orcaStatus: props.orcaStatus ?? ((props.orcaSettled ?? true) ? 'ready' : 'loading'),
       orcaError: props.orcaError
