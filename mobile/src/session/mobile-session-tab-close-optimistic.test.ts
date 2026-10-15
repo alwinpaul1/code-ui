@@ -5,6 +5,8 @@ import type { RpcResponse } from '../transport/types'
 import { createBulkCloseSheetActions } from './mobile-bulk-close-sheet-actions'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
+import { ccrSessionFactsForTab, noteCcrSessionFacts, resetCcrSessionFactsForTests } from './ccr-session-facts'
+import { parseCcrSessionRow } from './ccr-session-row'
 
 // Reported 2026-10-11: closing a terminal tab that was open on the desktop sat on
 // the phone's strip for "a really long time, or a little bit of time". The strip
@@ -405,5 +407,35 @@ describe('closing several tabs from the long-press sheet', () => {
     const others = actions('a', () => {}).find((action) => action.label === 'Close Other Tabs')
     others?.onPress?.()
     expect(closing).toEqual(['b', 'c'])
+  })
+})
+
+// Reported 2026-10-15 (review of the session-state branch): a tab's Anthropic session facts (its
+// title, list state and Unread mark) were never forgotten, so a closed tab's facts stayed in memory
+// for the life of the app. They go once the desktop has closed the tab, and stay on a refusal.
+describe('the closed tab’s Anthropic session facts', () => {
+  const SESSION = 'cse_01QXaaaaaaaaaaaaaaaaaaaa'
+  afterEach(() => resetCcrSessionFactsForTests())
+
+  it('are forgotten once the desktop has closed the tab', async () => {
+    const a = terminalTab('a')
+    const b = terminalTab('b')
+    noteCcrSessionFacts('b', 1, parseCcrSessionRow({ id: SESSION, title: 'CI failure' })!)
+    const session = open([a, b], 'a')
+    const closing = session.close(b)
+    session.replies[0].resolve(accepted())
+    await closing
+    expect(ccrSessionFactsForTab('b', SESSION)).toBeNull()
+  })
+
+  it('are kept when the desktop refuses the close', async () => {
+    const a = terminalTab('a')
+    const b = terminalTab('b')
+    noteCcrSessionFacts('b', 1, parseCcrSessionRow({ id: SESSION, title: 'CI failure' })!)
+    const session = open([a, b], 'a')
+    const closing = session.close(b)
+    session.replies[0].resolve(failed('terminal_tab_pinned'))
+    await closing
+    expect(ccrSessionFactsForTab('b', SESSION)?.title).toBe('CI failure')
   })
 })

@@ -382,8 +382,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // 2026-10-15 (auto permission): handleSend rewrites a typed `claude` line before it is sent, only
 // on a line known to be empty, and marks the line empty after an accepted send; handleCreateTerminal
 // marks a new plain terminal's line empty.
+// 2026-10-15 (stale Anthropic session facts): handleCloseSessionTab forgets an accepted close's
+// tab facts (forgetCcrSessionFacts, ccr-session-facts.ts). Same 16 functions.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'd2620b7e4c55085f0fc5d367631d47e8d341e19f81c3d3c8a124163d8830531c'
+  'd76211c999cbd0dffa880b4fd65451af4d9036095c1b741daacd4520f4477c7d'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -505,8 +507,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // shows its path": a session's transcript vouches for a path too. Same count.
 // 2026-10-15 (982ed4371, dictated words stay in the caption): four `spoken: ''` resets of the
 // chat take and the 'chat' check in onSpokenError. 693.
+// 2026-10-15 (the Anthropic session title): the header's 'Terminal' fallback left for
+// claudeSessionHeaderTitle (ccr-session-facts.ts). 690.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '22164f21f9feb5273e0ec04188e536e6b0f65c07faf10309435a64c74ab248dc'
+  '957e9f7d3fb3e738cd7aa6791e6ee5be993e8834e9eca65f2896848bfa01c890'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1290,7 +1294,9 @@ describe('mobile session route extraction parity', () => {
     // 691 since 577c6ab09 (2026-10-15, the Anthropic control lane): the mode toast's words moved
     // to permission-mode-pick.ts and the lock's 'agent-session' / 'connected' / 'disconnected'
     // to use-mobile-native-chat-input-lock.ts, out of these files; their two imports came in.
-    expect(strings).toHaveLength(691)
+    // 690 since 2026-10-15 (the Anthropic session title): the header's 'Terminal' fallback moved to
+    // claudeSessionHeaderTitle (ccr-session-facts.ts), which now chooses the header's title.
+    expect(strings).toHaveLength(690)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

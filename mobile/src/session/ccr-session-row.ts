@@ -46,6 +46,16 @@ export type CcrSessionRow = {
    *  each branch of `config.outcomes[].git_info` (`ojn`, `tjn`: `repo`, `branches`). Empty when the
    *  row names none; a pair is kept only when both halves are non-empty strings. */
   branches?: readonly CcrBranchRef[]
+  /** What the Claude app's list reads to file the session (SessionV2, xnv.java; q730.z): the
+   *  row's `unread` flag (null when the row does not say), `worker_status`, the post-turn
+   *  summary's `status_category` and `needs_action` (zip.java), whether a `task_summary` is
+   *  present, and `updated_at` in epoch ms (0 when absent). */
+  unread?: boolean | null
+  workerStatus?: string | null
+  summaryCategory?: string | null
+  needsAction?: string | null
+  hasTaskSummary?: boolean
+  updatedAt?: number
 }
 
 export type CcrBranchRef = { repo: string; branch: string }
@@ -80,6 +90,11 @@ function contextUsageOf(value: unknown): { usedTokens: number; maxTokens: number
   return typeof used === 'number' && Number.isFinite(used) && used >= 0 && typeof max === 'number' && Number.isFinite(max) && max > 0 ? { usedTokens: used, maxTokens: max } : null
 }
 
+function epochOf(value: unknown): number {
+  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN
+  return Number.isFinite(at) ? at : 0
+}
+
 function timeOf(row: Record<string, unknown>): number {
   for (const key of ['last_event_at', 'updated_at', 'created_at']) {
     const value = row[key]
@@ -107,6 +122,12 @@ export function parseCcrSessionRow(item: unknown): CcrSessionRow | null {
     model: stringOrNull(record(row.external_metadata)?.model),
     effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
     contextUsage: contextUsageOf(record(row.external_metadata)?.context_usage),
-    branches: branchesOfRow(row)
+    branches: branchesOfRow(row),
+    unread: typeof row.unread === 'boolean' ? row.unread : null,
+    workerStatus: stringOrNull(row.worker_status),
+    summaryCategory: stringOrNull(record(row.post_turn_summary)?.status_category),
+    needsAction: stringOrNull(record(row.post_turn_summary)?.needs_action),
+    hasTaskSummary: row.task_summary !== null && row.task_summary !== undefined,
+    updatedAt: epochOf(row.updated_at)
   }
 }

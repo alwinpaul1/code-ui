@@ -1,6 +1,8 @@
 import { Activity } from 'lucide-react-native'
 import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import { useTheme } from '../theme/theme-context'
+import type { ThemeColors } from '../theme/tokens'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
 
@@ -20,13 +22,38 @@ const STATUS_COLORS: Record<WorktreeStatus, string> = {
   inactive: 'rgba(115,115,115,0.4)'
 }
 
+// A workspace whose agents are Claude sessions draws its glyph in the live theme's tokens, so light
+// and dark each draw their own (the desktop hues above were one palette for both schemes). Any
+// other workspace (a Codex agent among them) keeps the desktop hues, unchanged.
+function themedColor(status: WorktreeStatus, colors: ThemeColors): string {
+  switch (status) {
+    case 'working':
+      return colors.warning
+    case 'active':
+    case 'done':
+      return colors.success
+    case 'permission':
+      return colors.danger
+    case 'inactive':
+      return colors.textMuted
+    default: {
+      const unhandled: never = status
+      return unhandled
+    }
+  }
+}
+
 export function AgentSpinner({
   status,
-  workingMode
+  workingMode,
+  themed = false
 }: {
   status: WorktreeStatus
   workingMode?: AgentWorkingMode
+  /** The workspace's agents are Claude sessions: draw in the theme's tokens. */
+  themed?: boolean
 }) {
+  const { colors } = useTheme()
   const monitoring = status === 'working' && workingMode === 'monitoring'
   const reducedMotion = useReducedMotion()
   // Unknown (null) holds too: a loop that started and then had to be
@@ -36,12 +63,14 @@ export function AgentSpinner({
     status === 'working' && !monitoring && reducedMotion === false
   )
 
-  const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
+  const color = themed ? themedColor(status, colors) : (STATUS_COLORS[status] ?? STATUS_COLORS.inactive)
+  // The desktop's idle grey carries its 40% in the hue; a token carries it here.
+  const dim = themed && status === 'inactive' ? { opacity: 0.4 } : null
 
   if (monitoring) {
     return (
       <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
-        <Activity size={12} color={STATUS_COLORS.working} />
+        <Activity size={12} color={themed ? colors.warning : STATUS_COLORS.working} />
       </View>
     )
   }
@@ -56,7 +85,7 @@ export function AgentSpinner({
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
+      <View style={[styles.dot, { backgroundColor: color }, dim]} />
     </View>
   )
 }

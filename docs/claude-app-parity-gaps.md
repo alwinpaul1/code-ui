@@ -811,3 +811,10 @@ Each batch carries the project's bar:
 - **Claude Code's side, on 2.1.29x:**
   - whether it paints prompt suggestions in the TUI input (G28);
   - what happens to its queue when a turn ends in an error (S6).
+- **"Ran agent: <desc> (+N tools)".** The app has this run label (`h330.i`,
+  plural `ccr_summary_agent_described_more`, fed by `z10`
+  "AgentRunLabelInfo(description, otherCallCount)"), but the code that builds
+  `z10` did not decompile, so its trigger is not known. The 2026-10-01 screen
+  showed the grouped sentence ("Used a tool, ran 3 commands, ran an agent") for
+  a run with a described agent in it. It stays out until a real screen shows
+  the label (tried in 266c4171b, reverted 2026-10-15).

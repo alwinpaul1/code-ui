@@ -119,7 +119,13 @@ describe('reading the replies', () => {
           model: 'claude-opus-5-5',
           effortLevel: 'high',
           contextUsage: null,
-          branches: []
+          branches: [],
+          unread: false,
+          workerStatus: 'idle',
+          summaryCategory: null,
+          needsAction: null,
+          hasTaskSummary: false,
+          updatedAt: Date.parse('2026-10-14T16:00:00Z')
         }
       ],
       nextCursor: 'next',
