@@ -93,13 +93,29 @@ describe('the status line on a Claude tab matched to its Anthropic session', () 
     expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: true, anthropic: { phase: 'live', turnOpen: true } })).toBeNull()
   })
 
-  it('a turn Anthropic last said was open counts as busy when the relay says idle', () => {
-    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'reconnecting', turnOpen: true } })?.kind).toBe('connecting')
+  // With the relay down, the desktop cannot say the turn ended: the turn Anthropic last saw open
+  // stands, as the app's line stays busy over a reconnect.
+  it('a turn Anthropic last said was open counts as busy while the relay is down too', () => {
+    expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: false, anthropic: { phase: 'reconnecting', turnOpen: true } })?.kind).toBe('connecting')
   })
 
-  it('an idle session draws nothing, connecting or not', () => {
-    expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: false, anthropic: { phase: 'lost', turnOpen: false } })).toBeNull()
+  // Review 2026-10-15: `turnOpen` is the last word of a stream that dropped mid-turn. With the relay
+  // up, the desktop said the agent went idle, and "Connection lost..." with the working mark stayed
+  // under a finished reply.
+  it('stops saying the mid-turn "Connection lost..." once the desktop says the turn is over', () => {
+    const notice = nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'lost', turnOpen: true } })
+    expect(notice?.text).not.toBe('Connection lost...')
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'reconnecting', turnOpen: true } })).toBeNull()
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'idle', turnOpen: true }, phoneOffline: true })).toBeNull()
+  })
+
+  it('an idle session draws no busy line while the stream connects', () => {
     expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: false, anthropic: { phase: 'reconnecting', turnOpen: false }, phoneOffline: true })).toBeNull()
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'loading', turnOpen: false } })).toBeNull()
+  })
+
+  it('an idle session whose stream failed outright draws no line: the reason is a row under the chat', () => {
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: false, anthropic: { phase: 'error', turnOpen: false } })).toBeNull()
   })
 
   it('the phone offline during a turn says the app’s sentence verbatim, no dots added', () => {
@@ -111,5 +127,33 @@ describe('the status line on a Claude tab matched to its Anthropic session', () 
 
   it('leaves an unmatched tab on the relay’s words, offline or not', () => {
     expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: true, phoneOffline: true })?.kind).toBe('lost')
+  })
+})
+
+// Review 2026-10-15: the branch took out the "Lost the connection to Anthropic" row, and on a
+// matched tab the chat's rows come from that stream, so between turns they froze with nothing on
+// screen saying so. A lost stream now always says the app's "Connection lost", quietly (no working
+// mark, no dots) when no turn runs.
+describe('a matched tab whose Anthropic stream is lost between turns', () => {
+  const relayUp = { connState: 'connected' as const, verdict: 'normal' as const }
+  const relayDown = { connState: 'disconnected' as const, verdict: 'unreachable' as const }
+  const QUIET = { kind: 'lost', text: 'Connection lost', anthropic: true, quiet: true }
+
+  it.each([
+    ['the relay up, no turn open', { ...relayUp, agentWorking: false, anthropic: { phase: 'lost' as const, turnOpen: false } }],
+    ['the relay up, a stale open turn', { ...relayUp, agentWorking: false, anthropic: { phase: 'lost' as const, turnOpen: true } }],
+    ['the relay down, no turn open', { ...relayDown, agentWorking: false, anthropic: { phase: 'lost' as const, turnOpen: false } }],
+    ['the phone offline, no turn open', { ...relayDown, agentWorking: false, anthropic: { phase: 'lost' as const, turnOpen: false }, phoneOffline: true }]
+  ])('says a quiet "Connection lost" with %s', (_name, input) => {
+    expect(nativeChatConnectionNotice(input)).toEqual(QUIET)
+  })
+
+  it('keeps the busy "Connection lost..." while the turn really runs', () => {
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: true, anthropic: { phase: 'lost', turnOpen: true } })).toMatchObject({ kind: 'lost', text: 'Connection lost...' })
+    expect(nativeChatConnectionNotice({ ...relayUp, agentWorking: true, anthropic: { phase: 'lost', turnOpen: true } })).not.toHaveProperty('quiet')
+  })
+
+  it('leaves an unmatched tab silent between turns', () => {
+    expect(nativeChatConnectionNotice({ ...relayDown, agentWorking: false })).toBeNull()
   })
 })

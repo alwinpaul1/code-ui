@@ -257,7 +257,7 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
   // A matched Claude tab: the app's line is busy on the turn its stream last saw open, so a
   // reconnecting stream says "Connecting..." even while the relay calls the agent idle, and the
   // phone offline says the app's whole sentence (zr8.java:1097-1099), not one cut line.
-  function drawNotice(scheme: 'light' | 'dark', notice: { kind: 'connecting' | 'lost' | 'offline'; text: string; anthropic?: true }, runningCount = 0) {
+  function drawNotice(scheme: 'light' | 'dark', notice: { kind: 'connecting' | 'lost' | 'offline'; text: string; anthropic?: true; quiet?: true }, runningCount = 0) {
     act(() => {
       renderer?.unmount()
       renderer = create(
@@ -286,6 +286,25 @@ describe('the working footer at the transcript\'s foot, as the Claude app draws 
       const byText = (t: string) => root.findAllByType('Text' as never).find((n) => n.props.children === t)!
       expect(flat(byText('Connecting...').props.style).color).toBe(want.clay)
       expect(star(root).length).toBeGreaterThan(0)
+    })
+
+    // Review 2026-10-15: a matched tab's rows come from its Anthropic stream, so a stream lost
+    // between turns froze the chat with nothing saying so. The line says it, muted, with no
+    // working mark: nothing is running.
+    it(`a stream lost between turns says a quiet "Connection lost" with no working mark (${scheme})`, () => {
+      const root = drawNotice(scheme, { kind: 'lost', text: 'Connection lost', anthropic: true, quiet: true })
+      expect(texts(root)).toEqual(['Connection lost'])
+      const line = root.findAllByType('Text' as never).find((n) => n.props.children === 'Connection lost')!
+      expect(flat(line.props.style).color).toBe(want.body)
+      expect(star(root)).toHaveLength(0)
+      expect(root.findAll((n) => n.props.accessibilityLabel === 'Working')).toHaveLength(0)
+      expect(root.findAll((n) => n.props.accessibilityLabel === 'Connection lost').length).toBeGreaterThan(0)
+    })
+
+    it(`a quiet "Connection lost" keeps the running count beside it (${scheme})`, () => {
+      const root = drawNotice(scheme, { kind: 'lost', text: 'Connection lost', anthropic: true, quiet: true }, 2)
+      expect(texts(root)).toEqual(['Connection lost', ' · ', '2 running tasks'])
+      expect(star(root)).toHaveLength(0)
     })
 
     it(`the phone offline mid-turn says the app’s whole sentence, wrapped, not cut (${scheme})`, () => {

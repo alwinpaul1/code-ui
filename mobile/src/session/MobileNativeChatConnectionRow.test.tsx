@@ -184,14 +184,21 @@ describe('the notice handed to the status line of a matched Claude tab', () => {
     seen = null
   })
 
-  it('says "Connecting..." while the stream reconnects mid-turn, with the relay up and calling the agent idle', async () => {
-    await provide(matched({ phase: 'reconnecting', turnOpen: true }))
+  it('says "Connecting..." while the stream reconnects mid-turn, with the relay down too', async () => {
+    await provide(matched({ phase: 'reconnecting', turnOpen: true, connState: 'disconnected' }))
     expect(seen).toMatchObject({ kind: 'connecting', text: 'Connecting...' })
+  })
+
+  // Review 2026-10-15: with the relay up, the desktop's idle wins over a turn the dropped stream
+  // last saw open (native-chat-connection-notice.ts).
+  it('says nothing busy once the relay is up and the desktop calls the agent idle', async () => {
+    await provide(matched({ phase: 'reconnecting', turnOpen: true }))
+    expect(seen).toBeNull()
   })
 
   it('says the app’s offline sentence while the phone has no network mid-turn', async () => {
     net.offline = true
-    await provide(matched({ phase: 'reconnecting', turnOpen: true }))
+    await provide(matched({ phase: 'reconnecting', turnOpen: true, connState: 'disconnected' }))
     expect(seen?.text).toBe('You’re offline. The rest of Claude’s reply will appear when you reconnect.')
   })
 

@@ -42,6 +42,9 @@ import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
  *                                           working with the connection dialling or lost: the
  *                                           notice in place of verb and stats, in the clay (au8
  *                                           case 0, nl7.java:232-235); not a second row.
+ *   Connection lost · 2 running tasks       a matched tab whose Anthropic stream is lost between
+ *                                           turns: muted, no mark (native-chat-connection-notice.ts
+ *                                           `quiet`; the chat's rows come from that stream).
  *
  * It used to read "Working · 3 running tasks" beside a breathing starburst (2026-09-24 to
  * 2026-10-14); the user's screenshot of the Claude app showed neither, and asked for the app's own
@@ -73,8 +76,10 @@ export function MobileNativeChatStatusLine({
   const notice = useNativeChatConnectionNotice()
   // A matched Claude tab's notice is busy on the turn Anthropic last saw open, whatever the relay
   // says (native-chat-connection-notice.ts), so it draws the line by itself.
-  const busy = working || notice?.anthropic === true
-  if (!busy && runningCount <= 0) {
+  const busy = working || (notice?.anthropic === true && notice.quiet !== true)
+  // A stream lost between turns: its words, muted, with no working mark (nothing is running).
+  const quiet = !busy && notice?.quiet === true ? notice.text : null
+  if (!busy && quiet === null && runningCount <= 0) {
     return null
   }
   // au8.java:73-91: a connection message stands in for the stats and the verb alike.
@@ -140,6 +145,18 @@ export function MobileNativeChatStatusLine({
             <Text testID="native-chat-status-phrase" style={[text, { color: palette.body, flexShrink: 1 }]} numberOfLines={1}>
               {`${CLAUDE_FOOTER_SEPARATOR}${stats.status}`}
             </Text>
+          ) : null}
+        </>
+      ) : quiet !== null ? (
+        <>
+          <Text accessible accessibilityLabel={quiet} style={[text, { color: palette.body, flexShrink: 1 }]} numberOfLines={1}>
+            {quiet}
+          </Text>
+          {runningCount > 0 ? (
+            <>
+              <Text style={[text, { color: palette.body }]}>{CLAUDE_FOOTER_SEPARATOR}</Text>
+              {countButton}
+            </>
           ) : null}
         </>
       ) : (
