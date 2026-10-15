@@ -21,6 +21,9 @@ function text(uuid: string, role: 'user' | 'assistant', words: string) {
   return event({ type: role, uuid, session_id: SESSION_A, parent_tool_use_id: null, message: { role, content: role === 'user' ? words : [{ type: 'text', text: words }] } })
 }
 
+/** A history page's answer standing for a 401. */
+const UNAUTHORIZED = Symbol('401')
+
 type Timers = { fire: (ms?: number) => void; pending: () => number[] }
 
 /** Timers the test fires by hand: the reconnect waits and the 30 s linger. */
@@ -53,6 +56,8 @@ type World = {
   stream: { fetch: CcrStreamFetch; requests: { url: string; headers: Record<string, string> }[] }
   logs: string[]
   authCalls: string[]
+  /** The accounts whose sign-in was read afresh (after a 401). */
+  freshAuthCalls: string[]
   timers: ReturnType<typeof manualTimers>
   signedOut: Set<string>
   /** The link's clock: each read returns `at`, then moves it on by `step`. */
@@ -66,6 +71,7 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     stream: streamFetch(streamAnswer),
     logs: [],
     authCalls: [],
+    freshAuthCalls: [],
     timers: manualTimers(),
     signedOut: new Set(),
     clock: { at: 0, step: 0 }
@@ -75,13 +81,20 @@ function world(streamAnswer: (url: URL, attempt: number) => StreamReply | Promis
     const parsed = new URL(url)
     const match = /^\/v1\/code\/sessions\/([^/]+)\/events$/.exec(parsed.pathname)
     const page = match ? w.pages[decodeURIComponent(match[1]!)] : undefined
-    return page ? reply(200, await page(parsed.searchParams.get('cursor'))) : reply(404, {})
+    if (!page) {
+      return reply(404, {})
+    }
+    const body = await page(parsed.searchParams.get('cursor'))
+    return body === UNAUTHORIZED ? reply(401, {}) : reply(200, body)
   }
   const deps: CcrLinkDeps = {
     fetch,
     streamFetch: (url, init) => w.stream.fetch(url, init),
-    auth: async (accountId) => {
+    auth: async (accountId, fresh) => {
       w.authCalls.push(accountId)
+      if (fresh) {
+        w.freshAuthCalls.push(accountId)
+      }
       return w.signedOut.has(accountId) ? null : (AUTH[accountId] ?? null)
     },
     keep: (key) => `file:///cache/${encodeURIComponent(key)}`,
@@ -466,6 +479,49 @@ describe('when reading fails', () => {
     expect(link.getState().phase).toBe('error')
     expect(link.getState().error).toMatch(/not found \(HTTP 404\)/)
     expect(w.stream.requests).toHaveLength(0)
+  })
+
+  it('a history page refused with 401 reads the sign-in afresh once and reads the page again', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    let calls = 0
+    w.pages[SESSION_A] = () => {
+      calls += 1
+      return eventsReply([text('u1', 'user', 'hi')])
+    }
+    const pages = w.pages[SESSION_A]!
+    let refused = false
+    w.pages[SESSION_A] = (cursor) => {
+      if (!refused) {
+        refused = true
+        return UNAUTHORIZED
+      }
+      return pages(cursor)
+    }
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(calls).toBe(1)
+    expect(rowsOf(link)).toEqual(['user:u1'])
+    expect(link.getState().phase).toBe('live')
+  })
+
+  it('a history page refused with 401 twice says so, after one fresh read', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => UNAUTHORIZED
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(link.getState().phase).toBe('error')
+    expect(link.getState().error).toMatch(/HTTP 401/)
+  })
+
+  it('a stream refused with 401 connects again with a sign-in read afresh', async () => {
+    const w = world((_url, attempt) => (attempt === 1 ? { status: 401, chunks: [] } : { status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'hi')])
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(w.freshAuthCalls).toEqual([ACCOUNT_A])
+    expect(link.getState().phase).toBe('live')
   })
 
   it('an account signed out under a link says so rather than reading with nothing', async () => {

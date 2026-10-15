@@ -31,14 +31,15 @@ export async function fetchAnthropicCredential(): Promise<AnthropicCredential | 
   return primary ? liveCredential(primary) : null
 }
 
-/** The account's token, refreshed when near expiry. A refresh token the server already refused is
- *  not spent again: the account keeps what life its access token has, then reads as signed out. */
-async function liveCredential(account: StoredAccount): Promise<StoredCredential | null> {
+/** The account's token, refreshed when near expiry, or whenever `force` (a server refused it with
+ *  401 though it had life left). A refresh token the server already refused is not spent again:
+ *  the account keeps what life its access token has, then reads as signed out. */
+async function liveCredential(account: StoredAccount, force = false): Promise<StoredCredential | null> {
   const phoneCred = account.credential
   if (!phoneCred.accessToken) {
     return null
   }
-  if (phoneCred.expiresAt - Date.now() >= TOKEN_MARGIN_MS) {
+  if (!force && phoneCred.expiresAt - Date.now() >= TOKEN_MARGIN_MS) {
     return phoneCred
   }
   if (account.refreshRefused) {
@@ -67,14 +68,15 @@ export type AccountCredential = {
  * (session/ccr-session-default-deps.ts) reads this; dictation reads only the first account, through
  * fetchAnthropicCredential. An empty list means nobody is signed in. With `only`, just that
  * account is read and refreshed (the model pill re-reads one matched account, not every one).
+ * With `refresh`, each token is refreshed whatever life it has left: a server refused it (401).
  */
-export async function fetchAccountCredentials(only?: string): Promise<AccountCredential[]> {
+export async function fetchAccountCredentials(only?: string, options: { refresh?: boolean } = {}): Promise<AccountCredential[]> {
   const accounts = await listAccounts()
   return Promise.all(
     accounts.flatMap((account, index) => (only === undefined || account.id === only ? [{ account, index }] : [])).map(async ({ account, index }): Promise<AccountCredential> => {
       const label = accountLabel(account, index)
       const base = { id: account.id, label, organizationUuid: account.organizationUuid }
-      const live = await liveCredential(account)
+      const live = await liveCredential(account, options.refresh === true)
       return live
         ? { ...base, accessToken: live.accessToken }
         : { ...base, accessToken: null, error: 'the sign-in expired and could not be refreshed; sign in to this account again in Settings, Anthropic accounts' }

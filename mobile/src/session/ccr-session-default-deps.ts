@@ -35,12 +35,12 @@ export function defaultCcrPipelineDeps(): CcrPipelineDeps {
   }
 }
 
-/** One read of an account's sign-in at a time, per account: two links of one account share it,
- *  and an account's refresh never waits on, or touches, another's. */
+/** One read of an account's sign-in at a time, per account and kind (plain or fresh): two links
+ *  of one account share it, and an account's refresh never waits on, or touches, another's. */
 const authInFlight = new Map<string, Promise<CcrLinkAuth | null>>()
 
-async function readAccountAuth(accountId: string): Promise<CcrLinkAuth | null> {
-  const [account] = await fetchAccountCredentials(accountId)
+async function readAccountAuth(accountId: string, fresh: boolean): Promise<CcrLinkAuth | null> {
+  const [account] = await fetchAccountCredentials(accountId, { refresh: fresh })
   if (!account?.accessToken) {
     return null
   }
@@ -60,11 +60,14 @@ export function defaultCcrLinkDeps(): CcrLinkDeps {
     fetch: ((url, init) => fetch(url, init)) as CcrFetch,
     // expo/fetch's response body is a web ReadableStream, the shape CcrStreamFetch reads.
     streamFetch: ((url: string, init: Parameters<CcrStreamFetch>[1]) => expoFetch(url, init)) as unknown as CcrStreamFetch,
-    auth: (accountId) => {
-      let running = authInFlight.get(accountId)
+    // `fresh` (after a 401) refreshes the token whatever life it has left, and never takes the
+    // answer of a plain read in flight, which may be the very token just refused.
+    auth: (accountId, fresh) => {
+      const key = `${accountId}\0${fresh ? 'fresh' : 'plain'}`
+      let running = authInFlight.get(key)
       if (!running) {
-        running = readAccountAuth(accountId).finally(() => authInFlight.delete(accountId))
-        authInFlight.set(accountId, running)
+        running = readAccountAuth(accountId, fresh).finally(() => authInFlight.delete(key))
+        authInFlight.set(key, running)
       }
       return running
     },

@@ -275,6 +275,23 @@ describe('refreshing each account', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
+  // Review 2026-10-15: a session stream or page refused with 401 asked for a fresh token, and got the
+  // same one back, because a token with life left was never refreshed.
+  it('refreshes an account whose token has life left when asked to, after the server refused it', async () => {
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    const stored = (await listAccounts())[0]!
+    vi.stubGlobal('fetch', async () => ({ ok: true, status: 200, json: async () => ({ access_token: 'a2', refresh_token: 'r2', expires_in: 3600 }) }))
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT))[0]!.accessToken).toBe(stored.credential.accessToken)
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT, { refresh: true }))[0]!.accessToken).toBe('a2')
+    expect((await listAccounts())[0]!.credential.accessToken).toBe('a2')
+  })
+
+  it('keeps the token it has when a forced refresh fails, while it has life left', async () => {
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 503, json: async () => ({}) }))
+    expect((await fetchAccountCredentials(DEFAULT_ACCOUNT, { refresh: true }))[0]!.accessToken).toBe('a1')
+  })
+
   it('reading one account for the model pill refreshes that account and no other', async () => {
     await twoAccountsDue()
     refreshEndpoint({})

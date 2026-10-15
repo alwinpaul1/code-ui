@@ -1,4 +1,4 @@
-import { listCcrSessionEvents, type CcrEventPage } from './ccr-session-api'
+import { CcrApiError, listCcrSessionEvents, type CcrEventPage } from './ccr-session-api'
 import type { CcrLinkDeps } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES } from './ccr-session-shared'
 
@@ -13,13 +13,23 @@ export class CcrSignedOutError extends Error {
   }
 }
 
-/** One page, newest first from `cursor`, read with the account's own sign-in. */
+/** One page, newest first from `cursor`, read with the account's own sign-in. A 401 reads the
+ *  sign-in afresh (a refreshed token) and asks once more. */
 export async function readCcrHistoryPage(deps: CcrLinkDeps, accountId: string, sessionId: string, cursor: string | null, limit: number): Promise<CcrEventPage> {
-  const auth = await deps.auth(accountId, false).catch(() => null)
-  if (!auth) {
-    throw new CcrSignedOutError()
+  for (const fresh of [false, true]) {
+    const auth = await deps.auth(accountId, fresh).catch(() => null)
+    if (!auth) {
+      throw new CcrSignedOutError()
+    }
+    try {
+      return await listCcrSessionEvents(deps.fetch, auth, sessionId, { cursor, limit })
+    } catch (error) {
+      if (fresh || !(error instanceof CcrApiError) || error.reason !== 'unauthorized') {
+        throw error
+      }
+    }
   }
-  return listCcrSessionEvents(deps.fetch, auth, sessionId, { cursor, limit })
+  throw new CcrSignedOutError()
 }
 
 /** Pages back from `cursor` until `stop(page)` or the history's start: that last page. Null when
