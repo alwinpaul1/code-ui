@@ -169,6 +169,21 @@ describe('a Claude session copied from the work profile to the personal one and 
     expect(after.sessionId).toBe(WORK_CSE)
   })
 
+  // Review 2026-10-15: when the tab's newest message has reached neither session yet and both hold
+  // the same copied history, the all-accounts pass ties; the bound account's match must stand, or
+  // every open fails and asks every account again.
+  it('still matches the bound account’s session when the other account holds the same older history and nobody the newest', async () => {
+    bindCcrConfigDir(WORK_DIR, WORK_ACCOUNT)
+    const h = harness([OLD_1, OLD_2])
+    const first = await runCcrImagePipeline(run(WORK_DIR, [OLD_1, OLD_2, NEW_1]), h.deps)
+    expect(first.sessionId).toBe(WORK_CSE)
+    forgetSharedCcrLists()
+    const sentBefore = h.sent.length
+    const second = await runCcrImagePipeline(run(WORK_DIR, [OLD_1, OLD_2, NEW_1]), h.deps)
+    expect(second.sessionId).toBe(WORK_CSE)
+    expect(h.sent.length - sentBefore).toBeLessThanOrEqual(1)
+  })
+
   it('keeps the match when the pane’s config dir is not known: nothing says it moved', async () => {
     const h = harness()
     await runCcrImagePipeline(run(WORK_DIR, [OLD_1, OLD_2]), h.deps)

@@ -170,9 +170,29 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
      * nothing: another account's session may hold the newer ones (a conversation copied between
      * profiles and resumed, 2026-10-15), so every account is then judged together.
      */
+    const settle = (outcome: Extract<Awaited<ReturnType<typeof matchCcrSessionInWaves>>, { kind: 'matched' }>) => {
+      const matched = outcome.candidate
+      sessionId = matched.row.id
+      auth = matched.auth
+      extractCcrImages(outcome.pages.events, wanted, deps.maxBytes, extracted)
+      cursor = outcome.pages.cursor
+      pagesRead = outcome.pages.read
+      setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId, input.configDir ?? null)
+      // The tab's config dir is this account's from now on: its next tabs ask it first.
+      if (input.configDir) {
+        bindCcrConfigDir(input.configDir, auth.accountId)
+      }
+      report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${outcome.overlap} message${outcome.overlap === 1 ? '' : 's'} with this tab`)
+      noteModel(input.tabId, input.epoch, matched.row, report)
+    }
+    /** The bound account's match on an older message, held while every account is judged: it stands
+     *  when no account holds a newer shared message (a tie on the copied history included, review
+     *  2026-10-15), so a tab whose newest message reached no session yet still settles. */
+    let settleBound: (() => void) | null = null
     const matchAmong = async (
       group: readonly CcrAuth[],
-      final: boolean
+      final: boolean,
+      rejudge = false
     ): Promise<{ kind: 'matched' } | { kind: 'none' } | { kind: 'older' } | { kind: 'failed'; result: CcrPipelineResult }> => {
       // sessions: every account's list, all at once, so a work account's session is found beside the
       // default's in one round trip
@@ -228,6 +248,10 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         return { kind: 'failed', result: fail('match', 'the tab has no transcript messages to compare yet', true) }
       }
       const outcome = await matchCcrSessionInWaves(deps.fetch, candidates, input.messageIds)
+      if (rejudge && outcome.kind !== 'matched') {
+        report('match', true, `no account holds a newer message of this tab (${outcome.kind}); keeping the first account's session`)
+        return { kind: 'none' }
+      }
       if (outcome.kind === 'unreadable') {
         const reasons = outcome.candidates.map((candidate, index) => `${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(outcome.reasons[index])}`)
         if (candidates.length === 1) {
@@ -244,24 +268,13 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         return { kind: 'failed', result: fail('match', `${outcome.sessionIds.length} sessions share messages with this tab (${outcome.sessionIds.map(maskId).join(', ')}); not guessing`) }
       }
       const newestId = input.messageIds.at(-1)
-      if (outcome.kind === 'matched' && !final && newestId !== undefined && !outcome.pages.uuids.has(newestId)) {
+      if (outcome.kind === 'matched' && !final && !rejudge && newestId !== undefined && !outcome.pages.uuids.has(newestId)) {
         report('match', true, `${accountCount > 1 ? `${group[0]!.label}: ` : ''}session ${maskId(outcome.candidate.row.id)} holds only older messages of this tab; asking every account`)
+        settleBound = () => settle(outcome)
         return { kind: 'older' }
       }
       if (outcome.kind === 'matched') {
-        const matched = outcome.candidate
-        sessionId = matched.row.id
-        auth = matched.auth
-        extractCcrImages(outcome.pages.events, wanted, deps.maxBytes, extracted)
-        cursor = outcome.pages.cursor
-        pagesRead = outcome.pages.read
-        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId, input.configDir ?? null)
-        // The tab's config dir is this account's from now on: its next tabs ask it first.
-        if (input.configDir) {
-          bindCcrConfigDir(input.configDir, auth.accountId)
-        }
-        report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${outcome.overlap} message${outcome.overlap === 1 ? '' : 's'} with this tab`)
-        noteModel(input.tabId, input.epoch, matched.row, report)
+        settle(outcome)
       }
       if (!sessionId || !auth) {
         const detail = `none of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} shares a message with this tab in ${candidates.length === 1 ? 'its' : 'their'} newest ${CCR_MATCH_FIRST_PAGE_SIZE} to ${CCR_MATCH_FIRST_PAGE_SIZE + (CCR_MATCH_PAGES - 1) * CCR_EVENT_PAGE_SIZE} events`
@@ -294,9 +307,12 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       }
       if (outcome.kind === 'older') {
         // The newest shared message decides across every account (ccr-session-match.ts).
-        const all = await matchAmong(auths, true)
+        const all = await matchAmong(auths, false, true)
         if (all.kind === 'failed') {
           return all.result
+        }
+        if (all.kind !== 'matched') {
+          settleBound?.()
         }
         break
       }
