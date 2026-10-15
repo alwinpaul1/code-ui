@@ -53,6 +53,11 @@ import expo.modules.kotlin.viewevent.EventDispatcher
  * Each way a selection ends here is logged under OrcaSelectionCopy (rule 9).
  */
 class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
+  private companion object {
+    /** How long after a lift the words a hold lit may wait for their menu before they are a stray. */
+    const val STRAY_GRACE_MS = 2_500L
+  }
+
   private val colors = ChatSelectionColors()
   private val onSelectionChange by EventDispatcher()
   private var holdSelects = true
@@ -97,14 +102,98 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private var lastUpY = 0f
   private var tookRepeatTap = false
 
+  // The gesture under way: where and when its finger went down, what each Text below held then
+  // (so a selection the reader already had is never taken for this gesture's stray), and whether
+  // its pending hold has been cancelled as a drag.
+  private var downX = 0f
+  private var downY = 0f
+  private var downAt = 0L
+  private var selectedAtDown: Map<TextView, SelectedRange> = emptyMap()
+  private var holdCancelled = false
+
   override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
     // Every touch passes here, whichever view ends up handling it, so the lift is always seen.
-    if (ev.actionMasked == MotionEvent.ACTION_UP) {
-      lastUpAt = ev.eventTime
-      lastUpX = ev.x
-      lastUpY = ev.y
+    when (ev.actionMasked) {
+      MotionEvent.ACTION_DOWN -> {
+        downX = ev.x
+        downY = ev.y
+        downAt = ev.eventTime
+        holdCancelled = false
+        selectedAtDown = selectionsBelow()
+      }
+      MotionEvent.ACTION_MOVE -> {
+        // A finger that moved before the long-press timeout is a drag, not a hold, as a Compose
+        // long press is cancelled by moving. A Text's own long press ends only when the finger
+        // leaves its bounds or the scroll view takes the touch, and a sideways start never does.
+        if (!holdCancelled && ev.eventTime - downAt < ViewConfiguration.getLongPressTimeout() &&
+          movedPastSlop(downX, downY, ev.x, ev.y, ViewConfiguration.get(context).scaledTouchSlop.toFloat())) {
+          holdCancelled = true
+          cancelPendingHolds()
+        }
+      }
+      MotionEvent.ACTION_UP -> {
+        lastUpAt = ev.eventTime
+        lastUpX = ev.x
+        lastUpY = ev.y
+        // A hold's menu opens after the lift, once the text classifier answers (0.5 s on the
+        // user's S23, 2026-10-15); words this gesture lit that still have none by then never will.
+        val before = selectedAtDown
+        postDelayed({ sweepStrays(before, "no menu opened $STRAY_GRACE_MS ms after the finger lifted") }, STRAY_GRACE_MS)
+      }
+      MotionEvent.ACTION_CANCEL -> {
+        // The scroll took the touch: a word a hold lit before it did will never get its menu.
+        val before = selectedAtDown
+        post { sweepStrays(before, "the touch went to the scroll before a menu opened") }
+      }
     }
     return super.dispatchTouchEvent(ev)
+  }
+
+  /** What each Text below holds selected now; a Text with nothing selected is left out. */
+  private fun selectionsBelow(): Map<TextView, SelectedRange> {
+    val held = HashMap<TextView, SelectedRange>()
+    for (text in textViewsBelow(this)) {
+      selectedRangeIn(text)?.let { held[text] = it }
+    }
+    return held
+  }
+
+  private fun cancelPendingHolds() {
+    for (text in textViewsBelow(this)) {
+      text.cancelLongPress()
+    }
+  }
+
+  /** Clears each selection below that the gesture made and that has no menu ([isStraySelection]). */
+  private fun sweepStrays(before: Map<TextView, SelectedRange>, why: String) {
+    for (text in textViewsBelow(this)) {
+      val after = selectedRangeIn(text)
+      if (after != null && isStraySelection(before[text], after, LiveSelections.watching(text))) {
+        (text.text as? Spannable)?.let { Selection.removeSelection(it) }
+        Log.w("OrcaSelectionCopy", "Cleared ${after.end - after.start} selected chars with no menu in ${text.javaClass.simpleName}: $why")
+      }
+    }
+  }
+
+  /** The chat document this view draws (MobileMarkdown's `identity`); null outside the chat. */
+  private var documentKey: String? = null
+
+  /**
+   * The list handed this row to another message: a selection held below belongs to the one it
+   * left, so it is dropped rather than put back on whatever words now stand at its place
+   * ([SelectionLifeCallback] puts one back after new text wherever the same words stand there,
+   * and another message can repeat them). The chat keeps the held selection outside the rows and
+   * sends it back to the row whose key matches (`restoreSelection`).
+   */
+  fun setDocumentKey(key: String?) {
+    val was = documentKey
+    documentKey = key
+    if (was == null || was == key) {
+      return
+    }
+    for (text in textViewsBelow(this)) {
+      LiveSelections.callbackFor(text)?.drop("its row now draws another message")
+    }
   }
 
   override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -267,6 +356,9 @@ internal class SelectionLifeCallback(
       lastText = text.text.toString()
       liveMode = mode
       observer = text.viewTreeObserver.also { it.addOnPreDrawListener(this) }
+      // One selection at a time: a Text that kept its highlight when this one opened elsewhere
+      // holds words the reader is no longer copying.
+      LiveSelections.opened(text, this).forEach { it.drop("another selection opened") }
       report(true, held)
     }
     return created
@@ -303,6 +395,20 @@ internal class SelectionLifeCallback(
     return true
   }
 
+  /** Ends this selection, highlight and menu, and says why in the log (rule 9). */
+  fun drop(why: String) {
+    Log.w("OrcaSelectionCopy", "Selection dropped in ${text.javaClass.simpleName}: $why")
+    (text.text as? Spannable)?.let { Selection.removeSelection(it) }
+    val mode = liveMode
+    stopWatching()
+    if (mode != null) {
+      // Its close (onDestroyActionMode) reports the selection gone.
+      mode.finish()
+    } else {
+      report(false, null)
+    }
+  }
+
   private fun moved(current: HeldSelection) {
     held = current
     report(true, current)
@@ -335,6 +441,7 @@ internal class SelectionLifeCallback(
 
   private fun stopWatching() {
     held = null
+    LiveSelections.closed(text, this)
     // The observer it was added to, if still alive; a re-attached view has a new one.
     val added = observer?.takeIf { it.isAlive } ?: text.viewTreeObserver
     observer = null
