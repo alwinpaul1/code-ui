@@ -40,6 +40,10 @@ export const CCR_PERSIST_STREAM_MS = 750
  *  row at all. */
 export const CCR_FIRST_PAGE_EVENTS = 200
 export const CCR_OLDER_PAGE_EVENTS = 500
+/** Newest pages read on an open that already holds rows, before the stream (`xjw.b`
+ *  "loadLatestPageV2" in the app reads up to 2 of CCR_FIRST_PAGE_EVENTS; ccr-session-link.ts
+ *  `catchUp`). */
+export const CCR_CATCH_UP_PAGES = 2
 
 export type CcrLinkPhase = 'idle' | 'loading' | 'live' | 'reconnecting' | 'lost' | 'error'
 

@@ -13,6 +13,7 @@ import { hydrateClaudeTranscriptModelReadings } from './claude-transcript-model-
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 import { hydrateCcrSessionMappings } from './ccr-session-cache'
 import { hydrateCcrTranscripts } from './ccr-transcript-persist'
+import { hydrateChatDockHeight } from './use-mobile-chat-dock'
 
 /** Load the persisted project caches once at app start, before any project opens. */
 export function hydrateSessionCaches(): Promise<void> {
@@ -54,6 +55,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateCcrSessionMappings(),
     // Why: each matched Claude tab's last 200 events from Anthropic, so it paints its conversation
     // in the first frame, before the stream catches up (ccr-transcript-persist.ts).
-    hydrateCcrTranscripts()
+    hydrateCcrTranscripts(),
+    // Why: the composer's height, so that first frame also draws the newest row clear of the
+    // composer instead of under it and sliding up a layout later (use-mobile-chat-dock.ts).
+    hydrateChatDockHeight()
   ]).then(() => undefined)
 }

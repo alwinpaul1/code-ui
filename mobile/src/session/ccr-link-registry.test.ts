@@ -292,8 +292,13 @@ describe('the transcript a link holds', () => {
     const w2 = world(() => new Promise<StreamReply>(() => undefined))
     const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
     expect(rowsOf(link)).toEqual(['user:u1', 'assistant:a1'])
-    await flush()
     expect(w2.pageRequests).toHaveLength(0)
+    await flush()
+    // Then, as the Claude app's connect does, the newest page lands in one change before the
+    // stream (ccr-session-link.ts `catchUp`); here it holds nothing new, so the stream resumes
+    // after the kept copy.
+    expect(w2.pageRequests).toHaveLength(1)
+    expect(new URL(w2.pageRequests[0]!.url).searchParams.get('cursor')).toBeNull()
     expect(w2.stream.requests[0]!.url).toContain(`from_sequence_num=${held[1]!.sequence_num}`)
   })
 
@@ -701,7 +706,8 @@ describe('the app in the background and back in front', () => {
     await flush()
     expect(w.stream.requests).toHaveLength(2)
     expect(w.stream.requests[1]!.url).toContain(`from_sequence_num=${two.sequence_num}`)
-    expect(w.pageRequests).toHaveLength(1)
+    // The resume reads the newest page once, so a backlog lands in one change (`catchUp`).
+    expect(w.pageRequests).toHaveLength(2)
     expect(link.getState().phase).toBe('live')
   })
 

@@ -1,4 +1,4 @@
-import { CcrApiError, type CcrEvent, type CcrEventPage } from './ccr-session-api'
+import { CcrApiError, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
 import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
@@ -6,6 +6,7 @@ import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHist
 import { readCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
 import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
+import { readCcrCatchUp } from './ccr-link-catch-up'
 import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'
 
 export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
@@ -17,8 +18,10 @@ export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CC
  * last sequence number held.
  *
  * The open path makes no request before the first paint: the events kept on the phone for this
- * (account, session) are there at once (ccr-transcript-persist.ts), and the stream asks only for
- * what came after them. With nothing kept, the newest page is read first, then the stream.
+ * (account, session) are there at once (ccr-transcript-persist.ts). Then, as the Claude app
+ * 1.261009.20 does, the newest page(s) are read and land in ONE change before the stream carries
+ * single events (`catchUp` below). With nothing kept, the newest page is read first, then the
+ * stream.
  *
  * Events are keyed by the message uuid (`payload.uuid`, on every one of 4,000 observed live on
  * 2026-10-14), else `event_id`: a page and the stream that both carry an event hold it once.
@@ -60,10 +63,10 @@ export class CcrSessionLink {
     this.state = { events: [], phase: 'idle', error: null, hasOlder: true, loadingOlder: false, connectionStatus: null, liveFrom: 0, streamThinking: null, version: 0 }
     const kept = readCcrTranscript(accountId, sessionId)
     if (kept) {
-      this.add(kept.events, false)
+      this.store.add(kept.events, false)
       this.store.seen(kept.lastSequenceNum)
       this.olderCursor = kept.olderCursor
-      this.state = { ...this.state, events: this.ordered, hasOlder: kept.hasOlder, liveFrom: kept.lastSequenceNum }
+      this.state = { ...this.state, events: this.store.ordered, hasOlder: kept.hasOlder, liveFrom: kept.lastSequenceNum }
     }
   }
 
@@ -84,18 +87,10 @@ export class CcrSessionLink {
     if (this.stopped) {
       return
     }
-    this.state = { ...this.state, ...patch, events: this.ordered, version: this.state.version + 1 }
+    this.state = { ...this.state, ...patch, events: this.store.ordered, version: this.state.version + 1 }
     for (const listener of this.listeners) {
       listener()
     }
-  }
-
-  private add(events: readonly CcrEvent[], slim = true): boolean {
-    return this.store.add(events, slim)
-  }
-
-  private get ordered(): CcrEvent[] {
-    return this.store.ordered
   }
 
   /** Writes a pending streamed burst now (the app leaving, the link closing). */
@@ -116,29 +111,48 @@ export class CcrSessionLink {
 
   private async open(): Promise<void> {
     const generation = this.generation
-    if (this.ordered.length === 0) {
+    if (this.store.ordered.length === 0) {
       this.set({ phase: 'loading', error: null })
       if (!(await this.readPage(null)) || generation !== this.generation) {
         return
       }
       // As the app does: a newest page with nothing to draw (all `system`) pages back until one
       // does, up to CCR_MAX_EVENT_PAGES.
-      for (let page = 1; page < CCR_MAX_EVENT_PAGES && this.state.hasOlder && !this.ordered.some(ccrEventDrawsRow); page++) {
+      for (let page = 1; page < CCR_MAX_EVENT_PAGES && this.state.hasOlder && !this.store.ordered.some(ccrEventDrawsRow); page++) {
         await this.loadOlder()
         if (generation !== this.generation) {
           return
         }
       }
+    } else if (!(await this.catchUp())) {
+      return
     }
     this.connect()
+  }
+
+  /** Rows already held (the kept copy, a resume, a truncated stream catch-up): the newest pages
+   *  land in ONE change before the stream carries single events (ccr-link-catch-up.ts, the Claude
+   *  app's connect). A page that fails changes nothing: the stream resumes after what is held.
+   *  False only when a pause, restart or stop came in between. `from`: the newest sequence held
+   *  before the gap (a truncated stream has moved past it since). */
+  private async catchUp(from = this.store.lastSequenceNum): Promise<boolean> {
+    const generation = this.generation
+    const read = await readCcrCatchUp((at) => readCcrHistoryPage(this.deps, this.accountId, this.sessionId, at, CCR_FIRST_PAGE_EVENTS), from).catch((error: unknown) => this.log(`catching up failed for session …${this.sessionId.slice(-6)}: ${reasonOf(error)}`))
+    const patch = read && generation === this.generation ? this.store.take(read) : null
+    if (read && patch) {
+      this.olderCursor = read.reached ? this.olderCursor : read.nextCursor
+      this.set(patch)
+      this.keptCopy.write()
+    }
+    return generation === this.generation
   }
 
   /** One history page, newest first from `cursor`; false when it failed (the state says why). */
   private async readPage(cursor: string | null): Promise<boolean> {
     try {
-      const page = await this.readHistory(cursor, CCR_FIRST_PAGE_EVENTS)
+      const page = await readCcrHistoryPage(this.deps, this.accountId, this.sessionId, cursor, CCR_FIRST_PAGE_EVENTS)
       // After stop(), `set` and the kept-copy write change nothing and connect() does not dial.
-      this.add(page.events)
+      this.store.add(page.events)
       // Only the first page is read here: what is older starts at its cursor.
       this.olderCursor = page.nextCursor
       this.set({ hasOlder: page.nextCursor !== null })
@@ -147,10 +161,6 @@ export class CcrSessionLink {
     } catch (error) {
       return this.failed(error, 'history')
     }
-  }
-
-  private readHistory(cursor: string | null, limit: number): Promise<CcrEventPage> {
-    return readCcrHistoryPage(this.deps, this.accountId, this.sessionId, cursor, limit)
   }
 
   /** Records a failure in the state; false. */
@@ -227,14 +237,14 @@ export class CcrSessionLink {
   private onFrame(frame: CcrStreamFrame, from: number): void {
     switch (frame.kind) {
       case 'event':
-        if (this.add([frame.event])) {
+        if (this.store.add([frame.event])) {
           this.set(this.state.streamThinking === null ? {} : { streamThinking: null })
           this.keptCopy.soon()
         }
         return
       case 'truncated':
-        // The catch-up after `from` was cut: page back from the newest until the gap closes.
-        void this.fillGap(from)
+        // The catch-up after `from` was cut: the newest pages back to `from` land in one change.
+        void this.catchUp(from)
         return
       case 'connection':
         this.set({ connectionStatus: frame.status })
@@ -256,18 +266,12 @@ export class CcrSessionLink {
     }
   }
 
-  /** The catch-up after `from` was cut: pages back from the newest until a page reaches `from`. */
-  private async fillGap(from: number): Promise<void> {
-    const oldest = (page: CcrEventPage) => page.events.reduce((min, event) => Math.min(min, event.sequenceNum ?? min), Number.MAX_SAFE_INTEGER)
-    await this.walkBack(null, CCR_FIRST_PAGE_EVENTS, (page) => oldest(page) <= from, 'filling the gap after a truncated catch-up')
-  }
-
   /** Pages back from `cursor` until `stop(page)`, the history's start or the page cap. The last
    *  page read, or null when one failed (logged, never thrown). */
   private async walkBack(cursor: string | null, limit: number, stop: (page: CcrEventPage) => boolean, what: string): Promise<CcrEventPage | null> {
     try {
-      return await walkCcrHistory((at) => this.readHistory(at, limit), cursor, (page) => {
-        if (this.add(page.events)) {
+      return await walkCcrHistory((at) => readCcrHistoryPage(this.deps, this.accountId, this.sessionId, at, limit), cursor, (page) => {
+        if (this.store.add(page.events)) {
           this.set({})
           this.keptCopy.write()
         }

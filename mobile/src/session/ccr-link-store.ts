@@ -1,3 +1,4 @@
+import type { CcrCatchUp } from './ccr-link-catch-up'
 import type { CcrEvent } from './ccr-session-api'
 import { storeCcrImages } from './ccr-session-cache'
 import { bySequence, CCR_PERSIST_STREAM_MS, ccrEventKey } from './ccr-session-link-types'
@@ -64,6 +65,19 @@ export class CcrEventStore {
     if (undrawn > CCR_HELD_UNDRAWN_EVENTS) {
       this.ordered = this.ordered.filter((event) => this.byKey.get(ccrEventKey(event)!) === event)
     }
+  }
+
+  /** Lands a catch-up (ccr-link-catch-up.ts): merged when its pages reached what is held, in
+   *  place of it when they did not, as the Claude app's `Initialize` replaces its cache seed. The
+   *  link's state patch, or null when nothing drawn changed. */
+  take(read: CcrCatchUp): { hasOlder?: boolean; liveFrom?: number } | null {
+    if (read.reached) {
+      return this.add(read.events) ? {} : null
+    }
+    this.byKey.clear()
+    this.ordered = []
+    this.add(read.events)
+    return { hasOlder: read.nextCursor !== null, liveFrom: 0 }
   }
 
   seen(sequenceNum: number | null | undefined): void {
