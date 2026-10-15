@@ -5,13 +5,13 @@ import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/nat
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 
-// The Claude app's message menu (1.261009.20, gv20.java:583-860): a hold on a
-// sent message opens a menu of "Copy message" and "Select text", with "Undo
-// send" first on a message still waiting. Before this a hold copied the
-// prompt at once and there was no way to select part of it (the bubble's text
-// is not selectable on purpose: a selectable Text took the hold first).
-// A reply keeps its in-place selection (the user, 2026-10-09: "the hold to
-// copy was good before ... revert"); only the sent prompt gets the menu.
+// The Claude app's message menu on a Code session (1.261009.20, fmg.java and
+// rgs.java:85-110): a hold on a sent message opens a card of "Copy" and
+// "Select text", with "Undo send" first on a message still waiting (in the
+// place of the app's Edit). Before this a hold copied the prompt at once and
+// there was no way to select part of it. Since 2026-10-15 ("we need exact hold
+// to copy from Claude mobile") a reply opens the same menu; the hold on a
+// reply is pinned in chat-message-hold-menu.test.tsx.
 
 vi.mock('../components/DraggableDetailSheet', async () => {
   const React = await import('react')
@@ -66,6 +66,7 @@ vi.mock('react-native', async () => {
     },
     ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
+    Modal: ({ children, ...props }: { children?: ReactNode }) => React.createElement('Modal', props, children),
     Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
@@ -73,7 +74,7 @@ vi.mock('react-native', async () => {
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFill: {} },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
@@ -167,9 +168,14 @@ const selectBody = (root: ReactTestInstance): ReactTestInstance | undefined =>
     (node) => node.props.testID === 'select-text-body' && typeof node.type !== 'string'
   )[0]
 
+/** A finger that goes down on the bubble and stays still past the long-press timeout. */
 async function hold(root: ReactTestInstance): Promise<void> {
+  const touch = { nativeEvent: { pageX: 300, pageY: 200 } }
   await act(async () => {
-    bubble(root).props.onLongPress()
+    bubble(root).props.onPressIn(touch)
+  })
+  await act(async () => {
+    bubble(root).props.onLongPress(touch)
   })
 }
 
@@ -190,20 +196,20 @@ describe.each([
 ] as ['light' | 'dark', ThemeColors][])(
   'holding a sent prompt in a %s session',
   (scheme, palette) => {
-    it('opens a menu of Copy message and Select text instead of copying at once', async () => {
+    it('opens a menu of Copy and Select text instead of copying at once', async () => {
       const root = render(prompt([{ type: 'text', text: TYPED }]), scheme)
       expect(menuRows(root)).toEqual([])
       await hold(root)
-      expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
+      expect(menuRows(root)).toEqual(['Copy', 'Select text'])
       expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
       expect(bubble(root).props.accessibilityHint).toBe('Hold for options')
       expect(bubble(root).props.delayLongPress).toBe(400)
     })
 
-    it('copies the words as typed, Markdown marks and all, from Copy message, and tints the bubble', async () => {
+    it('copies the words as typed, Markdown marks and all, from Copy, and tints the bubble', async () => {
       const root = render(prompt([{ type: 'text', text: TYPED }]), scheme)
       await hold(root)
-      await act(async () => row(root, 'Copy message').props.onPress())
+      await act(async () => row(root, 'Copy').props.onPress())
       expect(Clipboard.setStringAsync).toHaveBeenCalledWith(TYPED)
       expect(triggerSuccess).toHaveBeenCalledTimes(1)
       expect(flat(bubble(root).props.style).backgroundColor).toBe(palette.successSoft)
@@ -230,7 +236,8 @@ describe.each([
       const text = root.find(
         (node) => String(node.type) === 'Text' && node.props.testID === 'select-text-body'
       )
-      expect(flat(text.props.style).color).toBe(palette.text)
+      // The Claude sheet's text colour, `ad5.u0()` (b.java:2359 through ho7 case 3).
+      expect(flat(text.props.style).color).toBe(palette.askText)
     })
 
     it('does not let a drag on the selectable words move the sheet', async () => {
@@ -249,7 +256,7 @@ describe.each([
       await act(async () => (sheet.onClose as () => void)())
       expect(selectBody(root)).toBeUndefined()
       await hold(root)
-      expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
+      expect(menuRows(root)).toEqual(['Copy', 'Select text'])
       expect(selectBody(root)).toBeUndefined()
     })
   }
@@ -262,7 +269,7 @@ describe('the menu on a message still waiting behind a running turn', () => {
       onCancelQueued
     })
     await hold(root)
-    expect(menuRows(root)).toEqual(['Undo send', 'Copy message', 'Select text'])
+    expect(menuRows(root)).toEqual(['Undo send', 'Copy', 'Select text'])
     await act(async () => row(root, 'Undo send').props.onPress())
     expect(onCancelQueued).toHaveBeenCalledTimes(1)
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
@@ -336,7 +343,7 @@ describe('a prompt of one character', () => {
 })
 
 describe('a prompt the lead agent wrote, drawn as Markdown', () => {
-  it('copies and selects the words it shows, as a reply’s Copy does', async () => {
+  it('selects the prompt as it arrived, as the Claude app’s Select text holds every message', async () => {
     const root = render(
       prompt([{ type: 'text', text: '**Task:** run `npm test` and report' }]),
       'light',
@@ -346,7 +353,7 @@ describe('a prompt the lead agent wrote, drawn as Markdown', () => {
     )
     await hold(root)
     await act(async () => row(root, 'Select text').props.onPress())
-    expect(words(selectBody(root)!)).toBe('Task: run npm test and report')
+    expect(words(selectBody(root)!)).toBe('**Task:** run `npm test` and report')
   })
 })
 
@@ -366,7 +373,7 @@ describe('a cell the list recycles for another message', () => {
   it('does not carry an open menu over to the next prompt bound to it', async () => {
     const root = render(prompt([{ type: 'text', text: 'first words' }], 'u1'))
     await hold(root)
-    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
     bind(prompt([{ type: 'text', text: 'second words' }], 'u2'))
     expect(menuRows(root)).toEqual([])
   })
@@ -399,9 +406,11 @@ describe('a cell the list recycles for another message', () => {
 })
 
 describe('a reply', () => {
-  it('has no hold menu: its words stay selectable in place, as the user asked on 2026-10-09', () => {
+  it('is held by its words, not as a sent prompt: no tap, no prompt label', () => {
     const root = render(reply)
     expect(root.findAll((node) => node.props.accessibilityLabel === 'Sent prompt')).toEqual([])
-    expect(root.findAll((node) => typeof node.props.onLongPress === 'function')).toEqual([])
+    const holds = root.findAll((node) => String(node.type) === 'Pressable' && typeof node.props.onLongPress === 'function')
+    expect(holds).toHaveLength(1)
+    expect(holds[0]!.props.onPress).toBeUndefined()
   })
 })

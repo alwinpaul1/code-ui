@@ -40,13 +40,14 @@ vi.mock('react-native', async () => {
     Linking: { openURL: () => Promise.resolve() },
     PixelRatio: { get: () => 3, getFontScale: () => 1 },
     Platform: { OS: 'android', Version: 34, select: (o: Record<string, unknown>) => o.android ?? o.default },
+    Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style, hairlineWidth: 1 },
+    StyleSheet: { create: (styles: unknown) => styles, flatten: (style: unknown) => style, hairlineWidth: 1, absoluteFill: {} },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
@@ -253,7 +254,7 @@ describe('a sent prompt written in Markdown', () => {
   it('copies the raw Markdown from the menu a hold opens, and nothing in the bubble takes the hold for a selection', async () => {
     const root = render(userMessage(PASTED))
     const bubble = bubbleOf(root, 'light')!
-    await holdThenChoose(root, 'Copy message')
+    await holdThenChoose(root, 'Copy')
     expect(mocks.clipboard).toEqual([PASTED])
     expect(texts(bubble).filter((node) => node.props.selectable === true)).toEqual([])
   })

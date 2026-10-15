@@ -40,12 +40,13 @@ vi.mock('react-native', async () => {
     },
     Image: 'Image',
     Platform: { OS: 'android', Version: 34 },
+    Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
     Text,
     View: ({ children, ...props }: { children?: ReactNode }) => React.createElement('View', props, children),
-    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1, absoluteFill: {} },
     useColorScheme: () => 'light',
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
@@ -120,9 +121,9 @@ function render(message: NativeChatMessage, preference: 'light' | 'dark' = 'ligh
   return renderer!
 }
 
-// A hold on a sent prompt opens the Claude app's menu; Copy message is the row that copies.
+// A hold on a sent prompt opens the Claude app's menu; Copy is the row that copies.
 async function hold(tree: ReactTestRenderer): Promise<void> {
-  await holdThenChoose(tree.root, 'Copy message')
+  await holdThenChoose(tree.root, 'Copy')
 }
 
 async function pressCopy(tree: ReactTestRenderer): Promise<void> {

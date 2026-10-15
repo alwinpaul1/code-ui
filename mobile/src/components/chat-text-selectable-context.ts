@@ -62,3 +62,42 @@ export const ChatTextSelectionReportContext = createContext<ChatTextSelectionRep
 export function useChatTextSelectionReport(): ChatTextSelectionReport | null {
   return useContext(ChatTextSelectionReportContext)
 }
+
+/**
+ * Whether text here may be selected where it is drawn. False on a chat message row: there, as in
+ * the Claude app's Code timeline, a hold opens the message's menu and its Select text sheet is
+ * where words are selected (MobileNativeChatMessage, mobile-native-chat-message-menu.ts). Nothing
+ * in the row is a selectable Text, so a finger that stops a fling or rests before a scroll has no
+ * selection to start, and the list has no selection to keep through a recycle. Every other surface
+ * keeps its in-place selection (the default).
+ */
+export const ChatTextInPlaceSelectionContext = createContext(true)
+
+export function useChatTextInPlaceSelection(): boolean {
+  return useContext(ChatTextInPlaceSelectionContext)
+}
+
+/**
+ * What a Markdown document (MobileMarkdown) does with selection here.
+ *
+ * `selectable`: whether its Texts select. Off through a scroll, except where the document's
+ * native root guards holds (Android, `rootGuardsHolds`): there the Texts stay selectable and only
+ * the root hears the scroll, because switching a Text's `selectable` off ends the selection in
+ * it, and the user lost a held selection to a drag of the transcript (2026-10-14, 0.9.139).
+ *
+ * `holdSelects`: whether the root lets a hold start a selection. The scroll's own flag, not the
+ * one held open by a live selection: that let a scrolling finger start a new selection over the
+ * copied one (2026-10-15, 0.9.147). A document that never takes a hold says so through
+ * ChatTextSelectableContext.
+ *
+ * Both are off on a chat message row (ChatTextInPlaceSelectionContext).
+ */
+export function useChatDocumentSelection(rootGuardsHolds: boolean): { selectable: boolean; holdSelects: boolean } {
+  const selectableNow = useChatTextSelectable()
+  const holdsSelect = useChatTextHoldSelects()
+  const inPlace = useChatTextInPlaceSelection()
+  return {
+    selectable: inPlace && (rootGuardsHolds || selectableNow),
+    holdSelects: inPlace && selectableNow && holdsSelect
+  }
+}

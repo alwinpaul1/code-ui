@@ -20,7 +20,7 @@ export type MobileNativeChatMessageCopy = {
 }
 
 /**
- * A reply's Copy control and a sent prompt's Copy message (the row of the menu a hold opens).
+ * A reply's Copy control, and the Copy row of the menu a hold on a message opens.
  *
  * Why: this used to fire `setStringAsync` and forget it, then buzz success
  * and tint the bubble. `setStringAsync` answers false when the pasteboard did
