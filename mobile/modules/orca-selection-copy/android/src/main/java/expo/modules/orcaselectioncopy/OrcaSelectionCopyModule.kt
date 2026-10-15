@@ -25,12 +25,17 @@ class OrcaSelectionCopyModule : Module() {
         view.setSelectionHandleColor(colorIntOf(color))
       }
 
-      // False while the chat scrolls: a hold below starts no selection, an open one stays.
       // A selection this document held before its row went away (chat-held-selection.ts).
       Prop("restoreSelection") { view: SelectionCopyRootView, held: Map<String, Any?>? ->
         view.setRestoreSelection(heldSelectionOf(held))
       }
 
+      // The chat document drawn here: a row handed to another message drops what it held.
+      Prop("documentKey") { view: SelectionCopyRootView, key: String? ->
+        view.setDocumentKey(key)
+      }
+
+      // False while the chat scrolls: a hold below starts no selection, an open one stays.
       Prop("holdSelects") { view: SelectionCopyRootView, holds: Boolean? ->
         view.setHoldSelects(holds != false)
       }

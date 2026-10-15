@@ -34,6 +34,10 @@ type SelectionCopyViewProps = ViewProps & {
   /** A selection this document held before its row went away: the root puts it back where the
    *  same words still stand (chat-held-selection.ts). */
   restoreSelection?: HeldSelection
+  /** The chat document drawn here. When the list hands the row to another message, the root drops
+   *  any selection it held instead of putting it back on whatever words stand at its place
+   *  (SelectionCopyRootView.setDocumentKey); the held one comes back through `restoreSelection`. */
+  documentKey?: string
   /** False while the chat scrolls: the root makes its Texts not long-clickable, so a hold starts
    *  no selection, and one already open stays (SelectionCopyRootView.applyHoldSelects). */
   holdSelects?: boolean
@@ -142,6 +146,7 @@ export function MarkdownSelectionRoot({
       onSelectionChange={onSelectionChange}
       holdSelects={holdSelects}
       restoreSelection={isLive ? undefined : restore}
+      documentKey={document}
     >
       {children}
     </SelectionCopyView>
