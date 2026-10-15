@@ -40,7 +40,7 @@ import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useActiveChatBeacon } from './use-active-chat-beacon'
 import { beaconDecidesLimits } from './hud-rate-limit-notice'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
-import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'; import { claudeSendsThroughAnthropic, useCcrComposerSend } from './use-ccr-composer-send'; import { ccrSendTargetForTab } from './ccr-session-cache'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -117,6 +117,8 @@ export function useMobileNativeChatController(
   })
   // A Claude tab is drawn from Anthropic: what retires the phone's own bubbles (drafts, outbox) reads the rows DRAWN, never Orca's (claude-anthropic-echo-rows.test.tsx).
   const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), epoch: lastConnectedAt, orcaStatus: nativeChatSession.status, orcaRowCount: nativeChatSession.messages.length, orcaError: nativeChatSession.error }), drawnSession = claudeApi.session ?? nativeChatSession
+  // A Claude tab matched (or being matched) to its Remote Control session sends through Anthropic, never the terminal (use-ccr-composer-send.ts).
+  const ccrLane = claudeSendsThroughAnthropic(ccrEnabled, claudeApi.gate), ccrConfigDir = claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -275,7 +277,7 @@ export function useMobileNativeChatController(
       connState === 'connected' &&
       legacyNativeChatPermission == null &&
       legacyQuestion == null &&
-      nativeChatAskPrompt == null && terminalDialogKind === null,
+      nativeChatAskPrompt == null && terminalDialogKind === null && !ccrLane,
     handleRef: activeHandleRef,
     deviceTokenRef, agentRef: activeChatAgentRef,
     text: chatComposerText
@@ -497,6 +499,7 @@ export function useMobileNativeChatController(
     card: promptCard, dialogBeforeAnswer, rereadAfterAnswer, onSendResolved,
     answers: { ask: handleNativeChatAnswerAsk, cancelAsk: handleNativeChatCancelAsk, question: legacyHandleNativeChatQuestionAnswer, permission: activeChatStructured ? structuredNativeChat.respondPermission : legacyHandleNativeChatRespondPermission }
   })
+  const ccrSend = useCcrComposerSend({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: 0, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, removePending, onSendError }); if (ccrLane) { shareSendRef.current.send = (text) => ccrSend.sendWithOutcome(text) }
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
     client,
     enabled: inputSendable,
@@ -524,7 +527,7 @@ export function useMobileNativeChatController(
   })
 
   // What a closed app or an expired hold left in the outbox: resent once when safe, or handed back (use-native-chat-outbox-recovery.ts).
-  const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, agent: activeChatResolution?.agent ?? null, terminal: activeHandle, transcriptPath: activeChatResolution?.transcriptPath ?? null, promptBefore: activeChatPromptStatus?.prompt, messages: drawnSession.messages, transcriptSettled: drawnSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
+  const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, agent: activeChatResolution?.agent ?? null, terminal: activeHandle, transcriptPath: activeChatResolution?.transcriptPath ?? null, promptBefore: activeChatPromptStatus?.prompt, messages: drawnSession.messages, transcriptSettled: drawnSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError }); const outboxDeliveries = useMemo(() => (ccrLane ? { ...outbox.deliveries, ...ccrSend.deliveries } : outbox.deliveries), [ccrLane, outbox.deliveries, ccrSend.deliveries])
 
   // The composer's Stop: a ring while stopping, back on when the stop failed or the agent kept working (G24).
   // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
@@ -550,8 +553,8 @@ export function useMobileNativeChatController(
     chatComposerText,
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1), requestModelSheet: () => setHeaderModelRequests((n) => n + 1),
     getChatComposerEditGeneration,
-    chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
+    chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outboxDeliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
+    nativeChatQueuedMessages: activeChatStructured || ccrLane || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatLocalQueue: ccrLane ? { text: ccrSend.queue, onEdit: ccrSend.editQueue } : null, nativeChatAnthropicSend: ccrLane ? ccrSend.send : undefined, nativeChatQueueReadable: !activeChatStructured && !ccrLane && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
     chatImagePreviewsByMessageId, nativeChatImageShare,
     nativeChatSession: drawnSession, nativeChatAnthropicGate: claudeApi.gate, nativeChatAnthropicLive,
     nativeChatStructured: activeChatStructured,

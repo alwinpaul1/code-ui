@@ -78,7 +78,7 @@ export function MobileNativeChatView({
   getComposerEditGeneration,
   queuedMessages,
   onEditQueue,
-  onSendQueueNow,
+  onSendQueueNow, localQueue,
   queueEditor,
   pending,
   imagePreviewsByMessageId,
@@ -383,7 +383,7 @@ export function MobileNativeChatView({
                 agent={agent}
                 queuedMessages={queuedMessages}
                 onEditQueue={onEditQueue}
-                onSendQueueNow={onSendQueueNow}
+                onSendQueueNow={onSendQueueNow} localQueue={localQueue}
                 agentWorking={agentWorking === true}
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}

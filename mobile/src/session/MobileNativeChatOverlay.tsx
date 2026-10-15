@@ -477,13 +477,13 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={images.sendNativeChat}
+        onSend={controller.nativeChatAnthropicSend && images.attachments.length === 0 ? controller.nativeChatAnthropicSend : images.sendNativeChat}
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
         queuedMessages={projectedQueue.queue}
         onEditQueue={controller.nativeChatQueueEditable ? controller.openNativeChatQueueEditor : undefined}
-        onSendQueueNow={controller.sendNativeChatQueueNow}
+        onSendQueueNow={controller.sendNativeChatQueueNow} localQueue={controller.nativeChatLocalQueue}
         queueEditor={controller.nativeChatQueueEditor}
         pending={pendingInArrivalOrder} outboxDeliveries={controller.nativeChatOutboxDeliveries} onRetryOutbox={controller.retryNativeChatOutbox} onEditOutbox={controller.editNativeChatOutbox}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}

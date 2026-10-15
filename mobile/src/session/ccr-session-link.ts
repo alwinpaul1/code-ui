@@ -93,6 +93,9 @@ export class CcrSessionLink {
     }
   }
 
+  /** A request (a phone send, ccr-send.ts) for THIS session with THIS account's sign-in, never a copy's. */
+  withSession = <T>(run: (deps: CcrLinkDeps, accountId: string, sessionId: string) => Promise<T>): Promise<T> => run(this.deps, this.accountId, this.sessionId)
+
   /** Writes a pending streamed burst now (the app leaving, the link closing). */
   flushPersist(): void {
     this.keptCopy.flush()

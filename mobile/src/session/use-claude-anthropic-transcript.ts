@@ -5,6 +5,7 @@ import { acquireCcrLink } from './ccr-link-registry'
 import { ccrMatchOutcome, ccrMatchOutcomesVersion, subscribeCcrMatchOutcomes } from './ccr-match-outcome'
 import { ccrAccountForTab, ccrSessionForTab } from './ccr-session-cache'
 import type { CcrLinkState, CcrSessionLink } from './ccr-session-link'
+import type { CcrEvent } from './ccr-session-api'
 import { decodeCcrEvents } from './ccr-transcript-decode'
 import { deriveCcrLiveState, type CcrLiveState } from './ccr-live-state'
 import type { CcrLinkPhase } from './ccr-session-link-types'
@@ -46,6 +47,7 @@ export const CLAUDE_UNMATCHED_LINE = "This session isn't on Anthropic. Turn on R
 export const CLAUDE_SIGNED_OUT_LINE = 'Sign in to Anthropic to read Claude sessions on this phone.'
 
 const EMPTY: NativeChatMessage[] = []
+const NO_EVENTS: readonly CcrEvent[] = []
 const noop = () => undefined
 
 function emptySession(status: MobileNativeChatSession['status'], error?: string): MobileNativeChatSession {
@@ -189,7 +191,7 @@ export function useClaudeAnthropicTranscript(args: {
       }
     }
   }, [gate, link, rows, state])
-  return { gate, session, live, linkPhase: state?.phase ?? null, connectionStatus: state?.connectionStatus ?? null }
+  return { gate, session, live, linkPhase: state?.phase ?? null, connectionStatus: state?.connectionStatus ?? null, events: state?.events ?? NO_EVENTS }
 }
 
 export type ClaudeAnthropicTranscript = {
@@ -199,6 +201,8 @@ export type ClaudeAnthropicTranscript = {
   live: CcrLiveState | null
   linkPhase: CcrLinkPhase | null
   connectionStatus: string | null
+  /** The matched link's events, oldest first: a phone send's echo is found here by its uuid (use-ccr-composer-send.ts). */
+  events: readonly CcrEvent[]
 }
 
 const subscribeNothing = () => noop
