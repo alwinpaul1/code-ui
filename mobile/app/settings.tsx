@@ -14,6 +14,7 @@ import {
   Palette,
   Terminal as TerminalIcon,
   KeyRound,
+  UserRound,
   type LucideIcon
 } from 'lucide-react-native'
 import { useTheme } from '../src/theme/theme-context'
@@ -169,6 +170,11 @@ export default function SettingsScreen() {
             icon={Globe}
             label="Browser"
             onPress={() => router.push('/browser-settings')}
+          />
+          <SettingsRow
+            icon={UserRound}
+            label="Anthropic accounts"
+            onPress={() => router.push('/anthropic-accounts')}
           />
           <SettingsRow icon={Mic} label="Voice" onPress={() => router.push('/voice-settings')} />
           <SettingsRow

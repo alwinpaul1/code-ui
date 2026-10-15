@@ -26,7 +26,7 @@ export async function resolveCcrAuths(deps: CcrPipelineDeps, report: Report): Pr
     return { auths: [], failures: [{ stage: 'sign-in', accountId: null, detail: `the sign-in could not be read: ${reasonOf(error)}` }] }
   }
   if (entries.length === 0) {
-    return { auths: [], failures: [{ stage: 'sign-in', accountId: null, detail: 'not signed in to Anthropic on this phone (Voice settings → Sign in)' }] }
+    return { auths: [], failures: [{ stage: 'sign-in', accountId: null, detail: 'not signed in to Anthropic on this phone (Settings → Anthropic accounts)' }] }
   }
   // Each account at once: a profile read for one does not hold up another's (only an account with
   // no organization kept reads one). Lines and results keep the accounts' order.

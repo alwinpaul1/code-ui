@@ -2,7 +2,7 @@
  * A mic tap with nobody signed in to Anthropic on the phone (reported 2026-10-14 with a screen
  * recording: the toast read "unstructured server error", from a token the app had taken out of the
  * desktop's Keychain through a hidden terminal). Signing in on the phone is mandatory (the user,
- * 2026-10-14), so a signed-out tap says so and opens Voice settings, and starts nothing: no
+ * 2026-10-14), so a signed-out tap says so and opens the Anthropic accounts screen, and starts nothing: no
  * recogniser, no desktop dictation, no terminal on the desktop.
  *
  * Mounts the real `useMobileSessionNativeChatDictation` over the real engines, because the defect
@@ -190,14 +190,14 @@ beforeEach(() => {
 })
 
 describe('a mic tap with nobody signed in to Anthropic on the phone', () => {
-  it('says so and opens Voice settings, and starts nothing', async () => {
+  it('says so and opens the Anthropic accounts screen, and starts nothing', async () => {
     const rpc = createFakeRpcClient()
     const mounted = mount(rpc)
     await settle()
     await act(async () => mounted.tap())
     await settle()
 
-    expect(seen.pushed).toEqual(['/voice-settings'])
+    expect(seen.pushed).toEqual(['/anthropic-accounts'])
     expect(seen.toasts).toEqual(['Sign in to Anthropic to dictate'])
     expect(rpc.requests.map((request) => request.method)).not.toContain('speech.dictation.start')
     expect(rpc.requests).toEqual([])
@@ -217,7 +217,7 @@ describe('a mic tap with nobody signed in to Anthropic on the phone', () => {
 })
 
 describe('a mic tap with someone signed in on the phone', () => {
-  it('does not send them to Voice settings', async () => {
+  it('does not send them to the Anthropic accounts screen', async () => {
     seen.signedIn = true
     const rpc = createFakeRpcClient()
     const mounted = mount(rpc)

@@ -113,7 +113,7 @@ export function useMobileSessionNativeChatDictation(
   })
   // Signing in on the phone is mandatory (the user, 2026-10-14). A mic tap while signed out reads
   // the store once more (a sign-in may have just happened) and, if still nobody is signed in,
-  // says so and opens Voice settings instead of starting anything.
+  // says so and opens the Anthropic accounts screen instead of starting anything.
   const { available: anthropicSignedIn, refreshAvailable: refreshAnthropicSignIn } = anthropicDictation
   const requireAnthropicSignIn = useCallback((): boolean => {
     if (anthropicSignedIn) {
@@ -122,7 +122,7 @@ export function useMobileSessionNativeChatDictation(
     void refreshAnthropicSignIn().then((signedIn) => {
       if (!signedIn) {
         showToast('Sign in to Anthropic to dictate')
-        router.push('/voice-settings')
+        router.push('/anthropic-accounts')
       }
     })
     return false

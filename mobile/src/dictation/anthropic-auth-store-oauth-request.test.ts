@@ -1,5 +1,5 @@
 /**
- * Signing in to Anthropic from Voice settings. Reported 2026-10-14 on 0.9.137: tapping "Sign in to
+ * Signing in to Anthropic from the Anthropic accounts screen. Reported 2026-10-14 on 0.9.137: tapping "Sign in to
  * Anthropic" opened claude.ai on "Invalid OAuth request — Missing state parameter", so no code was
  * ever shown to paste back.
  *
@@ -73,7 +73,7 @@ beforeEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('the sign-in page Voice settings opens', () => {
+describe('the sign-in page the Anthropic accounts screen opens', () => {
   it('carries a state, so claude.ai does not refuse it as "Missing state parameter"', async () => {
     const url = await openedLogin()
     expect(url.searchParams.get('state')).toMatch(/^[\w-]{43}$/)

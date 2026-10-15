@@ -51,7 +51,7 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  * app shows it, read through Anthropic's API with the phone's sign-in.
  *
  * Stages, each leaving one log line that names success or the reason:
- *   sign-in  → the phone's Anthropic sign-ins (Voice settings), one per account;
+ *   sign-in  → the phone's Anthropic sign-ins (Settings, Anthropic accounts), one per account;
  *   org      → the organization each acts for, kept per account;
  *   sessions → every account's Remote Control (`bridge`) sessions, all accounts
  *              asked at once, each list shared by the tabs asking together

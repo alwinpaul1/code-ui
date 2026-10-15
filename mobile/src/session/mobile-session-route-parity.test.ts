@@ -270,7 +270,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-14: the five dictation callbacks left for useDictationHoldMode (see the identity pin).
 // 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
-const HEAD_CALLBACK_BODY_SHA256 = '5c7a0dfd0ed0254d5703516abcc55cab928e6204cf631d8eda3f06879c127405'
+const HEAD_CALLBACK_BODY_SHA256 = '631b236d34cd2d0929f34a076fcbfc98e3ebfd5fc7ba4783f7af245da9f753f5'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -477,12 +477,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 681 since 2026-10-14: the Anthropic voice_stream dictation's engine checks ('anthropic' twice),
 // its 'en' language and 'live' mode join. The send gate's 'chat' stays in the dictation hook
 // (targetIsChat), so a send ends only a chat take.
-// 683 since 2026-10-14 (later): '/voice-settings' and 'Sign in to Anthropic to dictate', the
+// 683 since 2026-10-14 (later): '/voice-settings' (now '/anthropic-accounts', 2026-10-15; same count) and 'Sign in to Anthropic to dictate', the
 // mic's sign-in gate.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '4131cad4a556bd708a0611b1c8ce16b49992ddbc324ff84edd9cc00f847d9d7c'
+  '33e30d80084f3ccf3d2344f20c40e596f77e0bccb404fa6d0dc980cd2f1dbb82'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -667,8 +667,8 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // openMcpServers/openPermissionRules/openProjectMemory — three router.push
 // navigators for the new project-config screens (MCP servers, permission
 // rules, project memory), each session-menu entries alongside Agent History.
-// 10 since 2026-10-14: a signed-out mic tap opens Voice settings (router.push('/voice-settings')).
-const HEAD_NAVIGATION_SHA256 = '51995be796072ac20481b2d07e394b1b32a6c405addfcc2b60ca750da429806a'
+// 10 since 2026-10-14: a signed-out mic tap opens the Anthropic accounts screen (router.push('/anthropic-accounts'); it was Voice settings until 2026-10-15).
+const HEAD_NAVIGATION_SHA256 = '115e61bb0ea84e4aa4e689b67401280eeb96663192d02b6a5a8949a19717c11e'
 // 2026-10-04 (Orca #24301): agent-session.repeated-stop.v1 joins prompt-cancel in the probe.
 // 2026-10-10 (Orca #27196): the probe also sets hostRefusesOtherRuntime, read through
 // hostRefusesOtherRuntimeWorkspace rather than a constant here, so the count stays 7.
@@ -1168,7 +1168,7 @@ describe('mobile session route extraction parity', () => {
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
     // 9 since 2026-09-18: the three new session-menu router.push navigators —
     // see HEAD_NAVIGATION_SHA256.
-    // 10 since 2026-10-14: the signed-out mic tap's push to Voice settings.
+    // 10 since 2026-10-14: the signed-out mic tap's push to the Anthropic accounts screen.
     expect(compatibility.navigation).toHaveLength(10)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
     // 6 since 2026-09-19: agent-session.prompt-cancel.v1 (Orca #20601).

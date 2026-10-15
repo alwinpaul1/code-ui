@@ -77,7 +77,7 @@ export async function fetchAccountCredentials(only?: string): Promise<AccountCre
       const live = await liveCredential(account)
       return live
         ? { ...base, accessToken: live.accessToken }
-        : { ...base, accessToken: null, error: 'the sign-in expired and could not be refreshed; sign in to this account again in Voice settings' }
+        : { ...base, accessToken: null, error: 'the sign-in expired and could not be refreshed; sign in to this account again in Settings, Anthropic accounts' }
     })
   )
 }

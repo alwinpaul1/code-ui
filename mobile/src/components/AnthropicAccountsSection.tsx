@@ -24,8 +24,8 @@ export const ADD_ACCOUNT_HINT = 'Switch to the other account on claude.ai first.
  * The phone's Anthropic sign-ins: one row per Claude account (the default profile and a work
  * profile on the desktop are different accounts in different organizations, and the sessions API
  * only shows a session to its own organization), "Add another account", and "Sign out" per
- * account. The first account is the one voice dictation uses. Rendered inside the Voice settings
- * ScrollView, which sets keyboardShouldPersistTaps for the code field.
+ * account. The first account is the one voice dictation uses. Rendered on the Anthropic accounts
+ * screen (Settings), whose ScrollView sets keyboardShouldPersistTaps for the code field.
  */
 export function AnthropicAccountsSection(): React.JSX.Element {
   const { colors } = useTheme()
@@ -125,7 +125,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   }, [reload])
 
   const signedIn = accounts !== null && accounts.length > 0
-  // Voice uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
+  // Dictation uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
   // so instead of "Signed in", as the single-account screen did (isLoggedIn) before 2026-10-14.
   const now = readAt
   const voiceAccountId = accounts?.find((account) => isAccountUsable(account, now))?.id ?? null
@@ -147,7 +147,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
                   {!isAccountUsable(account, now)
                     ? 'Signed out. Sign in to this account again.'
                     : account.id === voiceAccountId
-                      ? 'Signed in. Voice transcription uses this account.'
+                      ? 'Signed in. Dictation uses this account.'
                       : 'Signed in.'}
                 </Text>
               </View>
@@ -169,7 +169,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
           >
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>{signedIn ? 'Add another account' : 'Sign in to Anthropic'}</Text>
-              <Text style={styles.rowSublabel}>{signedIn ? ADD_ACCOUNT_HINT : 'Required for voice dictation.'}</Text>
+              <Text style={styles.rowSublabel}>{signedIn ? ADD_ACCOUNT_HINT : 'Used for sessions, usage and dictation.'}</Text>
             </View>
             {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
           </Pressable>

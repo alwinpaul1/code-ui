@@ -2,7 +2,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * The phone's Anthropic accounts on the Voice settings screen: one row per signed-in account with
+ * The phone's Anthropic accounts on the Anthropic accounts screen: one row per signed-in account with
  * its own "Sign out", "Add another account" (the same paste-the-code flow), and light and dark
  * both drawn from the live theme. The user runs Claude Code under two accounts on the desktop, so
  * the phone signs in to each (2026-10-14).
@@ -157,7 +157,7 @@ describe('the accounts list', () => {
     store.accounts = [PERSONAL, WORK]
     const root = await draw()
     expect(texts(root).filter((text) => text === 'Personal' || text === 'NexDash')).toEqual(['Personal', 'NexDash'])
-    expect(texts(root)).toContain('Signed in. Voice transcription uses this account.')
+    expect(texts(root)).toContain('Signed in. Dictation uses this account.')
     expect(texts(root)).toContain('Signed in.')
     expect(root.findAll((node) => String(node.type) === 'Button' && node.props.label === 'Sign out')).toHaveLength(2)
   })
@@ -194,7 +194,7 @@ describe('an account whose sign-in died (review of 2026-10-14)', () => {
     const all = texts(root)
     expect(all).toContain('Signed out. Sign in to this account again.')
     // Voice uses the account that still works, and only that one says so.
-    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual(['Signed in. Voice transcription uses this account.'])
+    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual(['Signed in. Dictation uses this account.'])
     expect(stylesOf(textNode(root, 'Signed out. Sign in to this account again.')!.props.style).map((s) => s.color)).toContain(palette.textSecondary)
   })
 
