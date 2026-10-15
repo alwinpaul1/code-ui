@@ -142,12 +142,13 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(pressables(screenNow, 'Edit image')).toHaveLength(1)
     expect(pressables(screenNow, 'Close')).toHaveLength(1)
     // The strip is drawn in the reader's own theme, under the viewer's scrim.
+    // The Claude app's photo chip (`l7f.d`, cxe.java:340): a 96 dp square clipped to 16 dp.
     const chip = screenNow.root.find(
-      (node) => String(node.type) === 'View' && node.props.style?.height === 60 && node.props.style?.width === 60
+      (node) => String(node.type) === 'View' && node.props.style?.height === 96 && node.props.style?.width === 96
     )
     expect(chip.props.style).toMatchObject({
-      borderColor: PALETTE[scheme].border,
-      backgroundColor: PALETTE[scheme].bgRaised
+      borderRadius: 16,
+      backgroundColor: PALETTE[scheme].attachmentCardFill
     })
   })
 
@@ -370,9 +371,11 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(chipPictures(screenNow)).toEqual(['data:image/png;base64,ZZZZ'])
     const ring = uploadRings(screenNow)
     expect(ring).toHaveLength(1)
-    expect(ring[0]!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].bgOverlay })
+    // The app's ring (`yfi.f`): 32 dp in its accent (`pl7.e`), over the photo with no scrim.
+    expect(ring[0]!.props.style).not.toHaveProperty('backgroundColor')
     const spinner = ring[0]!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]
-    expect(spinner?.props.color).toBe(PALETTE[scheme].text)
+    expect(spinner?.props.color).toBe(PALETTE[scheme].composerSend)
+    expect(spinner?.props.size).toBe(32)
     // Nothing to mark up again while the marks upload, but the remove badge
     // stays, as the Claude app keeps it on a chip in every state (g330.b).
     expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
@@ -420,7 +423,7 @@ describe('the video-frame extraction progress chip', () => {
     )
     expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading frames 5/20'))).toBe(true)
     const chip = screenNow.root.find(
-      (node) => String(node.type) === 'View' && node.props.style?.height === 60 && node.props.style?.maxWidth === 210
+      (node) => String(node.type) === 'View' && node.props.style?.height === 96 && node.props.style?.maxWidth === 210
     )
     expect(chip.props.style).toMatchObject({
       borderColor: PALETTE[scheme].border,
@@ -463,16 +466,16 @@ describe('the video-frame extraction progress chip', () => {
       attachments: [PHOTO],
       videoFrameExtraction: { batch: 'batch-1', done: 1, total: 20 }
     })
-    // Both chip shapes are a 60-tall View; the progress chip is the wide one
-    // (maxWidth 210, like a file chip), the photo the square one (width 60).
+    // Both chip shapes are a 96-tall View; the progress chip is the wide one
+    // (maxWidth 210), the photo the square one (width 96).
     // findAll walks the tree in render order, so their relative order here is
     // the strip's own left-to-right order.
     const chips = screenNow.root.findAll(
-      (node) => String(node.type) === 'View' && node.props.style?.height === 60
+      (node) => String(node.type) === 'View' && node.props.style?.height === 96
     )
     expect(chips).toHaveLength(2)
     expect(chips[0]!.props.style).toMatchObject({ maxWidth: 210 })
-    expect(chips[1]!.props.style).toMatchObject({ width: 60 })
+    expect(chips[1]!.props.style).toMatchObject({ width: 96 })
   })
 
   it('cancels through the same remove badge the strip already draws', () => {
@@ -520,7 +523,8 @@ describe('a chip whose upload failed', () => {
     const screenNow = draw(scheme, { attachments: [PHOTO, FAILED], onRemoveAttachment })
     const [retry] = pressables(screenNow, 'Retry upload')
     expect(retry).toBeDefined()
-    expect(retry!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].danger })
+    // The app's failed disc (`l7f.a`): its red at 0.8, 6 dp round the glyph.
+    expect(retry!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].danger, opacity: 0.8, padding: 6 })
     const icon = retry!.findAll((node) => String(node.type) === 'RotateCcw')[0]
     expect(icon?.props.color).toBe(PALETTE[scheme].onDanger)
     expect(pressables(screenNow, 'Remove attachment')).toHaveLength(2)
@@ -572,7 +576,10 @@ describe('a chip still uploading', () => {
     expect(renderer!.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(1)
     const [remove] = pressables(renderer!, 'Remove attachment')
     expect(remove).toBeDefined()
-    expect(remove!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].text })
+    // The app's remove disc (cxe.java:119-170): 18 dp in `pl7.O`, 4 dp in from the top end, its
+    // cross in the card fill (`pl7.p`).
+    expect(remove!.props.style).toMatchObject({ width: 18, height: 18, top: 4, right: 4, backgroundColor: PALETTE[scheme].text })
+    expect(remove!.findAll((node) => String(node.type) === 'X')[0]?.props.color).toBe(PALETTE[scheme].attachmentCardFill)
     tap(remove)
     expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-7')
   })
@@ -643,3 +650,53 @@ describe('reordering the chips from a screen reader', () => {
   })
 })
 
+// The Claude app's document chip is the card it draws over a sent prompt (`l7f.d`, 1.261009.20):
+// bordered, the extension badge at the top start, the base name at the bottom, and the state at the
+// bottom end beside the name. No file-type icon and no size. The strip is a row 12 dp apart (`l7s.a`).
+describe('a document chip, as the Claude app draws it', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  const DOC: PendingNativeChatImage = { id: 'doc-1', path: '/tmp/r.pdf', previewUri: 'file:///r.pdf', kind: 'file', name: 'quarterly report.pdf' }
+
+  function draw(scheme: Scheme, props: ChipProps): ReactTestRenderer {
+    act(() => {
+      renderer = create(screen(scheme, props))
+    })
+    return renderer!
+  }
+
+  function texts(node: ReactTestInstance): string[] {
+    return node.findAll((inner) => String(inner.type) === 'Text').map((inner) => [inner.props.children].flat().join(''))
+  }
+
+  it.each(SCHEMES)('shows the extension badge over the base name in the card colours, and no icon (%s)', (scheme) => {
+    const screenNow = draw(scheme, { attachments: [DOC], onRemoveAttachment: vi.fn() })
+    const card = screenNow.root.find((node) => String(node.type) === 'View' && node.props.style?.height === 96 && node.props.style?.borderWidth === 1)
+    expect(card.props.style).toMatchObject({ borderRadius: 16, borderColor: PALETTE[scheme].attachmentCardBorder, backgroundColor: PALETTE[scheme].attachmentCardFill })
+    expect(texts(card)).toEqual(['PDF', 'quarterly report'])
+    expect(card.findAll((node) => String(node.type) === 'FileText')).toHaveLength(0)
+  })
+
+  it('keeps a dotfile name whole, with no badge', () => {
+    const screenNow = draw('light', { attachments: [{ ...DOC, name: '.env' }] })
+    expect(texts(screenNow.root)).toContain('.env')
+  })
+
+  it.each(SCHEMES)('draws the ring inside the card at the bottom end, not over it (%s)', (scheme) => {
+    const screenNow = draw(scheme, { attachments: [{ ...DOC, path: '', uploading: true }], onRemoveAttachment: vi.fn() })
+    const [ring] = screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.testID === 'attachment-uploading')
+    expect(ring).toBeDefined()
+    expect(ring!.props.style).not.toMatchObject({ position: 'absolute' })
+    expect(ring!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]?.props.color).toBe(PALETTE[scheme].composerSend)
+  })
+
+  it('lays the strip out 12 apart', () => {
+    const screenNow = draw('light', { attachments: [DOC, PHOTO] })
+    const strip = screenNow.root.find((node) => String(node.type) === 'ScrollView')
+    expect(strip.props.contentContainerStyle).toMatchObject({ gap: 12 })
+  })
+})

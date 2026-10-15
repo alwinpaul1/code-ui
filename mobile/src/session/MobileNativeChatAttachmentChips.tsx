@@ -1,5 +1,5 @@
-import { FileText, Film, RotateCcw, X } from 'lucide-react-native'
-import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
+import { Film, RotateCcw, X } from 'lucide-react-native'
+import { ActivityIndicator, Image, Pressable, ScrollView, Text, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -7,6 +7,24 @@ import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-i
 import { openImagePreview } from './image-preview-store'
 import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
 import { moveNativeChatAttachment } from './mobile-native-chat-attachment-order'
+import { useFileCardStyles } from './mobile-native-chat-file-card-styles'
+import { splitAttachmentName } from './mobile-native-chat-file-mentions'
+
+/**
+ * A chip as the Claude app draws one in the Code composer (com.anthropic.claude 1.261009.20,
+ * decompiled): `l7s.a` lays the strip out as a LazyRow 12 dp apart, and each chip is `l7f.d` at
+ * 96 dp (`cxe.c`, cxe.java:340/497), the same body as the card above a sent prompt
+ * (mobile-native-chat-file-card-styles.ts): a photo fills a 96 dp square clipped to 16 dp, cropped;
+ * a document is the bordered card with its extension badge at the top and its name at the bottom.
+ * While it uploads, an indeterminate ring (`yfi.f`, 32 dp, `pl7.e`) sits over the photo's centre, or
+ * at the card's bottom end beside the name, with no scrim. A failed upload is a red disc there
+ * instead (`l7f.a`: `pl7.A` at 0.8 alpha, 6 dp padding). Remove is an 18 dp disc in `pl7.O` at the
+ * top end, 4 dp in, its cross in `pl7.p`, in every state. One addition: the red disc is a retry
+ * here (the app has none on the chip), since this lane can send the file again.
+ */
+const CHIP = 96
+const STRIP_GAP = 12
+const RING = 32
 
 /** "Move earlier" / "Move later" where the chip can go, the Claude app's
  *  screen-reader reorder (ccr_reorder_move_earlier_a11y / _later_a11y). */
@@ -51,7 +69,8 @@ export function MobileNativeChatAttachmentChips({
   videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
   onCancelVideoFrameExtraction?: () => void
 }) {
-  const { colors, radius, space } = useTheme()
+  const { colors, space } = useTheme()
+  const cardStyles = useFileCardStyles()
   if (attachments.length === 0 && !videoFrameExtraction) {
     return null
   }
@@ -60,9 +79,9 @@ export function MobileNativeChatAttachmentChips({
       horizontal
       keyboardShouldPersistTaps="always"
       showsHorizontalScrollIndicator={false}
-      style={{ maxHeight: 80 }}
+      style={{ maxHeight: CHIP + space.md }}
       contentContainerStyle={{
-        gap: space.sm,
+        gap: STRIP_GAP,
         paddingHorizontal: space.md,
         paddingTop: space.md
       }}
@@ -70,10 +89,10 @@ export function MobileNativeChatAttachmentChips({
       {videoFrameExtraction ? (
         <View
           style={{
-            height: 60,
+            height: CHIP,
             maxWidth: 210,
             paddingRight: 26,
-            borderRadius: radius.sm,
+            borderRadius: 16,
             borderWidth: 1,
             borderColor: colors.border,
             backgroundColor: colors.bgRaised
@@ -120,36 +139,57 @@ export function MobileNativeChatAttachmentChips({
       {attachments.map((attachment, index) => {
         const isFile = attachment.kind === 'file'
         const reorderable = reorderActions(index, attachments.length)
+        const fileName = attachment.name ?? 'File'
+        // The app's own split (p530): base name over the extension badge; a dotfile keeps its name.
+        const { stem: splitStem, ext } = splitAttachmentName(fileName)
+        const stem = splitStem || fileName
+        // Still on its way up, the ring; its bytes never arrived, the red disc (a retry here). Over a
+        // photo's centre with no scrim, so the picture stays visible; at a document's bottom end.
+        const statePlacement = isFile
+          ? {}
+          : { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center' as const, justifyContent: 'center' as const }
+        const state = attachment.uploading ? (
+          <View pointerEvents="none" accessibilityLabel="Uploading" testID="attachment-uploading" style={statePlacement}>
+            <ActivityIndicator size={RING} color={colors.composerSend} />
+          </View>
+        ) : attachment.failed ? (
+          // The retry is kept by chip id (mobile-native-chat-upload-retry.ts).
+          <View pointerEvents="box-none" accessibilityLabel="Upload failed" style={statePlacement}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry upload"
+              style={{ padding: 6, borderRadius: 999, opacity: 0.8, backgroundColor: colors.danger }}
+              onPress={() => void retryNativeChatUpload(attachment.id)}
+              hitSlop={8}
+            >
+              <RotateCcw size={16} color={colors.onDanger} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+        ) : null
         return (
-          <View
-            key={attachment.id}
-            style={{
-              height: 60,
-              ...(isFile ? { maxWidth: 210, paddingRight: 26 } : { width: 60 }),
-              borderRadius: radius.sm,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.bgRaised
-            }}
-          >
+          <View key={attachment.id} style={isFile ? cardStyles.card : cardStyles.thumb}>
             {isFile ? (
               <View
                 accessible
-                accessibilityLabel={attachment.name ?? 'File'}
+                accessibilityLabel={fileName}
                 accessibilityActions={reorderable}
                 onAccessibilityAction={onReorderAction(attachment.id)}
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: space.xs,
-                  paddingLeft: space.sm
-                }}
+                style={{ flex: 1 }}
               >
-                <FileText size={20} color={colors.textSecondary} strokeWidth={1.8} />
-                <Txt variant="caption" weight="medium" numberOfLines={2} style={{ maxWidth: 140 }}>
-                  {attachment.name ?? 'File'}
-                </Txt>
+                {ext ? (
+                  <View style={cardStyles.badge}>
+                    <Text numberOfLines={1} style={cardStyles.badgeText}>
+                      {ext}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={cardStyles.spacer} />
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+                  <Text numberOfLines={3} style={[cardStyles.name, { flex: 1 }]}>
+                    {stem}
+                  </Text>
+                  {state}
+                </View>
               </View>
             ) : (
               // A tap opens the photo full-screen, the way the Claude app does,
@@ -177,97 +217,32 @@ export function MobileNativeChatAttachmentChips({
                   )
                 }
               >
-                <Image
-                  source={{ uri: attachment.previewUri }}
-                  style={{ width: '100%', height: '100%', borderRadius: radius.sm }}
-                  resizeMode="cover"
-                />
+                <Image source={{ uri: attachment.previewUri }} style={cardStyles.thumbImage} resizeMode="cover" />
               </Pressable>
             )}
-            {attachment.uploading ? (
-              // Still on its way to the host: the chip is there at once, with a
-              // ring over it, the way the Claude app shows a heavy upload
-              // (2026-09-13). The rest of the composer stays usable.
-              <View
-                pointerEvents="none"
-                accessibilityLabel="Uploading"
-                testID="attachment-uploading"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.bgOverlay
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.text} />
-              </View>
-            ) : null}
-            {attachment.failed && !attachment.uploading ? (
-              // Its bytes never reached the host: a retry over the picture,
-              // and the remove badge stays beside it (2026-10-11). The retry
-              // itself is kept by chip id (mobile-native-chat-upload-retry.ts).
-              <View
-                pointerEvents="box-none"
-                accessibilityLabel="Upload failed"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.bgOverlay
-                }}
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Retry upload"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: colors.danger
-                  }}
-                  onPress={() => void retryNativeChatUpload(attachment.id)}
-                  hitSlop={8}
-                >
-                  <RotateCcw size={14} color={colors.onDanger} strokeWidth={2.4} />
-                </Pressable>
-              </View>
-            ) : null}
+            {isFile ? null : state}
             {onRemoveAttachment ? (
-              // In every state, uploading too, as the Claude app draws it
-              // (g330.b): a photo on its way out can still be taken back. It
-              // comes after the ring in the tree, so it paints over it.
+              // In every state, uploading too, as the Claude app draws it: a file on its way up can
+              // still be taken back. It comes after the ring in the tree, so it paints over it. Inset
+              // inside the chip: Android drops touches outside the parent's bounds.
               <Pressable
                 // The Claude app's words for it (ccr_remove_attachment).
                 accessibilityLabel="Remove attachment"
-                // Inset inside the chip: Android drops touches outside the parent's
-                // bounds, so an overhanging badge would lose part of its tap target.
                 style={{
                   position: 'absolute',
-                  top: 3,
-                  right: 3,
-                  width: 20,
-                  height: 20,
-                  borderRadius: 10,
+                  top: 4,
+                  right: 4,
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: colors.text
                 }}
                 onPress={() => onRemoveAttachment(attachment.id)}
-                hitSlop={8}
+                hitSlop={10}
               >
-                <X size={12} color={colors.textInverse} strokeWidth={2.6} />
+                <X size={12} color={colors.attachmentCardFill} strokeWidth={2.6} />
               </Pressable>
             ) : null}
           </View>
