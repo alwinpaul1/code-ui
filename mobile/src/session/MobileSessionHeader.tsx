@@ -17,6 +17,7 @@ import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { claudeChatHeaderConnection } from './claude-chat-live'
+import { claudeSessionHeaderTitle } from './ccr-session-facts'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { sessionTabActivity, tabPillDotState } from './session-tab-activity'
@@ -141,8 +142,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         />
 
         <View style={{ flex: 1, minWidth: 0, marginRight: space.xs }}>
+          {/* A Claude chat matched to its Anthropic session shows the session's own title, as the
+              Claude app's header does; the worktree name otherwise (ccr-session-facts.ts). */}
           <Txt variant="heading" weight="semibold" numberOfLines={1}>
-            {worktreeName || 'Terminal'}
+            {claudeSessionHeaderTitle(controller.nativeChatController.nativeChatAnthropicSession?.title ?? null, worktreeName)}
           </Txt>
           <Pressable
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}

@@ -3,6 +3,7 @@ import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-sess
 import { findAccountSessionRow } from './ccr-session-lists'
 import { noteCcrRowContext } from './ccr-session-usage'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
+import { noteCcrSessionFacts } from './ccr-session-facts'
 import {
   defaultLog,
   maskId,
@@ -13,9 +14,11 @@ import {
   type CcrStageReport
 } from './ccr-session-shared'
 
-/** Keeps the matched row's reported model and effort for the pill (ccr-session-model.ts). */
+/** Keeps the matched row's reported model and effort for the pill (ccr-session-model.ts), and its
+ *  title, list state and unread mark for the header and the list (ccr-session-facts.ts). */
 export function noteModel(tabId: string, epoch: number | null, row: CcrSessionRow, report: (stage: CcrStage, ok: boolean, detail: string) => void): void {
   noteCcrRowContext(tabId, epoch, row)
+  noteCcrSessionFacts(tabId, epoch, row)
   const read = ccrModelOfRow(row)
   if ('skip' in read) {
     forgetCcrModel(tabId)

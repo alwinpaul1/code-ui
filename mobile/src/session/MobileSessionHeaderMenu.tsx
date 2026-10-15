@@ -5,6 +5,8 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { MobileCcrImagesSelfTest } from './MobileCcrImagesSelfTest'
 import { sessionConnectionLine, sessionHeaderMenuActions } from './session-header-menu'
+import { CCR_SESSION_WRITES, renameCcrSessionFromHeader } from './ccr-session-writes'
+import { loadDefaultCcrPipelineDeps } from './use-ccr-session-images'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionHeaderMenu } from './use-session-header-menu'
 import { useSessionHostName } from './use-session-host-name'
@@ -50,13 +52,17 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
     unreachable: connectionVerdict.kind === 'unreachable',
     hostName
   })
+  // A Claude tab matched to its Anthropic session renames the session, as the app does, once the
+  // write is proven (CCR_SESSION_WRITES); until then Rename is the workspace, as before.
+  const anthropicSession = CCR_SESSION_WRITES ? (nativeChatController.nativeChatAnthropicSession ?? null) : null
   const actions = sessionHeaderMenuActions({
     client,
     worktreeId,
     branch: sessionMenu.branch,
     sessionId: sessionMenu.sessionId,
     clipboard,
-    showToast
+    showToast,
+    renameAnthropicSession: anthropicSession ? (name) => renameCcrSessionFromHeader(anthropicSession, name, loadDefaultCcrPipelineDeps) : null
   })
   // The name the dialog opened with, held while it is up: the dialog resets
   // what was typed whenever its default changes, and the live title can move
@@ -83,7 +89,7 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
         onCopyBranch={() => void actions.copyBranch()}
         onOpenBackgroundTasks={() => sessionMenu.openBackgroundTasks?.()}
         onChangeModel={() => nativeChatController.requestModelSheet()}
-        onRename={() => setRenaming(worktreeName)}
+        onRename={() => setRenaming(anthropicSession?.title ?? worktreeName)}
         onArchive={() => setArchiving(sessionMenu.archiveTab)}
         onCopySessionId={() => void actions.copySessionId()}
         onCheckSessionImages={() => setCheckingImages(true)}
@@ -91,7 +97,8 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
       />
       <MobileCcrImagesSelfTest visible={checkingImages} onClose={() => setCheckingImages(false)} />
       {/* The Claude app's Rename dialog, in its words. The name is the
-          workspace's own display name, which is the header's title. */}
+          workspace's display name, or the Anthropic session's title once
+          CCR_SESSION_WRITES is on. */}
       <TextInputModal
         visible={renaming !== null}
         title="Rename session"

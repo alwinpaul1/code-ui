@@ -1,6 +1,7 @@
 import type { ClaudeUsageSheetData } from './ClaudeUsageSheet'
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { ClaudeChatLive } from './claude-chat-live'
+import type { CcrSessionHeader } from './use-ccr-session-header'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -128,6 +129,9 @@ export type MobileNativeChatController = {
   nativeChatAnthropicGate?: ClaudeChatGate
   /** A matched Claude tab's live state from Anthropic and which source drives it (claude-chat-live.ts). */
   nativeChatAnthropicLive?: ClaudeChatLive | null
+  /** A matched Claude tab's Anthropic session: its title for the header, and where a rename of it
+   *  goes (use-ccr-session-header.ts). Null for every other tab. */
+  nativeChatAnthropicSession?: CcrSessionHeader | null
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
