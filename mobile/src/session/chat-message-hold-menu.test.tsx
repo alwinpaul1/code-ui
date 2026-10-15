@@ -4,12 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 // The user, 2026-10-15: "we need exact hold to copy from Claude mobile, and scrolls must not
-// trigger hold to copy." The Claude app (com.anthropic.claude 1.261009.20) selects nothing in
-// place on a Code session's timeline. A hold on a prose row, Claude's or the user's, buzzes,
-// holds the message and hangs a menu card from it: Copy and Select text (rgs.java:85-110,
-// t030.t), each with the row's words as drawn (Claude gives the Markdown source; Code UI gives plain text, by the user's choice, 2026-10-15). Select text opens a sheet with that text in
-// a SelectionContainer (code/remote/bottomsheet/b.java:2349-2362). Before this, a hold on a reply
-// started Android's selection in the list, which a finger stopping a fling could start too.
+// trigger hold to copy." In the Claude app (com.anthropic.claude 1.261013.20) a hold on the
+// user's own message in a Code session buzzes, holds the message and hangs a menu card from it:
+// Copy and Select text (l1s, xhz items yhz/eiz built in ds8; the bubble, gy30.d, has no
+// SelectionContainer), each with the row's words (Claude gives the Markdown source; Code UI gives
+// plain text, by the user's choice, 2026-10-15). Select text opens a sheet with that text in a
+// SelectionContainer (code/remote/bottomsheet/b.java). Claude's own words have no menu: they
+// select in place (chat-reply-hold-selects-in-place.test.tsx).
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -95,6 +96,9 @@ import { markdownPlainText } from '../components/markdown-plain-text'
 const REPLY = ['First paragraph of the reply.', '', 'Second, with **bold** and `code`.', '', '- one item', '- another item'].join(
   '\n'
 )
+/** A prompt written in Markdown: the menu gives its words without the marks. */
+const PROMPT = ['run the gate', '', '- then **push**', '- and `tag` it'].join('\n')
+const PROMPT_WORDS = markdownPlainText(PROMPT).trim()
 
 const message = (role: NativeChatMessage['role'], text: string, id = `${role}-1`): NativeChatMessage => ({
   id,
@@ -176,19 +180,19 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('holding a message in a %s session', (scheme, palette) => {
-  it('opens the Claude menu on a reply, with the long-press buzz, instead of starting a selection', async () => {
-    const root = render(message('assistant', REPLY), scheme)
+  it('opens the Claude menu on a sent prompt, with the long-press buzz, hung from its end', async () => {
+    const root = render(message('user', PROMPT), scheme)
     expect(menu(root)).toBeUndefined()
     const target = holdTarget(root)
     expect(target.props.delayLongPress).toBe(CHAT_HOLD_MS)
-    await holdStill(target)
+    await holdStill(target, 300, 200)
     expect(menuRows(root)).toEqual(['Copy', 'Select text'])
     expect(triggerMediumImpact).toHaveBeenCalledTimes(1)
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
-    // Hung from the reply's start (the point the finger was on, where nothing measures it here).
+    // Hung from the prompt's end (the point the finger was on, where nothing measures it here).
     const card = flat(menu(root)!.props.style)
-    expect(card.left).toBe(120)
-    expect(card.right).toBeUndefined()
+    expect(card.right).toBe(390 - 300)
+    expect(card.left).toBeUndefined()
     expect(card.backgroundColor).toBe(palette.askCardFill)
     expect(card.borderColor).toBe(palette.askDivider)
     expect(card.borderRadius).toBe(12)
@@ -196,27 +200,22 @@ describe.each([
     expect(flat(label.props.style).color).toBe(palette.askText)
   })
 
-  it('opens the same menu on a sent prompt, hung from its end', async () => {
-    const root = render(message('user', 'run the gate\n\n- then **push**'), scheme)
-    await holdStill(holdTarget(root), 300, 200)
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
-    const card = flat(menu(root)!.props.style)
-    expect(card.right).toBe(390 - 300)
-    expect(card.left).toBeUndefined()
+  it('opens no menu on a reply: Claude’s words select in place', () => {
+    expect(holdTargets(render(message('assistant', REPLY), scheme))).toEqual([])
   })
 
-  it('copies the reply as the words it shows, without its Markdown marks, and puts the message down', async () => {
-    const root = render(message('assistant', REPLY), scheme)
+  it('copies the prompt as the words it shows, without its Markdown marks, and puts the message down', async () => {
+    const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
     await choose(root, 'Copy')
-    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(markdownPlainText(REPLY))
-    expect(markdownPlainText(REPLY)).not.toMatch(/\*\*|`/)
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(PROMPT_WORDS)
+    expect(PROMPT_WORDS).not.toMatch(/\*\*|`/)
     expect(menu(root)).toBeUndefined()
   })
 
-  it('says so under the reply when the clipboard refuses the copy', async () => {
+  it('says so under the prompt when the clipboard refuses the copy', async () => {
     vi.mocked(Clipboard.setStringAsync).mockResolvedValue(false)
-    const root = render(message('assistant', REPLY), scheme)
+    const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
     await choose(root, 'Copy')
     expect(triggerError).toHaveBeenCalledTimes(1)
@@ -225,21 +224,21 @@ describe.each([
     expect(flat(notice[0]!.props.style).color).toBe(palette.danger)
   })
 
-  it('opens Select text as a sheet with the whole reply selectable, in the sheet ink', async () => {
-    const root = render(message('assistant', REPLY), scheme)
+  it('opens Select text as a sheet with the whole prompt selectable, in the sheet ink', async () => {
+    const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
     await choose(root, 'Select text')
     expect(menu(root)).toBeUndefined()
     const body = selectBody(root)
     expect(body).toBeDefined()
     expect(body!.props.selectable).toBe(true)
-    expect(words(body!)).toBe(markdownPlainText(REPLY))
+    expect(words(body!)).toBe(PROMPT_WORDS)
     expect(words(body!)).not.toMatch(/\*\*|`/)
     expect(flat(body!.props.style).color).toBe(palette.askText)
   })
 
   it('puts the message down on a tap off the card', async () => {
-    const root = render(message('assistant', REPLY), scheme)
+    const root = render(message('user', PROMPT), scheme)
     await holdStill(holdTarget(root))
     const backdrop = root.find((node) => node.props.testID === 'message-menu-backdrop' && String(node.type) === 'Pressable')
     await act(async () => {
@@ -250,13 +249,11 @@ describe.each([
   })
 })
 
-describe('nothing in a message row is selected in place', () => {
+describe('nothing in a held row is selected in place', () => {
   const selectableTexts = (root: ReactTestInstance): ReactTestInstance[] =>
     root.findAll((node) => node.props.selectable === true && node.props.testID !== 'select-text-body')
 
   it.each([
-    ['a reply', message('assistant', REPLY)],
-    ['a reply with a code fence and a table', message('assistant', 'Run:\n\n```sh\nnpm test\n```\n\n| a | b |\n|---|---|\n| 1 | 2 |')],
     ['a sent prompt written in Markdown', message('user', '- one\n- **two**')],
     ['a plan document', { ...message('system', 'Plan intro.\n\n1. Do it'), blocks: [{ type: 'text', text: 'Plan intro.\n\n1. Do it', presentation: 'plan-document' }] } as NativeChatMessage]
   ])('%s has no selectable text', (_label, row) => {
@@ -273,7 +270,7 @@ describe('nothing in a message row is selected in place', () => {
 
 describe('a scroll never opens the menu', () => {
   it('opens nothing for a press that turns into a scroll before the timeout', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     const target = holdTarget(root)
     await act(async () => {
       target.props.onPressIn(touch(120, 300))
@@ -285,7 +282,7 @@ describe('a scroll never opens the menu', () => {
   })
 
   it('opens the menu for a hold that wanders less than the touch slop', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     const target = holdTarget(root)
     await act(async () => {
       target.props.onPressIn(touch(120, 300))
@@ -296,7 +293,7 @@ describe('a scroll never opens the menu', () => {
   })
 
   it('opens nothing when the list starts scrolling while the hold is pending, even once it settles', async () => {
-    const row = message('assistant', REPLY)
+    const row = message('user', PROMPT)
     const root = render(row)
     await act(async () => {
       holdTarget(root).props.onPressIn(touch(120, 300))
@@ -310,7 +307,7 @@ describe('a scroll never opens the menu', () => {
   })
 
   it('opens nothing for a finger that went down to stop a fling', async () => {
-    const row = message('assistant', REPLY)
+    const row = message('user', PROMPT)
     const root = render(row, 'light', false)
     await act(async () => {
       holdTarget(root).props.onPressIn(touch(120, 300))
@@ -327,7 +324,7 @@ describe('a scroll never opens the menu', () => {
   })
 
   it('opens nothing for a long press Pressable reports with no press-in of its own', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     await act(async () => {
       holdTarget(root).props.onLongPress(touch(120, 300))
     })
@@ -336,14 +333,21 @@ describe('a scroll never opens the menu', () => {
 })
 
 describe('sizes at the edges', () => {
-  it('gives an empty reply nothing to hold', () => {
-    expect(holdTargets(render(message('assistant', '')))).toEqual([])
-    expect(holdTargets(render(message('assistant', '   \n\n  ')))).toEqual([])
+  it('gives an empty prompt nothing to hold', () => {
+    expect(holdTargets(render(message('user', '')))).toEqual([])
+    expect(holdTargets(render(message('user', '   \n\n  ')))).toEqual([])
   })
 
-  it('carries a very long reply whole into Select text', async () => {
-    const long = Array.from({ length: 4000 }, (_, index) => `Line ${index} of a very long reply.`).join('\n\n')
-    const root = render(message('assistant', long))
+  it('offers a one-word prompt the whole menu', async () => {
+    const root = render(message('user', 'go'))
+    await holdStill(holdTarget(root))
+    await choose(root, 'Copy')
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('go')
+  })
+
+  it('carries a very long prompt whole into Select text', async () => {
+    const long = Array.from({ length: 4000 }, (_, index) => `Line ${index} of a very long prompt.`).join('\n\n')
+    const root = render(message('user', long))
     await holdStill(holdTarget(root))
     await choose(root, 'Select text')
     // Plain lines read the same with or without the pass: nothing is cut.
@@ -362,8 +366,8 @@ describe('the menu is reachable and does not outlive its screen', () => {
   const ACTION = { nativeEvent: { actionName: 'longpress' } }
 
   it.each([
-    ['a reply run', message('assistant', REPLY)],
-    ['a sent prompt', message('user', 'run the gate')]
+    ['a sent prompt', message('user', 'run the gate')],
+    ['a prompt written in Markdown', message('user', PROMPT)]
   ])('offers %s a TalkBack action that opens the same menu', async (_label, row) => {
     const root = render(row)
     const target = holdTarget(root)
@@ -375,17 +379,17 @@ describe('the menu is reachable and does not outlive its screen', () => {
   })
 
   it('ignores an accessibility action it does not offer', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     await act(async () => {
       holdTarget(root).props.onAccessibilityAction({ nativeEvent: { actionName: 'activate' } })
     })
     expect(menu(root)).toBeUndefined()
   })
 
-  it('does not merge a reply run into one screen-reader node, so its own controls stay reachable', () => {
+  it('leaves a reply’s code Copy reachable: no hold wraps the reply’s words', () => {
     const fenced = 'Run:\n\n```sh\nnpm test\n```\n\nThen push.'
     const root = render(message('assistant', fenced))
-    expect(holdTarget(root).props.accessible).toBe(false)
+    expect(holdTargets(root)).toEqual([])
     const copyCode = root.findAll(
       (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Copy code'
     )
@@ -394,7 +398,7 @@ describe('the menu is reachable and does not outlive its screen', () => {
   })
 
   it('puts the menu down when the screen loses focus', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     await holdStill(holdTarget(root))
     expect(menu(root)).toBeDefined()
     await act(async () => {
@@ -404,7 +408,7 @@ describe('the menu is reachable and does not outlive its screen', () => {
   })
 
   it('puts the Select text sheet down when the screen loses focus', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     await holdStill(holdTarget(root))
     await choose(root, 'Select text')
     expect(selectBody(root)).toBeDefined()
@@ -415,7 +419,7 @@ describe('the menu is reachable and does not outlive its screen', () => {
   })
 
   it('keeps the menu when the screen gains focus', async () => {
-    const root = render(message('assistant', REPLY))
+    const root = render(message('user', PROMPT))
     await holdStill(holdTarget(root))
     await act(async () => {
       focusReports.report?.(true)
@@ -423,11 +427,11 @@ describe('the menu is reachable and does not outlive its screen', () => {
     expect(menu(root)).toBeDefined()
   })
 
-  it('keeps a card from an unmeasured hold near the right edge inside the window', async () => {
-    const root = render(message('assistant', REPLY))
-    await holdStill(holdTarget(root), 380, 300)
+  it('keeps a card from an unmeasured hold near the left edge inside the window', async () => {
+    const root = render(message('user', PROMPT))
+    await holdStill(holdTarget(root), 10, 300)
     const card = flat(menu(root)!.props.style)
-    // 390 wide window, 16 dp edge, 180 dp minimum card.
-    expect(card.left).toBe(390 - 16 - 180)
+    // 390 wide window, 16 dp edge, 180 dp minimum card: hung from its end, it ends 16 dp in.
+    expect(card.right).toBe(390 - 16 - 180)
   })
 })

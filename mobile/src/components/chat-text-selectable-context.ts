@@ -64,12 +64,13 @@ export function useChatTextSelectionReport(): ChatTextSelectionReport | null {
 }
 
 /**
- * Whether text here may be selected where it is drawn. False on a chat message row: there, as in
- * the Claude app's Code timeline, a hold opens the message's menu and its Select text sheet is
- * where words are selected (MobileNativeChatMessage, mobile-native-chat-message-menu.ts). Nothing
- * in the row is a selectable Text, so a finger that stops a fling or rests before a scroll has no
- * selection to start, and the list has no selection to keep through a recycle. Every other surface
- * keeps its in-place selection (the default).
+ * Whether text here may be selected where it is drawn. A chat message row sets it false and turns
+ * it back on around a reply's words only (MobileNativeChatMessage's ProseRun), as the Claude app
+ * (1.261013.20) wraps each text block of a message in its SelectionContainer (gy30.j, t8i.o) and
+ * nothing else in the row: a hold on Claude's words selects in place, a hold on the user's own
+ * bubble opens its menu (Copy, Select text; mobile-native-chat-message-menu.ts), and tool rows and
+ * thoughts select nothing. A scroll still keeps a hold from starting a selection
+ * (ChatTextHoldSelectsContext). Every other surface keeps its in-place selection (the default).
  */
 export const ChatTextInPlaceSelectionContext = createContext(true)
 
@@ -90,7 +91,7 @@ export function useChatTextInPlaceSelection(): boolean {
  * copied one (2026-10-15, 0.9.147). A document that never takes a hold says so through
  * ChatTextSelectableContext.
  *
- * Both are off on a chat message row (ChatTextInPlaceSelectionContext).
+ * Both are off on a chat message row outside a reply's words (ChatTextInPlaceSelectionContext).
  */
 export function useChatDocumentSelection(rootGuardsHolds: boolean): { selectable: boolean; holdSelects: boolean } {
   const selectableNow = useChatTextSelectable()

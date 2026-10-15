@@ -6,8 +6,10 @@ import { triggerMediumImpact } from '../platform/haptics'
 /**
  * A hold on a message in the chat, as the Claude app takes it (com.anthropic.claude 1.261009.20).
  *
- * The app gives every prose row of a Code session a `detectTapGestures(onLongPress = open)`
- * (gv20.java `p`, through t77 case 3 and hrx.f), and `open()` buzzes the long-press haptic before
+ * The app gives a message row of a Code session a `detectTapGestures(onLongPress = open)`
+ * (gv20.java `p`, through t77 case 3 and hrx.f; 1.261013.20 qs30.A, l87 case 4). Code UI holds
+ * only the user's own prompt this way: Claude's words sit in the app's SelectionContainer
+ * (1.261013.20 gy30.j, t8i.o), whose long press selects them in place. `open()` buzzes the long-press haptic before
  * it holds the message (xlg.java:84-96, `HapticFeedback.a(0)`, Compose's LongPress). Compose waits
  * Android's long-press timeout, 400 ms, and gives the hold up the moment the list's scroll takes
  * the pointer, which it does once the finger has moved past the touch slop (8 dp).

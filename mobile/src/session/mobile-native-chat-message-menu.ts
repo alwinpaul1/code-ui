@@ -1,7 +1,10 @@
 // What a hold on a message offers, after the Claude app's Code-session timeline
-// (com.anthropic.claude 1.261009.20). A hold on a prose row, Claude's or the
-// user's, holds that message and draws a menu card anchored to it (fmg.java),
-// with these actions, sorted by t030.t (t030.java:7234-7248):
+// (com.anthropic.claude 1.261009.20; re-read in 1.261013.20). In Code UI only
+// the user's own prompt is held this way: a hold on Claude's words starts
+// Android's selection in place, because the app draws each text block of a
+// message in its SelectionContainer (1.261013.20 gy30.j, t8i.o), and the
+// prompt's bubble (gy30.d) has none. A held message gets a menu card anchored to
+// it (fmg.java), with these actions, sorted by t030.t (t030.java:7234-7248):
 //
 //   Reply        0   a shared session's reply (koy/joy), never in Code UI
 //   Edit         1   the user's own editable message (hoy)

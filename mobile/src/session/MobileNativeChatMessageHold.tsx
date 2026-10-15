@@ -17,7 +17,7 @@ export type HoldHandler = (target: View | null, at: ChatHoldPoint) => void
 
 /**
  * A view that opens its message's menu on a hold (chat-message-hold.ts): the Claude app's
- * long-press on a prose row, gated so a scroll never opens it. Its own native view, so the menu
+ * long-press on a sent prompt, gated so a scroll never opens it. Its own native view, so the menu
  * can be hung from the box it measures.
  */
 export function HoldTarget({
@@ -73,23 +73,12 @@ export function HoldTarget({
   )
 }
 
-/** A run of a reply's words: a hold opens its menu when it has words to offer, else a plain view. */
-export function ProseHold({ onHold, children }: { onHold?: HoldHandler; children: ReactNode }) {
-  return onHold ? // Not accessible itself: one merged node would hide the links, chips and code Copy inside the
-  // run from a screen reader. The hold's action is still on the view for those that surface it.
-  <HoldTarget onHold={onHold} accessible={false}>
-      {children}
-    </HoldTarget> : <>{children}</>
-}
-
 /** The menu a hold opened, and what its rows act on. */
 type HeldMessage = {
   anchor: ChatMessageMenuAnchor
   alignEnd: boolean
   entries: ChatMessageMenuEntry[]
   text: string
-  /** The bubble's Copy tints the bubble; a reply's run says only a refusal. */
-  tintsBubble: boolean
 }
 
 /** The held view's box, or the point the finger was on where the view cannot be measured. */
@@ -109,7 +98,10 @@ function measureHeld(
 }
 
 /**
- * A message row's hold: which text a hold offers, the menu it opens and the Select text sheet.
+ * A sent prompt's hold: which text it offers, the menu it opens and the Select text sheet. Only
+ * the user's own bubble has one. A reply's words select in place, as the Claude app's do
+ * (com.anthropic.claude 1.261013.20: gy30.j wraps each text block of a message in the app's
+ * SelectionContainer, t8i.o; the prompt's bubble, gy30.d, has none, and a hold opens the menu).
  * Copy and Select text give the words as drawn, without Markdown marks. The Claude app gives
  * `Prose.text`, the Markdown source; Code UI gives plain text by the user's choice (2026-10-15). Nothing is mounted until a hold
  * asks for it (a list of rows carries no menu or sheet per row), and the words are kept until
@@ -122,19 +114,17 @@ function measureHeld(
 export function useMobileNativeChatMessageHold({
   messageId,
   onUndoSend,
-  copyBubble,
-  copyRun
+  copy
 }: {
   messageId: string
   /** Present while the message waits behind a running turn. */
   onUndoSend?: () => void
-  /** The bubble's copy, which tints it; and a reply's run's, which says only a refusal. */
-  copyBubble: (text: string) => void
-  copyRun: (text: string) => void
+  /** The bubble's copy, which tints it. */
+  copy: (text: string) => void
 }): {
-  /** The hold for `text`: the user's own (hung from its end, `alignEnd`) or a reply's run.
-   *  Undefined when the message offers nothing, so a hold does nothing. */
-  holdOn: (text: string, alignEnd: boolean) => HoldHandler | undefined
+  /** The hold for the prompt's `text`, its card hung from the bubble's end. Undefined when the
+   *  message offers nothing, so a hold does nothing. */
+  holdOn: (text: string) => HoldHandler | undefined
   overlays: ReactNode
 } {
   const [held, setHeld] = useState<HeldMessage | null>(null)
@@ -165,13 +155,12 @@ export function useMobileNativeChatMessageHold({
       setSelectNext(null)
     }
   }, [selectNext, held])
-  const holdOn = (text: string, alignEnd: boolean): HoldHandler | undefined => {
-    const entries = chatMessageMenuEntries({ hasText: text !== '', waiting: alignEnd && onUndoSend !== undefined })
+  const holdOn = (text: string): HoldHandler | undefined => {
+    const entries = chatMessageMenuEntries({ hasText: text !== '', waiting: onUndoSend !== undefined })
     if (entries.length === 0) {
       return undefined
     }
-    return (target, at) =>
-      measureHeld(target, at, (anchor) => setHeld({ anchor, alignEnd, entries, text, tintsBubble: alignEnd }))
+    return (target, at) => measureHeld(target, at, (anchor) => setHeld({ anchor, alignEnd: true, entries, text }))
   }
   const choose = (entry: ChatMessageMenuEntry): void => {
     if (!held) {
@@ -182,11 +171,7 @@ export function useMobileNativeChatMessageHold({
         onUndoSend?.()
         return
       case 'copy':
-        if (held.tintsBubble) {
-          copyBubble(held.text)
-        } else {
-          copyRun(held.text)
-        }
+        copy(held.text)
         return
       case 'select-text':
         setSelectNext(held.text)
