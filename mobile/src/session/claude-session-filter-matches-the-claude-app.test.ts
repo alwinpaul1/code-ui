@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseCcrSessionRow } from './ccr-session-row'
 import {
-  CLAUDE_SESSION_FILTERS,
-  CLAUDE_SESSION_FILTER_EMPTY,
   CLAUDE_SESSION_WORKING_WINDOW_MS,
   ccrSessionStateOfRow,
   claudeSessionStateLabel,
@@ -113,13 +111,9 @@ describe('an Orca agent row, filed under the same filters when there is no fresh
   })
 })
 
-describe('the filter words', () => {
-  it('are the app session_filter_* strings in its order, without Archived', () => {
-    // Archived is left out: Orca's own Show archived already filters the list, and archiving a
-    // session on Anthropic is an unproven write (CCR_SESSION_WRITES).
-    expect(CLAUDE_SESSION_FILTERS.map((filter) => filter.label)).toEqual(['All', 'Working', 'Needs input', 'Ready for review', 'Completed'])
+describe('the state words', () => {
+  it('are the app’s session state labels', () => {
     expect(claudeSessionStateLabel('ready-for-review')).toBe('Ready for review')
     expect(claudeSessionStateLabel('archived')).toBe('Archived')
-    expect(CLAUDE_SESSION_FILTER_EMPTY).toBe('No sessions match this filter')
   })
 })

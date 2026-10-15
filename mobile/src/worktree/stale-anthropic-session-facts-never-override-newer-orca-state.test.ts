@@ -3,7 +3,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { resetCcrCacheForTests, setCcrMapping } from '../session/ccr-session-cache'
 import { ccrSessionFactsVersion, noteCcrSessionFacts, resetCcrSessionFactsForTests } from '../session/ccr-session-facts'
 import { parseCcrSessionRow } from '../session/ccr-session-row'
-import { claudeAgentDotState, claudeAgentSessionFacts, claudeAgentSessionState } from './claude-session-list-filter'
+import { claudeAgentDotState, claudeAgentSessionFacts, claudeAgentSessionState } from './claude-agent-session-state'
 
 // Reported 2026-10-15 (review of the session-state branch): the list let a tab's Anthropic session
 // row override Orca's own agent state for as long as the row was under 90 s old, even when Orca's

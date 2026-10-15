@@ -9,7 +9,7 @@ import {
   agentRowTimeAt,
   formatTimeAgo
 } from '../worktree/agent-row-display'
-import { claudeAgentDotState, claudeAgentSessionFacts } from '../worktree/claude-session-list-filter'
+import { claudeAgentDotState, claudeAgentSessionFacts } from '../worktree/claude-agent-session-state'
 import { CCR_SESSION_WRITES } from '../session/ccr-session-writes'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
@@ -29,7 +29,7 @@ type Props = {
 // Mirrors desktop DashboardAgentRow's compact in-card layout.
 function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
   const { colors, space } = useTheme()
-  // A Claude row reads its tab's Anthropic session too (claude-session-list-filter.ts); every
+  // A Claude row reads its tab's Anthropic session too (claude-agent-session-state.ts); every
   // other agent keeps Orca's dot.
   const dotState = claudeAgentDotState(agent, now)
   // The Claude app's "Unread" mark (`ccr_session_unread`), only while mark_read is on as well:

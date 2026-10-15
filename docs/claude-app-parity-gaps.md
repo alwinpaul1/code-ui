@@ -491,7 +491,7 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Claude app | Code UI | Class |
 |---|---|---|
 | **Rows**: 24 dp radius, 16 dp padding, a 16 dp leading state mark. States in priority order: Waiting (amber dot `#FAB219`), Working (grey dot pulsing 1.0↔0.3 over 600 ms), Failed (icon), New (blue dot `#2A78D6`), Quiet (1.5 dp ring). Title 15/400, trailing relative time, a second line with status, repo and branch or PR state | Worktree rows (`src/components/WorktreeListRow.tsx`, `AgentSpinner.tsx`) with a spinning ring, a bell for unread, and per-agent rows | **Differs**. `AgentSpinner.tsx` also uses **hardcoded hex** (`#eab308`, `#10b981`, `#ef4444`), against the light/dark rule |
-| **Filter**: All, Working, Needs input, Ready for review, Completed, Archived; plus a text filter | Filter / Sort / Group / Search (`src/host-screen/host-screen-header.tsx`) | Differs |
+| **Filter**: All, Working, Needs input, Ready for review, Completed, Archived; plus a text filter | Filter / Sort / Group / Search (`src/host-screen/host-screen-header.tsx`) | Differs, on purpose: the app's state chips were built and then removed at the user's request (2026-10-15) |
 | **Long-press menu**: Copy branch, Share, Rename, project, Archive, Delete | the tab long-press sheet (`src/session/mobile-terminal-action-sheet-actions.ts`) | Differs |
 | Empty states, "Load more sessions" | `src/home/MobileHomeEmptyState.tsx` | Differs (a different model) |
 | **Starter screen** "Let's start coding" (Serif 28) and the new-session composer | "New Tab" sheet (`src/session/MobileSessionSheets.tsx`), `NewWorktreeModal*` | Differs. Environment and repo rows are cloud-only, so impossible |

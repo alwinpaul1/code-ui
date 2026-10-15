@@ -1,9 +1,8 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { ccrMappedSessionForTab } from '../session/ccr-session-cache'
 import { ccrSessionFactsForAgent, type CcrSessionFacts } from '../session/ccr-session-facts'
-import { orcaClaudeSessionState, type ClaudeSessionFilter, type ClaudeSessionState } from '../session/claude-session-state'
+import { orcaClaudeSessionState, type ClaudeSessionState } from '../session/claude-session-state'
 import { agentDotState, type AgentDotState } from './agent-row-display'
-import type { Section, Worktree } from './workspace-list-types'
 
 /** The tab's Anthropic session facts for a Claude agent row, only while fresh, newer than Orca's
  *  row, and about the session the tab is matched to now (ccr-session-facts.ts). Null for every
@@ -13,13 +12,12 @@ export function claudeAgentSessionFacts(agent: RuntimeWorktreeAgentRow, now: num
 }
 
 /**
- * The Claude app's session filters (claude-session-state.ts) over Code UI's workspace list. A
- * Claude agent row is filed by Orca's own status while that says the agent is busy or waiting
+ * A Claude agent row's session state (claude-session-state.ts), which its status dot on the
+ * workspace list follows. It is read by Orca's own status while that says the agent is busy or waiting
  * (Orca hears the agent live; the session row is up to a minute old), and otherwise by its tab's
  * Anthropic session row while the phone holds one that still applies (`claudeAgentSessionFacts`),
  * which tells Ready for review from Completed and names a turn that ended needing input. With no
- * such row, Orca's status decides. Only Claude agents are filed: a Codex or untyped agent, and a
- * workspace with no agent, never match a filter but All.
+ * such row, Orca's status decides. Only Claude agents get one: a Codex or untyped agent is null.
  */
 export function claudeAgentSessionState(agent: RuntimeWorktreeAgentRow, now: number): ClaudeSessionState | null {
   if (agent.agentType !== 'claude') {
@@ -45,35 +43,6 @@ export function claudeAgentDotState(agent: RuntimeWorktreeAgentRow, now: number)
     return 'waiting'
   }
   return dot
-}
-
-function matches(worktree: Worktree, filter: Exclude<ClaudeSessionFilter, 'all'>, now: number): boolean {
-  return (worktree.agents ?? []).some((agent) => claudeAgentSessionState(agent, now) === filter)
-}
-
-/** The sections narrowed to workspaces with a Claude session in `filter`'s state. All returns the
- *  very same list. A section the filter empties is dropped; a collapsed one (no rows) is kept. */
-export function filterSectionsByClaudeSession(sections: Section[], filter: ClaudeSessionFilter, now: number): Section[] {
-  if (filter === 'all') {
-    return sections
-  }
-  const narrowed: Section[] = []
-  for (const section of sections) {
-    if (section.data.length === 0) {
-      narrowed.push(section)
-      continue
-    }
-    const data = section.data.filter((worktree) => matches(worktree, filter, now))
-    if (data.length > 0) {
-      narrowed.push({ ...section, data })
-    }
-  }
-  return narrowed
-}
-
-/** Whether the list holds a Claude agent at all: the filters are offered only then. */
-export function hasClaudeAgents(worktrees: readonly Worktree[]): boolean {
-  return worktrees.some((worktree) => (worktree.agents ?? []).some((agent) => agent.agentType === 'claude'))
 }
 
 /** A workspace whose agents are all Claude sessions (at least one): its status glyph follows the

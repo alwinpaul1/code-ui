@@ -18,20 +18,14 @@ import type { CcrSessionRow } from './ccr-session-row'
  *    `running`, or a `task_summary` present (`lx30.n`), and `updated_at` less than an hour ago
  *    (`gnv.a`, one hour).
  *
- * The app's list also has Archived. Code UI leaves that filter out: Orca's own "Show archived"
- * already filters the workspace list, and archiving a session on Anthropic is an unproven write
- * (`CCR_SESSION_WRITES`, ccr-session-writes.ts).
+ * Code UI draws no filter row: the user had the app's chips removed from the workspace list on
+ * 2026-10-15. These states drive only a Claude agent row's status dot and its Unread mark.
  */
 
 export type ClaudeSessionState = 'working' | 'needs-input' | 'ready-for-review' | 'completed' | 'archived'
 
-export type ClaudeSessionFilter = 'all' | Exclude<ClaudeSessionState, 'archived'>
-
 /** `gnv.a`: a session not updated for this long is no longer Working. */
 export const CLAUDE_SESSION_WORKING_WINDOW_MS = 60 * 60 * 1000
-
-/** The app's `session_list_filter_empty`, word for word. */
-export const CLAUDE_SESSION_FILTER_EMPTY = 'No sessions match this filter'
 
 const LABELS: Record<ClaudeSessionState, string> = {
   working: 'Working',
@@ -40,14 +34,6 @@ const LABELS: Record<ClaudeSessionState, string> = {
   completed: 'Completed',
   archived: 'Archived'
 }
-
-export const CLAUDE_SESSION_FILTERS: readonly { value: ClaudeSessionFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'working', label: LABELS.working },
-  { value: 'needs-input', label: LABELS['needs-input'] },
-  { value: 'ready-for-review', label: LABELS['ready-for-review'] },
-  { value: 'completed', label: LABELS.completed }
-]
 
 export function claudeSessionStateLabel(state: ClaudeSessionState): string {
   return LABELS[state]
@@ -102,7 +88,7 @@ export function ccrSessionStateOfRow(row: StateRow, now: number): ClaudeSessionS
 }
 
 /** A Claude agent row's state from Orca (the desktop's agent status) when no session row applies
- *  (claude-session-list-filter.ts `claudeAgentSessionFacts`): the same filters, from the dot the
+ *  (claude-agent-session-state.ts `claudeAgentSessionFacts`): the same filters, from the dot the
  *  row already draws. */
 export function orcaClaudeSessionState(dot: AgentDotState): ClaudeSessionState {
   switch (dot) {

@@ -7,8 +7,7 @@ import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
-import { ClaudeSessionFilterChips } from '../components/ClaudeSessionFilterChips'
-import { useFilteredWorkspaceList } from './use-filtered-workspace-list'
+import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
@@ -42,11 +41,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
-  const { rawSections, uniqueRepoColors } = sectionsResult
-  // The Claude app's session filters, over Claude agents only (claude-session-list-filter.ts), and
-  // the scroll to the active workspace over the same filtered sections the SectionList draws.
-  const { sessionFilter, activeWorktreeScroll } = useFilteredWorkspaceList(displayWorktrees, sectionsResult.sections, now)
-  const { sections } = sessionFilter
+  const { rawSections, sections, uniqueRepoColors } = sectionsResult
+  const activeWorktreeScroll = useActiveWorktreeScroll(sections)
 
   return (
     <>
@@ -103,17 +99,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           />
         </View>
       )}
-
-      {sessionFilter.offered ? (
-        <ClaudeSessionFilterChips value={sessionFilter.value} onChange={sessionFilter.setValue} />
-      ) : null}
-      {sessionFilter.emptyNotice ? (
-        <View style={{ paddingHorizontal: space.lg, paddingVertical: space.lg }}>
-          <Txt variant="body" tone="muted">
-            {sessionFilter.emptyNotice}
-          </Txt>
-        </View>
-      ) : null}
 
       <HostWorkspaceListStates
         connState={connState}

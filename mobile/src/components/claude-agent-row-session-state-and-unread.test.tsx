@@ -62,7 +62,7 @@ afterEach(() => {
 })
 
 // The phone keys a terminal tab by the host's `<tabId>::<leafId>`; Orca's pane is `<tabId>:<leafId>`.
-// The row applies only to the session the tab is matched to (claude-session-list-filter.ts).
+// The row applies only to the session the tab is matched to (claude-agent-session-state.ts).
 function noteRow(fields: Record<string, unknown>) {
   setCcrMapping('tab-1::leaf-1', 'cse_01QXaaaaaaaaaaaaaaaaaaaa', 1, 'acct-1')
   noteCcrSessionFacts('tab-1::leaf-1', 1, parseCcrSessionRow({ id: 'cse_01QXaaaaaaaaaaaaaaaaaaaa', ...fields })!, NOW)
