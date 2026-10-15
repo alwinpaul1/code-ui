@@ -55,13 +55,15 @@ export function useSendErrorRetryable(message: string | null | undefined): boole
 }
 
 /** What the banner's Retry does: the composer's words go again, by the same path as its Send
- *  button, and the banner goes. Nothing when the box is empty (the user took the words). */
+ *  button, and the banner goes. Nothing when the box is empty and holds no attachment (the user
+ *  took them); a failed send of attachments with no words goes again with its chips. */
 export function retrySendFromComposer(
   composerText: string,
   send: (text: string) => Promise<boolean>,
-  clearBanner?: () => void
+  clearBanner?: () => void,
+  attachments = 0
 ): void {
-  if (composerText.trim() === '') {
+  if (composerText.trim() === '' && attachments === 0) {
     return
   }
   clearBanner?.()

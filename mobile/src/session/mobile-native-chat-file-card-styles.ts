@@ -75,6 +75,10 @@ export function makeFileCardStyles(theme: Theme) {
     },
     badge: {
       alignSelf: 'flex-start',
+      // A long extension ("WEBMANIFEST") truncates here instead of running under the composer
+      // chip's remove disc: 1 dp border + 8 dp padding + 80 = 89, clear of the disc's 18 dp at
+      // 4 dp in from the 116 dp card's end (from 94) with 4 dp to spare.
+      maxWidth: CARD_WIDTH - 36,
       borderRadius: 8,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.attachmentCardBorder,

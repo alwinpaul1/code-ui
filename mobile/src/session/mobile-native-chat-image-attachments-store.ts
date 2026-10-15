@@ -33,12 +33,35 @@ export const nativeChatAttachmentsResets = { current: 0 }
 /** Chips the user took out with the remove badge while their bytes were still
  *  going up. The Claude app draws its remove "x" on a chip in every state and
  *  cancels that chip's upload (`g330.b`, `j29.k`, 1.261009.20). An RPC already
- *  on the relay cannot be called back, so the upload is let finish and its
- *  result dropped: `uploads` (scope, selection and picture) keeps the landing
+ *  on the relay cannot be called back, so a desktop upload is let finish and
+ *  its result dropped (an upload to Anthropic is called back:
+ *  `nativeChatUploadAborts`): `uploads` (scope, selection and picture) keeps the landing
  *  from drawing the chip again, and `ids` (every chip removed, landed or not)
  *  tells a send waiting beside it that it was taken out, not lost to a failed
  *  upload. */
 export const nativeChatRemovedUploads = { ids: new Set<string>(), uploads: new Set<string>() }
+
+/** The uploads that CAN be called back: a pick going to Anthropic (ccr-file-upload.ts), keyed as
+ *  `removedUploadKey` keys it. The remove badge aborts its chip's (2026-10-15 review: the request
+ *  went on and left a file at Anthropic that nothing referenced); a desktop save ignores it. */
+export const nativeChatUploadAborts = new Map<string, AbortController>()
+
+/** A failed chip's retry on its way up, by chip id (mobile-native-chat-upload-retry.ts): the remove
+ *  badge calls it back, and so does a reset, which reuses chip ids from 1 (second review of the
+ *  Anthropic lane, 2026-10-15: one left running landed on the next chip to take its id). Kept
+ *  here because the store cannot import the retry module, which imports it. */
+export const nativeChatRetryUploads = new Map<string, AbortController>()
+
+/** Drops the abort handles a selection registered, once it has ended: every picture in it has
+ *  landed, failed, or been refused by then, whichever way (a 413, or bytes that never read). */
+export function forgetNativeChatUploadAborts(scope: string, batch: string | undefined): void {
+  const prefix = batch === undefined ? `${scope}\u0000` : removedUploadKey(scope, batch, '')
+  for (const key of nativeChatUploadAborts.keys()) {
+    if (key.startsWith(prefix)) {
+      nativeChatUploadAborts.delete(key)
+    }
+  }
+}
 
 export function removedUploadKey(scope: string, batch: string | undefined, previewUri: string): string {
   return `${scope}\u0000${batch ?? ''}\u0000${previewUri}`
@@ -155,6 +178,14 @@ export const useNativeChatImageAttachmentsStore = create<{
     nativeChatWaitingSends.clear()
     nativeChatRemovedUploads.ids.clear()
     nativeChatRemovedUploads.uploads.clear()
+    for (const upload of nativeChatUploadAborts.values()) {
+      upload.abort()
+    }
+    nativeChatUploadAborts.clear()
+    for (const upload of nativeChatRetryUploads.values()) {
+      upload.abort()
+    }
+    nativeChatRetryUploads.clear()
     for (const controller of videoFrameExtractionControllers.values()) {
       controller.abort()
     }

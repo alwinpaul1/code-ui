@@ -11,13 +11,16 @@ import {
   type UploadingNativeChatImage
 } from './mobile-native-chat-image-attachment'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
+import { discardCcrUploadedFile } from './ccr-file-discard'
 import {
   forgetNativeChatUploadRetry,
   registerNativeChatUploadRetry
 } from './mobile-native-chat-upload-retry'
 import {
+  forgetNativeChatUploadAborts,
   nativeChatChipIdCounter,
   nativeChatRemovedUploads,
+  nativeChatUploadAborts,
   removedUploadKey,
   useNativeChatImageAttachmentsStore,
   type NativeChatVideoFrameExtractionState
@@ -32,10 +35,17 @@ export function useNativeChatAttachmentScopeWriters(
   const setAttachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.update)
   const addUploadedImages = useCallback(
     (scope: string, landed: Omit<PendingNativeChatImage, 'id'>[]) => {
-      // A picture whose chip was removed while it went up stays out.
-      const uploadedImages = landed.filter(
-        (image) => !nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))
-      )
+      // A picture whose chip was removed while it went up stays out, and a file it left at
+      // Anthropic anyway (it landed before the abort reached it) is deleted.
+      const uploadedImages = landed.filter((image) => {
+        const key = removedUploadKey(scope, image.batch, image.previewUri)
+        nativeChatUploadAborts.delete(key)
+        const removed = nativeChatRemovedUploads.uploads.delete(key)
+        if (removed) {
+          void discardCcrUploadedFile(image.anthropicFile)
+        }
+        return !removed
+      })
       if (uploadedImages.length === 0) {
         return
       }
@@ -47,7 +57,10 @@ export function useNativeChatAttachmentScopeWriters(
     [setAttachmentsByScope]
   )
   const addUploadingImage = useCallback(
-    (scope: string, image: UploadingNativeChatImage) => {
+    (scope: string, image: UploadingNativeChatImage, upload?: AbortController) => {
+      if (upload) {
+        nativeChatUploadAborts.set(removedUploadKey(scope, image.batch, image.previewUri), upload)
+      }
       setAttachmentsByScope((prev) => ({
         ...prev,
         [scope]: addUploadingNativeChatImage(prev[scope] ?? [], image, nativeChatChipIdCounter)
@@ -61,8 +74,9 @@ export function useNativeChatAttachmentScopeWriters(
     (
       scope: string,
       image: { previewUri: string; batch?: string },
-      retry: () => Promise<NativeChatUploadLanded>
+      retry: (signal?: AbortSignal) => Promise<NativeChatUploadLanded>
     ): boolean => {
+      nativeChatUploadAborts.delete(removedUploadKey(scope, image.batch, image.previewUri))
       if (nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))) {
         return false
       }
@@ -96,10 +110,20 @@ export function useNativeChatAttachmentScopeWriters(
         nativeChatRemovedUploads.ids.add(id)
       }
       if (chip?.uploading) {
-        // A retry or a markup save lands by chip id, which is gone already.
+        // A retry or a markup save lands by chip id, which is gone already. An upload to Anthropic
+        // is called back; one the abort cannot reach lands and is dropped (addUploadedImages).
         if (chip.batch !== undefined) {
-          nativeChatRemovedUploads.uploads.add(removedUploadKey(scope, chip.batch, chip.previewUri))
+          const key = removedUploadKey(scope, chip.batch, chip.previewUri)
+          nativeChatRemovedUploads.uploads.add(key)
+          nativeChatUploadAborts.get(key)?.abort()
+          nativeChatUploadAborts.delete(key)
         }
+      }
+      // A chip whose file is at Anthropic leaves nothing there: the send that would reference it
+      // will not, so the file is deleted (best effort, logged). Not one a send already carried: that
+      // message may have reached the session and reference it (`carriedBySend`).
+      if (!chip?.carriedBySend) {
+        void discardCcrUploadedFile(chip?.anthropicFile)
       }
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, (prev[scope] ?? []).filter((attachment) => attachment.id !== id))
@@ -109,6 +133,8 @@ export function useNativeChatAttachmentScopeWriters(
   )
   const settleUploads = useCallback(
     (scope: string, batch?: string) => {
+      // The selection is over, so nothing in it can be called back any more.
+      forgetNativeChatUploadAborts(scope, batch)
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, dropUploadingNativeChatImages(prev[scope] ?? [], batch))
       )

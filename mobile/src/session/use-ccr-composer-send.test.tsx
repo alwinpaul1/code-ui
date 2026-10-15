@@ -80,7 +80,7 @@ function Harness(): null {
     captureSendOrigin: origin,
     clearDraftForSend: calls.clear,
     acceptSend: calls.accept,
-    restoreRejectedDraft: calls.restore,
+    restoreRejectedDraft: calls.restore, returnQueueToDraft: vi.fn(),
     removePending: calls.remove,
     onSendError: calls.error,
     deps

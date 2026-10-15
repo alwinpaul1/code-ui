@@ -211,7 +211,7 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'CCCC', uri: 'file:///clip.mp4', name: 'clip.mp4' }]),
       onImageStart
     })
-    expect(onImageStart).toHaveBeenCalledWith({ previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' })
+    expect(onImageStart).toHaveBeenCalledWith({ previewUri: 'file:///clip.mp4', kind: 'file', name: 'clip.mp4' }, expect.any(AbortController))
 
     const counter = { current: 0 }
     const placeholder = addUploadingNativeChatImage([], onImageStart.mock.calls[0]![0], counter)

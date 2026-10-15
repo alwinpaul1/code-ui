@@ -64,7 +64,7 @@ function ChatScreen(): null {
     captureSendOrigin: drafts.captureSendOrigin,
     clearDraftForSend: drafts.clearDraftForSend,
     acceptSend: drafts.acceptSend,
-    restoreRejectedDraft: drafts.restoreRejectedDraft,
+    restoreRejectedDraft: drafts.restoreRejectedDraft, returnQueueToDraft: vi.fn(),
     removePending: drafts.removePending,
     onSendError: () => undefined,
     deps

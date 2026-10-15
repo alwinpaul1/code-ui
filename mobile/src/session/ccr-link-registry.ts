@@ -103,6 +103,12 @@ export function acquireCcrLink(accountId: string, sessionId: string): CcrLinkHan
   }
 }
 
+/** An account's sign-in, as the links read it, for a call tied to no session (deleting an
+ *  uploaded file: ccr-file-upload.ts deleteCcrFile). */
+export function ccrAccountAuth(accountId: string, fresh: boolean): ReturnType<CcrLinkDeps['auth']> {
+  return lazyDeps().auth(accountId, fresh)
+}
+
 /** The link for (account, session) if one is open (for tests and the one-tap check). */
 export function openCcrLink(accountId: string, sessionId: string): CcrSessionLink | null {
   return entries.get(ccrTranscriptKey(accountId, sessionId))?.link ?? null

@@ -92,7 +92,7 @@ describe('a phone send on a tab whose session was copied between profiles', () =
       captureSendOrigin: origin,
       clearDraftForSend: vi.fn(),
       acceptSend: () => 'row-1',
-      restoreRejectedDraft: vi.fn(),
+      restoreRejectedDraft: vi.fn(), returnQueueToDraft: vi.fn(),
       removePending: vi.fn(),
       onSendError,
       deps

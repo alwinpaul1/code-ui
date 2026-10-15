@@ -32,7 +32,7 @@ import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-lau
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
-import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'
+import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'; import { returnCcrQueueToComposer } from './ccr-local-queue'
 import { keepRefusedSendInOutbox, originOutboxFields, outboxEchoId, showOutboxEchoIn, showSendingEchoWith, type NativeChatOutboxEntry } from './mobile-native-chat-outbox-drafts'; import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
@@ -96,6 +96,8 @@ export function useMobileNativeChatDrafts(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Put the text back after a definite rejection, after whatever the composer holds now. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Queued words back into `draftKey`'s draft AHEAD of what it holds, on screen or not (use-ccr-composer-send.ts). */
+  returnQueueToDraft: (draftKey: string, text: string) => void
   /** Clear the composer at send start; `images` also echoes at once — see clearDraftAtSendStartWith. */
   clearDraftAtSendStart: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   /** Returns the new pending echo's id (for a later removePending), or null if none was added. */
@@ -219,6 +221,7 @@ export function useMobileNativeChatDrafts(args: {
     )
   }, [own])
 
+  const returnQueueToDraft = useCallback((key: string, text: string) => { draftEditGenerationsRef.current.advance(key); liveNativeChatDrafts(key, own).setDrafts((previous) => ({ ...previous, [key]: returnCcrQueueToComposer(text, previous[key] ?? '') })) }, [own])
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     if (keepRefusedSendInOutbox(origin)) { return } else if (origin.echoDrawn && origin.outboxId) { dropNativeChatPendingEverywhere(own, outboxEchoId(origin.outboxId)) } // a recovery resend's bubble says "Not sent" instead
     // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
@@ -392,7 +395,7 @@ export function useMobileNativeChatDrafts(args: {
     imagePreviewsByMessageId: drawnPreviews,
     captureSendOrigin,
     readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho, takeSends,
-    clearDraftForSend, restoreRejectedDraft,
+    clearDraftForSend, restoreRejectedDraft, returnQueueToDraft,
     acceptSend,
     clearDraftAtSendStart,
     holdUnconfirmedSend,

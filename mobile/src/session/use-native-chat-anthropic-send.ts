@@ -10,8 +10,9 @@ import type { CcrSendFiles } from './use-ccr-composer-send'
 export type NativeChatAnthropicAttachments = {
   /** The upload for this tab now; null while the tab is not on that lane (the desktop path then). */
   readonly store: () => NativeChatAttachmentStore | null
-  /** The account the tab's session belongs to now (ccrSendTargetForTab), or null with no target. */
-  readonly accountId: () => string | null
+  /** The account the tab's session belongs to now (ccrSendTargetForTab), or, with no target, the
+   *  composer send's own refusal for it (`CCR_SEND_REFUSALS`): the reason the tab has none. */
+  readonly account: () => { readonly accountId: string } | { readonly refused: string }
   readonly send: (text: string, files?: CcrSendFiles) => Promise<MobileNativeChatSendOutcome>
 }
 
@@ -36,11 +37,19 @@ export function useNativeChatAnthropicSend(args: {
       return false
     }
     const chips = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
-    const accountId = lane.accountId()
-    if (chips.length === 0 || accountId === null) {
-      // No chips, or no target: the plain send, which refuses with the target's own reason.
+    if (chips.length === 0) {
       return (await lane.send(composerText)) !== 'rejected'
     }
+    const account = lane.account()
+    if ('refused' in account) {
+      // Chips, and no target: refused whole, with the target's own reason (second review,
+      // 2026-10-15: every reason read as "try again in a moment", a lasting account mismatch too).
+      // A plain send here could post the words the moment the target settles and leave the chips.
+      onError?.()
+      onSendError(account.refused)
+      return false
+    }
+    const { accountId } = account
     const plan = planCcrAttachmentSend(chips, composerText, accountId)
     switch (plan.kind) {
       case 'nothing':
@@ -53,7 +62,8 @@ export function useNativeChatAnthropicSend(args: {
         takeSentAttachments(scope, plan.sent)
         const outcome = await lane.send(composerText, { attachments: plan.files, previewUris: plan.previewUris, accountId }).catch(() => 'rejected' as const)
         if (outcome === 'rejected') {
-          restoreSentAttachments(scope, plan.sent)
+          // Marked: the rejected POST may have reached the session, so removing these keeps the file.
+          restoreSentAttachments(scope, plan.sent.map((chip) => ({ ...chip, carriedBySend: true })))
         }
         return outcome !== 'rejected'
       }

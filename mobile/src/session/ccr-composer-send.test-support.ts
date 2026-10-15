@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { vi } from 'vitest'
+import { returnCcrQueueToComposer } from './ccr-local-queue'
 import type { buildCcrUserEventBody } from './ccr-send'
 import type { CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
@@ -60,6 +61,8 @@ export const calls = {
   error: vi.fn()
 }
 export const composer = { text: '' }
+/** Stored composer drafts by key, for tabs not on screen: what `returnQueueToDraft` writes. */
+export const drafts: Record<string, string> = {}
 const setComposerText = (next: string | ((previous: string) => string)): void => {
   composer.text = typeof next === 'function' ? next(composer.text) : next
 }
@@ -95,6 +98,9 @@ function Harness(): null {
     clearDraftForSend: calls.clear,
     acceptSend: calls.accept,
     restoreRejectedDraft: calls.restore,
+    returnQueueToDraft: (draftKey, text) => {
+      drafts[draftKey] = returnCcrQueueToComposer(text, drafts[draftKey] ?? '')
+    },
     removePending: calls.remove,
     onSendError: calls.error,
     deps
@@ -146,6 +152,9 @@ export function resetCcrComposerHarness(): void {
   restored.length = 0
   uuids = 0
   composer.text = ''
+  for (const key of Object.keys(drafts)) {
+    delete drafts[key]
+  }
   io.post = async () => undefined
   io.readStatus = async () => 'connected'
   for (const fn of Object.values(calls)) {

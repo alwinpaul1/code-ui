@@ -45,21 +45,20 @@ export function planCcrAttachmentSend(chips: readonly PendingNativeChatImage[], 
   if (chips.some((chip) => chip.failed)) {
     return { kind: 'refuse', message: CCR_ATTACHMENT_FAILED }
   }
-  const live = chips
-  if (live.some((chip) => !chip.anthropicFile)) {
+  if (chips.some((chip) => !chip.anthropicFile)) {
     return { kind: 'refuse', message: CCR_ATTACHMENT_ON_DESKTOP }
   }
-  if (live.some((chip) => chip.anthropicFile?.accountId !== accountId)) {
+  if (chips.some((chip) => chip.anthropicFile?.accountId !== accountId)) {
     return { kind: 'refuse', message: CCR_ATTACHMENT_OTHER_ACCOUNT }
   }
-  if (text.trim() === '' && live.length === 0) {
+  if (text.trim() === '' && chips.length === 0) {
     return { kind: 'nothing' }
   }
   return {
     kind: 'send',
-    files: live.map((chip) => ccrFileAttachment(chip.anthropicFile!)),
-    sent: live,
-    previewUris: live.filter((chip) => chip.anthropicFile!.isImage).map((chip) => chip.previewUri)
+    files: chips.map((chip) => ccrFileAttachment(chip.anthropicFile!)),
+    sent: chips,
+    previewUris: chips.filter((chip) => chip.anthropicFile!.isImage).map((chip) => chip.previewUri)
   }
 }
 

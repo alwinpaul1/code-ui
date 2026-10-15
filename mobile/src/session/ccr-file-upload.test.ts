@@ -101,7 +101,8 @@ describe('an attachment uploaded to Anthropic when it is attached, with the tab 
       const error = await uploadCcrFile(deps, 'a', { base64: PNG }).catch((e: unknown) => e)
       expect(error).toBeInstanceOf(CcrFileUploadError)
       expect((error as CcrFileUploadError).userMessage).toBe(message)
-      expect((error as CcrFileUploadError).refusedBeforeUpload).toBe(false)
+      // A 413 is final, as the cap is: its chip offers no retry (2026-10-15 review).
+      expect((error as CcrFileUploadError).refusedBeforeUpload).toBe(message === CCR_ATTACHMENT_TOO_LARGE)
     }
   })
 

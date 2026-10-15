@@ -1,6 +1,10 @@
 import { hydrateNativeChatOutbox, nativeChatOutboxEntries } from '../storage/native-chat-outbox'
 import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
-import { ccrEchoSeen } from './ccr-send'
+import type { Dispatch, SetStateAction } from 'react'
+import type { CcrComposerSendDeps } from './ccr-composer-send-deps'
+import { returnCcrQueueToComposer } from './ccr-local-queue'
+import { ccrEchoSeen, ccrSessionOffline } from './ccr-send'
+import { reasonOf } from './ccr-session-shared'
 import type { CcrEvent } from './ccr-session-api'
 import type { NativeChatOutboxCcr } from '../storage/native-chat-outbox'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -34,6 +38,8 @@ import { ccrSessionTail, sameCcrTarget, type CcrTo } from './use-ccr-tab-queues'
  *  awaited there), and the POSTs out now (the app's "a send already in flight"). */
 export class CcrSendFlight {
   claimed = false
+  /** Who holds the claim, when it says (a tab's turn-end delivery, use-ccr-composer-send.ts). */
+  holder: string | null = null
   private posts = 0
   private waiters: (() => void)[] = []
 
@@ -51,6 +57,7 @@ export class CcrSendFlight {
   /** The claim is over. */
   release(): void {
     this.claimed = false
+    this.holder = null
     this.wake()
   }
 
@@ -65,9 +72,10 @@ export class CcrSendFlight {
     }
   }
 
-  /** `run` under the claim, so nothing else starts beside it. */
-  async claim<T>(run: () => Promise<T>): Promise<T> {
+  /** `run` under the claim, so nothing else starts beside it, held by `holder` when named. */
+  async claim<T>(run: () => Promise<T>, holder: string | null = null): Promise<T> {
     this.claimed = true
+    this.holder = holder
     try {
       return await run()
     } finally {
@@ -174,4 +182,85 @@ export function ccrSendTargetRefusal(to: CcrTo, pinned: NativeChatOutboxCcr | un
     ]
   }
   return null
+}
+
+/** Whether the Remote Control computer is offline: the stream's word, else the row read now. Not
+ *  refused on an unread status, as the app does not refuse UNKNOWN: the POST says. */
+export async function ccrTargetOffline(streamed: string | null, to: CcrTo, deps: Pick<CcrComposerSendDeps, 'readStatus' | 'log'>): Promise<boolean> {
+  if (streamed !== null) {
+    return ccrSessionOffline(streamed)
+  }
+  try {
+    return ccrSessionOffline(await deps.readStatus(to.accountId, to.sessionId))
+  } catch (error) {
+    deps.log(`[ccr-send] could not read session ${ccrSessionTail(to.sessionId)}'s connection status: ${reasonOf(error)}`)
+    return false
+  }
+}
+
+/**
+ * The words queued on a tab, posted now ahead of a send with files, so the session gets them in the
+ * order typed (merge review of d79b81a2b, 2026-10-15: the files send skipped the queue and landed
+ * first). The phone's queue holds words only, and the Claude app's local queue goes out as an
+ * ordinary send before anything sent after it; here it goes as soon as a send with files is made
+ * behind it. A queue held for another target is left alone. Resolves false when the words were
+ * not accepted: that failure is already reported and the words are back in the composer, so the
+ * files send must not go ahead of them.
+ */
+export async function sendCcrQueueAhead(args: {
+  held: { readonly text: string; readonly target: CcrTo } | undefined
+  to: CcrTo
+  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  takeFromQueue: (taken: string) => boolean
+  sendNow: (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo) => Promise<MobileNativeChatSendOutcome>
+  log: (line: string) => void
+}): Promise<boolean> {
+  const { held, to } = args
+  if (!held || !sameCcrTarget(held.target, to)) {
+    return true
+  }
+  const origin = args.captureSendOrigin(held.text)
+  if (!origin || !args.takeFromQueue(held.text)) {
+    return origin !== null
+  }
+  args.log(`[ccr-send] queued words sent ahead of a send with files, to session ${ccrSessionTail(to.sessionId)}`)
+  return (await args.sendNow(held.text, origin, to)) === 'accepted'
+}
+
+/**
+ * Queued words that failed, or never went, back to their tab's composer AHEAD of what it holds
+ * (typed after them), with everything still queued on the tab behind them: the order typed (second
+ * review of the attachment lane, 2026-10-15: they came back after the words typed later). Into the
+ * composer on screen only when it is that tab's; otherwise into that tab's own draft (`draftKey`,
+ * the send's origin or the queue's, from queueOnTab): a POST can fail after the user switched tabs,
+ * and the words went into the other tab's composer (second-pass review, 2026-10-15).
+ * `restoreQueued` is a failed queued POST's restore: its outbox entry and bubble as
+ * `restoreRejectedDraft` handles them, and the words through `giveBack`.
+ */
+export function ccrQueueGiveBack(
+  latest: { readonly current: { tabId: string | null; setComposerText: Dispatch<SetStateAction<string>>; restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void; returnQueueToDraft: (draftKey: string, text: string) => void } },
+  queued: (tab: string) => { readonly text: string; readonly draftKey: string | null } | undefined,
+  takeFromQueue: (tab: string, taken: string) => boolean
+): { giveBack: (tab: string, text: string, draftKey?: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
+  const giveBack = (tab: string, text: string, draftKey?: string): void => {
+    const held = queued(tab)
+    const rest = held?.text
+    const all = rest && takeFromQueue(tab, rest) ? (text ? `${text}\n\n${rest}` : rest) : text
+    const key = draftKey ?? held?.draftKey ?? null
+    if (!all) {
+      return
+    }
+    if ((latest.current.tabId ?? '') !== tab && key !== null) {
+      latest.current.returnQueueToDraft(key, all)
+    } else {
+      latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))
+    }
+  }
+  return {
+    giveBack,
+    restoreQueued: (tab) => (origin, text) => {
+      latest.current.restoreRejectedDraft(origin, '')
+      giveBack(tab, text, origin.draftKey)
+    }
+  }
 }

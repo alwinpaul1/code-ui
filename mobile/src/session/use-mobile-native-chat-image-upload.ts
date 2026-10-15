@@ -65,7 +65,7 @@ export function useMobileNativeChatImageUpload(args: {
   showToast: ShowToast
   onImagesUploaded: (scope: string, images: UploadedNativeChatImage[]) => void
   /** A picked file is on its way: show its chip now, with a spinner. */
-  onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
+  onImageUploading?: (scope: string, image: UploadingNativeChatImage, upload?: AbortController) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
   /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`.
@@ -73,7 +73,7 @@ export function useMobileNativeChatImageUpload(args: {
   onImageFailed?: (
     scope: string,
     image: UploadingNativeChatImage & { batch: string },
-    retry: () => Promise<NativeChatUploadLanded>
+    retry: (signal?: AbortSignal) => Promise<NativeChatUploadLanded>
   ) => boolean
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
@@ -118,8 +118,8 @@ export function useMobileNativeChatImageUpload(args: {
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
   // What a failed chip's retry goes out on, read at the tap (mobile-native-chat-image-attachment.ts).
-  const liveConnectionRef = useRef({ client, getConnectionId: getActiveWorktreeConnectionId })
-  liveConnectionRef.current = { client, getConnectionId: getActiveWorktreeConnectionId }
+  const liveConnectionRef = useRef({ client, getConnectionId: getActiveWorktreeConnectionId, store: anthropicStore ?? null })
+  liveConnectionRef.current = { client, getConnectionId: getActiveWorktreeConnectionId, store: anthropicStore ?? null }
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
     connStateRef.current = connState
@@ -181,7 +181,7 @@ export function useMobileNativeChatImageUpload(args: {
           },
           onImageFailed: onImageFailed
             ? (image, error, retry) => {
-                // A file Anthropic would refuse (empty, over the cap) is not retried: its chip goes with the selection's sweep, the app's words say why.
+                // A file Anthropic would refuse or refused (empty, over the cap, HTTP 413) is not retried: its chip goes with the selection's sweep, the app's words say why.
                 if (error instanceof CcrFileUploadError && error.refusedBeforeUpload) { showToast(error.userMessage, 2500); return false }
                 const kept = onImageFailed(scope, { ...image, batch }, retry)
                 chipFailed ||= kept
@@ -194,7 +194,7 @@ export function useMobileNativeChatImageUpload(args: {
             nativeChatAttachmentCount(useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []) <
             NATIVE_CHAT_ATTACHMENT_LIMIT,
           onLimitReached: () => showToast(NATIVE_CHAT_ATTACHMENT_LIMIT_LINE, 2500),
-          onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
+          onImageStart: (image, upload) => onImageUploading?.(scope, { ...image, batch }, upload),
           onUploadStart: () => {
             started = true
             attachingCount.current += 1

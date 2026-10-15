@@ -576,9 +576,11 @@ describe('a chip still uploading', () => {
     expect(renderer!.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(1)
     const [remove] = pressables(renderer!, 'Remove attachment')
     expect(remove).toBeDefined()
-    // The app's remove disc (cxe.java:119-170): 18 dp in `pl7.O`, 4 dp in from the top end, its
-    // cross in the card fill (`pl7.p`).
-    expect(remove!.props.style).toMatchObject({ width: 18, height: 18, top: 4, right: 4, backgroundColor: PALETTE[scheme].text })
+    // The app's remove disc (cxe.java:119-170): 18 dp in `pl7.O`, its cross in the card fill
+    // (`pl7.p`), drawn inside the 48 dp target (where it sits is
+    // attachment-chip-state-and-remove-reachable.test.tsx).
+    const disc = remove!.find((node) => String(node.type) === 'View' && node.props.style?.width === 18)
+    expect(disc.props.style).toMatchObject({ width: 18, height: 18, backgroundColor: PALETTE[scheme].text })
     expect(remove!.findAll((node) => String(node.type) === 'X')[0]?.props.color).toBe(PALETTE[scheme].attachmentCardFill)
     tap(remove)
     expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-7')
