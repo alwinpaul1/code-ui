@@ -11,6 +11,8 @@ import { PERMISSION_COMMENT_ACTION } from './permission-notification-content'
 import { mobileChatPermissionKey, parseApprovalFromStatus } from '../session/mobile-native-chat-permission'
 import { answerCcrPermissionFromNotification, registerCcrPermissionAnswerer, resetCcrPermissionAnswerersForTests } from '../session/ccr-permission-answerers'
 import type { CcrPendingPermission } from '../session/ccr-permission-request'
+import type { RpcClient } from '../transport/rpc-client'
+import { decorateWithPrompt } from './permission-notification-decorate'
 
 const ESCAPE = String.fromCharCode(27)
 // The banner as the terminal path builds it from Orca's approval envelope.
@@ -84,5 +86,49 @@ describe('a permission banner tapped while the relay is down', () => {
 
   it('stays on the terminal path with no lane at all', async () => {
     expect(await tap('permission:0')).toBe('unroutable')
+  })
+})
+
+describe('a banner carrying the prompt it was built for (review 2026-10-15)', () => {
+  const tapWith = (extra: Record<string, unknown>) =>
+    answerPermissionFromNotification({
+      actionIdentifier: 'permission:0',
+      userText: null,
+      data: { ...data, ...extra },
+      resolveClient: () => null,
+      lookup: async () => null,
+      send: terminalSend,
+      viaAnthropic: answerCcrPermissionFromNotification
+    })
+  const decorate = () =>
+    decorateWithPrompt({ title: 'Claude', body: 'npm test' }, { worktreeId: 'w' }, 'h', {
+      resolveClient: () => ({}) as RpcClient,
+      lookup: async () => ({ kind: 'permission', permission: banner, terminal: 'term-1', agent: 'claude' }),
+      ensureCategory: async () => 'cat'
+    })
+
+  it('answers nothing when its prompt was settled and a newer one asks the same tool and command', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const answers = lane({ ...pending, requestId: 'req-2' })
+    expect(await tapWith({ ccrRequestId: 'req-1' })).toBe('stale')
+    expect(answers).toEqual([])
+    expect(terminalSend).not.toHaveBeenCalled()
+  })
+
+  it('answers the prompt it names', async () => {
+    const answers = lane()
+    expect(await tapWith({ ccrRequestId: 'req-1' })).toBe('sent')
+    expect(answers).toEqual([{ choice: 'allow' }])
+  })
+
+  it('is stamped with the request id of the one prompt a live lane holds when it is built', async () => {
+    lane()
+    expect((await decorate()).data?.ccrRequestId).toBe('req-1')
+  })
+
+  it('carries no request id when no lane holds the prompt, so it answers as before', async () => {
+    const decorated = await decorate()
+    expect(decorated.categoryIdentifier).toBe('cat')
+    expect(decorated.data && 'ccrRequestId' in decorated.data).toBe(false)
   })
 })

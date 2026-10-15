@@ -1,5 +1,6 @@
 import { nativeChatAskDismissKey } from '../../../src/shared/native-chat-ask'
 import { mobileChatPermissionKey } from '../session/mobile-native-chat-permission'
+import { heldCcrPermissionRequestId } from '../session/ccr-permission-answerers'
 import type { RpcClient } from '../transport/rpc-client'
 import { desktopNotificationLocation } from './notification-presentation'
 import type { PendingPermission, PendingPrompt, PendingQuestion } from './permission-lookup'
@@ -81,6 +82,8 @@ function permissionDecoration(
     // Nothing a tap could answer: the desktop's own banner stays as it is.
     return null
   }
+  const permissionKey = mobileChatPermissionKey(pending.permission)
+  const ccrRequestId = heldCcrPermissionRequestId(hostId, worktreeId, permissionKey)
   return {
     title: permission.title,
     body: permission.body,
@@ -101,9 +104,12 @@ function permissionDecoration(
       worktreeId,
       // Identity of the prompt this banner was built from, so a tap minutes
       // later can tell whether the agent is still asking the same thing.
-      permissionKey: mobileChatPermissionKey(pending.permission),
+      permissionKey,
       sends: Object.fromEntries(kept.map((a) => [a.identifier, a.send])),
-      ...(offersComment ? { comment: true as const } : {})
+      ...(offersComment ? { comment: true as const } : {}),
+      // The Anthropic request a live lane holds for it now, so a tap later answers this prompt
+      // and not a newer one asking the same tool with the same summary.
+      ...(ccrRequestId ? { ccrRequestId } : {})
     }
   }
 }

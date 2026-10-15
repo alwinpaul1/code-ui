@@ -4,6 +4,7 @@ import type { ClaudePermissionCommentOutcome } from '../session/claude-permissio
 import type { PendingPrompt } from './permission-lookup'
 import { PERMISSION_COMMENT_ACTION } from './permission-notification-content'
 import type { CcrPermissionChoice } from '../session/ccr-permission-request'
+import type { CcrNotificationAnswer } from '../session/ccr-permission-answerers'
 
 const ESCAPE = String.fromCharCode(27)
 
@@ -25,6 +26,9 @@ export type PermissionNotificationData = {
   /** The banner offers Deny with comment (PERMISSION_COMMENT_ACTION). Absent for a banner that
    *  does not, so a tap that names it anyway answers nothing. */
   comment?: true
+  /** The Anthropic `can_use_tool` request the banner was built for, when a live lane held it then
+   *  (ccr-permission-answerers.ts): a tap answers that request or nothing on that lane. */
+  ccrRequestId?: string
 }
 
 /** How a tap on a prompt banner's button ended. Shared by the permission and
@@ -55,6 +59,7 @@ function readData(value: unknown): PermissionNotificationData | null {
   const permissionKey: unknown = Reflect.get(box, 'permissionKey')
   const sends: unknown = Reflect.get(box, 'sends')
   const comment: unknown = Reflect.get(box, 'comment')
+  const ccrRequestId: unknown = Reflect.get(box, 'ccrRequestId')
   if (
     typeof hostId !== 'string' ||
     typeof worktreeId !== 'string' ||
@@ -69,7 +74,8 @@ function readData(value: unknown): PermissionNotificationData | null {
     worktreeId,
     permissionKey,
     sends: sends as Record<string, string>,
-    ...(comment === true ? { comment: true as const } : {})
+    ...(comment === true ? { comment: true as const } : {}),
+    ...(typeof ccrRequestId === 'string' && ccrRequestId ? { ccrRequestId } : {})
   }
 }
 
@@ -114,7 +120,7 @@ export async function answerPermissionFromNotification(args: {
   send: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
   /** A live Anthropic lane holding the same prompt answers it with a `control_response`
    *  (ccr-permission-answerers.ts); null when none does, and the terminal path runs. */
-  viaAnthropic?: (input: { hostId: string; worktreeId: string; permissionKey: string; choice: CcrPermissionChoice; comment?: string }) => Promise<boolean> | null
+  viaAnthropic?: (input: CcrNotificationAnswer) => Promise<boolean | 'stale'> | null
   /** Types a comment into the agent's own dialog (Deny with comment). */
   sendComment?: (input: {
     client: RpcClient
@@ -145,9 +151,10 @@ export async function answerPermissionFromNotification(args: {
     }
     // The Claude app's road first: the session's own lane, which needs no relay.
     const choice = anthropicChoice(isComment, text)
-    const viaAnthropic = choice ? args.viaAnthropic?.({ hostId: data.hostId, worktreeId: data.worktreeId, permissionKey: data.permissionKey, choice, ...(isComment ? { comment } : {}) }) : null
+    const viaAnthropic = choice ? args.viaAnthropic?.({ hostId: data.hostId, worktreeId: data.worktreeId, permissionKey: data.permissionKey, ...(data.ccrRequestId ? { requestId: data.ccrRequestId } : {}), choice, ...(isComment ? { comment } : {}) }) : null
     if (viaAnthropic) {
-      return (await viaAnthropic) ? 'sent' : 'failed'
+      const answered = await viaAnthropic
+      return answered === 'stale' ? 'stale' : answered ? 'sent' : 'failed'
     }
     const client = args.resolveClient(data.hostId)
     if (!client) {
