@@ -185,7 +185,7 @@ export function useMobileNativeChatController(
     dialogOptions: terminalDialogOptions, dialogKind: terminalDialogKind, dialogBeforeAnswer, rereadAfterAnswer,
     terminalPermission,
     permissionDismissed,
-    queuedMessages: visibleQueuedMessages, queueReadable: screenQueueReadable, queueEditable: screenQueueEditable,
+    queuedMessages: visibleQueuedMessages, queueReadable: screenQueueReadable, queueEditable: screenQueueEditable, queueInput: screenQueueInput,
     sentPrompts: screenSentPrompts,
     taskCompletions: screenTaskCompletions,
     peerNotices: screenPeerNotices, spinner: screenSpinner, sentPhotos: screenSentPhotos, modelStatement: screenModelStatement
@@ -561,7 +561,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1), requestModelSheet: () => setHeaderModelRequests((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable,
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
     chatImagePreviewsByMessageId, nativeChatImageShare,
     nativeChatSession: claudeApi.session ?? nativeChatSession, nativeChatAnthropicGate: claudeApi.gate,
     nativeChatStructured: activeChatStructured,

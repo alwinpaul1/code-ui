@@ -257,8 +257,9 @@ export function midturnChat(frames: Record<string, unknown>[], agent: () => 'cla
     queued: string[] = [],
     /** Whether the tab was launched with the prompt hook (`hk=1` on its
      *  beacon), so every prompt it took while the phone listened was beaconed.
-     *  `queueReadable`: whether the read behind `queued` could see the box. */
-    { promptHook, queueReadable }: { promptHook?: boolean; queueReadable?: boolean } = {}
+     *  `queueReadable`: whether the read behind `queued` could see the box.
+     *  `input`: the words in the agent's input on that read. */
+    { promptHook, queueReadable, input }: { promptHook?: boolean; queueReadable?: boolean; input?: string } = {}
   ): Promise<void> {
     const delta = at(clock) - Date.now()
     if (delta > 0) {
@@ -267,8 +268,8 @@ export function midturnChat(frames: Record<string, unknown>[], agent: () => 'cla
       })
     }
     // Twice: the witness memory settles on the render after it stores.
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, queueReadable, promptHook })
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, queueReadable, promptHook })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, queueReadable, input, promptHook })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, queueReadable, input, promptHook })
   }
   /** The rows the chat's queue box draws, as their words. */
   function queueBox(): string[] {

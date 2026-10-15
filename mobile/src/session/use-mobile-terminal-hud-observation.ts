@@ -69,6 +69,9 @@ export function useMobileTerminalHudObservation(args: {
    *  (QueueBoxRead.editable): false under the same conditions as
    *  `queueReadable`, and for Claude while Orca publishes no draft. */
   queueEditable: boolean
+  /** The words in the agent's input on the same read (QueueBoxRead.input),
+   *  '' under the same conditions as `queueReadable` is false. */
+  queueInput: string
   /** Prompts the agent has already accepted, read off its scrollback. */
   sentPrompts: string[]
   /** Photos Claude painted above an accepted prompt, which the transcript
@@ -125,6 +128,7 @@ export function useMobileTerminalHudObservation(args: {
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [queueReadable, setQueueReadable] = useState(false)
   const [queueEditable, setQueueEditable] = useState(false)
+  const [queueInput, setQueueInput] = useState('')
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [sentPhotos, setSentPhotos] = useState<ScreenSentPhotos[]>([])
   // Tagged with the terminal it was read from, so a new terminal's rows are
@@ -150,6 +154,7 @@ export function useMobileTerminalHudObservation(args: {
     setQueuedMessages((current) => (current.length ? [] : current))
     setQueueReadable(false)
     setQueueEditable(false)
+    setQueueInput('')
     setTaskCompletions(null)
     setObservation(null)
     setSpinner(null)
@@ -232,6 +237,7 @@ export function useMobileTerminalHudObservation(args: {
         )
         setQueueReadable(box.readable)
         setQueueEditable(box.editable)
+        setQueueInput(box.input)
         // Only Claude paints its accepted prompts this way; Codex does not.
         // The reader takes the `❯` row and nothing under it — see
         // mobile-terminal-single-row-prompts.test.ts for why.
@@ -386,6 +392,7 @@ export function useMobileTerminalHudObservation(args: {
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     queueReadable: enabled && queueScopeRef.current === handleKey && queueReadable,
     queueEditable: enabled && queueScopeRef.current === handleKey && queueEditable,
+    queueInput: enabled && queueScopeRef.current === handleKey ? queueInput : '',
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     sentPhotos: enabled && queueScopeRef.current === handleKey ? sentPhotos : [],
     taskCompletions: enabled && taskCompletions?.handleKey === handleKey ? taskCompletions.rows : null,

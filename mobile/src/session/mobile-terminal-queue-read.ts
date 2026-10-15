@@ -1,6 +1,7 @@
 import { codexQueueReadFromScreen } from './codex-terminal-queued-messages'
 import { terminalDialogKind } from './mobile-native-chat-dialog-guard'
 import { claudeQueueViewFromScreen } from './mobile-terminal-queued-messages'
+import { QUEUE_HINT, SELECTED_HINT } from './mobile-terminal-queue-block'
 
 /** The agent's queue box as one screen read found it. */
 export type QueueBoxRead = {
@@ -12,9 +13,24 @@ export type QueueBoxRead = {
    *  session name or the fast-mode tag (Claude Code 2.1.285): the recall is
    *  refused there (native-queue-editor.ts), so no pencil is offered. */
   editable: boolean
+  /** The words in the agent's own input, as Orca publishes them (`draft`),
+   *  '' when it is empty or shows Claude's queue placeholder. Read with the
+   *  box: an entry that leaves the box into the input was recalled there (Up,
+   *  the phone's pencil or tap), not taken by the agent, and is not a message
+   *  sent (queue-recalls.ts). */
+  input: string
 }
 
-const UNREAD: QueueBoxRead = { entries: [], readable: false, editable: false }
+const UNREAD: QueueBoxRead = { entries: [], readable: false, editable: false, input: '' }
+
+/** Orca's `draft` as words: Claude's placeholder (the queue hints) is an
+ *  empty input, the same rule the queue editor reads it by (native-queue-input.ts). */
+export function agentInputWords(draft: unknown): string {
+  if (typeof draft !== 'string' || QUEUE_HINT.test(draft) || SELECTED_HINT.test(draft)) {
+    return ''
+  }
+  return draft.trim()
+}
 
 /**
  * The queue box on one screen read, and whether that read could see it.
@@ -52,6 +68,7 @@ export function queueBoxReadFromScreen(lines: readonly string[], agent: string |
   return {
     entries: read.entries,
     readable: read.entries.length > 0 || (read.readable && terminalDialogKind(lines, agent) === null),
-    editable: read.entries.length > 0 && (agent === 'codex' || (typeof draft === 'string' && draft !== ''))
+    editable: read.entries.length > 0 && (agent === 'codex' || (typeof draft === 'string' && draft !== '')),
+    input: agentInputWords(draft)
   }
 }
