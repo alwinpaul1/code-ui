@@ -1,33 +1,25 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { contrastRatio } from '../test/contrast'
-import { darkColors, lightColors, space } from '../theme/tokens'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
-import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 
-const mocks = vi.hoisted(() => ({ reduced: true, loops: 0 }))
+/**
+ * The line above the composer, drawn as the Claude app draws it (com.anthropic.claude
+ * 1.261009.20, `nl7.b` and `au8`, read 2026-10-15). The user's screenshot of a session with
+ * background tasks showed a plain "3 running tasks" in link blue, with no star and no word
+ * "Working"; ours drew "Working · 3 running tasks" with a breathing starburst.
+ *
+ * Where the Claude app's footer text comes from, so the next release can be re-checked:
+ * `nl7.java:263` (idle: the count alone, link colour `ad5.C0()`), `nl7.java:246` (working: a
+ * cycling verb), `nl7.java:205` and `:215` (the count after a " · ").
+ */
 
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+const mocks = vi.hoisted(() => ({ reduced: false as boolean | null }))
+
 vi.mock('react-native', () => ({
-  Animated: {
-    View: 'View',
-    createAnimatedComponent: (c: unknown) => c,
-    Value: class {
-      interpolate() {
-        return 0
-      }
-    },
-    loop: () => {
-      mocks.loops += 1
-      return { start: () => {}, stop: () => {} }
-    },
-    timing: () => ({}),
-    sequence: () => ({})
-  },
-  Easing: { inOut: () => 0, quad: 0 },
+  Image: 'Image',
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -36,174 +28,133 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => mocks.reduced }))
 
-type Drawn = { texts: string[]; colors: string[] }
+const LIGHT = { link: '#184F95', clay: '#C6613F', body: '#7B7974' }
+const DARK = { link: '#6DA7EC', clay: '#D97757', body: '#97958D' }
 
-describe('the status line above the composer', () => {
+function flat(style: unknown): Record<string, unknown> {
+  return Object.assign({}, ...[style].flat(3).filter(Boolean)) as Record<string, unknown>
+}
+
+describe('the status line above the composer, as the Claude app draws it', () => {
   let renderer: ReactTestRenderer | null = null
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mocks.reduced = false
+  })
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
-    mocks.reduced = true
-    mocks.loops = 0
+    vi.useRealTimers()
   })
 
-  function draw(args: {
-    runningCount: number
-    working: boolean
-    spinner?: ClaudeSpinner | null
-    scheme?: 'light' | 'dark'
-  }): Drawn {
+  function draw(args: { runningCount: number; working: boolean; scheme?: 'light' | 'dark'; openSheet?: () => void }) {
     act(() => {
       renderer?.unmount()
       renderer = create(
         <ThemeProvider initialPreference={args.scheme ?? 'light'}>
           {createElement(
             NativeChatTasksContext.Provider,
-            { value: { runningCount: args.runningCount, openSheet: () => {} } },
-            createElement(MobileNativeChatStatusLine, { working: args.working, spinner: args.spinner ?? null })
+            { value: { runningCount: args.runningCount, openSheet: args.openSheet ?? (() => {}) } },
+            createElement(MobileNativeChatStatusLine, { working: args.working, spinner: null })
           )}
         </ThemeProvider>
       )
     })
-    const texts: string[] = []
-    const colors: string[] = []
-    for (const node of renderer!.root.findAllByType('Text' as never)) {
-      if (typeof node.props.children === 'string') {
-        texts.push(node.props.children)
-      }
-      for (const entry of [node.props.style].flat()) {
-        if (entry && typeof entry.color === 'string') {
-          colors.push(entry.color)
-        }
-      }
-    }
-    return { texts, colors }
+    return renderer!.root
   }
+
+  function texts(root: ReactTestInstance): string[] {
+    return root
+      .findAllByType('Text' as never)
+      .map((node) => node.props.children)
+      .filter((child): child is string => typeof child === 'string')
+  }
+
+  const star = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'claude-spinner-sprite')
+  const oldStar = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'background-tasks-pulse')
+
+  // The headline.
+  it('a working session shows "N running tasks" and the Claude spinner, not the Working star', () => {
+    const root = draw({ runningCount: 3, working: true })
+    const all = texts(root)
+    expect(all.join('')).toMatch(/^[A-Za-z]+\.\.\. · 3 running tasks$/)
+    expect(all.join(' ')).not.toContain('Working')
+    expect(oldStar(root)).toHaveLength(0)
+    expect(star(root).length).toBeGreaterThan(0)
+  })
+
+  it('an idle session with background tasks is the count alone, in link blue, with no star and no Working', () => {
+    const root = draw({ runningCount: 3, working: false })
+    expect(texts(root)).toEqual(['3 running tasks'])
+    expect(star(root)).toHaveLength(0)
+    expect(oldStar(root)).toHaveLength(0)
+  })
 
   it('says "1 running task" for one and "2 running tasks" for two', () => {
-    expect(draw({ runningCount: 1, working: false }).texts).toEqual(['1 running task'])
-    expect(draw({ runningCount: 2, working: false }).texts).toEqual(['2 running tasks'])
+    expect(texts(draw({ runningCount: 1, working: false }))).toEqual(['1 running task'])
+    expect(texts(draw({ runningCount: 2, working: false }))).toEqual(['2 running tasks'])
   })
 
-  it('stays away entirely when nothing runs and the agent is idle, as on a quiet Codex tab', () => {
-    expect(draw({ runningCount: 0, working: false }).texts).toEqual([])
+  it('draws nothing when nothing runs and the agent is idle', () => {
+    expect(texts(draw({ runningCount: 0, working: false }))).toEqual([])
+    expect(renderer!.toJSON()).toBeNull()
   })
 
-  // 2026-09-25, the user: the line said "42s" once Claude's spinner showed a
-  // time, where they wanted words. It says "Working", capital W, whatever the
-  // spinner's verb or time, in the accent in both themes.
-  it('says Working, never a time, while the agent works', () => {
-    for (const spinner of [
-      { verb: 'Computing', elapsed: null, thinking: null },
-      { verb: 'Computing', elapsed: '42s', thinking: null },
-      { verb: 'Computing', elapsed: '1m 16s', thinking: 'thinking some more' },
-      null
-    ]) {
-      const texts = draw({ runningCount: 0, working: true, spinner }).texts
-      expect(texts[0]).toBe('Working')
-      expect(texts.join(' ')).not.toMatch(/\d+s\b|\dm\b/)
+  it('working with no tasks shows the spinner and a verb, and no count and no separator', () => {
+    const root = draw({ runningCount: 0, working: true })
+    expect(texts(root)).toHaveLength(1)
+    expect(texts(root)[0]).toMatch(/^[A-Za-z]+\.\.\.$/)
+    expect(star(root).length).toBeGreaterThan(0)
+  })
+
+  it('draws the count in the link colour and the verb in the clay accent of whichever theme is on', () => {
+    for (const [scheme, want] of [
+      ['light', LIGHT],
+      ['dark', DARK]
+    ] as const) {
+      const root = draw({ runningCount: 4, working: false, scheme })
+      const count = root.findAllByType('Text' as never).find((n) => n.props.children === '4 running tasks')
+      expect(flat(count!.props.style).color).toBe(want.link)
+
+      const working = draw({ runningCount: 4, working: true, scheme })
+      const byText = (match: (t: string) => boolean) =>
+        working
+          .findAllByType('Text' as never)
+          .find((n) => typeof n.props.children === 'string' && match(n.props.children))
+      expect(flat(byText((t) => t.endsWith('...'))!.props.style).color).toBe(want.clay)
+      expect(flat(byText((t) => t === '4 running tasks')!.props.style).color).toBe(want.link)
+      expect(flat(byText((t) => t.includes('·'))!.props.style).color).toBe(want.clay)
     }
   })
 
-  it('says Working beside the running count', () => {
-    expect(draw({ runningCount: 2, working: true, spinner: { verb: 'Cooking', elapsed: '5s', thinking: null } }).texts).toEqual([
-      'Working',
-      '·',
-      '2 running tasks'
-    ])
+  it('sets the line in the app body style: 15 / 400 / 21', () => {
+    const root = draw({ runningCount: 3, working: false })
+    const style = flat(root.findAllByType('Text' as never)[0]!.props.style)
+    expect(style.fontSize).toBe(15)
+    expect(style.lineHeight).toBe(21)
   })
 
-  /** Each separator the line draws: a Text holding the dot and nothing else. */
-  function separators() {
-    return renderer!.root
-      .findAllByType('Text' as never)
-      .filter((node) => typeof node.props.children === 'string' && node.props.children.includes('·'))
-  }
-
-  function flatStyle(style: unknown): Record<string, unknown> {
-    return Object.assign({}, ...[style].flat(3).filter(Boolean)) as Record<string, unknown>
-  }
-
-  // 2026-09-26, the user: "Working · 7 running tasks", with no ellipsis after
-  // Working, and "Working and n running tasks must be separated with . And
-  // small space". The line said "Working… · 7 running tasks", and on the phone
-  // its ' · ' read as "Working…·7 running tasks": the font's spaces are a few
-  // dp at label size, and the muted dot was faint.
-  it('reads "Working · 7 running tasks": no ellipsis, and a dot of its own with an even space either side, in light and dark', () => {
-    for (const [scheme, palette] of [['light', lightColors], ['dark', darkColors]] as const) {
-      const drawn = draw({ runningCount: 7, working: true, spinner: null, scheme })
-      expect(drawn.texts).toEqual(['Working', '·', '7 running tasks'])
-      expect(drawn.texts.join(' ')).not.toContain('…')
-      const [dot, ...rest] = separators()
-      expect(rest).toHaveLength(0)
-      // The dot alone: the space comes from the margin, not from space characters.
-      expect(dot!.props.children).toBe('·')
-      const style = flatStyle(dot!.props.style)
-      expect(style.marginLeft ?? style.marginHorizontal).toBe(space.xs)
-      expect(style.marginRight ?? style.marginHorizontal).toBe(space.xs)
-      // Secondary, not muted: it has to read against the page in both themes.
-      expect(style.color).toBe(palette.textSecondary)
-      expect(contrastRatio(style.color as string, palette.bg)).toBeGreaterThanOrEqual(4.5)
-      expect(contrastRatio(style.color as string, palette.bg)).toBeGreaterThan(contrastRatio(palette.textMuted, palette.bg))
-    }
+  it('opens the Background tasks sheet from the count, labelled for a screen reader', () => {
+    const openSheet = vi.fn()
+    const root = draw({ runningCount: 6, working: true, openSheet })
+    const press = root.find(
+      (n) => (n.type as unknown) === 'Pressable' && n.props.accessibilityLabel === '6 running tasks. Open background tasks'
+    )
+    expect(press.props.accessibilityRole).toBe('button')
+    act(() => press.props.onPress())
+    expect(openSheet).toHaveBeenCalledTimes(1)
   })
 
-  it('separates the thinking status with the same dot', () => {
-    const drawn = draw({ runningCount: 2, working: true, spinner: { verb: 'Cooking', elapsed: '1m 16s', thinking: 'thinking some more' } })
-    expect(drawn.texts).toEqual(['Working', '·', '2 running tasks', '·', 'thinking some more…'])
-    const [count, thinking] = separators()
-    expect(thinking!.props.children).toBe('·')
-    expect(flatStyle(thinking!.props.style)).toEqual(flatStyle(count!.props.style))
+  it('announces the line as a polite live region, and the working state as "Working"', () => {
+    const root = draw({ runningCount: 2, working: true })
+    const live = root.find((n) => n.props.testID === 'native-chat-status-line')
+    expect(live.props.accessibilityLiveRegion).toBe('polite')
+    const working = root.find((n) => n.props.accessibilityLabel === 'Working')
+    expect(working.props.accessible).toBe(true)
   })
 
-  it('draws Working in the accent and the count in the link colour of whichever theme is on', () => {
-    const spinner = { verb: 'Cooking', elapsed: null, thinking: null }
-    const light = draw({ runningCount: 5, working: true, spinner, scheme: 'light' }).colors
-    expect(light).toEqual(expect.arrayContaining([lightColors.accentText, lightColors.info]))
-    const dark = draw({ runningCount: 5, working: true, spinner, scheme: 'dark' }).colors
-    expect(dark).toEqual(expect.arrayContaining([darkColors.accentText, darkColors.info]))
-    expect(dark).not.toContain(lightColors.info)
-  })
-
-  /** The star's own drawing: what the Svg is styled with, if anything. */
-  function starStyle(): unknown {
-    const star = renderer!.root.find((node) => node.props.testID === 'background-tasks-pulse')
-    return star.findAllByType('Svg' as never)[0]?.props.style
-  }
-
-  // 2026-09-28, the user: "No breathing effect for claude logo in bg running task". The star
-  // stood still beside "N running tasks" to match a 2026-09-26 recording of the Claude app; the
-  // user wants it to breathe while background work runs, as it does beside Working.
-  it('breathes the star beside the running-task count while background tasks run', () => {
-    mocks.reduced = false
-    const drawn = draw({ runningCount: 4, working: false })
-    expect(drawn.texts).toEqual(['4 running tasks'])
-    expect(mocks.loops).toBe(1)
-    expect(starStyle()).toBeDefined()
-  })
-
-  it('keeps the star still beside the running-task count when motion is reduced', () => {
-    mocks.reduced = true
-    draw({ runningCount: 4, working: false })
-    expect(mocks.loops).toBe(0)
-    expect(starStyle()).toBeUndefined()
-  })
-
-  it('draws the still star in the accent of either theme', () => {
-    mocks.reduced = false
-    for (const [scheme, palette] of [['light', lightColors], ['dark', darkColors]] as const) {
-      draw({ runningCount: 4, working: false, scheme })
-      const path = renderer!.root.findAllByType('Path' as never)[0]
-      expect(path?.props.fill).toBe(palette.accentText)
-    }
-  })
-
-  // Not in the recording, which caught no working turn: the star beside
-  // "Working" keeps the breath it had.
-  it('still breathes the star beside Working', () => {
-    mocks.reduced = false
-    draw({ runningCount: 4, working: true, spinner: null })
-    expect(mocks.loops).toBe(1)
-    expect(starStyle()).toBeDefined()
+  it('does not say Working to a screen reader when the agent is idle', () => {
+    const root = draw({ runningCount: 2, working: false })
+    expect(root.findAll((n) => n.props.accessibilityLabel === 'Working')).toHaveLength(0)
   })
 })

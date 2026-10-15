@@ -33,6 +33,7 @@ vi.mock('react-native', () => ({
   },
   Easing: { linear: 0, quad: 0, inOut: () => 0, out: () => 0 },
   ActivityIndicator: 'ActivityIndicator',
+  Image: 'Image',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
