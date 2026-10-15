@@ -77,7 +77,7 @@ export function MobileNativeChatSendSlot({
       hitSlop={COMPOSER_BUTTON_HIT_SLOP}
       accessibilityLabel="Send message"
       accessibilityRole="button"
-      accessibilityState={{ disabled: !canSend, busy: sending }}
+      accessibilityState={sending ? { disabled: !canSend, busy: true } : { disabled: !canSend }}
       // The clay circle always; with nothing to send its fill and its arrow each go to 40%, as
       // the Claude app draws it, not swapped for a grey one and not faded as a group.
       style={[iconButton, { backgroundColor: canSend || sending ? colors.composerSend : colors.composerSendDisabled }]}
