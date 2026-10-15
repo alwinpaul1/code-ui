@@ -47,17 +47,16 @@ describe('words queued while the turn-end send is checking the session', () => {
     render()
     await settle()
     expect(reads).toHaveLength(1)
-    // The send below goes behind the queue (it is being seen out) instead of ahead of it.
-    let outcome: Promise<string> | null = null
-    await act(async () => {
-      outcome = hook.api.sendWithOutcome('second')
-      await Promise.resolve()
-    })
+    // The send below goes behind the queue (it is being seen out) instead of ahead of it. The
+    // delivery holds the flight from before its status read, so the send joins the queue at once,
+    // with no read of its own (use-ccr-composer-send.ts, since 2026-10-15).
     io.readStatus = async () => 'connected'
+    let outcome = ''
     await act(async () => {
-      reads[1]!('connected')
-      await outcome
+      outcome = await hook.api.sendWithOutcome('second')
     })
+    expect(outcome).toBe('accepted')
+    expect(reads).toHaveLength(1)
     expect(hook.api.queue).toBe('first\n\nsecond')
     await act(async () => {
       reads[0]!('connected')

@@ -54,17 +54,15 @@ describe('a turn that ended while the chat lane was off', () => {
     render()
     await settle()
     expect(reads).toHaveLength(1)
-    let outcome: Promise<string> | null = null
-    await act(async () => {
-      outcome = hook.api.sendWithOutcome('second')
-      await Promise.resolve()
-    })
-    expect(reads).toHaveLength(2)
+    // It joins the queue being seen out (the delivery holds the flight from before its status
+    // read) instead of reading the row itself and going first (use-ccr-composer-send.ts).
     io.readStatus = async () => 'connected'
+    let outcome = ''
     await act(async () => {
-      reads[1]!('connected')
-      await outcome
+      outcome = await hook.api.sendWithOutcome('second')
     })
+    expect(outcome).toBe('accepted')
+    expect(reads).toHaveLength(1)
     await act(async () => {
       reads[0]!('connected')
       await new Promise((resolve) => setTimeout(resolve, 0))
