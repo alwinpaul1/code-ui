@@ -131,8 +131,8 @@ describe('the chat’s Agent sheet reads the agent’s calls from Anthropic’s 
     const tree = render(sheet(live([...agentCallEvents(BACKGROUND_AGENT_LAUNCH_TEXT, PROMPT), subagentText('Starting.', T0 + 1_000)])))
     expect(peekSubagentActivityRequest()?.targets.map((target) => target.agentId)).toEqual([BACKGROUND_AGENT.agentId])
     act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, orcaTranscriptRows(probeARecords())))
-    // A floor: the stream's "Starting." is not in this file, so the file is behind the stream.
-    expect(labels(tree)).toContain('Tool calls (4+)')
+    // Exact: the stream's "Starting." is not in this file, but it is no call.
+    expect(labels(tree)).toContain('Tool calls (4)')
   })
 
   it('falls back to the file with no live stream at all', () => {
@@ -260,6 +260,13 @@ describe('the Agent sheet orders and counts the file’s window and the stream t
     })
     expect(tail(tree)).toEqual(['Tool calls (3+)'])
     expect(steps(tree)).toEqual(['step 1', 'step 2', 'step 3'])
+  })
+
+  it('a stream that adds only a text row the file lacks keeps the file’s count exact', () => {
+    const two = calls(2)
+    const tree = render(sheet(withStream([...two, subagentText('Thinking about step 3.', T0 + 9_000)])))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, ccrSubagentMessages(two, AGENT_CALL)))
+    expect(tail(tree)).toEqual(['Tool calls (2)'])
   })
 
   it('an empty file answer with streamed calls reads as a floor, (2+), not (2)', () => {

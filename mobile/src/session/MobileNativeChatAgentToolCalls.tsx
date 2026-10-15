@@ -32,9 +32,10 @@ import { openSubagentTranscript } from './subagent-transcript-store'
  * nq8.java:937-949), de-duplicated by row and tool_use id
  * (`subagent-stream-file-union.ts`). The stream alone is never the count: the
  * tab's store drops a subagent's older events. The count is exact only when
- * the file has answered, its read is not a window, and the stream added
- * nothing it lacked; otherwise it is a floor ("Tool calls (1+)"): a file
- * that is behind the stream may be behind by more than the stream still holds.
+ * the file has answered, its read is not a window, and the stream added no
+ * call it lacked; otherwise it is a floor ("Tool calls (1+)"): a file behind
+ * the stream on calls may be behind by more than the stream still holds. A
+ * text or thinking row only the stream holds adds no call and keeps it exact.
  * Nothing is listed for an agent that made no call. The rows are the run
  * sheet's, inert: drilling in is what the transcript viewer is for.
  */
@@ -58,8 +59,8 @@ export function MobileNativeChatAgentToolCalls({ agentId, title, inSection, tool
   const rows = useMemo(() => toolCallRows(union.messages), [union])
   // A floor, never an exact count: the feed reads the transcript's latest page only (earlier
   // pages unread), the file has not answered (or its read failed) and the rows are the stream's
-  // alone, or the stream holds rows the file lacks (the file is behind).
-  const windowed = useSubagentFeedsWindowed().has(agentId) || messages === undefined || union.streamAdded
+  // alone, or the stream holds calls the file lacks (the file is behind on calls).
+  const windowed = useSubagentFeedsWindowed().has(agentId) || messages === undefined || union.streamAddedCalls
   if (!target) {
     return null
   }

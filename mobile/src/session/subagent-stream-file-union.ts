@@ -30,14 +30,15 @@ export function unionSubagentMessages(file: readonly NativeChatMessage[], stream
 
 export type SubagentStreamFileUnion = {
   messages: NativeChatMessage[]
-  /** Whether the stream held anything the file did not: the file is then behind, and a count over
-   *  the union is a floor, never exact. */
-  streamAdded: boolean
+  /** Whether the stream held a tool call the file did not: the file is then behind on calls, and a
+   *  count of calls over the union is a floor, never exact. A text or thinking row the file lacks
+   *  adds no call, so it leaves that count alone. */
+  streamAddedCalls: boolean
 }
 
 export function subagentStreamFileUnion(file: readonly NativeChatMessage[], streamed: readonly NativeChatMessage[]): SubagentStreamFileUnion {
   if (streamed.length === 0) {
-    return { messages: [...file], streamAdded: false }
+    return { messages: [...file], streamAddedCalls: false }
   }
   const ids = new Set(file.map((message) => message.id))
   const calls = new Set<string>()
@@ -70,7 +71,10 @@ export function subagentStreamFileUnion(file: readonly NativeChatMessage[], stre
       extra.push({ ...message, blocks })
     }
   }
-  return { messages: mergeByTime(file, extra), streamAdded: extra.length > 0 }
+  return {
+    messages: mergeByTime(file, extra),
+    streamAddedCalls: extra.some((message) => message.blocks.some((block) => block.type === 'tool-call'))
+  }
 }
 
 const THINKING_SUFFIX = ':thinking'
