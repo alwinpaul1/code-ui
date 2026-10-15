@@ -1,4 +1,5 @@
 import { listCcrSessionEvents, CcrApiError, type CcrSessionRow } from './ccr-session-api'
+import { recordCcrMatchOutcome } from './ccr-match-outcome'
 import { bindCcrConfigDir, clearCcrFailure, ccrAccountForConfigDir, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
 import { forgetSharedCcrLists, listAccountSessionsShared } from './ccr-session-lists'
 import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
@@ -93,7 +94,11 @@ export function runCcrImagePipeline(input: CcrPipelineInput, deps: CcrPipelineDe
   if (running) {
     return ids.every((id) => running.wanted.has(id)) ? running.run : running.run.then(() => runCcrImagePipeline(input, deps))
   }
-  const run = runOnce(input, deps).finally(() => {
+  // Each run's outcome is kept for the chat, which says why a tab has no session (ccr-match-outcome.ts).
+  const run = runOnce(input, deps).then((result) => {
+    recordCcrMatchOutcome(input.tabId, input.epoch, result)
+    return result
+  }).finally(() => {
     inFlight.delete(input.tabId)
   })
   inFlight.set(input.tabId, { run, wanted: new Set(ids) })

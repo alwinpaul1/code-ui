@@ -65,7 +65,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'events' | 'branches' | 'usage'
+export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage'
 
 export class CcrApiError extends Error {
   constructor(
@@ -258,28 +258,81 @@ export async function listCcrSessions(
   const sessions: CcrSessionRow[] = []
   let malformedRows = 0
   for (const item of body.data) {
-    const row = record(item)
-    if (!row || !isCcrSessionId(row.id)) {
+    const row = parseCcrSessionRow(item)
+    if (!row) {
       malformedRows += 1
       continue
     }
-    sessions.push({
-      id: row.id,
-      environmentKind: stringOrNull(row.environment_kind),
-      title: stringOrNull(row.title),
-      status: stringOrNull(row.status),
-      connectionStatus: stringOrNull(row.connection_status),
-      activeAt: timeOf(row),
-      model: stringOrNull(record(row.external_metadata)?.model),
-      effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
-      contextUsage: contextUsageOf(record(row.external_metadata)?.context_usage),
-      branches: branchesOfRow(row)
-    })
+    sessions.push(row)
   }
   return { sessions, nextCursor: cursorOf(body.next_cursor), malformedRows }
 }
 
-export type CcrEvent = { eventId: string | null; payload: Record<string, unknown> }
+/** One session row (eyu.java's fields), or null when it has no usable id. */
+export function parseCcrSessionRow(item: unknown): CcrSessionRow | null {
+  const row = record(item)
+  if (!row || !isCcrSessionId(row.id)) {
+    return null
+  }
+  return {
+    id: row.id,
+    environmentKind: stringOrNull(row.environment_kind),
+    title: stringOrNull(row.title),
+    status: stringOrNull(row.status),
+    connectionStatus: stringOrNull(row.connection_status),
+    activeAt: timeOf(row),
+    model: stringOrNull(record(row.external_metadata)?.model),
+    effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
+    contextUsage: contextUsageOf(record(row.external_metadata)?.context_usage),
+    branches: branchesOfRow(row)
+  }
+}
+
+/** One session's row: `GET v1/code/sessions/{id}` (the app's m4v.java), the same row a list page holds. */
+export async function getCcrSession(fetchImpl: CcrFetch, auth: { token: string; organizationUuid: string }, sessionId: string): Promise<CcrSessionRow> {
+  if (!isCcrSessionId(sessionId)) {
+    throw new CcrApiError('session', 'malformed')
+  }
+  const url = `${CCR_API_BASE_URL}/v1/code/sessions/${encodeURIComponent(sessionId)}`
+  const row = parseCcrSessionRow(await getJson(fetchImpl, 'session', url, ccrSessionHeaders(auth.token, auth.organizationUuid)))
+  if (!row) {
+    throw new CcrApiError('session', 'malformed')
+  }
+  return row
+}
+
+export type CcrEvent = {
+  eventId: string | null
+  payload: Record<string, unknown>
+  /** The server's order (`sequence_num`; a POST's reply carries it as a string, "16"). */
+  sequenceNum?: number | null
+  /** `worker` (Claude Code) or `client` (a phone or the web), as observed. */
+  source?: string | null
+  /** Epoch ms of `created_at`, or null. */
+  createdAt?: number | null
+}
+
+function sequenceOf(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : Number.NaN
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
+}
+
+/** One event as a history page or a stream frame holds it; `fallbackSequence` is the frame's SSE id. */
+export function parseCcrEvent(item: unknown, fallbackSequence: string | null = null): CcrEvent | null {
+  const event = record(item)
+  const payload = record(event?.payload)
+  if (!event || !payload) {
+    return null
+  }
+  const created = typeof event.created_at === 'string' ? Date.parse(event.created_at) : Number.NaN
+  return {
+    eventId: stringOrNull(event.event_id),
+    payload,
+    sequenceNum: sequenceOf(event.sequence_num) ?? sequenceOf(fallbackSequence),
+    source: stringOrNull(event.source),
+    createdAt: Number.isFinite(created) ? created : null
+  }
+}
 export type CcrEventPage = { events: CcrEvent[]; nextCursor: string | null }
 
 export async function listCcrSessionEvents(
@@ -302,10 +355,9 @@ export async function listCcrSessionEvents(
   }
   const events: CcrEvent[] = []
   for (const item of body.data) {
-    const event = record(item)
-    const payload = record(event?.payload)
-    if (event && payload) {
-      events.push({ eventId: stringOrNull(event.event_id), payload })
+    const event = parseCcrEvent(item)
+    if (event) {
+      events.push(event)
     }
   }
   return { events, nextCursor: cursorOf(body.next_cursor) }

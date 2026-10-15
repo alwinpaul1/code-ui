@@ -45,7 +45,7 @@ import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
 import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
 import { holdsWholeSession, transcriptSettled } from './mobile-native-chat-whole-session'
 import { placedByHarnessTurns } from './desk-prompt-harness-turns'
-import { useWithoutScheduledTicks } from './scheduled-prompt-ticks'
+import { useWithoutScheduledTicks } from './scheduled-prompt-ticks'; import { MobileClaudeAnthropicGate } from './MobileClaudeAnthropicGate'; import { openAnthropicAccounts } from './open-anthropic-accounts'
 const CLIPBOARD_POLL_MS = 3000
 
 const NO_PROMPTS: DesktopPrompt[] = []
@@ -153,7 +153,10 @@ export function MobileNativeChatOverlay({
   keyboardInset,
   keyStrip, sessionDiff = null, onOpenDiff, sessionPills, notices
 }: Props): React.JSX.Element | null {
-  const session = controller.nativeChatSession
+  // A Claude tab reads Anthropic's copy of its session (use-claude-anthropic-transcript.ts), which
+  // already holds what the beacon, the tab status and the screen add for Orca's: drawn, they doubled.
+  // Signed out or unmatched, the gate stands in place of the chat.
+  const session = controller.nativeChatSession, anthropicGate = controller.nativeChatAnthropicGate, apiTab = anthropicGate !== undefined && anthropicGate.kind !== 'off', gateShown = anthropicGate?.kind === 'signed-out' || anthropicGate?.kind === 'unmatched' ? anthropicGate : null
   // Both halves are fresh arrays every call, and they are the `pending` dep of
   // the render memo downstream whose comment says it exists to keep FlashList's
   // data identity stable. Unmemoized, every 1 Hz screen poll rebuilt the whole
@@ -239,7 +242,7 @@ export function MobileNativeChatOverlay({
   // ride the HUD beacon instead (2026-09-13).
   // A held copy the transcript can now place goes to its run
   // (desk-prompt-harness-turns.ts, 2026-09-27).
-  const statusAndBeaconPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  const statusAndBeaconPrompts = apiTab ? NO_PROMPTS : (controller.nativeChatDesktopPrompts ?? NO_PROMPTS)
   // A loop's tick is no person's prompt: no bubble (scheduled-prompt-ticks.ts).
   const unticked = useWithoutScheduledTicks(statusAndBeaconPrompts, session.messages, controller.nativeChatSessionIdentity?.sessionId)
   const desktopPrompts = useMemo(() => placedByHarnessTurns(unticked, session.messages), [session.messages, unticked])
@@ -309,7 +312,7 @@ export function MobileNativeChatOverlay({
   )
   const { echoes: absorbedEchoes, box: boxSightings } = useAbsorbedQueueWitness(
     queuedMessages ?? [],
-    controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
+    apiTab ? NO_SCREEN_PROMPTS : (controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS),
     baseFolded,
     // Scoped on the STREAM key, which carries the session id: the surface id
     // is host/worktree/tab only, so after a `/clear` a held echo survived into
@@ -345,7 +348,7 @@ export function MobileNativeChatOverlay({
   // A subagent's message never reaches the transcript the phone reads; the
   // prompt hook carries it, drawn as the TUI's folded row (2026-09-26). A
   // hand-back is not drawn: the Claude app draws nothing for one (2026-10-11).
-  const agentMessages = controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES
+  const agentMessages = apiTab ? NO_AGENT_MESSAGES : (controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES)
   const wholeSessionHeld = session.status === 'ready' && session.baseRetained !== true && !session.hasMore
   const foldedWithAgents = useAgentMessageRows(agentMessages, foldedWithoutPeers, session.messages, controller.nativeChatStreamScopeKey, wholeSessionHeld)
   // A message from a subagent or another session mostly never reaches the
@@ -353,10 +356,10 @@ export function MobileNativeChatOverlay({
   // from whom, so that is drawn where it was seen (2026-09-20). A subagent's
   // is drawn off the screen only where no prompt hook carries it.
   // Its words, where the tab status carried a subagent message (2026-09-27).
-  const statusAgentMessages = controller.nativeChatStatusAgentMessages ?? NO_STATUS_AGENT_MESSAGES
+  const statusAgentMessages = apiTab ? NO_STATUS_AGENT_MESSAGES : (controller.nativeChatStatusAgentMessages ?? NO_STATUS_AGENT_MESSAGES)
   const screenBodies = useMemo(() => screenRowBodies(statusAgentMessages, session.messages), [session.messages, statusAgentMessages])
   const foldedWithoutPhotos = useScreenPeerNotices(
-    controller.nativeChatScreenPeerNotices === undefined ? NO_PEER_ROWS : controller.nativeChatScreenPeerNotices,
+    apiTab || controller.nativeChatScreenPeerNotices === undefined ? NO_PEER_ROWS : controller.nativeChatScreenPeerNotices,
     foldedWithAgents,
     controller.nativeChatStreamScopeKey,
     controller.nativeChatPromptHook !== true,
@@ -368,7 +371,7 @@ export function MobileNativeChatOverlay({
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).
   const folded = useScreenSentPhotos(
-    controller.nativeChatScreenSentPhotos ?? NO_SENT_PHOTOS,
+    apiTab ? NO_SENT_PHOTOS : (controller.nativeChatScreenSentPhotos ?? NO_SENT_PHOTOS),
     foldedWithoutPhotos,
     controller.nativeChatStreamScopeKey
   )
@@ -426,8 +429,8 @@ export function MobileNativeChatOverlay({
     hasTerminalUnderneath, ptyTab,
     surfaceId: sendSurfaceId
   })
-  if (frame === 'terminal') {
-    return null
+  if (frame === 'terminal' || gateShown) {
+    return frame === 'terminal' || !gateShown ? null : <MobileClaudeAnthropicGate gate={gateShown} onSignIn={openAnthropicAccounts} onOpenTerminal={controller.openNativeChatTerminal} />
   }
   const chat: ReactElement<ComponentProps<typeof MobileNativeChatShellConfirmView>> = (
       <MobileNativeChatShellConfirmView
