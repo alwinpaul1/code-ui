@@ -49,7 +49,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'Permission' }))
@@ -499,9 +499,14 @@ describe('the sent state on the other card shapes', () => {
     pick('Claude app: warm cream/ink, serif headings (Recommended)')
     await tap(primary())
     expect(primary()!.props.label).toBe('Sending…')
-    // The tabs cannot take the card back to a question whose answer is going out.
-    const tabs = renderer!.root.findAll((node) => isHost(node, 'Pressable') && node.props.accessibilityRole === 'tab')
-    expect(tabs.every((tab) => tab.props.disabled === true)).toBe(true)
+    // The pager cannot take the card back to a question whose answer is going out.
+    const chevrons = renderer!.root.findAll(
+      (node) =>
+        isHost(node, 'Pressable') &&
+        (node.props.accessibilityLabel === 'Previous question' || node.props.accessibilityLabel === 'Next question')
+    )
+    expect(chevrons).toHaveLength(2)
+    expect(chevrons.every((chevron) => chevron.props.disabled === true)).toBe(true)
     await reply(true)
     expectSent()
     await pressEverything()
@@ -514,7 +519,6 @@ describe('the sent state on the other card shapes', () => {
     open(ASK_USER_QUESTION_CLEANUP)
     pick('Tier 1 caches (~45 GB) (Recommended)')
     pick('Hugging Face models (22 GB)')
-    pick('Something else')
     const input = renderer!.root.findAll((node) => isHost(node, 'TextInput'))[0]!
     act(() => input.props.onChangeText('the old simulator images'))
     await tap(primary())

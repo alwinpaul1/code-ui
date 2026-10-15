@@ -21,7 +21,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light',
   useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 
 import { ASK_SENT_WAIT_MS, ASK_SENT_WAITING_LINE, MobileNativeChatAsk } from './MobileNativeChatAsk'
 
@@ -103,20 +103,20 @@ describe('the ask card after Submit, in light and dark', () => {
 
     // In flight: a spinner and a word on the accent pill, not a dimmed Submit.
     const spinner = renderer!.root.findAll((node) => (node.type as unknown) === 'ActivityIndicator')[0]
-    expect(spinner?.props.color).toBe(palette.onAccent)
-    expect(flat(textNode('Sending…').props.style).color).toBe(palette.onAccent)
+    expect(spinner?.props.color).toBe(palette.askSubmitLabel)
+    expect(flat(textNode('Sending…').props.style).color).toBe(palette.askSubmitLabel)
     expect(flat(button('Sending…').props.style).opacity).toBe(1)
 
     await act(async () => {
       reply(true)
     })
-    // Sent is a status on its own ground, read at full strength: a disabled
+    // Sent is a status on the card's own ground, read at full strength: a disabled
     // Button would paint it at half, 1.9:1 in light.
     const pill = renderer!.root.findAll((node) => node.props.testID === 'ask-sent')[0]!
-    const ground = flat(pill.props.style).backgroundColor as string
-    expect(ground).toBe(palette.bgRaised)
+    const ground = palette.askCardFill
+    expect(flat(pill.props.style).backgroundColor).toBeUndefined()
     const sent = flat(textNode('Sent').props.style).color as string
-    expect(sent).toBe(palette.textSecondary)
+    expect(sent).toBe(palette.askLabel)
     expect(contrastRatio(sent, ground)).toBeGreaterThanOrEqual(4.5)
     const check = pill.findAll((node) => (node.type as unknown) === 'Check')[0]!
     expect(check.props.color).toBe(palette.success)
@@ -127,8 +127,8 @@ describe('the ask card after Submit, in light and dark', () => {
       vi.advanceTimersByTime(ASK_SENT_WAIT_MS)
     })
     const waiting = flat(textNode(ASK_SENT_WAITING_LINE).props.style).color as string
-    expect(waiting).toBe(palette.textSecondary)
+    expect(waiting).toBe(palette.askLabel)
     // Small caption text on the card's own ground: WCAG AA for body text.
-    expect(contrastRatio(waiting, palette.bgPanel)).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(waiting, palette.askCardFill)).toBeGreaterThanOrEqual(4.5)
   })
 })

@@ -41,7 +41,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 // The other two cards are not under test; the ask card wins over both anyway.

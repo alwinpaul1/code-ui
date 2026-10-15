@@ -18,7 +18,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 400, height: 900 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 // The real row so its onPress is reachable; only its leaf pieces are stubbed.
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
@@ -26,7 +26,6 @@ vi.mock('../notifications/notification-plain-text', () => ({
   notificationPlainText: (text: string) => text
 }))
 
-import { space } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 
@@ -57,61 +56,25 @@ function flatten(style: unknown): Record<string, unknown> {
 
 /**
  * 2026-09-15 from the phone: "the typing input of that question card was
- * touching the cancel and submit buttons row and seemed cluttered." The free
- * text box has a visible border of its own and the footer has a divider above
- * it, so the two lines landed almost on top of each other with only 12px of
- * total clearance between them.
+ * touching the cancel and submit buttons row and seemed cluttered." That was the
+ * free-text box drawing its own border above the footer rule. The Claude app's
+ * card has no such box: the free answer is a borderless field inside the last
+ * row, so nothing of it can meet the footer's rule (ask-card-claude-look.test.tsx).
  */
-describe('the free-text box on an ask card', () => {
+describe('the free-text field on an ask card', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
 
-  it('does not sit against the Cancel and Submit row', () => {
+  it('draws no border of its own, so no second line sits against the footer rule', () => {
     act(() => {
-      renderer = create(
-        createElement(MobileNativeChatAsk, { prompt, onAnswer: async () => true })
-      )
-    })
-    // The free-text box only exists once "Something else" is chosen.
-    act(() => {
-      // "Something else" is the last option row.
-      const rows = renderer!.root
-        .findAllByType('Pressable' as never)
-        .filter((node) => node.props.accessibilityRole === 'radio')
-      rows.at(-1)?.props.onPress?.()
-    })
-    const input = renderer!.root.findByType('TextInput' as never)
-    const scroll = renderer!.root
-      .findAllByType('ScrollView' as never)
-      .find((node) => flatten(node.props.contentContainerStyle).paddingBottom !== undefined)
-
-    const below = Number(flatten(input.props.style).marginBottom ?? 0)
-    const scrollPad = Number(flatten(scroll?.props.contentContainerStyle).paddingBottom ?? 0)
-    // Two borders meeting needs more than a hairline between them.
-    expect(below + scrollPad).toBeGreaterThanOrEqual(space.lg + space.sm)
-  })
-
-  it('clears the Other row border when the answer box opens', () => {
-    act(() => {
-      renderer = create(
-        createElement(MobileNativeChatAsk, { prompt, onAnswer: async () => true })
-      )
-    })
-    act(() => {
-      const rows = renderer!.root
-        .findAllByType('Pressable' as never)
-        .filter((node) => node.props.accessibilityRole === 'radio')
-      rows.at(-1)?.props.onPress?.()
+      renderer = create(createElement(MobileNativeChatAsk, { prompt, onAnswer: async () => true }))
     })
     const input = renderer!.root.findByType('TextInput' as never)
     const style = flatten(input.props.style)
-    // The Other row already has a border. With no gap above the field, that
-    // line and the field's own top edge read as one overlapping stroke
-    // (Claude ask card, 2026-09-22).
-    expect(Number(style.marginTop ?? 0)).toBeGreaterThanOrEqual(space.md)
+    expect(style.borderWidth ?? 0).toBe(0)
     expect(input.props.underlineColorAndroid).toBe('transparent')
   })
 })
@@ -168,8 +131,10 @@ describe('an ask card, the Claude app’s way', () => {
     })
     expect(txt('1 of 2')).toHaveLength(1)
     expect(txt('1/2')).toHaveLength(0)
-    const tabs = renderer!.root.findAllByType('Pressable' as never).filter((node) => node.props.accessibilityRole === 'tab')
-    act(() => tabs[1]!.props.onPress())
+    const next = renderer!.root
+      .findAllByType('Pressable' as never)
+      .find((node) => node.props.accessibilityLabel === 'Next question')!
+    act(() => next.props.onPress())
     expect(txt('2 of 2')).toHaveLength(1)
   })
 
@@ -185,10 +150,8 @@ describe('an ask card, the Claude app’s way', () => {
           )
         )
       })
-      expect(txt('Something else')).toHaveLength(1)
-      expect(txt('Other…')).toHaveLength(0)
-      act(() => rows().at(-1)!.props.onPress())
-      // Chosen but empty: nothing typed yet, so the choices keep their strength.
+      expect(renderer!.root.findByType('TextInput' as never).props.placeholder).toBe('Something else')
+      // Nothing typed yet, so the choices keep their strength.
       expect(rows().slice(0, 2).map(opacityOf)).toEqual([1, 1])
       act(() => renderer!.root.findByType('TextInput' as never).props.onChangeText('A popover on the map'))
       expect(rows().slice(0, 2).map(opacityOf)).toEqual([0.4, 0.4])
@@ -204,7 +167,6 @@ describe('an ask card, the Claude app’s way', () => {
       renderer = create(createElement(MobileNativeChatAsk, { prompt: multi, onAnswer: async () => true }))
     })
     act(() => rows()[0]!.props.onPress())
-    act(() => rows().at(-1)!.props.onPress())
     act(() => renderer!.root.findByType('TextInput' as never).props.onChangeText('and a widget'))
     expect(rows().slice(0, 2).map(opacityOf)).toEqual([1, 1])
   })

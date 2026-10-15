@@ -85,7 +85,7 @@ const SPLIT_STYLE_MODULES = ['src/browser/browser-address-field-styles.web.ts']
  */
 const THEMED_INPUT_MODULES = [
   'src/components/TextInputModal.tsx',
-  'src/session/MobileNativeChatAsk.tsx',
+  'src/session/MobileNativeChatAskRows.tsx',
   'src/session/MobileNativeChatQuestion.tsx'
 ]
 const THEMED_SEAM_SIZE = `fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE)`

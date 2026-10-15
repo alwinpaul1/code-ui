@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { tapTargetHitSlop } from '../ui/tap-target'
+import { useMemo, useRef, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
-import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
+import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useTheme } from '../theme/theme-context'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
+import { OptionRow, OtherRow, PagerButton, Rule } from './MobileNativeChatAskRows'
+import {
+  ASK_SENT_WAITING_LINE,
+  useSentWaitElapsed
+} from './mobile-native-chat-ask-sent-wait'
+
+export { ASK_OTHER_LABEL } from './MobileNativeChatAskRows'
+export { ASK_SENT_WAIT_MS, ASK_SENT_WAITING_LINE } from './mobile-native-chat-ask-sent-wait'
 
 type Props = {
   prompt: AskPrompt
@@ -21,41 +27,31 @@ type Props = {
   sentAt?: number | null
 }
 
-// Sentinel index for the free-text "Something else" row (never a real option index).
-const OTHER = -1
-
-/** The free answer's row, in the Claude app's words (`question_card_other_hint`,
- *  1.261009.20). */
-export const ASK_OTHER_LABEL = 'Something else'
 /** How far the choices fade once a single-select answer is typed in the free
  *  row, as the Claude app's card fades them: the typed words are the answer. */
 const DIMMED_CHOICE_OPACITY = 0.4
+/** The rows that were not chosen, once the answer is on its way (dc5.java:2298). */
+const LOCKED_ROW_OPACITY = 0.38
+/** The card's corner: bn7.j, 24 dp (zlw.java:16). */
+const ASK_CARD_RADIUS = 24
 
-/**
- * How long an accepted answer waits for the hook row to let go of the question
- * before the card says it is still waiting. After the last key is acknowledged,
- * the agent's PostToolUse hook goes to the desktop and the status comes back
- * over the relay: one relayed leg (a ~250 ms floor, measured behind the VPN on
- * 2026-09-11) plus the agent's own handling, well under a second on a healthy
- * link. Codex's request_user_input lets go the same way (its PostToolUse). 3 s is
- * several times that, so a normal hand-off never shows the line, and it is
- * still short of a network change, where the relay takes 5–8 s to migrate and
- * re-handshake (docs/network-measurements-2026-09-06.md) and the wait is
- * genuinely unexplained to the phone. Saying so then is the truth.
- */
-export const ASK_SENT_WAIT_MS = 3_000
 
-/** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
- *  question per step with tabs across the top, a Next button that turns the page
- *  (Submit on the last step), and a Cancel that dismisses the prompt. A tap on an
- *  option only chooses it; nothing reaches the agent until Submit, which sends
- *  every page's answer at once. Desktop moves on by itself after a single-select
- *  pick (Orca #26288); the phone does not, because on the last page that move was
- *  the submit and the user lost the chance to change their mind (2026-10-13). The
- *  Claude app 1.261009.20 behaves the same way: a tap rewrites the page's answer
- *  and Next/Submit is its own button. */
+/** Native renderer for an agent's AskUserQuestion prompt, drawn as the Claude
+ *  app 1.261009.20 draws its question card (dc5.java; the numbers are in
+ *  ask-card-claude-look.test.tsx): one question per page, a "1 of N" pager with
+ *  chevrons in the header (no header chip, no tabs), numbered rows or
+ *  checkboxes, a "Something else" field in the last row, and a footer with Next
+ *  (Submit on the last page). A tap on an option only chooses it; nothing reaches
+ *  the agent until Submit, which sends every page's answer at once. Desktop moves
+ *  on by itself after a single-select pick (Orca #26288); the phone does not,
+ *  because on the last page that move was the submit and the user lost the chance
+ *  to change their mind (2026-10-13). The Claude app behaves the same way.
+ *
+ *  Not the Claude app's: it has Skip beside Next, which clears the page's answer
+ *  ("[No preference]"). Claude Code's own picker cannot be driven to "no answer"
+ *  with keys, so that slot holds Cancel, which writes Escape. */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null }: Props): React.JSX.Element {
-  const { colors, fonts, radius, space, type } = useTheme()
+  const { colors, space } = useTheme()
   // 400 was a fixed guess: with the keyboard up on a short phone it grew the
   // dock past the viewport and clipped the card's own question off the top,
   // with nothing to scroll. The dock is bottom-anchored and has no cap of its
@@ -65,8 +61,11 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  // The row under a finger, so the rules beside it can let go (dc5.java j()).
+  const [pressedRow, setPressedRow] = useState<number | null>(null)
   const [busy, setBusy] = useState<'sending' | 'cancelling' | null>(null)
   const busyRef = useRef(false)
+  const otherInputRef = useRef<TextInput | null>(null)
   // Once the host accepts the answer the card never takes another: a second
   // send types into whatever the agent draws next (a Bash approval reads a
   // digit as its answer). The controller's record covers a remount; this
@@ -78,7 +77,8 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
 
   // A tap only chooses: it never turns the page and never sends. Multi-select
   // toggles the row; single-select is a radio, so a tap makes that row the
-  // choice and tapping the chosen row again keeps it.
+  // choice, tapping the chosen row again keeps it, and the words typed in the
+  // free row are let go (a62.java:186-193: a pick clears the typed text).
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // The ref as well as `locked`: a tap can land before the render that disables the rows.
     if (locked || busyRef.current) {
@@ -95,19 +95,28 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
         return cur.includes(optIndex) ? cur.filter((o) => o !== optIndex) : [...cur, optIndex]
       })
     )
+    if (!multi) {
+      setOtherText((prev) => prev.map((cur, i) => (i === qi ? '' : cur)))
+    }
   }
 
-  const setOther = (qi: number, value: string): void => {
+  // Typing in the free row is the choice of it: on a single-select card the
+  // picked option is let go (a62.java:197-203), on a multi-select card the
+  // picks stay beside the typed words.
+  const setOther = (qi: number, value: string, multi: boolean): void => {
     setOtherText((prev) => {
       const next = [...prev]
       next[qi] = value
       return next
     })
+    if (!multi && value.trim().length > 0) {
+      setSelections((prev) => prev.map((cur, i) => (i === qi ? [] : cur)))
+    }
   }
 
   const selectionFor = (qi: number): AskAnswerSelection => {
-    const picked = (selections[qi] ?? []).filter((i) => i !== OTHER)
-    const other = (selections[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
+    const picked = selections[qi] ?? []
+    const other = (otherText[qi] ?? '').trim()
     return other ? { indices: picked, other } : { indices: picked }
   }
 
@@ -175,10 +184,24 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
   }
 
   const q = prompt.questions[index]!
-  const otherSelected = (selections[index] ?? []).includes(OTHER)
+  const picked = selections[index] ?? []
+  const typed = (otherText[index] ?? '').trim()
+  const otherSelected = typed.length > 0
   // A typed single-select answer replaces the choices, so they step back. A
   // multi-select one is sent beside them, so they keep their strength.
-  const choicesDimmed = !q.multiSelect && otherSelected && (otherText[index] ?? '').trim().length > 0
+  const choicesDimmed = !q.multiSelect && otherSelected
+  const selectedCount = picked.length + (otherSelected ? 1 : 0)
+  // Once the answer is on its way the chosen rows stay whole and the rest sink
+  // (dc5.java:2298 i()).
+  const rowOpacity = (selected: boolean, dimmed: boolean): number => {
+    if (locked) {
+      return selected ? 1 : LOCKED_ROW_OPACITY
+    }
+    return dimmed ? DIMMED_CHOICE_OPACITY : 1
+  }
+  // The rule between two rows lets go while either is pressed.
+  const ruleHidden = (above: number): boolean => pressedRow === above || pressedRow === above + 1
+  const otherRowIndex = q.options.length
 
   return (
     <View
@@ -186,164 +209,143 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
         maxHeight: cardMaxHeight,
         marginHorizontal: space.md,
         marginBottom: space.xs,
-        borderRadius: radius.lg,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.bgPanel,
+        borderRadius: ASK_CARD_RADIUS,
+        backgroundColor: colors.askCardFill,
         overflow: 'hidden'
       }}
     >
-      {total > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.border }}
-          contentContainerStyle={{
-            paddingHorizontal: space.md,
-            paddingVertical: space.sm,
-            gap: space.sm,
-            alignItems: 'center'
-          }}
-          keyboardShouldPersistTaps="always"
-        >
-          {prompt.questions.map((qq, i) => {
-            const active = i === index
-            return (
-              <Pressable
-                hitSlop={tapTargetHitSlop({ height: 30 })}
-                key={i}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 5,
-                  height: 30,
-                  paddingHorizontal: space.md,
-                  borderRadius: radius.pill,
-                  backgroundColor: active ? colors.text : colors.bgRaised
-                }}
-                onPress={() => setIndex(i)}
-                disabled={locked}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active, disabled: locked }}
-              >
-                <Txt
-                  variant="caption"
-                  weight="semibold"
-                  numberOfLines={1}
-                  style={{ color: active ? colors.textInverse : colors.textSecondary }}
-                >
-                  {qq.header || `Step ${i + 1}`}
-                </Txt>
-                {isAnswered(i) ? (
-                  <Check size={11} color={active ? colors.textInverse : colors.success} strokeWidth={3} />
-                ) : null}
-              </Pressable>
-            )
-          })}
-        </ScrollView>
-      ) : null}
-
-      <ScrollView
-        style={{ paddingHorizontal: space.lg }}
-        // The free-text box carries its own border and the footer carries a
-        // divider, so these two lines meet unless the list clears them. At
-        // `space.sm` they sat almost on top of each other and the card read as
-        // clutter (2026-09-15).
-        contentContainerStyle={{ paddingBottom: space.lg }}
-        keyboardShouldPersistTaps="always"
-      >
-        <Txt variant="heading" weight="semibold" style={{ marginVertical: space.md }}>
-          {notificationPlainText(q.question)}
-        </Txt>
-        {q.options.map((opt, optIndex) => (
-          <OptionRow
-            key={`${optIndex}:${opt.label}`}
-            label={opt.label}
-            description={opt.description}
-            selected={(selections[index] ?? []).includes(optIndex)}
-            multi={q.multiSelect}
-            disabled={locked}
-            dimmed={choicesDimmed}
-            onPress={() => toggle(index, optIndex, q.multiSelect)}
-          />
-        ))}
-        <OptionRow
-          label={ASK_OTHER_LABEL}
-          selected={otherSelected}
-          multi={q.multiSelect}
-          disabled={locked}
-          onPress={() => toggle(index, OTHER, q.multiSelect)}
-        />
-        {otherSelected ? (
-          <TextInput
-            cursorColor={colors.caret}
-            style={{
-              backgroundColor: colors.bgRaised,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.md,
-              color: colors.text,
-              fontFamily: fonts.regular,
-              fontSize: Math.max(type.body.size, TEXT_INPUT_FONT_SIZE),
-              padding: space.md,
-              minHeight: 46,
-              // The Other row's own border is the line above. Without this gap
-              // the field's top edge sits on that stroke (Claude ask card,
-              // 2026-09-22).
-              marginTop: space.md,
-              marginBottom: space.sm
-            }}
-            value={otherText[index]}
-            onChangeText={(v) => setOther(index, v)}
-            editable={!locked}
-            placeholder="Type your answer"
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accent}
-            // Android draws its own underline through the border we just set.
-            underlineColorAndroid="transparent"
-            multiline
-            autoFocus
-          />
-        ) : null}
-      </ScrollView>
-
+      {/* Header (dc5.java f()): the question, and the pager when there is more than one. */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: space.md,
-          paddingVertical: space.md,
-          gap: space.sm,
-          borderTopWidth: 1,
-          borderTopColor: colors.border
+          paddingLeft: 16,
+          paddingTop: 12,
+          // The chevron's 36 dp target sits 8 dp inside the 16 dp edge.
+          paddingRight: total > 1 ? 8 : 16,
+          paddingBottom: 6
         }}
       >
-        {/* Sent: Cancel would write Escape into a turn the agent may already
-            have started, so it goes, and the slot says what the card waits on. */}
+        <Txt variant="body" style={{ flex: 1, color: colors.askText }} accessibilityRole="header">
+          {notificationPlainText(q.question)}
+        </Txt>
+        {total > 1 ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginLeft: 8,
+              // The targets are 36 dp around a 20 dp glyph: pull the group back into the text line.
+              marginVertical: -8
+            }}
+          >
+            <PagerButton
+              label="Previous question"
+              disabled={locked || index === 0}
+              onPress={() => setIndex((i) => Math.max(i - 1, 0))}
+            >
+              <ChevronLeft size={20} color={colors.askMuted} strokeWidth={2} />
+            </PagerButton>
+            <Txt
+              variant="body"
+              style={{ color: colors.askMuted }}
+              accessibilityLabel={`Question ${index + 1} of ${total}`}
+            >
+              {`${index + 1} of ${total}`}
+            </Txt>
+            <PagerButton
+              label="Next question"
+              disabled={locked || isLast}
+              onPress={() => setIndex((i) => Math.min(i + 1, total - 1))}
+            >
+              <ChevronRight size={20} color={colors.askMuted} strokeWidth={2} />
+            </PagerButton>
+          </View>
+        ) : null}
+      </View>
+
+      <ScrollView
+        style={{ flexShrink: 1 }}
+        contentContainerStyle={{ padding: 6 }}
+        keyboardShouldPersistTaps="always"
+      >
+        {q.options.map((opt, optIndex) => {
+          const selected = picked.includes(optIndex)
+          return (
+            <View key={`${optIndex}:${opt.label}`}>
+              {optIndex > 0 ? <Rule hidden={ruleHidden(optIndex - 1)} /> : null}
+              <OptionRow
+                label={opt.label}
+                description={opt.description}
+                number={optIndex < 9 ? optIndex + 1 : null}
+                selected={selected}
+                multi={q.multiSelect}
+                disabled={locked}
+                opacity={rowOpacity(selected, choicesDimmed)}
+                onPressedChange={(down) => setPressedRow(down ? optIndex : null)}
+                onPress={() => toggle(index, optIndex, q.multiSelect)}
+              />
+            </View>
+          )
+        })}
+        {q.options.length > 0 ? <Rule hidden={ruleHidden(q.options.length - 1)} /> : null}
+        <OtherRow
+          value={otherText[index] ?? ''}
+          selected={otherSelected}
+          multi={q.multiSelect}
+          disabled={locked}
+          opacity={rowOpacity(otherSelected, false)}
+          isLast={isLast}
+          inputRef={otherInputRef}
+          onPressedChange={(down) => setPressedRow(down ? otherRowIndex : null)}
+          onChangeText={(v) => setOther(index, v, q.multiSelect)}
+          onSubmit={() => {
+            if (canAdvance) {
+              void advance()
+            }
+          }}
+        />
+      </ScrollView>
+
+      <View style={{ height: 1, backgroundColor: colors.askDivider }} />
+      {/* Footer (dc5.java d()): the count on the left, then the actions. */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          minHeight: 48,
+          paddingLeft: 20,
+          paddingTop: 6,
+          paddingRight: 16,
+          paddingBottom: 6,
+          gap: 8
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          {answeredAt !== null ? (
+            // Sent: Cancel would write Escape into a turn the agent may already
+            // have started, so it goes, and the slot says what the card waits on.
+            <Txt variant="label" style={{ color: colors.askLabel }} accessibilityLiveRegion="polite">
+              {waitingLong ? ASK_SENT_WAITING_LINE : ''}
+            </Txt>
+          ) : q.multiSelect ? (
+            // question_card_selected_count: the same words for one and many.
+            <Txt variant="label" style={{ color: colors.askMuted }}>
+              {`${selectedCount} selected`}
+            </Txt>
+          ) : null}
+        </View>
         {answeredAt === null ? (
           <Button label="Cancel" variant="ghost" size="sm" disabled={locked} onPress={() => void cancel()} />
-        ) : (
-          <Txt
-            variant="caption"
-            tone="secondary"
-            style={{ flexShrink: 1 }}
-            accessibilityLiveRegion="polite"
-          >
-            {waitingLong ? ASK_SENT_WAITING_LINE : ''}
-          </Txt>
-        )}
-        {total > 1 && answeredAt === null ? (
-          // The Claude app's pager words (`question_card_page`).
-          <Txt variant="caption" tone="muted">
-            {`${index + 1} of ${total}`}
-          </Txt>
         ) : null}
         {answeredAt === null ? (
           <Button
             label={busy === 'sending' ? 'Sending…' : isLast ? 'Submit' : 'Next'}
             variant="accent"
             size="sm"
+            // Next is the ink pill, Submit the clay one (kf4, gf4).
+            style={{ backgroundColor: isLast ? colors.askSubmitFill : colors.askNextFill }}
+            labelColor={isLast ? colors.askSubmitLabel : colors.askNextLabel}
             // While sending the spinner is the feedback; Button keeps a loading
             // one pressable-dead without dimming it to look like a missed tap.
             disabled={!canAdvance && busy !== 'sending'}
@@ -363,120 +365,16 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
               gap: space.xs,
               height: 36,
               paddingHorizontal: space.md,
-              borderRadius: radius.pill,
-              backgroundColor: colors.bgRaised
+              borderRadius: 999
             }}
           >
             <Check size={14} color={colors.success} strokeWidth={2.6} />
-            <Txt variant="label" weight="semibold" tone="secondary">
+            <Txt variant="label" weight="semibold" style={{ color: colors.askLabel }}>
               Sent
             </Txt>
           </View>
         )}
       </View>
     </View>
-  )
-}
-
-/** The caption an answered card shows once it has waited ASK_SENT_WAIT_MS. */
-export const ASK_SENT_WAITING_LINE = 'Sent — waiting for the agent to take it'
-
-// The answer whose wait was last logged: a card remounted past the wait (a
-// chat↔terminal toggle) must not log the same answer again.
-let waitLoggedFor: number | null = null
-
-/** True once `sentAt` is ASK_SENT_WAIT_MS old. Logs one line per answer when it
- *  turns, so one the agent never took leaves a trace saying where it stopped. */
-function useSentWaitElapsed(sentAt: number | null): boolean {
-  const [elapsedFor, setElapsedFor] = useState<number | null>(null)
-  useEffect(() => {
-    if (sentAt === null) {
-      return
-    }
-    const remaining = ASK_SENT_WAIT_MS - (Date.now() - sentAt)
-    const turn = (): void => {
-      if (waitLoggedFor !== sentAt) {
-        waitLoggedFor = sentAt
-        console.warn(
-          `[ask] answer accepted ${Date.now() - sentAt} ms ago; the hook row still shows the question pending, so the card waits (no resend offered)`
-        )
-      }
-      setElapsedFor(sentAt)
-    }
-    if (remaining <= 0) {
-      turn()
-      return
-    }
-    const timer = setTimeout(turn, remaining)
-    return () => clearTimeout(timer)
-  }, [sentAt])
-  return sentAt !== null && elapsedFor === sentAt
-}
-
-function OptionRow({
-  label,
-  description,
-  selected,
-  multi,
-  disabled = false,
-  dimmed = false,
-  onPress
-}: {
-  label: string
-  description?: string
-  selected: boolean
-  multi?: boolean
-  /** Sending or sent: the answer on its way out can no longer change. */
-  disabled?: boolean
-  /** A typed answer stands in for the choices (DIMMED_CHOICE_OPACITY). */
-  dimmed?: boolean
-  onPress: () => void
-}): React.JSX.Element {
-  const { colors, radius, space } = useTheme()
-  return (
-    <Pressable
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.sm + 2,
-        padding: space.md,
-        borderRadius: radius.md,
-        backgroundColor: pressed ? colors.bgSunken : colors.bgRaised,
-        borderWidth: 1,
-        borderColor: selected ? colors.accent : colors.border,
-        marginBottom: space.xs + 2,
-        opacity: dimmed ? DIMMED_CHOICE_OPACITY : 1
-      })}
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected, disabled }}
-    >
-      {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
-      <View
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: multi ? 6 : 10,
-          borderWidth: 1.5,
-          borderColor: selected ? colors.accent : colors.textMuted,
-          backgroundColor: selected ? colors.accent : 'transparent',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        {selected ? <Check size={12} color={colors.onAccent} strokeWidth={3} /> : null}
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="body" weight="medium">
-          {notificationPlainText(label)}
-        </Txt>
-        {description ? (
-          <Txt variant="caption" tone="secondary" numberOfLines={3}>
-            {notificationPlainText(description)}
-          </Txt>
-        ) : null}
-      </View>
-    </Pressable>
   )
 }

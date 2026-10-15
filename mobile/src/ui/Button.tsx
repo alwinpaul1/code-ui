@@ -18,6 +18,7 @@ export function Button({
   block = false,
   align = 'start',
   accessibilityLabel,
+  labelColor,
   style
 }: {
   label: string
@@ -33,6 +34,9 @@ export function Button({
    *  compact button where it was. */
   align?: 'start' | 'center'
   accessibilityLabel?: string
+  /** Overrides the label (and spinner) colour for a button whose fill a caller sets
+   *  through `style`, so the two stay a matched pair in both themes. */
+  labelColor?: string
   style?: StyleProp<ViewStyle>
 }) {
   const { colors, radius, space } = useTheme()
@@ -43,13 +47,15 @@ export function Button({
     danger: colors.danger,
     accent: colors.accent
   }[variant]
-  const foreground = {
-    primary: colors.textInverse,
-    secondary: colors.text,
-    ghost: colors.text,
-    danger: colors.onDanger,
-    accent: colors.onAccent
-  }[variant]
+  const foreground =
+    labelColor ??
+    {
+      primary: colors.textInverse,
+      secondary: colors.text,
+      ghost: colors.text,
+      danger: colors.onDanger,
+      accent: colors.onAccent
+    }[variant]
   const height = { sm: 36, md: 44, lg: 52 }[size]
   return (
     <PressScale

@@ -41,7 +41,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check' }))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('../notifications/notification-plain-text', () => ({
@@ -121,9 +121,10 @@ async function waitLong(): Promise<void> {
 const shows = (text: string): boolean =>
   root().findAll((node) => (node.type as unknown) === 'Txt' && node.props.children === text).length > 0
 
-function borderOf(node: ReactTestInstance): unknown {
-  const style = typeof node.props.style === 'function' ? node.props.style({ pressed: false }) : node.props.style
-  return (style as { borderColor?: unknown }).borderColor
+/** The fill of the 28 dp number badge in front of a row (the row's first View). */
+function badgeFillOf(node: ReactTestInstance): unknown {
+  const badge = node.findAll((n) => (n.type as unknown) === 'View')[0]!
+  return (badge.props.style as { backgroundColor?: unknown }).backgroundColor
 }
 
 describe('an ask card, choose first and Submit after', () => {
@@ -181,10 +182,11 @@ describe('an ask card, choose first and Submit after', () => {
 
   it('keeps Submit off until every question has an answer, even from the last page', async () => {
     const onAnswer = render(ASK_USER_QUESTION_STACK_AND_LOOK)
-    const tabs = root().findAll(
-      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityRole === 'tab'
+    // The pager's next chevron (the Claude app's, in place of step tabs) turns to the last page.
+    const next = root().find(
+      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Next question'
     )
-    act(() => tabs[1]!.props.onPress())
+    act(() => next.props.onPress())
     tap("Keep Orca's graphite dark palette")
 
     expect(button('Submit').props.disabled).toBe(true)
@@ -209,7 +211,7 @@ describe('an ask card, choose first and Submit after', () => {
   it('sends a "Something else" answer only on Submit, not while it is typed', async () => {
     const onAnswer = render(ASK_USER_QUESTION_CONTEXT_RING)
 
-    tap('Something else')
+    // The free answer is a field in the last row from the start: typing is the choice of it.
     type('A chip that refreshes on a timer')
     await waitLong()
     expect(onAnswer).not.toHaveBeenCalled()
@@ -223,7 +225,6 @@ describe('an ask card, choose first and Submit after', () => {
   it('sends nothing for an empty or blank "Something else"', async () => {
     const onAnswer = render(ASK_USER_QUESTION_CONTEXT_RING)
 
-    tap('Something else')
     expect(button('Submit').props.disabled).toBe(true)
     await press('Submit')
     type('   ')
@@ -273,15 +274,15 @@ describe('an ask card, choose first and Submit after', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [0] }])
   })
 
-  it.each(['light', 'dark'] as const)('shows the chosen row in the accent and the rest unmarked, in %s', (scheme) => {
+  it.each(['light', 'dark'] as const)('shows the chosen row’s badge at the stronger fill and the rest at the faint one, in %s', (scheme) => {
     const palette = scheme === 'dark' ? darkColors : lightColors
     render(ASK_USER_QUESTION_CONTEXT_RING, vi.fn(async () => true), scheme)
 
     tap('Tap to refresh')
     tap('Skip it for Codex')
 
-    expect(borderOf(row('Skip it for Codex'))).toBe(palette.accent)
-    expect(borderOf(row('Tap to refresh'))).toBe(palette.border)
+    expect(badgeFillOf(row('Skip it for Codex'))).toBe(palette.askBadgeStrong)
+    expect(badgeFillOf(row('Tap to refresh'))).toBe(palette.askBadge)
   })
 })
 

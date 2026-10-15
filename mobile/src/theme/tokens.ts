@@ -174,6 +174,30 @@ export type ThemeColors = {
   /** Auto's lightning bolt, and Bypass's: `pl7.e`, the clay (#C6613F light, #D97757 dark), the
    *  same colour as `composerSend`. */
   modeAuto: string
+  /** The ask-user question card (Claude app 1.261009.20, `dc5.java`, read 2026-10-15). The
+   *  card's fill: `ad5.n0()` (#FFFFFF light, #20201F dark), no border and no shadow. */
+  askCardFill: string
+  /** The question text and a pressed row's title: `ad5.u0()`. */
+  askText: string
+  /** A row's title: `ad5.x0()`. */
+  askLabel: string
+  /** A row's description, the "n of N" pager, the "n selected" count and the chevrons:
+   *  `ad5.y()`, #898781 in both schemes. */
+  askMuted: string
+  /** The rule between rows and above the footer: `ad5.A()`, ink or white at 10%. */
+  askDivider: string
+  /** A row's number badge: `ad5.P()`, ink or white at 5%. */
+  askBadge: string
+  /** The badge while pressed or chosen: `ad5.X()`, ink or white at 10%. */
+  askBadgeStrong: string
+  /** Next's fill: `kf4`, `ad5.k0()` (#0B0B0B light, #FFFFFF dark). */
+  askNextFill: string
+  /** Next's label, the inverse of its fill (`ad5.p0()`; inferred, kf4 does not name it). */
+  askNextLabel: string
+  /** Submit's fill: `gf4`, `ad5.w0()`, the clay #C6613F in both schemes. */
+  askSubmitFill: string
+  /** Submit's label: white in both schemes (inferred). */
+  askSubmitLabel: string
 }
 
 export const lightColors: ThemeColors = {
@@ -246,7 +270,18 @@ export const lightColors: ThemeColors = {
   modeManual: '#383835',
   modeAcceptEdits: '#9747FF',
   modePlan: '#006666',
-  modeAuto: '#C6613F'
+  modeAuto: '#C6613F',
+  askCardFill: '#FFFFFF',
+  askText: '#0B0B0B',
+  askLabel: '#52514E',
+  askMuted: '#898781',
+  askDivider: 'rgba(11, 11, 11, 0.1)',
+  askBadge: 'rgba(11, 11, 11, 0.05)',
+  askBadgeStrong: 'rgba(11, 11, 11, 0.1)',
+  askNextFill: '#0B0B0B',
+  askNextLabel: '#FFFFFF',
+  askSubmitFill: '#C6613F',
+  askSubmitLabel: '#FFFFFF'
 }
 
 export const darkColors: ThemeColors = {
@@ -323,7 +358,18 @@ export const darkColors: ThemeColors = {
   modeManual: '#C3C2B7',
   modeAcceptEdits: '#9747FF',
   modePlan: '#006666',
-  modeAuto: '#D97757'
+  modeAuto: '#D97757',
+  askCardFill: '#20201F',
+  askText: '#F0EFEC',
+  askLabel: '#C3C2B7',
+  askMuted: '#898781',
+  askDivider: 'rgba(255, 255, 255, 0.1)',
+  askBadge: 'rgba(255, 255, 255, 0.05)',
+  askBadgeStrong: 'rgba(255, 255, 255, 0.1)',
+  askNextFill: '#FFFFFF',
+  askNextLabel: '#0B0B0B',
+  askSubmitFill: '#C6613F',
+  askSubmitLabel: '#FFFFFF'
 }
 
 /** The brand red, now the notification tint (the mark itself is black or
