@@ -6,7 +6,7 @@ import type { LevelSource } from '../dictation/pcm-level'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
-import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
+import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'; import type { ClaudeUsageSheetData } from './ClaudeUsageSheet'
 import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
 import { COMPOSER_BUTTON_HIT_SLOP } from './composer-touch-target'
 import type {
@@ -111,7 +111,7 @@ type Props = {
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
   /** Context window figure from the desktop status line; shows the ring. */
-  contextWindow?: TerminalHudContextWindow | null
+  contextWindow?: TerminalHudContextWindow | null; claudeUsage?: { data: ClaudeUsageSheetData; onOpen: () => void } | null // claudeUsage: a Claude tab's Usage sheet, which the ring opens
   /** Permission mode from the terminal footer; drives the mode sheet. */
   permissionMode?: TerminalPermissionMode | null
   /** Steps the terminal to the chosen mode (Shift+Tab until its footer agrees). */
@@ -203,7 +203,7 @@ export function MobileNativeChatComposer({
   onStopDictation,
   dictationPaint = null,
   onComposerCursor,
-  contextWindow = null,
+  contextWindow = null, claudeUsage = null,
   permissionMode = null,
   onSelectPermissionMode,
   agentMode = null,
@@ -601,7 +601,7 @@ export function MobileNativeChatComposer({
         onSelectAgentMode={onSelectAgentMode}
         showContextSheet={showContextSheet}
         onCloseContextSheet={() => setShowContextSheet(false)}
-        contextWindow={contextWindow}
+        contextWindow={contextWindow} claudeUsage={claudeUsage}
       />
     </View>
   )

@@ -134,6 +134,31 @@ describe('the usage rows of a tab matched to an account', () => {
   })
 })
 
+// 2026-10-15: the phone's ring read 128k of 400k from the status line while the Claude app showed
+// 145.5k, which it had asked the session for (get_context_usage). The session's own answer for the
+// current turn is the ring, over the beacon, the badge and the row's statement; the usage rows are
+// untouched by it.
+describe('the ring from the session’s live answer', () => {
+  it('shows the answer the session gave, not the status line a turn behind', () => {
+    const today = { context: { usedPercent: 32, usedLabel: '128k', windowLabel: '400k', limits: hostLimits }, limits: hostLimits, usedTokens: null }
+    const merged = applyCcrUsageToHud(today, { reading: null, matchedAccount: false, hostFeedAllowed: true, beaconDecidesLimits: true, live: { usedTokens: 145_500, windowTokens: 400_000, percent: 36 } })
+    expect(merged.context).toMatchObject({ usedPercent: 36, usedLabel: '145.5k', windowLabel: '400k', limits: hostLimits })
+    expect(merged.limits).toEqual(hostLimits)
+  })
+
+  it('draws a ring from the answer when nothing else states one, at 0% and at 100%', () => {
+    for (const percent of [0, 100]) {
+      const merged = applyCcrUsageToHud(nothingToday, { reading: null, matchedAccount: true, hostFeedAllowed: false, beaconDecidesLimits: false, live: { usedTokens: percent * 4000, windowTokens: 400_000, percent } })
+      expect(merged.context).toMatchObject({ usedPercent: percent, windowLabel: '400k' })
+    }
+  })
+
+  it('keeps today’s ring when there is no live answer', () => {
+    const merged = applyCcrUsageToHud({ context: beaconContext, limits: [], usedTokens: null }, { reading: null, matchedAccount: false, hostFeedAllowed: true, beaconDecidesLimits: true, live: null })
+    expect(merged.context).toMatchObject({ usedPercent: 54, usedLabel: '537.2k' })
+  })
+})
+
 // A structural pin: the ring and rows are read in the controller, where no behavioural test reaches
 // without the whole session screen. The window, the rows and the token count must all pass through
 // the merge, so none of them keeps reading the host's feed or the raw HUD.

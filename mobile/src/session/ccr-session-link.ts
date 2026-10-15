@@ -7,7 +7,7 @@ import { readCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
 import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
 import { readCcrCatchUp } from './ccr-link-catch-up'
-import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'
+import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'; import { CcrControlWaiters } from './ccr-context-usage'
 
 export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
@@ -49,6 +49,8 @@ export class CcrSessionLink {
    *  its next await, so a page in flight across a pause and resume does not dial a second stream
    *  beside the one resume() started (review 2026-10-15). */
   private generation = 0
+  /** Requests waiting for their `control_response` on this stream (`get_context_usage`, ccr-context-usage.ts): `wait()` before posting. */
+  readonly controlWaiters = new CcrControlWaiters((run, ms) => (this.deps.setTimer ?? defaultCcrTimer)(run, ms))
 
   constructor(accountId: string, sessionId: string, deps: CcrLinkDeps) {
     this.accountId = accountId
@@ -209,7 +211,7 @@ export class CcrSessionLink {
             this.refreshedAuth = false
             this.set({ phase: 'live', error: null })
           },
-          onFrame: (frame) => this.onFrame(frame, from)
+          onFrame: (frame) => void (this.controlWaiters.offerFrame(frame), this.onFrame(frame, from))
         })
         if (end === 'aborted' || this.stopped) {
           return
@@ -372,9 +374,8 @@ export class CcrSessionLink {
     this.stopped = true
     this.generation += 1
     this.abort?.abort()
-    this.cancelTimer?.()
-    this.cancelTimer = null
+    this.cancelTimer?.(); this.cancelTimer = null
     this.keptCopy.cancel()
-    this.listeners.clear()
+    this.listeners.clear(); this.controlWaiters.closeAll()
   }
 }

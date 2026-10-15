@@ -1,13 +1,17 @@
 import { shortTokenLabel } from './hud-agent-status-fields'
 import type { RateLimitWindowReading } from './hud-rate-limit-notice'
 import type { CcrUsageReading } from './ccr-session-usage'
+import type { CcrContextUsageAnswer } from './ccr-context-usage'
+import { formatTokens } from './context-card-model'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
 /**
  * Today's ring, usage rows and token count, with Anthropic's per-tab figures laid under them.
  *
  * Precedence, per figure:
- *  - CONTEXT: what this session's own terminal states (a live beacon, the badge, the host's status)
+ *  - CONTEXT: first the session's own answer to `get_context_usage` for the current turn
+ *    (ccr-context-usage.ts, use-ccr-usage-sheet.ts), as the Claude app's ring reads it (taa.a):
+ *    the agent saying now what it holds. Then what this session's own terminal states (a live beacon, the badge, the host's status)
  *    wins when present. Only then the matched session's events from Anthropic: a ring when the
  *    session stated its window, else the tokens alone (no percentage, no invented denominator).
  *  - USAGE ROWS: a Claude beacon decides alone, as before (`hudRateLimitWindows`). Otherwise a tab
@@ -35,6 +39,8 @@ export function applyCcrUsageToHud(
     hostFeedAllowed: boolean
     /** A live Claude beacon is believed for this session: it decides the usage rows alone. */
     beaconDecidesLimits: boolean
+    /** The session's answer to `get_context_usage` for the current turn, or null. */
+    live?: CcrContextUsageAnswer | null
   }
 ): CcrHudInput {
   const { reading, matchedAccount, hostFeedAllowed, beaconDecidesLimits } = args
@@ -45,6 +51,13 @@ export function applyCcrUsageToHud(
     // The sheet draws the windows on the context reading: the account's, or none.
     const { limits: _host, ...rest } = context
     context = accountRows.length > 0 ? { ...rest, limits: accountRows } : rest
+  }
+  if (args.live) {
+    const { usedTokens: used, windowTokens: window, percent } = args.live
+    const figure = { usedPercent: percent, usedLabel: formatTokens(used), windowLabel: formatTokens(window) }
+    context = context
+      ? { ...context, ...figure }
+      : { ...figure, ...(accountRows !== null && accountRows.length > 0 ? { limits: accountRows } : {}) }
   }
   if (!context && reading?.context) {
     const { usedTokens: used, windowTokens: window } = reading.context

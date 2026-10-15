@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // and so does the model picker's pill (openPicker).
 //
 // How each opens over the keyboard:
-//   context window  the composer's ring
+//   context window  the composer's ring (a Claude tab's: the Usage sheet)
 //   permission / agent mode  the + sheet's Permission row (keyboard already gone)
 //   background tasks  the "N running tasks" row above the composer
 //   agent run  an agent row in the transcript
@@ -62,6 +62,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { MobileAgentModeSheet } from './MobileAgentModeSheet'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
+import { ClaudeUsageSheet } from './ClaudeUsageSheet'
 import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 
@@ -82,6 +83,15 @@ const SHEETS: [string, () => ReactElement][] = [
       createElement(MobileContextWindowSheet, {
         visible: true,
         context: { usedPercent: 42 } as never,
+        onClose: noop
+      })
+  ],
+  [
+    'the Usage sheet (a Claude tab\'s ring)',
+    () =>
+      createElement(ClaudeUsageSheet, {
+        visible: true,
+        data: { context: { answer: null, figure: null, ask: 'asking' }, plan: null, refreshing: false, onRefresh: noop },
         onClose: noop
       })
   ],

@@ -516,7 +516,7 @@ export function MobileNativeChatOverlay({
         onStopDictation={onStopDictation}
         dictationPaint={dictationPaint}
         onComposerCursor={onComposerCursor}
-        contextWindow={controller.nativeChatContextWindow}
+        contextWindow={controller.nativeChatContextWindow} claudeUsage={controller.nativeChatClaudeUsage ?? null}
         permissionMode={controller.nativeChatPermissionMode}
         onSelectPermissionMode={onSelectPermissionMode}
         agentMode={controller.nativeChatAgentMode}
