@@ -69,7 +69,9 @@ export function expectedHostStateForRender(
 /**
  * What the menu draws at once, before this open's probe has answered, from what an
  * earlier probe or action on the same connection learnt; null when nothing is known
- * on this connection, and the menu draws the rows of a host that has not said.
+ * on this connection, and the menu draws the rows of a host that has not said, with
+ * the display and mute it named on an earlier connection filled in by the caller
+ * (withRememberedHalves in use-known-host-states.ts, 2026-10-15).
  *
  * Why: every open threw the last answer away and hid the rows behind one disabled
  * "Checking the Mac…" row, at a different sheet height, for as long as the host took
@@ -100,7 +102,10 @@ export function isUnknownHostState(state: MacHostState): boolean {
  * What the open menu draws: an action's live expectation (already holding this
  * open's probe), else this open's answer, unless it learnt nothing (a timeout, a
  * refused tab) while something is known, else what is known, else the rows of a
- * host that would not say: every row but Unlock.
+ * host that would not say: every row but Unlock. The caller then fills an unknown
+ * display or mute from what the host named on an earlier connection or app run, if
+ * anything (use-known-host-states.ts): the user, 2026-10-15, sent a screenshot of a
+ * first open offering Sleep display, Wake display, Mute and Unmute all at once.
  *
  * Why not "Checking" when nothing is known: the first open on every connection hid
  * the rows behind it until the host had opened a shell and answered, and the sheet

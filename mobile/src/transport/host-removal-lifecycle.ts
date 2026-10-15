@@ -8,6 +8,7 @@ import {
 } from '../notifications/notification-reconnect-catchup'
 import { forgetPushRegistrationOutcome } from '../notifications/push-registration-outcome'
 import { clearDeliveredPushes } from '../notifications/push-delivery-log'
+import { forgetRememberedHostState } from '../host-controls/remembered-host-state-store'
 import { removeHost } from './host-store'
 
 export async function removeHostAndCloseClient(
@@ -31,4 +32,7 @@ export async function removeHostAndCloseClient(
   // the removal or fail it. A cache that fails to delete is reclaimed by the next eviction.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)
+  // The display and sound the host menu kept for this host (never rejects): a re-pair
+  // must not draw the old host's rows on its first open.
+  void forgetRememberedHostState(hostId)
 }

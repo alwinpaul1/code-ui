@@ -202,12 +202,15 @@ export function useMacHostControls(args: {
     ? settlingHostIds.has(openHostId) && waitExpiredHostId !== openHostId
     : false
 
-  // Why on every open and never persisted: the Mac may have been locked or woken from
-  // its own keyboard since last time. What the last probe or action on this
-  // connection learnt is drawn at once meanwhile, its lock unasserted, and this probe
-  // replaces it when it answers (cachedHostStateForRender, 2026-10-14). Hiding it
-  // behind "Checking" on every open was the bug: the rows vanished for as long as the
-  // host took to open a shell and answer, and the sheet changed height twice.
+  // Why on every open: the Mac may have been locked or woken from its own keyboard
+  // since last time. What the last probe or action on this connection learnt is drawn
+  // at once meanwhile, its lock unasserted, and this probe replaces it when it answers
+  // (cachedHostStateForRender, 2026-10-14). Hiding it behind "Checking" on every open
+  // was the bug: the rows vanished for as long as the host took to open a shell and
+  // answer, and the sheet changed height twice. On the first open of a connection,
+  // the display and mute the host named last time, on any connection or app run,
+  // fill what is not known yet; the lock is never carried over (2026-10-15,
+  // remembered-host-state-store.ts).
   //
   // Why keyed on these values and not on the home screen's objects: the home
   // screen replaces its worktree info whenever it fetches a host's workspaces
@@ -305,8 +308,9 @@ export function useMacHostControls(args: {
         finished = outcome.ok
         if (outcome.ok && mountedRef.current) {
           // Only an action that finished OK says what the host is now; a failed,
-          // unfinished or thrown one forgets what was known (finally, below), and
-          // the next open draws every row but Unlock while it asks.
+          // unfinished or thrown one forgets what was known (finally, below), the
+          // display and mute kept across connections too, and the next open draws
+          // every row but Unlock while it asks.
           recordAction(hostId, action, platforms[hostId], clientsRef.current.find((c) => c.hostId === hostId)?.client)
         }
         if (!outcome.ok) {
