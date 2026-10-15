@@ -29,6 +29,7 @@ import { followSubagentTranscriptRunning, openSubagentTranscript } from './subag
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
 import { useBridgeBackgroundTasksToHeader } from './session-header-tasks-bridge'
+import { useClaudeChatLive } from './claude-chat-live'
 
 /** An Agent sheet's "Tool calls (N)" list (parity G29). */
 const renderAgentToolCalls: RenderAgentToolCalls = (props) => <MobileNativeChatAgentToolCalls {...props} />
@@ -163,9 +164,12 @@ export function MobileNativeChatTasksProvider({
       chosenPair.current = null
     }
   }, [])
-  const tasks = useMemo(() => ({ runningCount: running.length, openSheet }), [openSheet, running.length])
+  // With the relay down and Anthropic's stream live, the count is Anthropic's
+  // (`background_tasks_changed`, claude-chat-live.ts): the relay's sources are stale then.
+  const runningCount = useClaudeChatLive()?.runningCount ?? running.length
+  const tasks = useMemo(() => ({ runningCount, openSheet }), [openSheet, runningCount])
   // The header menu's Background tasks entry opens this same sheet (parity gap G35).
-  useBridgeBackgroundTasksToHeader(running.length, openSheet)
+  useBridgeBackgroundTasksToHeader(runningCount, openSheet)
   return (
     <NativeChatTranscriptProvider messages={messages}>
     <AgentToolCallsSlotProvider render={renderAgentToolCalls}>

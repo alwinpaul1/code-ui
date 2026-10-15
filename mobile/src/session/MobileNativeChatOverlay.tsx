@@ -9,7 +9,7 @@ import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
 import { placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-point'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react'
-import { usePendingImageHistory } from './use-pending-image-history'
+import { usePendingImageHistory } from './use-pending-image-history'; import { ClaudeChatLiveContext } from './claude-chat-live'
 import { StyleSheet } from 'react-native'; import { AgentImageShareView } from './AgentImageShareView' // the overlay's box; a refused picture's ask (agent-image-share-ask.ts)
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'; import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
@@ -565,9 +565,9 @@ export function MobileNativeChatOverlay({
   }
   return (
     <CreatedFileCountProvider store={createdFileCounts} messages={shown.messages} live={shown.wholeSession}>
-      <AgentImageShareView share={controller.nativeChatImageShare ?? null} style={styles.overlay}>
+      <ClaudeChatLiveContext.Provider value={controller.nativeChatAnthropicLive ?? null}>{/* Anthropic's live state, for the footer and the count (claude-chat-live.ts) */}<AgentImageShareView share={controller.nativeChatImageShare ?? null} style={styles.overlay}>
         {shown === live ? chat : cloneElement(chat, shown.chat)}
-      </AgentImageShareView>
+      </AgentImageShareView></ClaudeChatLiveContext.Provider>
     </CreatedFileCountProvider>
   )
 }

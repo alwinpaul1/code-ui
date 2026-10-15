@@ -55,7 +55,8 @@ export function MobileNativeChatConnectionRow({
   const notice = nativeChatConnectionNotice({
     connState: controller.connState,
     verdict: controller.connectionVerdict.kind,
-    agentWorking: controller.nativeChatController.nativeChatAgentWorking === true
+    agentWorking: controller.nativeChatController.nativeChatAgentWorking === true,
+    anthropicLive: controller.nativeChatController.nativeChatAnthropicLive?.linkLive === true
   })
   return notice === null ? null : <ConnectionRowView notice={notice} />
 }

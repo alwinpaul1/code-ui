@@ -40,8 +40,11 @@ export function nativeChatConnectionNotice(input: {
   connState: ConnectionState
   verdict: ConnectionVerdict['kind']
   agentWorking: boolean
+  /** A Claude tab whose Anthropic stream is live: that stream is the chat's connection, as the
+   *  app's backplane is its own, so the relay's state is not this row's to say (claude-chat-live.ts). */
+  anthropicLive?: boolean
 }): NativeChatConnectionNotice | null {
-  if (input.connState === 'connected' || !input.agentWorking) {
+  if (input.connState === 'connected' || !input.agentWorking || input.anthropicLive === true) {
     return null
   }
   return input.verdict === 'normal'

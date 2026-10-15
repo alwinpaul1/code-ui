@@ -8,8 +8,9 @@ import type { ThemeScheme } from './tokens'
  *   ("Cooking...", nl7.java:377) and the " · " before the count (nl7.java:293);
  * - `link`: `ad5.C0()` (nl7.java:263 idle, :290 inside the working line), #184F95 light and
  *   #6DA7EC dark. The "N running tasks" text, idle or working;
- * - `body`: `pl7.Q`, #7B7974 light and #97958D dark. The stats text the app draws before the count
- *   when it has stats (nl7.java:196); Code UI draws no stats, so nothing reads it yet.
+ * - `body`: `pl7.Q`, #7B7974 light and #97958D dark. The stats the app draws before the count
+ *   ("15s", nl7.java:196), the " · " before the count beside them, and the status phrase after it
+ *   ("· still thinking…", nl7.java:213-224); claude-working-footer-stats.ts.
  *
  * A module of its own for the reason the session pill palette is: `tokens.ts` is shared by every
  * screen. A component reads `claudeStatusFooterPalette(useTheme().scheme)`, so the line cannot

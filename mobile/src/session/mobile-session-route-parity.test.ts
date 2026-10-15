@@ -662,7 +662,7 @@ const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96ea
 // microphone level for the waveform. Same records; only the overlay's moved.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_LEAF_JSX_SHA256 = '08cca4d5a1873855ef9c9a06f19ecaf8988880696df82e8b2d38d551f4d91a7f'
+const HEAD_LEAF_JSX_SHA256 = '0fde985f4d0e1892ce50f27a70a5c38c7705ea8e1d3cacb44dd25b8c37097825'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1302,6 +1302,9 @@ describe('mobile session route extraction parity', () => {
     // and hands it to the chat overlay's pill slot (the pull request, Create PR and Local changes pills).
     // 78 since 2026-10-14 (parity Batch 5): the session content mounts <MobileNativeChatConnectionRow />
     // and <MobileNativeChatRateLimitBanner /> in the chat overlay's notice slot.
+    // Same count (78) since 2026-10-15: the header's status dot and line read
+    // `chatConnection?.dot ?? connState` and `chatConnection?.label ?? terminalSummary`, a Claude
+    // chat's own session state from Anthropic while the relay is down (claude-chat-live.ts).
     expect(jsx.leaf).toHaveLength(78)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.

@@ -42,6 +42,14 @@ describe('the connection row while the agent works', () => {
     }
     expect(nativeChatConnectionNotice({ connState: 'disconnected', verdict: 'unreachable', agentWorking: false })).toBeNull()
   })
+
+  // 2026-10-15 12:29-12:31: the relay down, the turn still streaming from Anthropic. The chat's
+  // connection is Anthropic's stream then, and the Claude app said no "Connection lost" over it.
+  it('says nothing about the relay while the tab’s Anthropic stream is live', () => {
+    expect(nativeChatConnectionNotice({ connState: 'disconnected', verdict: 'unreachable', agentWorking: true, anthropicLive: true })).toBeNull()
+    expect(nativeChatConnectionNotice({ connState: 'reconnecting', verdict: 'normal', agentWorking: true, anthropicLive: true })).toBeNull()
+    expect(nativeChatConnectionNotice({ connState: 'reconnecting', verdict: 'normal', agentWorking: true, anthropicLive: false })?.kind).toBe('connecting')
+  })
 })
 
 describe('the words as the Claude app draws a message', () => {

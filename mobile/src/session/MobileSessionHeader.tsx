@@ -16,6 +16,7 @@ import {
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
+import { claudeChatHeaderConnection } from './claude-chat-live'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { sessionTabActivity, tabPillDotState } from './session-tab-activity'
@@ -95,6 +96,9 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   // switches between them from the header instead of the tab long-press sheet.
   const { activeChatEligible, showNativeChat } = controller.nativeChatController
   const { switchTabView } = controller
+  // A Claude chat whose Anthropic stream is live says the session's own state, not the relay's
+  // "Disconnected" (claude-chat-live.ts); the terminal view keeps the relay's.
+  const chatConnection = claudeChatHeaderConnection({ chatShown: showNativeChat, live: controller.nativeChatController.nativeChatAnthropicLive })
   const viewToggle = mobileSessionChatViewToggle({
     eligible: activeChatEligible,
     chatVisible: showNativeChat,
@@ -151,9 +155,9 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             accessibilityRole={showConnectionRetry ? 'button' : undefined}
             accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
           >
-            <StatusDot state={connState} gap={false} size={7} />
+            <StatusDot state={chatConnection?.dot ?? connState} gap={false} size={7} />
             <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {terminalSummary}
+              {chatConnection?.label ?? terminalSummary}
             </Txt>
           </Pressable>
         </View>

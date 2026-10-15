@@ -6,6 +6,8 @@ import { ccrMatchOutcome, ccrMatchOutcomesVersion, subscribeCcrMatchOutcomes } f
 import { ccrAccountForTab, ccrSessionForTab } from './ccr-session-cache'
 import type { CcrLinkState, CcrSessionLink } from './ccr-session-link'
 import { decodeCcrEvents } from './ccr-transcript-decode'
+import { deriveCcrLiveState, type CcrLiveState } from './ccr-live-state'
+import type { CcrLinkPhase } from './ccr-session-link-types'
 import { readCcrTranscript } from './ccr-transcript-persist'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 
@@ -93,7 +95,7 @@ export function useClaudeAnthropicTranscript(args: {
   orcaStatus: MobileNativeChatSession['status']
   orcaRowCount: number
   orcaError?: string
-}): { gate: ClaudeChatGate; session: MobileNativeChatSession | null } {
+}): ClaudeAnthropicTranscript {
   const { enabled, tabId, agentSessionId, epoch } = args
   useSyncExternalStore(subscribeAnthropicSignInPresence, anthropicSignInPresenceVersion, anthropicSignInPresenceVersion)
   useSyncExternalStore(subscribeCcrMatchOutcomes, ccrMatchOutcomesVersion, ccrMatchOutcomesVersion)
@@ -140,6 +142,11 @@ export function useClaudeAnthropicTranscript(args: {
   const link = useMatchedLink(gate.kind === 'matched' ? gate : null)
   const state = useSyncExternalStore(link?.subscribe ?? subscribeNothing, link?.getState ?? noState, link?.getState ?? noState)
   const rows = useMemo(() => (state ? decodeCcrEvents(state.events) : EMPTY), [state])
+  // The tab's live state from the same events (ccr-live-state.ts), for when the relay is down.
+  const live = useMemo(
+    () => (state ? deriveCcrLiveState(state.events, { liveFrom: state.liveFrom, streamThinking: state.streamThinking, connectionStatus: state.connectionStatus }) : null),
+    [state]
+  )
 
   // A new relay connection retries a lost stream (CLAUDE.md, "Nothing stays stale once the relay connects").
   const lastEpoch = useRef(epoch)
@@ -179,7 +186,16 @@ export function useClaudeAnthropicTranscript(args: {
       }
     }
   }, [gate, link, rows, state])
-  return { gate, session }
+  return { gate, session, live, linkPhase: state?.phase ?? null, connectionStatus: state?.connectionStatus ?? null }
+}
+
+export type ClaudeAnthropicTranscript = {
+  gate: ClaudeChatGate
+  session: MobileNativeChatSession | null
+  /** The matched link's live state; null until a link's state is held. */
+  live: CcrLiveState | null
+  linkPhase: CcrLinkPhase | null
+  connectionStatus: string | null
 }
 
 const subscribeNothing = () => noop

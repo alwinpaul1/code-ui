@@ -1,4 +1,5 @@
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
+import type { ClaudeChatLive } from './claude-chat-live'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -123,6 +124,8 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** What a Claude tab's chat reads (use-claude-anthropic-transcript.ts): `off` for every other tab. */
   nativeChatAnthropicGate?: ClaudeChatGate
+  /** A matched Claude tab's live state from Anthropic and which source drives it (claude-chat-live.ts). */
+  nativeChatAnthropicLive?: ClaudeChatLive | null
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */

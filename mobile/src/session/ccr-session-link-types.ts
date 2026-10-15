@@ -54,6 +54,13 @@ export type CcrLinkState = {
   loadingOlder: boolean
   /** The Remote Control session's `connection_status`, from the stream's `session_update`. */
   connectionStatus: string | null
+  /** The sequence number up to which the held events were read from the phone's kept copy, not
+   *  from Anthropic (0 when none were). The kept copy keeps rows only, no `result`, so the live
+   *  state (ccr-live-state.ts) judges the turn only from events after it. */
+  liveFrom: number
+  /** The newest ephemeral `stream_event`'s word on a thinking block (ccr-live-state.ts
+   *  `streamEventThinking`), cleared to null by the next durable event. */
+  streamThinking: boolean | null
   /** Bumped on every change, for useSyncExternalStore. */
   version: number
 }

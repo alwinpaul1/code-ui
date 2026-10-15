@@ -11,7 +11,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatStreamPreview } from './use-mobile-native-chat-stream-preview'
-import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'; import { claudeRowsAreHistory, useClaudeAnthropicTranscript } from './use-claude-anthropic-transcript'
+import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'; import { claudeChatLive } from './claude-chat-live'; import { claudeRowsAreHistory, useClaudeAnthropicTranscript } from './use-claude-anthropic-transcript'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useCodexStatusPoll } from './use-codex-status-poll'
@@ -152,8 +152,14 @@ export function useMobileNativeChatController(
   const nativeChatHostConnection = useMemo(() => ({ connected: connState === 'connected', lastConnectedAt }), [connState, lastConnectedAt])
   const nativeChatLeadTurnEnded = claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeChatAgentStatus)
   const nativeChatStreamLive = activeChatStructured ? structuredNativeChat.isWorking : activeTabAgentWorking && !nativeChatLeadTurnEnded
+  // A matched Claude tab's live state from Anthropic: with the relay down and Anthropic's stream
+  // live, it drives working/idle and the running count (claude-chat-live.ts).
+  const nativeChatAnthropicLive = useMemo(
+    () => claudeChatLive({ live: claudeApi.live, linkPhase: claudeApi.linkPhase, connectionStatus: claudeApi.connectionStatus, relayConnected: connState === 'connected' }),
+    [claudeApi.live, claudeApi.linkPhase, claudeApi.connectionStatus, connState]
+  )
   const nativeChatAgentWorking =
-    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
+    nativeChatAnthropicLive?.working ?? (nativeChatStreamLive && (activeChatStructured || activeChatResolution != null))
   const streamPreview = useMobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking)
   const nativeChatStreamingText = useThrottledLatestValue(
     activeChatStructured ? undefined : streamPreview,
@@ -547,7 +553,7 @@ export function useMobileNativeChatController(
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable, nativeChatAgentInput: !activeChatStructured && connState === 'connected' ? screenQueueInput : '', // what left the box into the input was recalled, not sent (queue-recalls.ts)
     chatImagePreviewsByMessageId, nativeChatImageShare,
-    nativeChatSession: drawnSession, nativeChatAnthropicGate: claudeApi.gate,
+    nativeChatSession: drawnSession, nativeChatAnthropicGate: claudeApi.gate, nativeChatAnthropicLive,
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,

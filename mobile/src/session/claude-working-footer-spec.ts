@@ -40,10 +40,11 @@
 // `CircularProgressIndicator` (`khp.a`, 20 dp / 2 dp stroke in the status chip, `gqc.java:1352`),
 // and none sits in the session header.
 //
-// Not applied: the stats ("12s · 1,234 tokens") the app puts before the count. The user asked
-// for words and no time (2026-09-25), and Code UI has no token figure for a hand-started
-// session, so the line draws the verb path, which the app draws when it has no stats
-// (nl7.java:246).
+// The stats ("15s · 1,234 tokens") and the status phrase ("still thinking…") the app puts around
+// the count are drawn since 2026-10-15, when the user asked for the app's exact line (they had
+// asked for words and no time on 2026-09-25). They come from Anthropic's events of a matched tab
+// (claude-working-footer-stats.ts); a tab with none draws the verb path, which the app draws when
+// it has no stats (nl7.java:246).
 
 /** `nl7.a` (nl7.java:14), in the app's order. */
 export const CLAUDE_WORKING_VERBS = [
