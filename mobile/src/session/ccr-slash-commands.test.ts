@@ -46,8 +46,23 @@ describe('the session’s own slash commands', () => {
     expect(list?.filter((command) => command.name === 'compact')).toHaveLength(1)
   })
 
-  it('with an empty list, offers the app’s own commands alone', () => {
-    expect(ccrSessionSlashCommands([init({ slash_commands: [] })])?.map((command) => command.name)).toEqual(['workflows', 'diff', 'model'])
+  // Review 2026-10-15: a list with nothing usable in it replaced the curated catalog with the app's
+  // three commands alone. It is read as no list now (this test pinned `[]` as the three commands).
+  it('keeps the curated catalog for an empty list', () => {
+    expect(ccrSessionSlashCommands([init({ slash_commands: [] })])).toBeUndefined()
+  })
+
+  it('keeps the curated catalog for a list with no usable names', () => {
+    expect(ccrSessionSlashCommands([init({ slash_commands: [{ name: 'compact' }, 7, null, '', '  ', '/'] })])).toBeUndefined()
+  })
+
+  it('passes over a newer unusable list to the newest usable one', () => {
+    const list = ccrSessionSlashCommands([init({ slash_commands: ['compact'] }), init({ slash_commands: [{ name: 'x' }] }), init({ slash_commands: [] })])
+    expect(list?.map((command) => command.name)).toEqual(['compact', 'workflows', 'diff', 'model'])
+  })
+
+  it('lists a one-name list with the app’s commands after it', () => {
+    expect(ccrSessionSlashCommands([init({ slash_commands: ['compact'] })])?.map((command) => command.name)).toEqual(['compact', 'workflows', 'diff', 'model'])
   })
 
   it('is undefined (the curated catalog stays) with no events, or none that states a list', () => {

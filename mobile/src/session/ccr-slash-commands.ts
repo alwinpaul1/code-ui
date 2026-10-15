@@ -20,8 +20,9 @@ import type { CcrEvent } from './ccr-session-api'
  * `/feedback`, `/bug` and `/export` are the app's too, but open Anthropic's own flows, which
  * Code UI has no counterpart for, so they are left off.
  *
- * Null when no event states the list (a session that predates it, or a stream not read yet):
- * the menu keeps the curated catalog then.
+ * Undefined when no event states a list with a usable name in it (a session that predates it, a
+ * stream not read yet, or a list that is empty or holds no names): the menu keeps the curated
+ * catalog then.
  */
 export type ClaudeAppCommand = 'model' | 'diff' | 'workflows'
 
@@ -45,11 +46,13 @@ function names(value: unknown): string[] | null {
   })
 }
 
-/** The newest top-level `system` event that states `slash_commands` as a list, or null. */
+/** The newest top-level `system` event whose `slash_commands` holds at least one usable name, or
+ *  null. A list with none (`[]`, objects, other types) is read as no list, so it cannot replace the
+ *  curated catalog with the app's three commands alone (review 2026-10-15). */
 function newestStatement(events: readonly CcrEvent[]): Record<string, unknown> | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const payload = events[index]!.payload
-    if (payload.type === 'system' && !payload.parent_tool_use_id && Array.isArray(payload.slash_commands)) {
+    if (payload.type === 'system' && !payload.parent_tool_use_id && (names(payload.slash_commands)?.length ?? 0) > 0) {
       return payload
     }
   }
