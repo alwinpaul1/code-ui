@@ -9,6 +9,7 @@ import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
 import { ccrAttachmentBlock, type CcrAttachmentRef } from './mobile-native-chat-file-mentions'
+import { isLocalCommandOutput, LOCAL_COMMAND_PRESENTATION, localCommandDrawnText } from './mobile-native-chat-local-command'
 
 /**
  * A Claude Code session's Anthropic events as the chat's rows: the only transcript a matched
@@ -333,6 +334,18 @@ function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp
   }
   const message = record(payload.message)
   const { blocks: text, thinking, pictures } = contentBlocks(message?.content)
+  if (role === 'assistant' && isLocalCommandOutput(payload, message?.model)) {
+    // A slash command's own output (`/code-review …` starting its background agent): the app's
+    // command-output row, with the tags it does not draw taken out (mobile-native-chat-local-command.ts).
+    const output = text.flatMap((block): NativeChatBlock[] => {
+      if (block.type !== 'text') {
+        return [block]
+      }
+      const drawn = localCommandDrawnText(block.text)
+      return drawn ? [{ type: 'text', text: drawn, presentation: LOCAL_COMMAND_PRESENTATION }] : []
+    })
+    return output.length > 0 ? [{ id: uuid, role: 'assistant', blocks: output, timestamp, source: 'transcript' }] : []
+  }
   // A prompt that names its pictures (`[Image #N]`, a paste in the terminal) has them drawn where
   // the markers are, from the image cache (ccrKeptImages below, use-ccr-session-images.ts); one
   // that names none (sent from the Claude app or the phone) gets them as tiles of its own.

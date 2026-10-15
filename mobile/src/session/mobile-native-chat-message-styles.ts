@@ -206,6 +206,14 @@ export function makeChatMessageStyles(
     },
     // A row of image tiles: 3:4 tiles the Claude app's height, a sliver of the
     // next one showing so the row reads as scrollable.
+    // A slash command's output: a 2 dp line down its left side and 8 dp before
+    // the words, as the Claude app draws it (vb20.j, 1.261009.20); the line in
+    // our own hairline colour (mobile-native-chat-local-command.ts).
+    localCommand: {
+      borderLeftWidth: 2,
+      borderLeftColor: colors.border,
+      paddingLeft: space.sm
+    },
     // Air between a picture and the caption under it, as the Claude app has.
     imageLead: {
       marginBottom: space.md

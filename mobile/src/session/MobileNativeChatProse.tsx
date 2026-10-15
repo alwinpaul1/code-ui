@@ -10,6 +10,8 @@ import {
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { MobileNativeChatFileLinkSheet } from './MobileNativeChatFileLinkSheet'
 import { userTextDrawsAsMarkdown } from './mobile-native-chat-user-markdown'
+import { LOCAL_COMMAND_PRESENTATION } from './mobile-native-chat-local-command'
+import { ThemeInk, useTheme } from '../theme/theme-context'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import {
   MobileNativeChatAgentImageLoadingTile,
@@ -62,6 +64,7 @@ export function Prose({
   // The user's own words, Markdown or not: read once per text, not per render.
   const ownText = invert && !markdownPrompt && isTextBlock(block) ? block.text : null
   const ownMarkdown = useMemo(() => ownText !== null && userTextDrawsAsMarkdown(ownText), [ownText])
+  const { colors } = useTheme()
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt && !ownMarkdown) {
       // Not selectable, on purpose: a hold on a message opens its menu
@@ -101,6 +104,15 @@ export function Prose({
         typed={ownMarkdown}
       />
     )
+    // A slash command's output is the command's, not Claude's: a rule down its
+    // left side and the words in the dimmed ink (mobile-native-chat-local-command.ts).
+    if (!invert && block.presentation === LOCAL_COMMAND_PRESENTATION) {
+      return (
+        <View style={styles.localCommand}>
+          <ThemeInk ink={colors.textSecondary}>{document}</ThemeInk>
+        </View>
+      )
+    }
     // Selects nothing in place: the message row turns that off for every
     // document in it (ChatTextInPlaceSelectionContext), and a hold opens the
     // message's menu.

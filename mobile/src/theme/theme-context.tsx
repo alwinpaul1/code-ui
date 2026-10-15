@@ -125,6 +125,15 @@ export function useTheme(): Theme {
   return useContext(ThemeContext)
 }
 
+/** Draws what is inside in another ink: the scheme's own `text` swapped for `ink`, nothing else
+ *  changed, so a document's words take it in light and dark alike (a command's output in the
+ *  chat, MobileNativeChatProse.tsx). */
+export function ThemeInk({ ink, children }: { ink: string; children: ReactNode }) {
+  const theme = useTheme()
+  const value = useMemo(() => ({ ...theme, colors: { ...theme.colors, text: ink } }), [theme, ink])
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+}
+
 /** Memoized StyleSheet-shaped object built from the live theme. */
 export function useThemedStyles<T>(factory: (theme: Theme) => T): T {
   const theme = useTheme()
