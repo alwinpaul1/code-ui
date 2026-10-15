@@ -57,12 +57,12 @@ export type FileMentionCard = {
 
 /** One entry of an Anthropic user event's `file_attachments`
  *  (`{file_uuid, file_name, is_image}`, recorded 2026-10-15). */
-export type CcrAttachmentRef = { fileUuid: string; fileName: string; isImage: boolean }
+export type CcrAttachmentRef = { fileUuid: string; fileName: string; isImage: boolean; missing?: true }
 
 /** The `presentation` the carrier block of an attachment has: the kind, then the file's uuid. The
  *  block's text is the file name, so a row drawn by anything that does not know the carrier still
  *  names the file. */
-const ATTACHMENT_PRESENTATION = /^ccr-attachment:(image|file):(.+)$/
+const ATTACHMENT_PRESENTATION = /^ccr-attachment:(image|file):([^:]+)(:missing)?$/
 
 /** The block that carries one attachment from the Anthropic decoder to the prompt's card row. */
 export function ccrAttachmentBlock(ref: CcrAttachmentRef): NativeChatBlock {
@@ -74,7 +74,14 @@ function attachmentOfBlock(block: NativeChatBlock): CcrAttachmentRef | null {
     return null
   }
   const match = ATTACHMENT_PRESENTATION.exec(block.presentation)
-  return match && block.text ? { fileUuid: match[2]!, fileName: block.text, isImage: match[1] === 'image' } : null
+  return match && block.text ? { fileUuid: match[2]!, fileName: block.text, isImage: match[1] === 'image', ...(match[3] ? { missing: true as const } : {}) } : null
+}
+
+/** The carrier block marked as a file that never reached Claude (`file_attachments_missing`,
+ *  ccr-row-annotations.ts) when its uuid is in `lost`; any other block as it was. */
+export function markAttachmentMissing(block: NativeChatBlock, lost: ReadonlySet<string>): NativeChatBlock {
+  const ref = attachmentOfBlock(block)
+  return ref && !ref.missing && lost.has(ref.fileUuid) && isTextBlock(block) ? { ...block, presentation: `${block.presentation}:missing` } : block
 }
 
 /** The extension the Claude app badges (p530.java:104-126): what follows the last dot, unless it is

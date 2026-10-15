@@ -24,6 +24,7 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
+import { useComposerPromptSuggestion } from './MobileNativeChatPromptSuggestion'
 import { MobileNativeChatSendSlot } from './MobileNativeChatSendSlot'
 import { MobileNativeChatDictationLayer } from './MobileNativeChatDictationRow'
 import { MobileNativeChatDictationCaption, MobileNativeChatDictationScrim } from './MobileNativeChatDictationCaption'
@@ -367,6 +368,9 @@ export function MobileNativeChatComposer({
     justifyContent: 'center' as const
   }
   const composerType = { fontFamily: fonts.regular, ...COMPOSER_TYPE }
+  // A matched Claude tab's next-prompt suggestion over the empty field, and the lines it draws: while
+  // it shows, the field is tall enough for all of them and the pill (ccr-prompt-suggestion.ts).
+  const promptHint = useComposerPromptSuggestion({ value, onFill: onChangeText, pad: COMPOSER_INPUT_PAD, type: composerType })
   const inputPads = COMPOSER_INPUT_PAD.top + COMPOSER_INPUT_PAD.bottom
   const inputMaxHeight = inputPads + COMPOSER_INPUT_MAX_LINES * composerType.lineHeight
   const inputMaxHeightWithMenu = inputPads + COMPOSER_INPUT_LINES_WITH_MENU * composerType.lineHeight
@@ -460,7 +464,7 @@ export function MobileNativeChatComposer({
               style={{
                 width: '100%',
                 maxHeight: inputMaxHeight,
-                minHeight: inputPads + composerType.lineHeight,
+                minHeight: inputPads + promptHint.lines * composerType.lineHeight,
                 color: colors.text,
                 ...composerType,
                 paddingHorizontal: COMPOSER_INPUT_PAD.side,
@@ -480,7 +484,7 @@ export function MobileNativeChatComposer({
               }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
-              placeholder={placeholder}
+              placeholder={promptHint.overlay ? '' : placeholder}
               placeholderTextColor={colors.composerPlaceholder}
               selectionColor={colors.accent}
               multiline
@@ -489,6 +493,7 @@ export function MobileNativeChatComposer({
               // The lock gates sending; the draft survives and rides the next send.
               textAlignVertical="top"
             />
+            {promptHint.overlay}
           </View>
           </Animated.View>
           <View testID="native-chat-composer-action-area">

@@ -77,6 +77,8 @@ export type MobileNativeChatViewProps = {
   /** The session the chat reads (its transcript is where a subagent's lives),
    *  and the one a nested agent's status named instead, for the empty state. */
   sessionIdentity?: NativeChatSessionIdentity | null
+  /** A Claude tab read from Anthropic's copy of its session: its empty state is the Claude app's. */
+  anthropicTab?: boolean
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   /** The host's own background-task roster, on the structured lane. When the

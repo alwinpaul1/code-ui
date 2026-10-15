@@ -16,7 +16,8 @@ import { useChatListContentPosition } from './mobile-native-chat-list-extra-data
 import { MobileNativeChatJumpToLatest, MobileNativeChatLoadEarlier } from './mobile-native-chat-list-edges'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { useChatViewStyles } from './mobile-native-chat-view-styles'
-import { subagentTranscriptBodyState } from './mobile-subagent-transcript'
+import { streamedSubagentMessages, subagentTranscriptBodyState } from './mobile-subagent-transcript'
+import { unionSubagentMessages } from './subagent-stream-file-union'
 import {
   closeSubagentTranscript,
   useSubagentTranscriptRequest,
@@ -87,6 +88,9 @@ export function MobileSubagentTranscriptScreen({
   onClose: () => void
 }): React.JSX.Element {
   const { target, running } = request
+  // Opened from Anthropic's stream (G8): its rows add what the file does not hold yet. The file is
+  // still read: the tab's store drops a subagent's older events (subagent-stream-file-union.ts).
+  const streamed = useMemo(() => streamedSubagentMessages(request), [request])
   const { colors, space } = useTheme()
   const styles = useChatViewStyles()
   const insets = useSafeAreaInsets()
@@ -102,7 +106,8 @@ export function MobileSubagentTranscriptScreen({
     transcriptPath: target.transcriptPath,
     lastConnectedAt
   })
-  const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
+  const merged = useMemo(() => unionSubagentMessages(session.messages, streamed ?? []), [session.messages, streamed])
+  const folded = useMemo(() => foldMobileNativeChatMessages(merged), [merged])
   const newestFirst = useMemo(() => folded.toReversed(), [folded])
   const tail = useMobileNativeChatTailFollow<NativeChatMessage>({
     rows: newestFirst,

@@ -11,6 +11,7 @@ import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatStreamPreview } from './use-mobile-native-chat-stream-preview'
+import { useCcrRefusalRetryHost } from './ccr-refusal-retry'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'; import { claudeChatLive } from './claude-chat-live'; import { claudeRowsAreHistory, useClaudeAnthropicTranscript } from './use-claude-anthropic-transcript'
 import { useCodexCurrentModel } from './use-codex-current-model'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
@@ -504,6 +505,8 @@ export function useMobileNativeChatController(
   })
   // The composer's attachments live in the image hook, made after this one: the overlay reports their count (the queue's turn-end blocker).
   const ccrComposerAttachments = useRef(0), setCcrComposerAttachments = useRef((count: number) => { ccrComposerAttachments.current = count }).current; const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: () => ccrComposerAttachments.current, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, returnQueueToDraft, removePending, onSendError }); const ccrAttachments = useCcrAttachmentLane({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), send: ccrSend.sendWithOutcome }) /* attachments too, behind the switch in ccr-file-upload.ts */; if (ccrLane) { shareSendRef.current.send = (text) => (claudeComposerSendGoes(text) === 'anthropic' ? ccrSend.sendWithOutcome(text) : handleNativeChatSendWithOutcome(text)) } // a slash command types, as before the lane (claude-composer-send-route.ts)
+  // A refusal card's Edit and retry, behind CCR_CONTROL_LANE (ccr-refusal-retry.ts).
+  useCcrRefusalRetryHost({ rewindTo: ccrControl.rewindTo, setComposerText: setChatComposerText, onSendError })
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
     client,
     enabled: inputSendable,

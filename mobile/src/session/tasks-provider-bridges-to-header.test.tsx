@@ -23,6 +23,7 @@ vi.mock('./MobileNativeChatAgentToolCalls', () => ({ MobileNativeChatAgentToolCa
 vi.mock('./MobileBackgroundTaskTranscriptPage', () => ({ BACKGROUND_TASK_TRANSCRIPT_PAGE: null }))
 vi.mock('./subagent-transcript-store', () => ({
   followSubagentTranscriptRunning: () => () => {},
+  followSubagentTranscriptStream: () => {},
   openSubagentTranscript: () => {}
 }))
 

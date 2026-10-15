@@ -10,6 +10,9 @@ export type AgentToolCallsProps = {
   agentId: string
   /** The Agent call's description, which titles the transcript viewer. */
   title: string
+  /** The Agent call's id: the `parent_tool_use_id` of the agent's own events in Anthropic's
+   *  stream (ccr-background-tasks.ts `ccrSubagentMessages`). Null when the call carries none. */
+  toolUseId?: string | null
   inSection: (label: string, body: ReactNode) => ReactNode
 }
 

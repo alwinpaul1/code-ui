@@ -166,6 +166,7 @@ export function ToolDetailBody({ pair, agentId = null }: { pair: NativeChatToolP
         ? renderAgentToolCalls({
             agentId,
             title: agentTitle(pair.call?.input),
+            toolUseId: pair.call?.callId ?? null,
             inSection: (label, body) => <Section label={label}>{body}</Section>
           })
         : null}

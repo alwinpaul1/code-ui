@@ -35,8 +35,11 @@
 // (`task_id`), the same id space the transcript's `<task-notification>` uses —
 // read from the bundle, not exercised against an SDK session.
 
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { BackgroundTask } from './mobile-background-tasks'
+import { ccrSubagentMessages } from './ccr-background-tasks'
+import type { SubagentTranscriptRequest } from './subagent-transcript-store'
 
 export type SubagentTranscriptTarget = {
   agent: 'claude'
@@ -111,6 +114,12 @@ export function subagentTranscriptTarget(args: {
     transcriptPath: parentTranscriptPath ? subagentTranscriptPath(parentTranscriptPath, task.id) : null,
     title: task.title
   }
+}
+
+/** The agent's own events from Anthropic's stream, decoded as the lead's are, when the viewer was
+ *  opened with them; null otherwise. They add to the file's rows, never replace them. */
+export function streamedSubagentMessages(request: SubagentTranscriptRequest): NativeChatMessage[] | null {
+  return request.stream ? ccrSubagentMessages(request.stream.events, request.stream.toolUseId) : null
 }
 
 /** What the viewer's body draws for the transcript hook's state. An absent

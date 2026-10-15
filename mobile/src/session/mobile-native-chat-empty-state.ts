@@ -22,7 +22,15 @@ export type MobileNativeChatEmptyStateEvidence = {
   /** The session the chat reads, and the one a nested agent's status named
    *  instead (native-chat-kept-session.ts). Absent: the status's own session. */
   sessionIdentity?: NativeChatSessionIdentity | null
+  /** A Claude tab whose chat is Anthropic's copy of its session: an empty conversation there is
+   *  the Claude app's "What are we building?" (rp30.java:882), with no subtitle. */
+  anthropicTab?: boolean
+  /** Older history exists that the chat has not read yet (the session's `hasMore`). */
+  hasOlder?: boolean
 }
+
+/** The Claude app's title for a session with no message (`code_empty_what_are_we_building_title`). */
+export const CLAUDE_APP_EMPTY_TITLE = 'What are we building?'
 
 /** Agents whose own hooks name their transcript on every event, so a status
  *  of theirs that names none is most likely another agent's
@@ -112,8 +120,8 @@ function nestedSessionDetail(sessionId: string, agentLabel: string): string {
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
  *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
- *  stay in lockstep. Returns null when the list should stay bare (idle, or the
- *  loading spinner owns the view). */
+ *  stay in lockstep. Returns null when the list should stay bare (idle, the
+ *  loading spinner owns the view, or older history is unread). */
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
   agent: string | null,
@@ -133,7 +141,15 @@ export function mobileNativeChatEmptyState(
     case 'waiting-session':
     case 'awaiting-transcript':
     case 'ready': {
-      const copy = formatNativeChatEmptyStateCopy('empty', agentLabel)
+      if (status === 'ready' && evidence.hasOlder === true) {
+        // Not an empty conversation: older history exists and none of it is drawn yet. The list's
+        // load-older spinner stands alone (review 2026-10-15: a link that ended `live` with
+        // `hasOlder` and zero rows drew "What are we building?" over unread history).
+        return null
+      }
+      // The Claude app's title on an Anthropic tab, with the diagnostic line kept under it: a read
+      // that came back empty still says where to look (review 2026-10-15).
+      const copy = status === 'ready' && evidence.anthropicTab === true ? { title: CLAUDE_APP_EMPTY_TITLE, subtitle: '' } : formatNativeChatEmptyStateCopy('empty', agentLabel)
       const detail = emptyConversationDetail(status, agent, agentLabel, evidence)
       return detail ? { ...copy, detail } : copy
     }

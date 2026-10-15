@@ -24,9 +24,11 @@ export function MobileNativeChatListEmpty({
       <Txt variant="heading" weight="semibold" align="center">
         {emptyState.title}
       </Txt>
-      <Txt variant="body" tone="muted" align="center">
-        {emptyState.subtitle}
-      </Txt>
+      {emptyState.subtitle ? (
+        <Txt variant="body" tone="muted" align="center">
+          {emptyState.subtitle}
+        </Txt>
+      ) : null}
       {emptyState.detail ? (
         <Txt variant="caption" tone="muted" align="center">
           {emptyState.detail}

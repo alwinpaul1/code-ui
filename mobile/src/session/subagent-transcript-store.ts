@@ -4,6 +4,7 @@
 // the same reason as the image preview: the row lives three components below
 // the screen that knows the host, and two of those sit at their line caps.
 import { useSyncExternalStore } from 'react'
+import type { CcrEvent } from './ccr-session-api'
 import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
 
 /** The target plus whether the roster lists it as running, which the header
@@ -12,7 +13,13 @@ import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
 export type SubagentTranscriptRequest = {
   target: SubagentTranscriptTarget
   running: boolean
+  /** The agent's own events in Anthropic's stream, when it held some at the tap: the viewer adds
+   *  them to the file's rows (subagent-stream-file-union.ts). */
+  stream?: SubagentTranscriptStream | null
 }
+
+/** The Agent call the events belong to, and the stream's events (all of them, oldest first). */
+export type SubagentTranscriptStream = { toolUseId: string; events: readonly CcrEvent[] }
 
 let state: SubagentTranscriptRequest | null = null
 const listeners = new Set<() => void>()
@@ -23,8 +30,18 @@ function emit(): void {
   }
 }
 
-export function openSubagentTranscript(target: SubagentTranscriptTarget, running: boolean): void {
-  state = { target, running }
+export function openSubagentTranscript(target: SubagentTranscriptTarget, running: boolean, stream: SubagentTranscriptStream | null = null): void {
+  state = { target, running, stream }
+  emit()
+}
+
+/** The stream's newest events, from the tab's tasks provider, so a viewer drawn from the stream
+ *  stays live. A stream that went away (null) leaves the viewer on what it last held. */
+export function followSubagentTranscriptStream(events: readonly CcrEvent[] | null): void {
+  if (state === null || !state.stream || events === null || state.stream.events === events) {
+    return
+  }
+  state = { ...state, stream: { ...state.stream, events } }
   emit()
 }
 

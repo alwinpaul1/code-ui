@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +27,9 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatListEmpty } from './mobile-native-chat-list-edges'
 import { mobileNativeChatEmptyState } from './mobile-native-chat-empty-state'
+import type { CcrSessionLink } from './ccr-session-link'
+import type { CcrLinkState } from './ccr-session-link-types'
+import { ccrLinkSession } from './use-claude-anthropic-transcript'
 
 let renderer: ReactTestRenderer | null = null
 
@@ -99,5 +104,71 @@ describe('the empty chat of a pane that named no session', () => {
       'Start a chat with Claude',
       'Ask Claude to inspect code, explain output, or make a change.'
     ])
+  })
+})
+
+// The Claude app 1.261013.20 shows a session with no message as "What are we building?" alone
+// (rp30.java:882/947/970, `code_empty_what_are_we_building_title`; no subtitle). A matched Claude
+// tab reads Anthropic's copy of the session, so its empty conversation is that one.
+describe('the empty chat of a Claude tab read from Anthropic', () => {
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('reads "What are we building?" alone, as the Claude app does (%s)', (scheme, colors) => {
+    const emptyState = mobileNativeChatEmptyState('ready', 'claude', undefined, { anthropicTab: true, agentStatus: STATUS_WITHOUT_SESSION, transcriptMessageCount: 0 })
+    const lines = textNodes(render(emptyState, scheme))
+    expect(lines.map((line) => line.text)).toEqual(['What are we building?'])
+    expect(lines[0]?.color).toBe(colors.text)
+  })
+
+  // Review 2026-10-15: on the `new` gate the chat draws Orca's read, and a read that settled with
+  // nothing in it lost its diagnostic line under the new title (CLAUDE.md rule 9: the line that
+  // says where to look is part of the empty state).
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('keeps the empty-read diagnostic under "What are we building?" (%s)', (scheme, colors) => {
+    const status: AgentStatusEntry = {
+      ...STATUS_WITHOUT_SESSION,
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'ad1e3053-f9ac-40be-80be-8f33a800e9b1' }
+    }
+    const emptyState = mobileNativeChatEmptyState('ready', 'claude', undefined, { anthropicTab: true, agentStatus: status, transcriptMessageCount: 0 })
+    const lines = textNodes(render(emptyState, scheme))
+    expect(lines.map((line) => line.text)).toEqual(['What are we building?', 'The desktop read session ad1e3053 and sent no messages.'])
+    expect(lines[1]?.color).toBe(colors.textMuted)
+  })
+
+  it('keeps the desktop’s words while Orca has not said the session is empty', () => {
+    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, { anthropicTab: true })?.title).toBe('Start a chat with Claude')
+    expect(mobileNativeChatEmptyState('error', 'claude', 'The desktop could not read this session.', { anthropicTab: true })?.title).toBe('Could not load conversation')
+  })
+
+  // The flag is optional all the way down, so a chat that stopped passing it would quietly go back
+  // to the desktop's invitation: the overlay hands the view its Anthropic gate, and the view hands
+  // it to the empty state (code lines, not comments).
+  it('is told the tab is Anthropic’s by the overlay and the view', () => {
+    const code = (file: string) => readFileSync(join(__dirname, file), 'utf8').split('\n').filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).join('\n')
+    // The overlay draws the view through its shell-command wrapper, which passes every prop on.
+    expect(code('MobileNativeChatOverlay.tsx')).toMatch(/<MobileNativeChatShellConfirmView[^>]*?\banthropicTab=\{apiTab\}/)
+    expect(code('MobileNativeChatView.tsx')).toMatch(/mobileNativeChatEmptyState\(status, agent \?\? null, error, \{\s*agentStatus, sessionIdentity, anthropicTab,/)
+    // And whether older history is unread (review 2026-10-15), from the same list's `hasMore`.
+    expect(code('MobileNativeChatView.tsx')).toMatch(/mobileNativeChatEmptyState\([^)]*?\bhasOlder: hasMore === true\b/)
+  })
+
+  // Review 2026-10-15: a link that ends `live` with older history unread and zero rows is not an
+  // empty session; the list's load-older spinner stands instead of the title.
+  it('shows no title while the link has older history and nothing is drawn; a reconnecting empty link keeps it', () => {
+    const link = { sessionId: 'cse_x', loadOlder: async () => undefined } as unknown as CcrSessionLink
+    const state = (phase: CcrLinkState['phase'], hasOlder: boolean): CcrLinkState => ({ events: [], phase, error: null, hasOlder, loadingOlder: false, connectionStatus: null, liveFrom: 0, streamThinking: null, version: 1 })
+    const emptyFor = (session: ReturnType<typeof ccrLinkSession>) =>
+      mobileNativeChatEmptyState(session.status, 'claude', session.error, { anthropicTab: true, hasOlder: session.hasMore === true, transcriptMessageCount: session.messages.length })
+    expect(emptyFor(ccrLinkSession(link, state('live', true), []))).toBeNull()
+    expect(emptyFor(ccrLinkSession(link, state('reconnecting', false), []))?.title).toBe('What are we building?')
+    expect(emptyFor(ccrLinkSession(link, state('live', false), []))?.title).toBe('What are we building?')
+  })
+
+  it('leaves a Codex tab’s invitation as it was', () => {
+    expect(mobileNativeChatEmptyState('ready', 'codex', undefined, { anthropicTab: false })?.title).toBe('Start a chat with Codex')
   })
 })

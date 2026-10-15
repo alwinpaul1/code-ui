@@ -2,6 +2,7 @@ import type { CcrCatchUp } from './ccr-link-catch-up'
 import type { CcrEvent } from './ccr-session-api'
 import { storeCcrImages } from './ccr-session-cache'
 import { bySequence, CCR_PERSIST_STREAM_MS, ccrEventKey } from './ccr-session-link-types'
+import { ccrEventAnnotatesRows } from './ccr-row-annotations'
 import { ccrEventDrawsRow, ccrKeptImages, slimCcrEvent, type CcrImageKeeper } from './ccr-transcript-decode'
 import { writeCcrTranscript, type CcrPersistedTranscript } from './ccr-transcript-persist'
 
@@ -14,6 +15,12 @@ import { writeCcrTranscript, type CcrPersistedTranscript } from './ccr-transcrip
 /** Undrawn (`system`) events a link holds at most: 84% of a session's events draw nothing
  *  (observed live 2026-10-14), and a long-lived stream held every one (review 2026-10-15). */
 export const CCR_HELD_UNDRAWN_EVENTS = 200
+
+/** Held past the undrawn cap and kept in the copy: an event that draws a row, or changes one
+ *  (ccr-row-annotations.ts). A `prompt_suggestion` is neither: it is the live turn's alone. */
+function isKept(event: CcrEvent): boolean {
+  return ccrEventDrawsRow(event) || ccrEventAnnotatesRows(event)
+}
 
 export class CcrEventStore {
   private readonly byKey = new Map<string, CcrEvent>()
@@ -58,7 +65,7 @@ export class CcrEventStore {
     let undrawn = 0
     for (let at = this.ordered.length - 1; at >= 0; at--) {
       const event = this.ordered[at]!
-      if (!ccrEventDrawsRow(event) && ++undrawn > CCR_HELD_UNDRAWN_EVENTS) {
+      if (!isKept(event) && ++undrawn > CCR_HELD_UNDRAWN_EVENTS) {
         this.byKey.delete(ccrEventKey(event)!)
       }
     }
@@ -90,9 +97,10 @@ export class CcrEventStore {
     }
   }
 
-  /** The events that draw a row, oldest first. */
+  /** The events that draw a row or change one (a run's label, a prompt's lost files), oldest
+   *  first: what the kept copy holds. */
   drawing(): CcrEvent[] {
-    return this.ordered.filter(ccrEventDrawsRow)
+    return this.ordered.filter(isKept)
   }
 
   /** The sequence number of the oldest event that draws a row; null when none does (or none

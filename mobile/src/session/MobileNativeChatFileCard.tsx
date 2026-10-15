@@ -171,22 +171,33 @@ export function MobileNativeChatUploadCardRow({
   onOpen?: (path: string) => void
 }) {
   const styles = useFileCardStyles()
+  // Files Claude Code said never reached it (`file_attachments_missing`): each card says so to a
+  // screen reader, and a line under the row counts them (gy30.java, `ccr_sent_file_not_arrived_a11y`
+  // and the `ccr_sent_files_not_arrived` plural, in the app's error ink).
+  const lost = cards.filter((card) => card.attachment?.missing).length
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.uploadScroll}
-      contentContainerStyle={styles.uploadRow}
-    >
-      {cards.map((card, index) => (
-        <FileCard
-          key={`${index}:${card.path}`}
-          card={card}
-          label={`Attached file ${card.name}`}
-          onOpen={onOpen}
-          styles={styles}
-        />
-      ))}
-    </ScrollView>
+    <>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.uploadScroll}
+        contentContainerStyle={styles.uploadRow}
+      >
+        {cards.map((card, index) => (
+          <FileCard
+            key={`${index}:${card.path}`}
+            card={card}
+            label={card.attachment?.missing ? `Attached file ${card.name}, Didn’t reach Claude` : `Attached file ${card.name}`}
+            onOpen={onOpen}
+            styles={styles}
+          />
+        ))}
+      </ScrollView>
+      {lost > 0 ? (
+        <Text testID="upload-not-arrived" style={styles.notArrived}>
+          {lost === 1 ? '1 file didn’t reach Claude' : `${lost} files didn’t reach Claude`}
+        </Text>
+      ) : null}
+    </>
   )
 }
