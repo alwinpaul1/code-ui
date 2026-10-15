@@ -12,20 +12,16 @@ export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): strin
     .trim()
 }
 
-/** What a hold's Copy and Select text give for a run of a reply: its text as it arrived, Markdown
- *  source and all, as the Claude app's message menu gives `Prose.text` (npy.c). A visual line
- *  (`::orca-visual{...}`) is the transcript's, not the agent's words, so it is left out. */
-export function nativeChatReplySource(blocks: readonly NativeChatBlock[]): string {
-  return blocks
-    .filter(isTextBlock)
-    .map((b) => withoutNativeChatVisualDirectiveLines(b.text).trim())
-    .filter((text) => text !== '')
-    .join('\n\n')
+/** What a hold's Copy and Select text give for a sent prompt: the words as drawn, without
+ *  Markdown marks. The Claude app gives `Prose.text` source; Code UI gives plain text by the
+ *  user's choice (2026-10-15), as every other Code UI copy does. Empty when it is only markup. */
+export function nativeChatPromptPlainText(blocks: readonly NativeChatBlock[]): string {
+  return markdownPlainText(nativeChatMessageText(blocks)).trim()
 }
 
 /** What a reply's Copy puts on the clipboard: each text block as the words
  *  MobileMarkdown draws for it, not its Markdown source. A sent prompt is
- *  drawn as typed, so the menu a hold opens gives `nativeChatMessageText`. A visual line
+ *  drawn as typed, so the menu a hold opens gives `nativeChatPromptPlainText`; a hold on a reply's run gives this too. A visual line
  *  (`::orca-visual{...}`, Orca #26071) is not prose; only the transcript can
  *  show it, so it is left out (one inside a code fence stays). */
 export function nativeChatReplyPlainText(blocks: readonly NativeChatBlock[]): string {

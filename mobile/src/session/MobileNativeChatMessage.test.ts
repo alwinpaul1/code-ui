@@ -206,17 +206,17 @@ describe('MobileNativeChatMessage', () => {
   })
 
   // The subagent transcript draws the lead's task prompt as Markdown. Its hold's
-  // Copy gives the prompt as it arrived, as the Claude app's menu gives every
-  // message's text (2026-10-15); only the reply's own Copy control gives words
-  // as drawn.
-  it('copies a prompt drawn as Markdown as it arrived, from the menu a hold opens', async () => {
+  // Copy gives the words the prompt shows, not its Markdown source: the Claude
+  // app's menu gives the source, Code UI gives plain text by the user's choice
+  // (2026-10-15).
+  it('copies a prompt drawn as Markdown as plain words, from the menu a hold opens', async () => {
     const clipboard = await import('expo-clipboard')
     vi.mocked(clipboard.setStringAsync).mockClear()
     const tree = render(userMessage([{ type: 'text', text: '**Task:** run `npm test` and report' }]), {
       promptsAsMarkdown: true
     })
     await holdThenChoose(tree.root, 'Copy')
-    expect(clipboard.setStringAsync).toHaveBeenCalledWith('**Task:** run `npm test` and report')
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith('Task: run npm test and report')
   })
 
   it('does not make the prompt text a selection target, so the hold reaches the bubble', () => {

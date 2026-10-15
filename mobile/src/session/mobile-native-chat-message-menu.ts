@@ -11,7 +11,9 @@
 // The list is built in one place (dexdump of classes3.dex, the method that
 // makes each TimelineDisplayRow): Copy and Select text are added together, both
 // with the row's `Prose.text` (npy.c, the message text as it arrived, Markdown
-// source and all), and only when that text is not blank. A row that is not
+// source and all), and only when that text is not blank. Code UI differs on
+// purpose, by the user's choice (2026-10-15): it gives the words as drawn,
+// without Markdown marks, and a message that is only markup offers nothing. A row that is not
 // prose (a tool call, a thought) gets no menu, and a row with nothing to offer
 // gets no hold at all (g7q.java:595).
 //

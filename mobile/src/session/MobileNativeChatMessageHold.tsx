@@ -71,8 +71,8 @@ function measureHeld(
 
 /**
  * A message row's hold: which text a hold offers, the menu it opens and the Select text sheet.
- * Copy and Select text give the words as they arrived, Markdown source and all, as the Claude
- * app's give `Prose.text` (mobile-native-chat-message-menu.ts). Nothing is mounted until a hold
+ * Copy and Select text give the words as drawn, without Markdown marks. The Claude app gives
+ * `Prose.text`, the Markdown source; Code UI gives plain text by the user's choice (2026-10-15). Nothing is mounted until a hold
  * asks for it (a list of rows carries no menu or sheet per row), and the words are kept until
  * their sheet has left the screen.
  *

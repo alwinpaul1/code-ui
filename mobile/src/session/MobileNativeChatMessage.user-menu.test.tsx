@@ -99,6 +99,7 @@ vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 import * as Clipboard from 'expo-clipboard'
 import { triggerSuccess } from '../platform/haptics'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { markdownPlainText } from '../components/markdown-plain-text'
 
 const prompt = (blocks: NativeChatBlock[], id = 'u1'): NativeChatMessage => ({
   id,
@@ -206,11 +207,11 @@ describe.each([
       expect(bubble(root).props.delayLongPress).toBe(400)
     })
 
-    it('copies the words as typed, Markdown marks and all, from Copy, and tints the bubble', async () => {
+    it('copies the words as typed without their Markdown marks, from Copy, and tints the bubble', async () => {
       const root = render(prompt([{ type: 'text', text: TYPED }]), scheme)
       await hold(root)
       await act(async () => row(root, 'Copy').props.onPress())
-      expect(Clipboard.setStringAsync).toHaveBeenCalledWith(TYPED)
+      expect(Clipboard.setStringAsync).toHaveBeenCalledWith(markdownPlainText(TYPED))
       expect(triggerSuccess).toHaveBeenCalledTimes(1)
       expect(flat(bubble(root).props.style).backgroundColor).toBe(palette.successSoft)
       expect(selectBody(root)).toBeUndefined()
@@ -225,7 +226,8 @@ describe.each([
       const body = selectBody(root)
       expect(body).toBeDefined()
       expect(body!.props.selectable).toBe(true)
-      expect(words(body!)).toBe(TYPED)
+      expect(words(body!)).toBe(markdownPlainText(TYPED))
+      expect(words(body!)).not.toMatch(/\*\*|`/)
       expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
     })
 
@@ -343,7 +345,7 @@ describe('a prompt of one character', () => {
 })
 
 describe('a prompt the lead agent wrote, drawn as Markdown', () => {
-  it('selects the prompt as it arrived, as the Claude app’s Select text holds every message', async () => {
+  it('selects the prompt as the words it shows, not its Markdown source (Claude gives the source; Code UI gives plain text, by the user’s choice)', async () => {
     const root = render(
       prompt([{ type: 'text', text: '**Task:** run `npm test` and report' }]),
       'light',
@@ -353,7 +355,7 @@ describe('a prompt the lead agent wrote, drawn as Markdown', () => {
     )
     await hold(root)
     await act(async () => row(root, 'Select text').props.onPress())
-    expect(words(selectBody(root)!)).toBe('**Task:** run `npm test` and report')
+    expect(words(selectBody(root)!)).toBe('Task: run npm test and report')
   })
 })
 

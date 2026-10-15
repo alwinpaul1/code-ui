@@ -71,6 +71,7 @@ vi.mock('../components/BottomDrawer', async () => {
 })
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { markdownPlainText } from '../components/markdown-plain-text'
 import { agentMessageRow } from './mobile-native-chat-agent-messages'
 import { holdThenChoose } from './user-message-menu.test-support'
 
@@ -134,7 +135,7 @@ describe('a code block in the chat', () => {
 
   // A prompt the user wrote in Markdown draws the fence as the Claude app
   // does, in the reply's card with its own Copy (recording, 2026-10-14); the
-  // menu a hold on the bubble opens still copies the whole prompt as typed
+  // menu a hold on the bubble opens copies the whole prompt as plain words
   // (2026-09-21).
   it('has it on a prompt the user wrote in Markdown, and the menu a hold opens still copies the whole prompt', async () => {
     const tree = mount(createElement(MobileNativeChatMessage, { message: message('user', REPLY) }))
@@ -142,9 +143,9 @@ describe('a code block in the chat', () => {
     expect(others).toHaveLength(0)
     await press(button!)
     expect(pasteboard.written).toEqual([CODE])
-    // A hold opens the message menu now; its Copy gives the prompt as typed.
+    // A hold opens the message menu now; its Copy gives the prompt without its Markdown marks.
     await holdThenChoose(tree.root, 'Copy')
-    expect(pasteboard.written).toEqual([CODE, REPLY])
+    expect(pasteboard.written).toEqual([CODE, markdownPlainText(REPLY)])
   })
 
   it('adds nothing to a prompt the user typed in plain words', () => {

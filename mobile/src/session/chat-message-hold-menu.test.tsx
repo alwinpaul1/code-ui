@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 // trigger hold to copy." The Claude app (com.anthropic.claude 1.261009.20) selects nothing in
 // place on a Code session's timeline. A hold on a prose row, Claude's or the user's, buzzes,
 // holds the message and hangs a menu card from it: Copy and Select text (rgs.java:85-110,
-// t030.t), each with the row's text as it arrived. Select text opens a sheet with that text in
+// t030.t), each with the row's words as drawn (Claude gives the Markdown source; Code UI gives plain text, by the user's choice, 2026-10-15). Select text opens a sheet with that text in
 // a SelectionContainer (code/remote/bottomsheet/b.java:2349-2362). Before this, a hold on a reply
 // started Android's selection in the list, which a finger stopping a fling could start too.
 
@@ -84,6 +84,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { CHAT_HOLD_MS } from './chat-message-hold'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { markdownPlainText } from '../components/markdown-plain-text'
 
 const REPLY = ['First paragraph of the reply.', '', 'Second, with **bold** and `code`.', '', '- one item', '- another item'].join(
   '\n'
@@ -196,11 +197,12 @@ describe.each([
     expect(card.left).toBeUndefined()
   })
 
-  it('copies the reply as it arrived, Markdown marks and all, and puts the message down', async () => {
+  it('copies the reply as the words it shows, without its Markdown marks, and puts the message down', async () => {
     const root = render(message('assistant', REPLY), scheme)
     await holdStill(holdTarget(root))
     await choose(root, 'Copy')
-    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(REPLY)
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith(markdownPlainText(REPLY))
+    expect(markdownPlainText(REPLY)).not.toMatch(/\*\*|`/)
     expect(menu(root)).toBeUndefined()
   })
 
@@ -223,7 +225,8 @@ describe.each([
     const body = selectBody(root)
     expect(body).toBeDefined()
     expect(body!.props.selectable).toBe(true)
-    expect(words(body!)).toBe(REPLY)
+    expect(words(body!)).toBe(markdownPlainText(REPLY))
+    expect(words(body!)).not.toMatch(/\*\*|`/)
     expect(flat(body!.props.style).color).toBe(palette.askText)
   })
 
@@ -335,6 +338,14 @@ describe('sizes at the edges', () => {
     const root = render(message('assistant', long))
     await holdStill(holdTarget(root))
     await choose(root, 'Select text')
+    // Plain lines read the same with or without the pass: nothing is cut.
+    expect(words(selectBody(root)!)).toBe(markdownPlainText(long))
     expect(words(selectBody(root)!)).toBe(long)
+  })
+
+  // A message that is only markup draws as nothing; its plain text is empty, so it offers no menu.
+  it.each([['empty bold marks', '****'], ['an empty fence', '```\n```']])('gives %s alone nothing to hold', (_label, text) => {
+    expect(holdTargets(render(message('assistant', text)))).toEqual([])
+    expect(holdTargets(render(message('user', text)))).toEqual([])
   })
 })

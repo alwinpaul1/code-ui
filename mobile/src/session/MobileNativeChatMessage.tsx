@@ -18,8 +18,8 @@ import { Txt } from '../ui/Txt'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import {
   nativeChatMessageText,
-  nativeChatReplyPlainText,
-  nativeChatReplySource
+  nativeChatPromptPlainText,
+  nativeChatReplyPlainText
 } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
@@ -329,7 +329,7 @@ function MobileNativeChatMessageRow({
     copy(text)
   }
   // A sent prompt is held whole, from its bubble; a reply by each run of its words, from that run.
-  const holdBubble = isUser ? holdOn(nativeChatMessageText(drawn), true) : undefined
+  const holdBubble = isUser ? holdOn(nativeChatPromptPlainText(drawn), true) : undefined
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
   const sentPromptControls =
@@ -401,7 +401,7 @@ function MobileNativeChatMessageRow({
               // No line beside the agent's own words, interim or final
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
-                <ProseHold onHold={isAgent ? holdOn(nativeChatReplySource(segment.blocks), false) : undefined}>
+                <ProseHold onHold={isAgent ? holdOn(nativeChatReplyPlainText(segment.blocks), false) : undefined}>
                 {groupProseBlocks(segment.blocks).map((group, index, groups) => (
                   // Air between a picture and the caption under it, and
                   // between pictures that follow each other.

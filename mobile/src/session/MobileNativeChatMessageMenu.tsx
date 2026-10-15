@@ -117,7 +117,7 @@ export function MobileNativeChatMessageMenu({
 /**
  * The sheet Select text opens (com.anthropic.claude 1.261009.20: CodeRemoteBottomSheetDestination
  * .SelectText, drawn by bottomsheet/b.java:2349-2362): titled "Select text", holding one Text in a
- * SelectionContainer, the message's text as it arrived, in the body face and primary ink. A hold
+ * SelectionContainer, the message's words as drawn, without Markdown marks (the Claude app shows the source; Code UI's choice, 2026-10-15), in the body face and primary ink. A hold
  * on the words starts Android's own selection with its handles and toolbar; there is no Copy
  * button of the sheet's own. Not draggable by its content: a drag meant to extend a selection
  * must not move the sheet. The cross, the scrim and Back close it.
