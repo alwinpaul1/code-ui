@@ -89,7 +89,7 @@ function render(prompt: AskPrompt, scheme: Scheme = 'light', onAnswer = vi.fn(as
   act(() => {
     tree = create(
       createElement(
-        ThemeProvider,
+        ThemeProvider as never,
         { initialPreference: scheme },
         createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel: async () => true })
       )
