@@ -157,8 +157,8 @@ export function useMobileNativeChatController(
   // A matched Claude tab's live state from Anthropic: with the relay down and Anthropic's stream
   // live, it drives working/idle and the running count (claude-chat-live.ts).
   const nativeChatAnthropicLive = useMemo(
-    () => claudeChatLive({ live: claudeApi.live, linkPhase: claudeApi.linkPhase, connectionStatus: claudeApi.connectionStatus, relayConnected: connState === 'connected' }),
-    [claudeApi.live, claudeApi.linkPhase, claudeApi.connectionStatus, connState]
+    () => claudeChatLive({ live: claudeApi.live, linkPhase: claudeApi.linkPhase, connectionStatus: claudeApi.connectionStatus, relayConnected: connState === 'connected', stream: claudeApi.gate.kind === 'matched' ? { events: claudeApi.events, accountId: claudeApi.gate.accountId, sessionId: claudeApi.gate.sessionId } : null }),
+    [claudeApi.live, claudeApi.linkPhase, claudeApi.connectionStatus, connState, claudeApi.gate, claudeApi.events]
   )
   const nativeChatAgentWorking =
     nativeChatAnthropicLive?.working ?? (nativeChatStreamLive && (activeChatStructured || activeChatResolution != null))

@@ -162,14 +162,18 @@ export type ScreenTaskCompletion = { label: string; status: string; launchIds?: 
  *  host never made. */
 export type BackgroundTaskKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'unknown'
 /** `finished` is a shell the agent's own footer count retired: over, outcome
- *  unseen. `completed` and `failed` come from a notification that said so. */
-export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'finished'
+ *  unseen. `completed` and `failed` come from a notification that said so;
+ *  `stopped` only from Anthropic's task events (ccr-background-tasks.ts). */
+export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'stopped' | 'finished'
 
 /** `stopLabel`: what a terminal tab's Stop selects in Claude's Background dialog
  *  (a shell's command, an agent's description; claude-background-dialog.ts). */
 export type BackgroundTask = Pick<Launch, 'stopLabel'> & {
   /** Claude's own task id — a shell's `bzp6f42la`, or a subagent's `agentId`. */
   id: string
+  /** The `toolu_…` id of the call that launched it, where the source states it (Anthropic's
+   *  `task_started`): what an agent's "View transcript" finds its Agent call by. */
+  toolUseId?: string
   kind: BackgroundTaskKind
   title: string
   status: BackgroundTaskStatus

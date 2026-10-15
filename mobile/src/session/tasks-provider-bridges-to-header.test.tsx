@@ -20,6 +20,7 @@ vi.mock('./MobileNativeChatRunSheet', () => ({ MobileNativeChatRunSheet: () => n
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('./MobileBackgroundShellOutputSheet', () => ({ MobileBackgroundShellOutputSheet: () => null }))
 vi.mock('./MobileNativeChatAgentToolCalls', () => ({ MobileNativeChatAgentToolCalls: () => null }))
+vi.mock('./MobileBackgroundTaskTranscriptPage', () => ({ BACKGROUND_TASK_TRANSCRIPT_PAGE: null }))
 vi.mock('./subagent-transcript-store', () => ({
   followSubagentTranscriptRunning: () => () => {},
   openSubagentTranscript: () => {}

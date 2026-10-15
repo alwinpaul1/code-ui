@@ -13,6 +13,7 @@ import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
+import { BACKGROUND_TASK_TRANSCRIPT_PAGE } from './MobileBackgroundTaskTranscriptPage'
 import { MobileBackgroundTasksSheet, type BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 import { MobileBackgroundShellOutputSheet } from './MobileBackgroundShellOutputSheet'
 import type { BackgroundTask } from './mobile-background-tasks'
@@ -199,6 +200,7 @@ export function MobileNativeChatTasksProvider({
           connection={hostConnection}
           subagentSource={subagentSource}
           onShowOutput={showShellOutput}
+          transcriptPage={BACKGROUND_TASK_TRANSCRIPT_PAGE}
           onAfterClose={finishTasksSheet}
           onClose={() => setSheetOpen(false)}
         />

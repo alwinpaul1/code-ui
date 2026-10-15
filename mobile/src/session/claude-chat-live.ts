@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { CcrLiveState, CcrRateLimitState } from './ccr-live-state'
+import type { CcrEvent } from './ccr-session-api'
 import type { CcrLinkPhase } from './ccr-session-link-types'
 import type { ClaudeFooterLiveInput } from './claude-working-footer-stats'
 import type { ConnectionState } from '../transport/types'
@@ -32,13 +33,20 @@ export type ClaudeChatLive = {
   linkLive: boolean
   /** The newest `rate_limit_event`, for the limit banner; null when none was read. */
   rateLimit: CcrRateLimitState | null
+  /** While the stream is live: its events and the session they are in, for the Background tasks
+   *  sheet's list, its Stop and its agents' transcripts (ccr-background-tasks.ts); else null. */
+  stream: ClaudeChatLiveStream | null
 }
+
+export type ClaudeChatLiveStream = { events: readonly CcrEvent[]; accountId: string; sessionId: string }
 
 export function claudeChatLive(input: {
   live: CcrLiveState | null
   linkPhase: CcrLinkPhase | null
   connectionStatus: string | null
   relayConnected: boolean
+  /** The matched session and its events; absent or null leaves `stream` null. */
+  stream?: ClaudeChatLiveStream | null
 }): ClaudeChatLive | null {
   const { live } = input
   if (!live) {
@@ -61,7 +69,8 @@ export function claudeChatLive(input: {
     runningCount: linkLive ? live.runningTasks : null,
     sessionConnection,
     linkLive,
-    rateLimit: live.rateLimit
+    rateLimit: live.rateLimit,
+    stream: linkLive ? (input.stream ?? null) : null
   }
 }
 
