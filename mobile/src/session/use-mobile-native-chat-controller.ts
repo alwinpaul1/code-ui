@@ -383,7 +383,7 @@ export function useMobileNativeChatController(
         ? { tabId: activeSessionTabId, sessionId: activeChatSessionId }
         : null,
     terminalHandleRef: activeHandleRef,
-    messages: nativeChatSession.messages,
+    messages: drawnSession.messages,
     localPreviews: chatImagePreviewsByMessageIdLocal, remote: ccrImages
   })
   useMobilePermissionRefresh(reportedNativeChatPermission, refreshTerminalHud)
