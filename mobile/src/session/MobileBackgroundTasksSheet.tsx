@@ -15,6 +15,9 @@ import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useSubagentActivityWatch, type SubagentActivitySource } from './use-subagent-activity-watch'
+import { useClaudeChatLive, type ClaudeChatLiveStream } from './claude-chat-live'
+import { useCcrBackgroundTaskLane, useCcrTaskStops, type CcrStopTask } from './use-ccr-background-task-lane'
+import { agentTaskPairs, findAgentTaskPair, type BackgroundTaskTranscriptPage } from './mobile-background-task-agent-pairs'
 
 /** Whether the sheet's host is reachable, and which connection it is on. */
 export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
@@ -26,9 +29,16 @@ const TICK_MS = 1000
 
 /** The list of background work the agent has in flight and has finished. A
  *  terminal-driven tab has only the transcript the chat view already holds; a
- *  structured tab gets the provider's own roster from the host. It lists and
- *  stops nothing: no row carries a Stop, at the user's ask (2026-10-11;
- *  no-stop.test.tsx), though the Claude app's rows carry one. */
+ *  structured tab gets the provider's own roster from the host.
+ *
+ *  Since 2026-10-15 (the user: "same like Claude Mobile", and the running tasks
+ *  in Claude and Code UI must be the same): a Claude tab whose Anthropic stream
+ *  is live lists what the Claude app lists, from the same events
+ *  (ccr-background-tasks.ts), with its Stop on each running row and "View
+ *  transcript" on each agent whose Agent call is in the conversation; that link
+ *  pushes the call's page into this same sheet, with a back arrow
+ *  (MobileBackgroundTaskTranscriptPage.tsx). The desktop's lanes stay as they
+ *  were when the stream is not live: no Stop (no-stop.test.tsx). */
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
@@ -39,7 +49,9 @@ export function MobileBackgroundTasksSheet({
   subagentSource = null,
   onShowOutput,
   onAfterClose,
-  onClose
+  onClose,
+  stopTask,
+  transcriptPage = null
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
@@ -55,7 +67,17 @@ export function MobileBackgroundTasksSheet({
   /** Fires once the sheet has left the screen. */
   onAfterClose?: () => void
   onClose: () => void
+  /** Sends a Stop on Anthropic's lane; tests replace it. */
+  stopTask?: CcrStopTask
+  /** An agent's "View transcript" page (mobile-background-task-agent-pairs.ts); null offers no link. */
+  transcriptPage?: BackgroundTaskTranscriptPage | null
 }) {
+  const stream = useClaudeChatLive()?.stream ?? null
+  const [page, setPage] = useState<BackgroundTask | null>(null)
+  const pairs = useMemo(() => (visible && transcriptPage ? agentTaskPairs(messages) : null), [messages, transcriptPage, visible])
+  const pagePair = page && pairs ? findAgentTaskPair(pairs, page) : null
+  const livePage = useLivePageTask(page, stream)
+  const shownPage = page && transcriptPage ? (livePage ?? page) : null
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     // The title rides above the list rather than in it, so it stays in view
@@ -63,12 +85,24 @@ export function MobileBackgroundTasksSheet({
     <BottomDrawer
       visible={visible}
       onClose={onClose}
-      onAfterClose={onAfterClose}
+      onAfterClose={() => {
+        setPage(null)
+        onAfterClose?.()
+      }}
       dragContentToDismiss
       dismissKeyboardOnOpen
       expandable
-      header={<MobileBackgroundTasksSheetHeader onClose={onClose} />}
+      header={
+        shownPage && transcriptPage ? (
+          transcriptPage.header({ task: shownPage, pair: pagePair, onBack: () => setPage(null) })
+        ) : (
+          <MobileBackgroundTasksSheetHeader onClose={onClose} />
+        )
+      }
     >
+      {shownPage && transcriptPage ? transcriptPage.body({ task: shownPage, pair: pagePair, stream }) : null}
+      {/* Kept mounted under the page, so Back finds the list as it was left. */}
+      <View style={shownPage ? { display: 'none' } : null}>
       <MobileBackgroundTasksSheetBody
         messages={messages}
         agentStatus={agentStatus ?? null}
@@ -77,9 +111,21 @@ export function MobileBackgroundTasksSheet({
         connection={connection}
         subagentSource={visible ? subagentSource : null}
         onShowOutput={onShowOutput}
+        stream={stream}
+        stopTask={stopTask}
+        canViewTranscript={pairs ? (task) => findAgentTaskPair(pairs, task) !== null : undefined}
+        onViewTranscript={setPage}
       />
+      </View>
     </BottomDrawer>
   )
+}
+
+/** The page's task as the stream has it now (its status moves while the page is up); the row as
+ *  tapped when the stream is not live. */
+function useLivePageTask(task: BackgroundTask | null, stream: ClaudeChatLiveStream | null): BackgroundTask | null {
+  const lane = useCcrBackgroundTaskLane(task ? stream : null, 0)
+  return lane && task ? ([...lane.running, ...lane.finished].find((row) => row.id === task.id) ?? null) : null
 }
 
 /** The sheet's title and close cross. The drawer pins it above the list. */
@@ -102,7 +148,11 @@ export function MobileBackgroundTasksSheetBody({
   hostBackgroundTasks,
   connection,
   subagentSource = null,
-  onShowOutput
+  onShowOutput,
+  stream = null,
+  stopTask,
+  canViewTranscript,
+  onViewTranscript
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
@@ -115,6 +165,12 @@ export function MobileBackgroundTasksSheetBody({
   subagentSource?: SubagentActivitySource | null
   /** Makes each finished shell's row open its output. */
   onShowOutput?: (task: BackgroundTask) => void
+  /** Anthropic's live stream: its tasks replace the desktop's, and its rows can be stopped. */
+  stream?: ClaudeChatLiveStream | null
+  stopTask?: CcrStopTask
+  /** Whether an agent row's Agent call is in the conversation, so its transcript can open. */
+  canViewTranscript?: (task: BackgroundTask) => boolean
+  onViewTranscript?: (task: BackgroundTask) => void
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -143,14 +199,18 @@ export function MobileBackgroundTasksSheetBody({
   // An agent a read subagent launched is listed while the host's roster holds
   // it (the Claude app lists them; `mobile-subagent-activity.ts`).
   const hostSubagents = (agentStatus ?? backgroundTaskReport?.heldAgentStatus ?? null)?.subagents ?? null
+  const anthropic = useCcrBackgroundTaskLane(stream, now)
   const watched = useSubagentActivityWatch({
     tasks: lane.tasks,
-    source: lane.structured ? null : subagentSource,
+    source: lane.structured || anthropic ? null : subagentSource,
     report: backgroundTaskReport,
     hostSubagents,
     now
   })
-  const { running, finished } = watched
+  const { running, finished } = anthropic ?? watched
+  const stops = useCcrTaskStops(anthropic ? stream : null, running, stopTask)
+  // Only on Anthropic's lane: the desktop's rows have offered no link since 2026-10-10.
+  const viewTranscript = anthropic && onViewTranscript && canViewTranscript ? (task: BackgroundTask) => canViewTranscript(task) : () => false
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -163,12 +223,12 @@ export function MobileBackgroundTasksSheetBody({
   return (
     // Claude's list sits 24 dp in from the screen's edges, 12 dp further than
     // the drawer's own padding, and leaves 24 dp between Running and Finished.
-    // No Stop all at Running's right and no Stop on a row: the user asked for
-    // both gone (2026-10-11). The Claude app has no Stop all, but does draw a
-    // Stop on each running row.
+    // No Stop all at Running's right (the Claude app has none). A row's own
+    // Stop is drawn only on Anthropic's lane (2026-10-15, "same like Claude
+    // Mobile"); the desktop's lanes keep none, as asked on 2026-10-11.
     <View style={{ paddingBottom: space.md, paddingHorizontal: space.md, gap: space.xl }}>
       <BackgroundTasksSection title="Running" open={runningOpen} onToggle={() => setRunningOpen((open) => !open)}>
-        {disconnected && running.length > 0 ? (
+        {disconnected && !anthropic && running.length > 0 ? (
           <Txt variant="caption" tone="muted">
             Status unknown — reconnecting
           </Txt>
@@ -178,9 +238,21 @@ export function MobileBackgroundTasksSheetBody({
             count already says how much is running, and the labels were noise
             above a short list. This supersedes the 2026-09-14 ask to show the
             two kinds as separate labelled groups. */}
+        {stops.failed ? (
+          <Txt variant="caption" tone="danger">
+            {stops.failed}
+          </Txt>
+        ) : null}
         {running.length > 0 ? (
           running.map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} statusUnknown={disconnected} />
+            <BackgroundTaskCard
+              key={task.id}
+              task={task}
+              statusUnknown={disconnected && !anthropic}
+              onStop={stops.stop ?? undefined}
+              stopping={stops.stopping.has(task.id)}
+              onViewTranscript={viewTranscript(task) ? onViewTranscript : undefined}
+            />
           ))
         ) : (
           <Txt variant="caption" tone="muted">
@@ -201,7 +273,7 @@ export function MobileBackgroundTasksSheetBody({
           onToggle={() => setFinishedOpen((open) => !open)}
         >
           {finished.slice(0, finishedShown).map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} onShowOutput={onShowOutput} />
+            <BackgroundTaskCard key={task.id} task={task} onShowOutput={onShowOutput} onViewTranscript={viewTranscript(task) ? onViewTranscript : undefined} />
           ))}
           {finished.length > finishedShown ? (
             <LoadMoreFinished onPress={() => setFinishedShown((shown) => shown + FINISHED_PAGE)} />

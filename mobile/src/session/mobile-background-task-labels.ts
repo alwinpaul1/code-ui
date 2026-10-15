@@ -51,6 +51,8 @@ export function backgroundTaskStatusLabel(status: BackgroundTaskStatus): string 
       return 'Completed'
     case 'failed':
       return 'Failed'
+    case 'stopped':
+      return 'Stopped'
     case 'finished':
       // Retired by the agent's own shell count, not by a notification: the
       // phone knows it ended, not how (mobile-background-tasks.ts).

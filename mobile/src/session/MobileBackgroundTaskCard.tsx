@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native'
-import { Activity, ChevronRight, Diamond, ListTree, SquareCode } from 'lucide-react-native'
+import { Activity, ChevronRight, CircleStop, Diamond, ListTree, SquareCode } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
@@ -15,16 +15,24 @@ import {
  * One task, as the Claude Android app's Background tasks sheet draws it (screenshot, 2026-10-10;
  * re-measured beside Code UI on the same phone, 2026-10-11): a card darker than the sheet with the
  * kind's glyph, a 14/19 semibold title (two lines at most), then the kind in the title's ink and its
- * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. No card carries a
- * Stop: the user asked for the round one at the right gone (2026-10-11, no-stop.test.tsx), though
- * the Claude app does draw one (docs/mobile-background-tasks.md, "No Stop on any row"). The fork's
- * "View transcript" link is gone (2026-10-10, not in Orca). A finished shell given `onShowOutput`
- * is tappable, with a chevron at its right, as the Claude app's "Show output" row is (parity G27).
+ * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. A finished shell
+ * given `onShowOutput` is tappable, with a chevron at its right, as the Claude app's "Show output"
+ * row is (parity G27).
+ *
+ * Since 2026-10-15 ("same like Claude Mobile"), as the app's row (`dt2.b`, 1.261013.20): a running
+ * row given `onStop` carries the round Stop at its right ("Stop task: <title>" to TalkBack, so each
+ * row's button says which task it stops), and reads "Stopping…" in
+ * place of its time from the press until it ends; an agent given `onViewTranscript` has the
+ * "View transcript" link under its meta line. The sheet passes them only on Anthropic's lane
+ * (MobileBackgroundTasksSheet.tsx); the desktop's rows still carry neither (no-stop.test.tsx).
  */
 export function MobileBackgroundTaskCard({
   task,
   statusUnknown = false,
-  onShowOutput
+  onShowOutput,
+  onStop,
+  stopping = false,
+  onViewTranscript
 }: {
   task: BackgroundTask
   /** No connection to the host: a running row cannot say it runs, so its time reads "Status
@@ -32,6 +40,12 @@ export function MobileBackgroundTaskCard({
   statusUnknown?: boolean
   /** Opens a finished shell's output; ignored on any other row. */
   onShowOutput?: (task: BackgroundTask) => void
+  /** Stops a running row; absent draws no Stop. */
+  onStop?: (task: BackgroundTask) => void
+  /** A Stop was sent and the row has not ended yet. */
+  stopping?: boolean
+  /** Opens an agent's transcript; absent draws no link. */
+  onViewTranscript?: (task: BackgroundTask) => void
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
@@ -40,6 +54,8 @@ export function MobileBackgroundTaskCard({
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'
   const showOutput = onShowOutput && task.kind === 'shell' && !running ? () => onShowOutput(task) : null
+  const stop = onStop && running && !stopping && !statusUnknown ? () => onStop(task) : null
+  const viewTranscript = onViewTranscript && task.kind === 'agent' ? () => onViewTranscript(task) : null
   const card = (
     <View
       testID="background-task-card"
@@ -72,6 +88,10 @@ export function MobileBackgroundTaskCard({
             <Txt variant="caption" tone="muted">
               Status unknown
             </Txt>
+          ) : running && stopping ? (
+            <Txt variant="caption" tone="muted">
+              Stopping…
+            </Txt>
           ) : running ? (
             elapsed ? (
               <Txt variant="caption" tone="muted">
@@ -89,7 +109,25 @@ export function MobileBackgroundTaskCard({
             </Txt>
           ) : null}
         </View>
+        {viewTranscript ? (
+          <Pressable accessibilityRole="link" hitSlop={8} onPress={viewTranscript} style={({ pressed }) => ({ alignSelf: 'flex-start', marginTop: 2, opacity: pressed ? 0.6 : 1 })}>
+            <Txt variant="caption" tone="accent">
+              View transcript
+            </Txt>
+          </Pressable>
+        ) : null}
       </View>
+      {stop ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Stop task: ${task.title}`}
+          hitSlop={8}
+          onPress={stop}
+          style={({ pressed }) => ({ height: TITLE_LINE, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+        >
+          <CircleStop size={20} color={colors.textSecondary} />
+        </Pressable>
+      ) : null}
       {showOutput ? (
         <View style={{ height: TITLE_LINE, justifyContent: 'center' }}>
           <ChevronRight size={16} color={colors.textMuted} />
