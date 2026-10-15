@@ -68,6 +68,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Modal: ({ children, ...props }: { children?: ReactNode }) => React.createElement('Modal', props, children),
     Platform: { OS: 'android', Version: 34 },
+    Keyboard: { metrics: () => undefined },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -201,19 +202,20 @@ describe.each([
       const root = render(prompt([{ type: 'text', text: TYPED }]), scheme)
       expect(menuRows(root)).toEqual([])
       await hold(root)
-      expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+      expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
       expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
       expect(bubble(root).props.accessibilityHint).toBe('Hold for options')
       expect(bubble(root).props.delayLongPress).toBe(400)
     })
 
-    it('copies the words as typed without their Markdown marks, from Copy, and tints the bubble', async () => {
+    it('copies the words as typed without their Markdown marks, from Copy message, leaving the bubble as it is', async () => {
       const root = render(prompt([{ type: 'text', text: TYPED }]), scheme)
       await hold(root)
-      await act(async () => row(root, 'Copy').props.onPress())
+      await act(async () => row(root, 'Copy message').props.onPress())
       expect(Clipboard.setStringAsync).toHaveBeenCalledWith(markdownPlainText(TYPED))
-      expect(triggerSuccess).toHaveBeenCalledTimes(1)
-      expect(flat(bubble(root).props.style).backgroundColor).toBe(palette.successSoft)
+      // The system confirms the copy (Android 13 and later), as for the Claude app: no buzz, no tint.
+      expect(triggerSuccess).not.toHaveBeenCalled()
+      expect(flat(bubble(root).props.style).backgroundColor).not.toBe(palette.successSoft)
       expect(selectBody(root)).toBeUndefined()
     })
 
@@ -258,7 +260,7 @@ describe.each([
       await act(async () => (sheet.onClose as () => void)())
       expect(selectBody(root)).toBeUndefined()
       await hold(root)
-      expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+      expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
       expect(selectBody(root)).toBeUndefined()
     })
   }
@@ -271,7 +273,7 @@ describe('the menu on a message still waiting behind a running turn', () => {
       onCancelQueued
     })
     await hold(root)
-    expect(menuRows(root)).toEqual(['Undo send', 'Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Undo send', 'Copy message', 'Select text'])
     await act(async () => row(root, 'Undo send').props.onPress())
     expect(onCancelQueued).toHaveBeenCalledTimes(1)
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
@@ -375,7 +377,7 @@ describe('a cell the list recycles for another message', () => {
   it('does not carry an open menu over to the next prompt bound to it', async () => {
     const root = render(prompt([{ type: 'text', text: 'first words' }], 'u1'))
     await hold(root)
-    expect(menuRows(root)).toEqual(['Copy', 'Select text'])
+    expect(menuRows(root)).toEqual(['Copy message', 'Select text'])
     bind(prompt([{ type: 'text', text: 'second words' }], 'u2'))
     expect(menuRows(root)).toEqual([])
   })

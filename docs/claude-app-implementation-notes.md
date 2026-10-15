@@ -616,11 +616,90 @@ through `ipq` to `npq.f`. Who wrote it is `gjz.b`: `bfz` is "Claude", `dfz`
 | Row kind | What a long press does | Citation |
 |---|---|---|
 | Claude's prose | Selects the word under the finger in place, with handles and the Copy / Select all bar. No menu, no sheet. One selection per **text block**: its paragraphs, list items, inline code and code fences select together; another text block of the same message is a separate selection. | `npq.f` else-branch → `oy6` → `npq.a` → `kpq` case 0/1 → `gy30.a` → `gy30.j(k2v block, z82 parsed, ...)`: a `tpy` text block with its parsed Markdown (`z82` from `tsf.b(index)`) is drawn inside `t8i.o(... yz10 ...)` (gy30.java:31865 and its duplicates) |
-| The user's own prompt | Holds the message and opens the menu card: Copy, Select text (and Reply, Edit, which Code UI has no action for). The bubble has no SelectionContainer. | `npq.f` `gjz.e()` branch → `hpq` → `gy30.d` (plain `ewy.b` Texts, no `t8i.o`); menu items built in `ds8` (`yhz` Copy, `eiz` Select text, `zhz` Edit, `diz` Reply), drawn by `l1s`, chosen through `wjz` (Select text → `CodeRemoteBottomSheetDestination.SelectText`, pl6 case 11) |
+| The user's own prompt | Holds the message and opens a Material dropdown card under it: **Copy message**, **Select text** (below). The bubble has no SelectionContainer. | `npq.f` `gjz.e()` branch → `hpq` → `gy30.d` (plain `ewy.b` Texts, no `t8i.o`); the card is `qs30.a` filled by `gy30.e`, its actions the `el4` built in `ay8.E` (Copy → `jw8` case 2, Select text → `ae8` case 28 → `CodeRemoteBottomSheetDestination.SelectText`). The `ds8` list (`yhz` Copy, `eiz` Select text, `zhz` Edit, `diz` Reply) drawn by `l1s.h` with `generic_copy` "Copy" is a different menu; where it is drawn was not traced, and it is not the card in the 2026-10-15 recording |
 | The row's long-press modifier | `qs30.A(lyl, gjz.e())`: for Claude's rows a `detectTapGestures(onLongPress = open)` (`l87` case 4 → `ojy.f`); for the user's a right-click / stylus button only (`qu7.a` → `pu7` → `ou7`, buttons & 66) plus an accessibility "Open menu" action. On Claude's prose the SelectionContainer's own long press is what the user sees; whether the row's modifier also fires there was not settled (the screenshot shows no menu). | qs30.java:22-77 |
 | Tool-run rows, thinking | Drawn outside the SelectionContainer; nothing selects. Thinking opens its sheet on a tap (`ViewThinking`). Tool-detail sheets select (`qv30.a`/`r` → `u530.e`). | `fpq.i` switch on `mjz` kinds; qv30.java |
 | A mouse | `kt30.e` wraps some bodies in a selection only once a mouse or stylus has been used (`vkp`: `ukp` Never / Earlier / Now, `zku.b` checks SOURCE_MOUSE / stylus). Not a touch path. | kt30.java:402-497, vkp.java, gmj case 24 |
 | Images / attachments in a prompt | Tap opens the preview; the attachment card takes the message's `open` as its long press. | gy30.java ~7700 (`c(w7v, ..., rsf open)`) |
+
+**The sent prompt's menu (the user's recording, 2026-10-15, app 1.261013.20).**
+Pixel measurements are from the 1080 × 2316 recording at 450 dpi (2.8125 px/dp).
+
+- **What it is.** Material 3's `DropdownMenu`: `qs30.a(gdk state, alignment,
+  content)` puts a zero-size Box at the bubble's corner (`z64.a.a(…, rt3)`,
+  `dlg.B` / `C` / `D` for a bubble drawn at the start / centre / end; a sent
+  prompt is at the end, so `dlg.D`, bottom-end) and hangs `oxb.a` (the app's
+  wrapper of `ccr.d`) from it. Opening is `gdk.b`: `rmg.a(0)`, the long-press
+  haptic, then expanded. Dismissal is `gdk.close` on a tap outside or Back.
+- **Items** (`gy30.e`): `chat_message_bottom_sheet_menu_copy` **"Copy message"**
+  with the `copy` glyph, then `chat_message_bottom_sheet_menu_select` **"Select
+  text"** with the `select` glyph; `dj4` case 0 leaves Select text out for some
+  rows (`!z2 ? el4.b : null`; which rows was not traced). The glyphs are code
+  points of the app's icon font `cds_icon_symbols.ttf` (`wu0`: `copy` U+E056,
+  `select` U+E0D5): two rounded squares, and a page with two text lines and
+  a selection handle at two corners. Code UI draws the same shapes in SVG.
+- **Item layout** (`c530.b` → `jw30.i` → `jw30.h` → `sdd` case 1): each row is
+  a clickable surface inset 4 dp from the card's sides with 12 dp corners; in it
+  a Row `sizeIn(minWidth 112, minHeight 48, maxWidth 280)` padded 12 dp each
+  side, a 20 dp glyph (`jw30.l`), 16 dp, then the label. Colours `jql.b`: label
+  onSurface, glyph onSurfaceVariant; through `e54.x` those are `ym7.O` (#131313
+  light, #F9F9F7 dark) and `ym7.Q` (#7B7974, #97958D). Measured: label starts
+  52 dp from the card's left edge (4 + 12 + 20 + 16), rows 48 dp apart.
+- **Card** (`oxb.a` defaults): shape `ro7.a.f` = 12 dp corners (`gcx.h`); fill
+  `s79.d(36)` = surfaceContainer = `ym7.p`, #FFFFFF light, #20201F dark
+  (measured ≈ #1E1E1E in the dark recording); shadow elevation 3 dp; tonal
+  elevation 0; **no border**; 8 dp above and below the rows. Width is the
+  widest row: 171 dp for "Copy message" in the recording.
+- **Position** (`wdd`, DropdownMenuPositionProvider; candidates `ljl` cases 11
+  and 12; vertical margin 48 dp, horizontal margin 0, content offset 0).
+  Across: start at the anchor, else end at it, else against the window's nearer
+  side. Down: top on the anchor, else bottom on the anchor, else centred on it,
+  else against the nearer window edge; a candidate counts only if the card keeps
+  48 dp from both the top and the bottom, and the last one is clamped inside
+  them. With the anchor at the bubble's bottom-end corner this means: **the
+  card's top is the bubble's bottom with no gap** (measured: bubble ends at
+  577 px, card starts at 578 px) **and its right edge is the bubble's** (both at
+  1035 px). **With no room below, the card's bottom sits on the bubble's
+  bottom, over the bubble's last lines, not above the bubble.** A prompt taller
+  than the screen whose bottom is off screen gets its card pinned 48 dp above
+  the window's foot; one whose bottom has scrolled above the top, 48 dp under
+  the top. The window is Compose's popup window, the visible display frame, so
+  the system bars and the keyboard are outside it.
+- **Motion** (`pql.a`): scale 0.8 → 1 on `ysk.Q(1)` = `tdm.c`,
+  spring(dampingRatio 0.9, stiffness 1400); alpha 0 → 1 on `ysk.Q(4)` = `tdm.f`,
+  spring(1, 3800); the same springs back to 0.8 / 0 on close; the transform
+  origin is where the anchor meets the card (top-right under the bubble,
+  bottom-right over it). The recording shows the card part-faded on one 33 ms
+  frame each way.
+- **No scrim.** Nothing behind the card dims in the recording, and the Popup
+  draws no scrim.
+- **Copy message** (`jw8` case 2 → the screen's copy function → `e730.A`): on
+  API 33 and later the app adds nothing (Android confirms every clipboard write
+  itself); below 33, or when the text was truncated or the copy failed, it
+  posts its own snackbar (`generic_copied_toast` "Copied to clipboard",
+  `generic_copied_truncated_toast`, `generic_copy_failed_toast`). **The
+  "Copied." pill above the composer in the recording is One UI's own
+  clipboard toast, not the app's** (the app has no "Copied." string, and the
+  pill is in Samsung's font). No haptic was found in the copy path.
+- **Select text** (`ae8` case 28 → `CodeRemoteBottomSheetDestination.SelectText`
+  → bottomsheet/b.java `v`): the app's sheet frame (`r2t`, title
+  `chat_message_bottom_sheet_menu_select`, a cross at the start, title centred)
+  around `t8i.o(fillMaxWidth().padding(contentPadding))` holding one Text of
+  the prompt.
+
+**Code UI** (`mobile-native-chat-message-menu.ts`, `MobileNativeChatMessageMenu.tsx`):
+labels, glyphs (SVG redrawn from the font's outlines), row geometry, card
+fill / radius / shadow / no border, the placement algorithm with the anchor at
+the bubble's bottom-end corner (the keyboard counts as outside the window), the
+springs with Material's transform origin, and no scrim all follow the above.
+Copy message neither buzzes nor tints the bubble; below API 33 it shows a
+"Copied to clipboard" Android toast where the app shows its own snackbar.
+Undo send stays first on a waiting message (Code UI's own). Tests:
+`mobile-native-chat-message-menu.test.ts`, `chat-message-hold-menu.test.tsx`.
+Not matched: the row's press feedback is a flat tint, not a ripple; the card
+is placed from a guessed minimum width until its first layout (only the start
+/ end choice depends on it, and for a prompt at the screen's end it never
+changes); text sizes stay Code UI's own.
 
 **Scrolling.** Compose's selection long press and a LazyColumn share the
 pointer: once the list's drag passes the touch slop the long press is
@@ -631,7 +710,7 @@ row (`ChatTextInPlaceSelectionContext`) and back on around a reply's words only
 (`ProseRun`), so a hold on Claude's words starts Android's selection
 (SelectionCopyRootView: Copy and Select all only, clay handles and highlight
 from `chatSelectionColors`, light and dark). The reply's hold menu is gone; the
-user's prompt keeps its menu (Copy, Select text, Undo send). The scroll guard
+user's prompt keeps its menu (Copy message, Select text, Undo send). The scroll guard
 is the document root's `holdSelects`. Tests:
 `chat-reply-hold-selects-in-place.test.tsx`, `chat-message-hold-menu.test.tsx`.
 

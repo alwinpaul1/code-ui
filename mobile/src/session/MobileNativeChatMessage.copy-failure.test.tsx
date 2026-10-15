@@ -40,6 +40,7 @@ vi.mock('react-native', async () => {
     },
     Image: 'Image',
     Platform: { OS: 'android', Version: 34 },
+    Keyboard: { metrics: () => undefined },
     Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
@@ -74,6 +75,7 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench'
 }))
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 // A hold on a sent prompt opens its menu in a drawer; this one is a bare shell.
 vi.mock('../components/BottomDrawer', async () => {
   const { BottomDrawerDouble } = await import('./user-message-menu.test-support')
@@ -121,9 +123,9 @@ function render(message: NativeChatMessage, preference: 'light' | 'dark' = 'ligh
   return renderer!
 }
 
-// A hold on a sent prompt opens the Claude app's menu; Copy is the row that copies.
+// A hold on a sent prompt opens the Claude app's menu; Copy message is the row that copies.
 async function hold(tree: ReactTestRenderer): Promise<void> {
-  await holdThenChoose(tree.root, 'Copy')
+  await holdThenChoose(tree.root, 'Copy message')
 }
 
 async function pressCopy(tree: ReactTestRenderer): Promise<void> {
@@ -206,7 +208,9 @@ describe('copying a message the clipboard takes', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('buzzes and tints the held prompt only once the write landed, in %s', async (preference, colors) => {
+  ] as const)('leaves a held prompt’s landed copy to the system to confirm: no buzz, no tint, in %s', async (preference, colors) => {
+    // The Claude app (1.261013.20 e730.A) adds nothing to a copy from Android 13 on: the system
+    // confirms every clipboard write itself.
     let land: (value: boolean) => void = () => {}
     vi.mocked(Clipboard.setStringAsync).mockReturnValue(
       new Promise<boolean>((resolve) => {
@@ -222,9 +226,10 @@ describe('copying a message the clipboard takes', () => {
     await act(async () => {
       land(true)
     })
-    expect(triggerSuccess).toHaveBeenCalledTimes(1)
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('run the full gate')
+    expect(triggerSuccess).not.toHaveBeenCalled()
     expect(triggerError).not.toHaveBeenCalled()
-    expect(flat(bubble().props.style).backgroundColor).toBe(colors.successSoft)
+    expect(flat(bubble().props.style).backgroundColor).toBe(colors.userBubble)
     expect(notice(tree)).toBeUndefined()
   })
 

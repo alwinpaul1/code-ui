@@ -39,6 +39,7 @@ vi.mock('react-native', async () => {
     Modal: ({ children, ...props }: { children?: unknown }) => React.createElement('Modal', props, children),
     // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
     Platform: { OS: 'android', Version: 34 },
+    Keyboard: { metrics: () => undefined },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -52,6 +53,7 @@ vi.mock('react-native', async () => {
 })
 // A pasteboard that takes the text; the refusals are in MobileNativeChatMessage.copy-failure.test.tsx.
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => true) }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronDown: 'ChevronDown',
@@ -138,12 +140,12 @@ describe('MobileNativeChatMessage', () => {
 
   // 2026-09-21, the user: "automatic copy on long hold on user send prompts
   // instead of long hold and copy button". A hold on a sent prompt copied the
-  // whole prompt at once. It opens the Claude app's message menu now (Copy,
-  // Select text; chat-message-hold-menu.test.tsx), and Copy copies the whole
-  // prompt and tints the bubble, the way the agent's Copy control does. No text
+  // whole prompt at once. It opens the Claude app's message menu now (Copy
+  // message, Select text; chat-message-hold-menu.test.tsx), and Copy message
+  // copies the whole prompt; the system confirms it, as for the app. No text
   // in a message row is a selection target (2026-10-15): Select text is where
   // the words are selected.
-  it('opens a menu on a hold, and its Copy copies the whole prompt and confirms it on the bubble', async () => {
+  it('opens a menu on a hold, and its Copy message copies the whole prompt', async () => {
     const clipboard = await import('expo-clipboard')
     vi.mocked(clipboard.setStringAsync).mockClear()
     const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
@@ -154,7 +156,7 @@ describe('MobileNativeChatMessage', () => {
     // Opening the menu copies nothing.
     expect(clipboard.setStringAsync).not.toHaveBeenCalled()
     await act(async () => {
-      menuRow(tree.root, 'Copy').props.onPress()
+      menuRow(tree.root, 'Copy message').props.onPress()
     })
     expect(clipboard.setStringAsync).toHaveBeenCalledWith('run the full gate')
   })
@@ -215,7 +217,7 @@ describe('MobileNativeChatMessage', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Task:** run `npm test` and report' }]), {
       promptsAsMarkdown: true
     })
-    await holdThenChoose(tree.root, 'Copy')
+    await holdThenChoose(tree.root, 'Copy message')
     expect(clipboard.setStringAsync).toHaveBeenCalledWith('Task: run npm test and report')
   })
 

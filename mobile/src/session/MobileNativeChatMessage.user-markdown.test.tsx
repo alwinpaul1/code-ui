@@ -40,6 +40,7 @@ vi.mock('react-native', async () => {
     Linking: { openURL: () => Promise.resolve() },
     PixelRatio: { get: () => 3, getFontScale: () => 1 },
     Platform: { OS: 'android', Version: 34, select: (o: Record<string, unknown>) => o.android ?? o.default },
+    Keyboard: { metrics: () => undefined },
     Modal: 'Modal',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
@@ -258,7 +259,7 @@ describe('a sent prompt written in Markdown', () => {
     const message = userMessage(PASTED)
     const root = render(message)
     const bubble = bubbleOf(root, 'light')!
-    await holdThenChoose(root, 'Copy')
+    await holdThenChoose(root, 'Copy message')
     expect(mocks.clipboard).toEqual([nativeChatPromptPlainText(message.blocks)])
     expect(mocks.clipboard[0]).not.toContain('**')
     expect(texts(bubble).filter((node) => node.props.selectable === true)).toEqual([])

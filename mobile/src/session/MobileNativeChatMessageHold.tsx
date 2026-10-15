@@ -76,9 +76,10 @@ export function HoldTarget({
 /** The menu a hold opened, and what its rows act on. */
 type HeldMessage = {
   anchor: ChatMessageMenuAnchor
-  alignEnd: boolean
   entries: ChatMessageMenuEntry[]
   text: string
+  /** False while the card leaves after it was put down. */
+  open: boolean
 }
 
 /** The held view's box, or the point the finger was on where the view cannot be measured. */
@@ -102,9 +103,10 @@ function measureHeld(
  * the user's own bubble has one. A reply's words select in place, as the Claude app's do
  * (com.anthropic.claude 1.261013.20: gy30.j wraps each text block of a message in the app's
  * SelectionContainer, t8i.o; the prompt's bubble, gy30.d, has none, and a hold opens the menu).
- * Copy and Select text give the words as drawn, without Markdown marks. The Claude app gives
- * `Prose.text`, the Markdown source; Code UI gives plain text by the user's choice (2026-10-15). Nothing is mounted until a hold
- * asks for it (a list of rows carries no menu or sheet per row), and the words are kept until
+ * Copy message and Select text give the words as drawn, without Markdown marks. The Claude app
+ * gives `Prose.text`, the Markdown source; Code UI gives plain text by the user's choice
+ * (2026-10-15). Nothing is mounted until a hold asks for it (a list of rows carries no menu or
+ * sheet per row); the card stays until it has finished leaving, and the words are kept until
  * their sheet has left the screen.
  *
  * The list recycles a row's instance for other messages, and what was opened belongs to the one
@@ -119,10 +121,10 @@ export function useMobileNativeChatMessageHold({
   messageId: string
   /** Present while the message waits behind a running turn. */
   onUndoSend?: () => void
-  /** The bubble's copy, which tints it. */
+  /** Copy message's copy: the system confirms it (useMobileNativeChatMessageCopy `system`). */
   copy: (text: string) => void
 }): {
-  /** The hold for the prompt's `text`, its card hung from the bubble's end. Undefined when the
+  /** The hold for the prompt's `text`, its card hung from the bubble's bottom-end corner. Undefined when the
    *  message offers nothing, so a hold does nothing. */
   holdOn: (text: string) => HoldHandler | undefined
   overlays: ReactNode
@@ -130,7 +132,8 @@ export function useMobileNativeChatMessageHold({
   const [held, setHeld] = useState<HeldMessage | null>(null)
   const [selecting, setSelecting] = useState<{ text: string; open: boolean } | null>(null)
   // Select text's words, waiting for the menu's layer to be gone: two native modals shown and
-  // dismissed in one commit can race (react-native #10331), so the sheet opens a commit later.
+  // dismissed in one commit can race (react-native #10331), so the sheet opens once the card has
+  // left and its layer is unmounted.
   const [selectNext, setSelectNext] = useState<string | null>(null)
   const [openedOn, setOpenedOn] = useState(messageId)
   if (openedOn !== messageId) {
@@ -160,7 +163,7 @@ export function useMobileNativeChatMessageHold({
     if (entries.length === 0) {
       return undefined
     }
-    return (target, at) => measureHeld(target, at, (anchor) => setHeld({ anchor, alignEnd: true, entries, text }))
+    return (target, at) => measureHeld(target, at, (anchor) => setHeld({ anchor, entries, text, open: true }))
   }
   const choose = (entry: ChatMessageMenuEntry): void => {
     if (!held) {
@@ -187,10 +190,11 @@ export function useMobileNativeChatMessageHold({
       {held ? (
         <MobileNativeChatMessageMenu
           anchor={held.anchor}
-          alignEnd={held.alignEnd}
+          visible={held.open}
           entries={held.entries}
           onChoose={choose}
-          onClose={() => setHeld(null)}
+          onClose={() => setHeld((current) => (current ? { ...current, open: false } : null))}
+          onAfterClose={() => setHeld(null)}
         />
       ) : null}
       {selecting ? (

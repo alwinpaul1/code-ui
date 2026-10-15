@@ -74,10 +74,6 @@ export function makeChatMessageStyles(
     controlPressed: {
       opacity: 0.5
     },
-    copied: {
-      backgroundColor: colors.successSoft,
-      borderRadius: radius.md
-    },
     toolRun: {
       marginTop: space.xs
     },
