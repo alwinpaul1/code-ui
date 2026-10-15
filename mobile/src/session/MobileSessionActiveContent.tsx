@@ -1,6 +1,7 @@
 import type { LevelSource } from '../dictation/pcm-level'
 import { useMemo, useRef } from 'react'
 import { shownPermissionMode, stepTerminalMode } from './terminal-mode-stepper'
+import { pickPermissionMode } from './permission-mode-pick'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -169,24 +170,29 @@ export function MobileSessionActiveContent({
       showToast('That mode is not available in this session')
     }
   }
-  const selectPermissionMode = async (target: TerminalPermissionMode) => {
-    const startedOn = liveHandleRef.current
-    // Read the mode the footer STATED, as the stepper compares it
-    // (`shownPermissionMode`): 'default' and 'manual' are one mode, and a
-    // footer nobody read stays unread rather than "already Manual".
-    const reached = await stepTerminalMode<TerminalPermissionMode>({
-      read: async () =>
-        shownPermissionMode((await nativeChatController.refreshNativeChatHud())?.permissionModeSeen),
-      press: pressShiftTab,
-      wait,
-      wanted: shownPermissionMode(target) as TerminalPermissionMode,
-      maxPresses: 6,
-      stillOurs: () => liveHandleRef.current === startedOn
+  // A matched Claude tab with a live Anthropic link sets the mode as the Claude app does
+  // (`set_permission_mode`); Shift+Tab only without one (permission-mode-pick.ts).
+  const selectPermissionMode = (target: TerminalPermissionMode) =>
+    pickPermissionMode({
+      mode: target,
+      viaAnthropic: nativeChatController.nativeChatAnthropicControl?.setPermissionMode,
+      say: showToast,
+      stepTerminal: (mode) => {
+        const startedOn = liveHandleRef.current
+        // Read the mode the footer STATED, as the stepper compares it
+        // (`shownPermissionMode`): 'default' and 'manual' are one mode, and a
+        // footer nobody read stays unread rather than "already Manual".
+        return stepTerminalMode<TerminalPermissionMode>({
+          read: async () =>
+            shownPermissionMode((await nativeChatController.refreshNativeChatHud())?.permissionModeSeen),
+          press: pressShiftTab,
+          wait,
+          wanted: shownPermissionMode(mode) as TerminalPermissionMode,
+          maxPresses: 6,
+          stillOurs: () => liveHandleRef.current === startedOn
+        })
+      }
     })
-    if (!reached) {
-      showToast('That mode is not available in this session')
-    }
-  }
 
   return showLoadingState ? (
     <View style={centered}>

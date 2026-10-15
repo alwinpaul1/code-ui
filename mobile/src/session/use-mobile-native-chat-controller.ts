@@ -40,7 +40,7 @@ import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useActiveChatBeacon } from './use-active-chat-beacon'
 import { beaconDecidesLimits } from './hud-rate-limit-notice'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
-import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'; import { claudeSendsThroughAnthropic, useCcrComposerSend } from './use-ccr-composer-send'; import { claudeComposerSendGoes } from './claude-composer-send-route'; import { ccrSendTargetForTab } from './ccr-session-cache'; import { useCcrAttachmentLane } from './use-ccr-attachment-lane'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'; import { claudeSendsThroughAnthropic, useCcrComposerSend } from './use-ccr-composer-send'; import { claudeComposerSendGoes } from './claude-composer-send-route'; import { ccrSendTargetForTab } from './ccr-session-cache'; import { useCcrAttachmentLane } from './use-ccr-attachment-lane'; import { useCcrControlLane } from './use-ccr-control-lane'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -118,7 +118,8 @@ export function useMobileNativeChatController(
   // A Claude tab is drawn from Anthropic: what retires the phone's own bubbles (drafts, outbox) reads the rows DRAWN, never Orca's (claude-anthropic-echo-rows.test.tsx).
   const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), epoch: lastConnectedAt, orcaStatus: nativeChatSession.status, orcaRowCount: nativeChatSession.messages.length, orcaError: nativeChatSession.error }), drawnSession = claudeApi.session ?? nativeChatSession
   // A Claude tab matched (or being matched) to its Remote Control session sends through Anthropic, never the terminal (use-ccr-composer-send.ts).
-  const ccrLane = claudeSendsThroughAnthropic(ccrEnabled, claudeApi.gate), ccrConfigDir = claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath)
+  // Stop, the mode, model, effort and permission answers ride the same session's events as control requests while its link is live (use-ccr-control-lane.ts); the terminal otherwise.
+  const ccrLane = claudeSendsThroughAnthropic(ccrEnabled, claudeApi.gate), ccrConfigDir = claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), ccrControl = useCcrControlLane({ enabled: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), linkSessionId: claudeApi.gate.kind === 'matched' ? claudeApi.gate.sessionId : null, linkPhase: claudeApi.linkPhase, connectionStatus: claudeApi.connectionStatus, events: claudeApi.events, onSendError, scope: { hostId, worktreeId, tabId: activeSessionTabId ?? null } })
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -236,7 +237,7 @@ export function useMobileNativeChatController(
   )
   // The card as rendered: what a tap answers, and what the send path reads
   // to tell a plan review (known only from its option labels) from a Bash one.
-  const legacyRenderedPermission = withTerminalDialogOptions(
+  const legacyRenderedPermission = ccrControl.permission ?? withTerminalDialogOptions(
     legacyNativeChatPermission,
     terminalDialogOptions
   )
@@ -408,7 +409,7 @@ export function useMobileNativeChatController(
       activeChatStructured,
       activeSessionTabId,
       agent: activeChatResolution?.agent ?? null,
-      dispatchCommand: handleNativeChatDispatchCommand,
+      dispatchCommand: ccrControl.wrapDispatch(handleNativeChatDispatchCommand),
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
@@ -498,7 +499,7 @@ export function useMobileNativeChatController(
   const promptCard = legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt
   const { noticeHeld, onCardAnswered, answerAsk, cancelAsk, answerQuestion, respond } = useMobileNativeChatCardAnswers({
     card: promptCard, dialogBeforeAnswer, rereadAfterAnswer, onSendResolved,
-    answers: { ask: handleNativeChatAnswerAsk, cancelAsk: handleNativeChatCancelAsk, question: legacyHandleNativeChatQuestionAnswer, permission: activeChatStructured ? structuredNativeChat.respondPermission : legacyHandleNativeChatRespondPermission }
+    answers: { ask: handleNativeChatAnswerAsk, cancelAsk: handleNativeChatCancelAsk, question: legacyHandleNativeChatQuestionAnswer, permission: activeChatStructured ? structuredNativeChat.respondPermission : (text: string) => ccrControl.respondPermission(text) ?? legacyHandleNativeChatRespondPermission(text) }
   })
   // The composer's attachments live in the image hook, made after this one: the overlay reports their count (the queue's turn-end blocker).
   const ccrComposerAttachments = useRef(0), setCcrComposerAttachments = useRef((count: number) => { ccrComposerAttachments.current = count }).current; const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: () => ccrComposerAttachments.current, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, returnQueueToDraft, removePending, onSendError }); const ccrAttachments = useCcrAttachmentLane({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), send: ccrSend.sendWithOutcome }) /* attachments too, behind the switch in ccr-file-upload.ts */; if (ccrLane) { shareSendRef.current.send = (text) => (claudeComposerSendGoes(text) === 'anthropic' ? ccrSend.sendWithOutcome(text) : handleNativeChatSendWithOutcome(text)) } // a slash command types, as before the lane (claude-composer-send-route.ts)
@@ -533,7 +534,7 @@ export function useMobileNativeChatController(
 
   // The composer's Stop: a ring while stopping, back on when the stop failed or the agent kept working (G24).
   // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
-  const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud }); const stopButton = useChatStopButton({ stop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop, reportsVerdict: !activeChatStructured, canStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking, scope: streamIdentity, onSendError })
+  const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud }); const stopButton = useChatStopButton({ stop: activeChatStructured ? structuredNativeChat.cancel : (ccrControl.interrupt ?? handleNativeChatStop), reportsVerdict: !activeChatStructured, canStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking, scope: streamIdentity, onSendError })
 
   // Held across renders: a fresh map each render re-ran the chat's whole
   // render-data pass, and an agent's pictures now keep a host entry even
@@ -614,7 +615,7 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: ccrHud.context, nativeChatRateLimits: ccrHud.limits, nativeChatContextUsedTokens: ccrHud.usedTokens, nativeChatClaudeUsage: ccrUsageSheet.sheet ? { data: ccrUsageSheet.sheet, onOpen: ccrUsageSheet.onOpen } : null, nativeChatLiveModel: claudeModelPillPair(preferCcrModelPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, ccrModel, hudLiveBeacon?.receivedAt ?? null), transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: ccrHud.context, nativeChatRateLimits: ccrHud.limits, nativeChatContextUsedTokens: ccrHud.usedTokens, nativeChatClaudeUsage: ccrUsageSheet.sheet ? { data: ccrUsageSheet.sheet, onOpen: ccrUsageSheet.onOpen } : null, nativeChatLiveModel: claudeModelPillPair(preferCcrModelPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, ccrModel, hudLiveBeacon?.receivedAt ?? null), transcriptModel.fallback), nativeChatPermissionMode: ccrControl.permissionMode ?? hudObservation?.permissionMode ?? null, nativeChatAnthropicControl: { live: ccrControl.live, setPermissionMode: ccrControl.setPermissionMode }, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }
