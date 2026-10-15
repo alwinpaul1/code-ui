@@ -30,6 +30,7 @@ const reading = (accountId: string, sessionId: string | null, planRows: CcrPlanR
   sessionId, accountId, epoch: 1, fetchedAt: Date.now(), limits: planRows ? [] : null, planRows, context: null
 })
 
+const assistant = (uuid: string): CcrEvent => ({ eventId: uuid, sequenceNum: null, createdAt: null, payload: { type: 'assistant', uuid } }) as unknown as CcrEvent
 const result = (uuid: string): CcrEvent => ({ eventId: uuid, sequenceNum: null, createdAt: null, payload: { type: 'result', uuid } }) as unknown as CcrEvent
 
 /** A session that answers the next ask with `answer` (or never, or refuses), recording who was asked. */
@@ -134,12 +135,14 @@ describe('the Usage sheet of a work tab and a personal tab', () => {
     expect(planCards(latest!.sheet!.plan, 0).session[0]).toMatchObject({ figure: 'Loading' })
   })
 
-  it('shows Loading while the profile is not known or the match is under the other account', () => {
+  it('shows no plan at all while the profile is not known or the match is under the other account', () => {
+    // No account of the tab's own: no Usage sheet (the old card opens), so no figure of the
+    // other account can show either.
     setCcrMapping(TAB, WORK_CSE, 1, WORK, CLAUDE_SESSION, PERSONAL_DIR)
     render({ configDir: PERSONAL_DIR, reading: reading(WORK, WORK_CSE, rows(62, 40)) })
-    expect(latest!.sheet!.plan).toBeNull()
+    expect(latest!.sheet).toBeNull()
     render({ configDir: null, reading: reading(WORK, WORK_CSE, rows(62, 40)) })
-    expect(latest!.sheet!.plan).toBeNull()
+    expect(latest!.sheet).toBeNull()
   })
 
   it('shows the config dir’s account before the match lands', () => {
@@ -219,5 +222,72 @@ describe('what the sheet shows before the session answers', () => {
     expect(ccrUsageFallbackFigure({ usedPercent: 40, usedLabel: null, windowLabel: null }, null)).toMatchObject({ percent: 40, usedLabel: null })
     expect(ccrUsageFallbackFigure(null, reading(WORK, WORK_CSE, null))).toBeNull()
     expect(ccrUsageFallbackFigure(null, { ...reading(WORK, WORK_CSE, null), context: { usedTokens: 32_800, windowTokens: null } })).toEqual({ usedTokens: 32_800, windowTokens: null, percent: null })
+  })
+})
+
+describe('review findings, 2026-10-15', () => {
+  it('leaves a tab with no target and no known account on the old context card', () => {
+    render({ configDir: null })
+    expect(latest!.sheet).toBeNull()
+  })
+
+  it('lets the answer go as soon as the next turn starts writing, so the beacon leads mid-turn', async () => {
+    setCcrMapping(TAB, WORK_CSE, 1, WORK, CLAUDE_SESSION, WORK_DIR)
+    const session = fakeSession()
+    session.answer(145_500, 400_000)
+    render({ configDir: WORK_DIR, events: [result('r-1')] }, session)
+    act(() => latest!.onOpen())
+    await flush()
+    expect(latest!.live).not.toBeNull()
+    render({ configDir: WORK_DIR, events: [result('r-1'), assistant('a-2')] }, session)
+    expect(latest!.live).toBeNull()
+  })
+
+  it('an answer that lands after the turn moved still stands for the turn it was read in', async () => {
+    setCcrMapping(TAB, WORK_CSE, 1, WORK, CLAUDE_SESSION, WORK_DIR)
+    let deliver: ((payload: Record<string, unknown> | null) => void) | null = null
+    let requestId = ''
+    const slow: CcrUsageAskDeps = () => ({
+      deps: {
+        waitForResponse: (id) => {
+          requestId = id
+          return { reply: new Promise((resolve) => (deliver = resolve)), cancel: () => undefined }
+        },
+        post: async () => undefined,
+        newUuid: (() => { let n = 0; return () => `slow-${(n += 1)}` })(),
+        log: () => undefined
+      },
+      release: () => undefined
+    })
+    render({ configDir: WORK_DIR, events: [result('r-1')], askDeps: slow })
+    act(() => latest!.onOpen())
+    await flush()
+    // The turn ends while the ask is still out; its reply lands after.
+    render({ configDir: WORK_DIR, events: [result('r-1'), result('r-2')], askDeps: slow })
+    await flush()
+    await act(async () => deliver!({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response: { totalTokens: 150_000, rawMaxTokens: 400_000 } } }))
+    await flush()
+    expect(latest!.live?.usedTokens).toBe(150_000)
+  })
+
+  it('does not ask when the events only went away and came back (a relink), only at a turn end', async () => {
+    setCcrMapping(TAB, WORK_CSE, 1, WORK, CLAUDE_SESSION, WORK_DIR)
+    const session = fakeSession()
+    session.answer(1, 400_000)
+    render({ configDir: WORK_DIR, events: [result('r-1')] }, session)
+    render({ configDir: WORK_DIR, events: [] }, session)
+    render({ configDir: WORK_DIR, events: [result('r-1')] }, session)
+    await flush()
+    expect(session.asked).toHaveLength(0)
+  })
+
+  it('runs one plan re-read at a time however often refresh is tapped', async () => {
+    setCcrMapping(TAB, WORK_CSE, 1, WORK, CLAUDE_SESSION, WORK_DIR)
+    let calls = 0
+    let finish: () => void = () => undefined
+    render({ configDir: WORK_DIR, refreshPlan: () => { calls += 1; return new Promise<void>((resolve) => (finish = resolve)) } })
+    act(() => { latest!.sheet!.onRefresh(); latest!.sheet!.onRefresh(); latest!.sheet!.onRefresh() })
+    expect(calls).toBe(1)
+    await act(async () => finish())
   })
 })

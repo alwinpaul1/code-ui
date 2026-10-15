@@ -648,7 +648,11 @@ usage" (`o610.java:190`).
 - It asks on open, on refresh, and at each turn's end while the chat is open,
   so the ring tracks the session itself. Before this the ring read the status
   line: 128k on the phone against 145.5k in the app.
-- The answer for the current turn leads the ring (`ccr-usage-hud.ts`).
+- The answer leads the ring (`ccr-usage-hud.ts`) until the next message, compaction
+  or clear lands. Mid-turn the beacon leads again, because it moves with the turn.
+  A reply that crosses a turn's end counts for the turn in which it lands.
+- A tab with no target and no bound account keeps the old context card, which
+  shows the beacon and the host's figures, instead of a sheet stuck on "Loading".
 - Every figure is the tab's own: the session and account come from
   `ccrSendTargetForTab`. The plan cards show that account's rows, or the
   config dir's bound account before the match lands. Otherwise they show
