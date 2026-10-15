@@ -6,8 +6,10 @@
  * Not fired for a token refresh: that changes no account, and it happens on the hot path.
  */
 
-/** What changed, when it is a sign-out: the account that left, or every account. */
-export type AnthropicAccountsChange = { signedOut?: string | 'all' }
+/** What changed. `signedOut`: the account that signed out, or every account. `removed`: entries
+ *  gone though nobody signed out (merged into the account they turned out to be, or replaced by a
+ *  new sign-in); what the phone keeps under those ids is as dead as a signed-out account's. */
+export type AnthropicAccountsChange = { signedOut?: string | 'all'; removed?: readonly string[] }
 
 const listeners = new Set<(change: AnthropicAccountsChange) => void>()
 

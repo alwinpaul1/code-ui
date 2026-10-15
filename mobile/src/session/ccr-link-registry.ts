@@ -150,6 +150,10 @@ subscribeAnthropicAccountsChanged((change) => {
   if (change.signedOut) {
     closeCcrLinksOfAccount(change.signedOut)
   }
+  // An entry merged into another, or replaced by a new sign-in, is gone like a signed-out one.
+  for (const removed of change.removed ?? []) {
+    closeCcrLinksOfAccount(removed)
+  }
 })
 
 export function setCcrLinkTimerForTests(timer: (run: () => void, ms: number) => () => void): void {

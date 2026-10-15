@@ -205,7 +205,9 @@ export function upsertAccount(credential: StoredCredential, profile: CcrProfile 
       at = accounts.findIndex((account) => account.accountUuid === null && !isAccountUsable(account, now))
     }
     await writeAccounts(at === -1 ? [...accounts, fresh] : accounts.map((account, index) => (index === at ? fresh : account)))
-  }).then(() => notifyAnthropicAccountsChanged())
+    const replaced = at === -1 ? null : accounts[at]!.id
+    return replaced !== null && replaced !== fresh.id ? [replaced] : []
+  }).then((removed) => notifyAnthropicAccountsChanged(removed.length > 0 ? { removed } : {}))
 }
 
 /** Of two entries for one account, the one whose credential to keep: one that still works over one
@@ -244,11 +246,12 @@ export function rememberAccountProfile(id: string, profile: CcrProfile): Promise
     const place = twin ? Math.min(meAt, twinAt) : meAt
     const next = accounts.flatMap((account, index) => (index === place ? [identified] : account === me || account === twin ? [] : [account]))
     await writeAccounts(next)
-    return twin !== null
-  }).then((merged) => {
-    // Two entries became one: the accounts changed. Naming a pending entry alone does not.
-    if (merged) {
-      notifyAnthropicAccountsChanged()
+    return twin === null ? null : [me.id, twin.id].filter((gone) => gone !== identified.id)
+  }).then((removed) => {
+    // Two entries became one: the accounts changed, and the one merged away is named. Naming a
+    // pending entry alone does not.
+    if (removed) {
+      notifyAnthropicAccountsChanged({ removed })
     }
   })
 }

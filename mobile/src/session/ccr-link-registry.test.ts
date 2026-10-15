@@ -230,6 +230,34 @@ describe('one stream per (account, session)', () => {
   })
 })
 
+describe('an account entry merged into another', () => {
+  // Review 2026-10-15: only a sign-out closed an account's links. An entry merged away (or replaced
+  // by a new sign-in) left its stream open and its kept transcript on the phone under a dead id.
+  it('closes that entry’s links and wipes its kept transcript, and only that entry’s', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'a')])
+    w.pages[SESSION_B] = () => eventsReply([text('u2', 'user', 'b')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    acquireCcrLink(ACCOUNT_B, SESSION_B)
+    await flush()
+    notifyAnthropicAccountsChanged({ removed: [ACCOUNT_A] })
+    expect(openCcrLink(ACCOUNT_A, SESSION_A)).toBeNull()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toBeNull()
+    expect(openCcrLink(ACCOUNT_B, SESSION_B)?.getState().phase).toBe('live')
+    expect(readCcrTranscript(ACCOUNT_B, SESSION_B)).not.toBeNull()
+  })
+
+  it('a change that removed nobody closes nothing', async () => {
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply([text('u1', 'user', 'a')])
+    acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    notifyAnthropicAccountsChanged({ removed: [] })
+    notifyAnthropicAccountsChanged()
+    expect(openCcrLink(ACCOUNT_A, SESSION_A)?.getState().phase).toBe('live')
+  })
+})
+
 describe('the transcript a link holds', () => {
   it('an event on both the newest page and the stream draws one row, not two', async () => {
     const one = text('u1', 'user', 'hello')

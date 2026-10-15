@@ -508,6 +508,31 @@ describe('telling the sessions path the accounts changed', () => {
     ear.stop()
   })
 
+  // Review 2026-10-15: the entry merged away was gone with no sign-out named, so the sessions path
+  // kept its open streams and its kept transcripts under an account id that no longer exists.
+  it('names the entry a merge removed', async () => {
+    await signIn('known', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    await signIn('mystery', 'unreadable')
+    const pending = (await listAccounts())[1]!
+    const changes: unknown[] = []
+    const stop = subscribeAnthropicAccountsChanged((change) => changes.push(change))
+    await rememberAccountProfile(pending.id, { accountUuid: DEFAULT_ACCOUNT, organizationUuid: DEFAULT_ORG, organizationName: 'Personal' })
+    expect(changes).toEqual([{ removed: [pending.id] }])
+    stop()
+  })
+
+  it('names the signed-out unidentified entry a new sign-in took the place of', async () => {
+    await signIn('mystery', 'unreadable')
+    const dead = (await listAccounts()).map((account) => ({ ...account, refreshRefused: true, credential: { ...account.credential, expiresAt: 0 } }))
+    fake.store.set('anthropic-accounts-v1', JSON.stringify({ accounts: dead }))
+    const changes: unknown[] = []
+    const stop = subscribeAnthropicAccountsChanged((change) => changes.push(change))
+    await signIn('w1', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+    expect((await listAccounts()).map((account) => account.id)).toEqual([WORK_ACCOUNT])
+    expect(changes).toEqual([{ removed: [dead[0]!.id] }])
+    stop()
+  })
+
   it('says nothing when the sessions path only names an account or forgets its organization', async () => {
     await signIn('mystery', 'unreadable')
     const pending = (await listAccounts())[0]!
