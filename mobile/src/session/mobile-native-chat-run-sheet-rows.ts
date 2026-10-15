@@ -23,10 +23,13 @@ import { toolCallPath } from './tool-call-path-keys'
 //   Ran  <the Bash call's description>
 //   Ran agent  <the agent's description>
 // Every verb is past tense, the running agent's row included: the screenshot
-// shows "Ran agent" under a "Running agent" row. The verbs for the kinds the
-// screenshot did not show (read, edit, search, web, skill, message) are this
-// client's own, taken from the run sentence's words (mobile-native-chat-tool-
-// sentence.ts) and not checked against the app.
+// shows "Ran agent" under a "Running agent" row. Claude Code's own tools read
+// in the app's verbs for one call (1.261013.20, `ccr_verb_*`, targets from
+// `xpz.a`), the words the run sentence gives a run of one
+// (mobile-native-chat-tool-run-words.ts): "Searched web <query>", "Ran skill
+// /<name>", "Updated todos", "Proposed plan", "Asked <header>", "Listed
+// <path>". Those are matched by Claude Code's exact tool names, which no
+// Codex tool carries, so a Codex sheet keeps the words it had.
 
 export type RunSheetRow = {
   /** What the call did to the reader; the sheet picks its icon by it. */
@@ -98,6 +101,48 @@ function isToolSearch(name: string): boolean {
   return name.trim().toLowerCase() === 'toolsearch'
 }
 
+/** The first question's header of an AskUserQuestion, as the app names it. */
+function firstQuestionHeader(input: unknown): string | null {
+  const questions = typeof input === 'object' && input !== null ? Reflect.get(input, 'questions') : null
+  return Array.isArray(questions) ? readString(questions[0], 'header') : null
+}
+
+/** A skill as the app names it: "/" and the name after its last `/`. */
+function skillName(input: unknown): string | null {
+  const skill = readString(input, 'skill') ?? readString(input, 'name')
+  return skill ? `/${skill.slice(skill.lastIndexOf('/') + 1)}` : null
+}
+
+/** The row of one of Claude Code's own tools in the Claude app's words, or
+ *  null for any other name (every Codex tool among them). */
+function claudeAppRow(name: string, input: unknown, plain: (verb: string, detail: string | null) => RowFacts): RowFacts | null {
+  switch (name) {
+    case 'WebSearch':
+      return plain('Searched web', readString(input, 'query'))
+    case 'Skill':
+      return plain('Ran skill', skillName(input))
+    case 'TodoWrite':
+      return plain('Updated todos', null)
+    case 'ExitPlanMode':
+      return plain('Proposed plan', null)
+    case 'AskUserQuestion':
+      return plain('Asked', firstQuestionHeader(input))
+    case 'LS':
+      return plain('Listed', readString(input, 'path'))
+    case 'Grep':
+    case 'Glob':
+      return plain('Searched', readString(input, 'pattern') ?? inputLabel(input))
+    case 'TaskCreate':
+    case 'TaskUpdate': {
+      // With no subject the call keeps the generic row ("Used TaskUpdate  …").
+      const subject = readString(input, 'subject')
+      return subject ? plain(`Used ${name}`, subject) : null
+    }
+    default:
+      return null
+  }
+}
+
 function editDetail(pair: NativeChatToolPair): {
   verb: string
   detail: string | null
@@ -151,6 +196,10 @@ function rowOf(pair: NativeChatToolPair): RowFacts {
     diff: null,
     glyph: null
   })
+  const claude = claudeAppRow(call.name.trim(), call.input, plain)
+  if (claude) {
+    return claude
+  }
   switch (kind) {
     case 'command': {
       const description = readString(call.input, 'description')
