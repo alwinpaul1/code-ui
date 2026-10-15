@@ -70,3 +70,19 @@ export function ccrQueueAtTurnEnd(queue: string | null, blockers: CcrQueueBlocke
 export function returnCcrQueueToComposer(queue: string, draft: string): string {
   return draft.trim() ? `${queue}\n\n${draft}` : queue
 }
+
+/**
+ * The queue once the `taken` text it held has gone out (or back to the composer): the words
+ * appended after it while that took its time, or null when nothing was. `undefined` when the
+ * queue no longer starts with `taken` (a tap moved it back to the composer meanwhile), so the
+ * caller sends nothing rather than a copy of what the user is now editing.
+ */
+export function ccrQueueAfter(queue: string | null, taken: string): string | null | undefined {
+  if (queue === taken) {
+    return null
+  }
+  if (queue !== null && queue.startsWith(`${taken}\n\n`)) {
+    return queue.slice(taken.length + 2)
+  }
+  return undefined
+}

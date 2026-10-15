@@ -68,12 +68,13 @@ let api!: ReturnType<typeof useCcrComposerSend>
 function Harness(): null {
   api = useCcrComposerSend({
     active: state.active,
+    tabId: 'tab-a',
     resolveTarget: () => ({ kind: 'target', sessionId: CSE, accountId: 'acct-personal' }),
     events: state.events,
     connectionStatus: state.connectionStatus,
     working: state.working,
     promptUp: state.promptUp,
-    attachments: 0,
+    attachments: () => 0,
     composerText: state.composerText,
     setComposerText,
     captureSendOrigin: origin,

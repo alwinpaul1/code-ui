@@ -25,7 +25,8 @@ export const OUTBOX_SESSION_AUTO_ATTEMPTS = 2
  *  deadline (UNCONFIRMED_SEND_DEADLINE_MS). */
 export const OUTBOX_TERMINAL_CONFIRM_WAIT_MS = 20_000
 
-export type OutboxLane = 'terminal' | 'session'
+/** `ccr`: a Claude tab that sends through Anthropic (use-ccr-composer-send.ts). */
+export type OutboxLane = 'terminal' | 'session' | 'ccr'
 
 /** Whether the transcript shows the entry: its row after its boundary, or the agent's own
  *  prompt receipt after it left. `unsure` when its boundary is not in what was read. */
@@ -105,6 +106,11 @@ export type OutboxStep =
  *   its own operation id, up to OUTBOX_SESSION_AUTO_ATTEMPTS times.
  * - Otherwise it goes when it is safe: the link up, and for a terminal the agent safe to type
  *   into for OUTBOX_IDLE_SETTLE_MS; a terminal that waits OUTBOX_SAFE_WAIT_MS gives it back.
+ * - An entry posted through Anthropic (`ccr`) is only ever resent by that lane, so it waits while
+ *   its tab is on any other. On that lane it goes, like a structured one, under its own uuid
+ *   (the server keys events by it), but only once Claude has been idle for OUTBOX_IDLE_SETTLE_MS,
+ *   as the app posts nothing mid-turn. An older entry resent there has no uuid yet: it keeps the
+ *   terminal's rules, as its first copy may still land.
  */
 export function planOutboxEntry(input: {
   entry: NativeChatOutboxEntry
@@ -134,6 +140,11 @@ export function planOutboxEntry(input: {
   if (now - entry.createdAt > OUTBOX_MAX_RESEND_AGE_MS) {
     return { kind: 'give-back', reason: 'tooOld' }
   }
+  if (entry.ccr && lane !== 'ccr') {
+    return { kind: 'wait' }
+  }
+  // Resent under an id the far end keys on: a copy that did land is not posted twice.
+  const keyed = lane === 'session' || (lane === 'ccr' && entry.ccr !== undefined)
   if (entry.hasAttachments) {
     if (outboxEntryDrainable(entry)) {
       return entry.failed ? { kind: 'give-back', reason: 'undelivered' } : { kind: 'wait' }
@@ -141,7 +152,7 @@ export function planOutboxEntry(input: {
     return { kind: 'give-back', reason: 'attachments' }
   }
   if (
-    lane === 'terminal' &&
+    !keyed &&
     entry.lastAttemptAt !== undefined &&
     now < entry.lastAttemptAt + OUTBOX_TERMINAL_CONFIRM_WAIT_MS
   ) {
@@ -151,10 +162,9 @@ export function planOutboxEntry(input: {
     if (entry.failed) {
       return { kind: 'wait' }
     }
-    const spent =
-      lane === 'terminal'
-        ? entry.autoAttempts >= 1 || landing === 'unsure'
-        : entry.autoAttempts >= OUTBOX_SESSION_AUTO_ATTEMPTS
+    const spent = keyed
+      ? entry.autoAttempts >= OUTBOX_SESSION_AUTO_ATTEMPTS
+      : entry.autoAttempts >= 1 || landing === 'unsure'
     if (spent) {
       return { kind: 'fail' }
     }
@@ -164,7 +174,7 @@ export function planOutboxEntry(input: {
   if (safe) {
     return { kind: 'send' }
   }
-  if (!userRetry && lane === 'terminal' && input.waitedMs >= OUTBOX_SAFE_WAIT_MS) {
+  if (!userRetry && lane !== 'session' && input.waitedMs >= OUTBOX_SAFE_WAIT_MS) {
     return { kind: 'give-back', reason: 'busy' }
   }
   return { kind: 'wait' }

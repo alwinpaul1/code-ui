@@ -71,7 +71,14 @@ export type NativeChatOutboxEntry = {
    *  at full strength from here, as the Claude app's pending row is once its POST is acked. The
    *  entry still waits for Claude's record of it to leave the outbox (delivery on record). */
   hostAcked?: true
+  /** Written by a Claude tab that sends through Anthropic (use-ccr-composer-send.ts): the session
+   *  and account it was posted to and the event uuid it was posted under. Only that lane resends
+   *  it, into that session under that uuid (the server keys an event by it, so a copy that did
+   *  arrive is not posted twice), and it never carries a route: nothing types it into a terminal. */
+  ccr?: NativeChatOutboxCcr
 }
+
+export type NativeChatOutboxCcr = { sessionId: string; accountId: string; uuid: string }
 
 export type NativeChatOutboxRoute = {
   hostId: string
@@ -122,6 +129,11 @@ function isRoute(value: unknown): value is NativeChatOutboxRoute {
   )
 }
 
+function isCcr(value: unknown): value is NativeChatOutboxCcr {
+  const ccr = value as Partial<NativeChatOutboxCcr> | null
+  return typeof ccr === 'object' && ccr !== null && typeof ccr.sessionId === 'string' && typeof ccr.accountId === 'string' && typeof ccr.uuid === 'string'
+}
+
 function isAttachmentList(value: unknown): value is NativeChatOutboxAttachment[] {
   return (
     Array.isArray(value) &&
@@ -138,9 +150,14 @@ function isAttachmentList(value: unknown): value is NativeChatOutboxAttachment[]
 /** A stored route or attachment list that does not read is dropped, not the entry: the entry then
  *  waits for its chat, as one from an older build does. */
 function withReadableExtras(entry: NativeChatOutboxEntry): NativeChatOutboxEntry {
-  const { route, attachments, ...rest } = entry
+  const { route, attachments, ccr, ...rest } = entry
+  if (ccr !== undefined && !isCcr(ccr)) {
+    // Its session cannot be read back, and only that session may have it: it never resends.
+    return { ...rest, failed: true }
+  }
   return {
     ...rest,
+    ...(ccr ? { ccr } : {}),
     ...(isRoute(route) ? { route } : {}),
     ...(isAttachmentList(attachments) && attachments.length > 0 ? { attachments } : {})
   }

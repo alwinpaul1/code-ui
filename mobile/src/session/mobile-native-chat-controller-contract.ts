@@ -224,6 +224,9 @@ export type MobileNativeChatController = {
   /** A Claude tab that sends through Anthropic: the composer's text-only send (a POST into its
    *  Remote Control session, never the terminal). Absent on every other tab. */
   nativeChatAnthropicSend?: (text: string) => Promise<boolean>
+  /** The composer's attachment count, reported by the overlay that holds the image hook: the
+   *  Anthropic queue reads it at a turn's end (the app moves the queue back over attachments). */
+  setNativeChatComposerAttachments?: (count: number) => void
   handleNativeChatStop: () => void
   /** A Stop went out and the turn has not ended (use-chat-stop-button.ts). */
   nativeChatStopping?: boolean

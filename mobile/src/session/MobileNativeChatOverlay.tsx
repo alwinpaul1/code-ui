@@ -38,7 +38,7 @@ import { openImageMarkup } from './image-markup-store'
 import { setChatMarkupAttachTarget } from './chat-image-markup-target'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
-import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { MobileNativeChatController } from './use-mobile-native-chat-controller'; import { claudeComposerSend } from './claude-composer-send-route'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
@@ -271,7 +271,8 @@ export function MobileNativeChatOverlay({
   )
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // A picture from the chat marked up in the viewer goes to this composer (chat-image-markup-target.ts).
-  useEffect(() => setChatMarkupAttachTarget(images.attachImageBase64), [images.attachImageBase64])
+  // What the composer has attached goes to the Anthropic queue's turn-end blocker (use-ccr-composer-send.ts).
+  const reportAttachments = controller.setNativeChatComposerAttachments; useEffect(() => setChatMarkupAttachTarget(images.attachImageBase64), [images.attachImageBase64]); useEffect(() => reportAttachments?.(images.attachments.length), [reportAttachments, images.attachments])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
   // A user row of a desk copy's words lands it, unless a later submission of
@@ -477,7 +478,7 @@ export function MobileNativeChatOverlay({
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}
-        onSend={controller.nativeChatAnthropicSend && images.attachments.length === 0 ? controller.nativeChatAnthropicSend : images.sendNativeChat}
+        onSend={claudeComposerSend(controller.nativeChatAnthropicSend, images.sendNativeChat, () => images.attachments.length)}
         sendSurfaceId={sendSurfaceId}
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}

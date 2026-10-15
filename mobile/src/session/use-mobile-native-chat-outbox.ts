@@ -47,6 +47,9 @@ export function useMobileNativeChatOutbox(input: {
   setComposerText: Dispatch<SetStateAction<string>>
   sendTerminal: (text: string) => Promise<MobileNativeChatSendOutcome>
   sendStructured: (text: string) => Promise<MobileNativeChatSendOutcome>
+  /** A Claude tab that sends through Anthropic: its resend (use-ccr-composer-send.ts). Present,
+   *  the outbox is that lane's and nothing of this tab's is typed into the terminal. */
+  sendAnthropic?: (text: string, entry: NativeChatOutboxEntry) => Promise<MobileNativeChatSendOutcome>
   showEcho: (entry: NativeChatOutboxEntry) => void
   removeEcho: (id: string) => void
   onNotice: (message: string) => void
@@ -56,7 +59,7 @@ export function useMobileNativeChatOutbox(input: {
   edit: (rowId: string) => void
 } {
   const draftKey = mobileNativeChatScopeKey(input.hostId, input.worktreeId, input.tabId)
-  const { setComposerText, structured, sendTerminal, sendStructured } = input // setComposerText is read through `active`
+  const { setComposerText, structured, sendTerminal, sendStructured, sendAnthropic } = input // setComposerText is read through `active`
   // Read when the words come back, not as of the render that asked: a tab switch in between.
   const active = useRef({ draftKey, setComposerText })
   active.current = { draftKey, setComposerText }
@@ -96,19 +99,24 @@ export function useMobileNativeChatOutbox(input: {
     [draftKey, hostId, routeAgent, routeLane, routePromptBefore, routeTerminal, routeTranscriptPath, sessionId, tabId, worktreeId]
   )
   const send = useCallback(
-    (text: string) => (structured ? sendStructured(text) : sendTerminal(text)),
-    [sendStructured, sendTerminal, structured]
+    (text: string, entry: NativeChatOutboxEntry) =>
+      structured ? sendStructured(text) : sendAnthropic ? sendAnthropic(text, entry) : sendTerminal(text),
+    [sendAnthropic, sendStructured, sendTerminal, structured]
   )
+  // On the Anthropic lane the far end is Anthropic, not the desktop's input line: it is sendable
+  // without the relay.
+  const anthropic = !structured && sendAnthropic !== undefined
+  const sendable = anthropic || input.inputSendable
   return useNativeChatOutboxRecovery({
     draftKey,
     pendingKey: draftKey && input.sessionId ? `${draftKey}\0${input.sessionId}` : null,
-    lane: !input.showNativeChat ? null : structured ? 'session' : input.terminalChat ? 'terminal' : null,
+    lane: !input.showNativeChat ? null : structured ? 'session' : anthropic ? 'ccr' : input.terminalChat ? 'terminal' : null,
     messages: input.messages,
     transcriptSettled: input.transcriptSettled,
     receipts: input.receipts,
-    sendable: input.inputSendable,
+    sendable,
     idle:
-      input.inputSendable &&
+      sendable &&
       !input.agentWorking &&
       !input.promptUp &&
       input.queuedCount === 0 &&
