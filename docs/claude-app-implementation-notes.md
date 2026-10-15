@@ -391,8 +391,8 @@ field `aj1`, placeholder `ib8`, custom measure policies `ai9` (button row) and
 ## 7. How the chat list is built
 
 - One `LazyColumn` in the session screen `yv8`, **laid out from the bottom**
-  so the newest message is item 0 (*inferred from the key order and the scroll
-  logic, not read from the call itself*). Items are keyed by message id, with
+  so the newest message is item 0 (confirmed 2026-10-15: the call at
+  `yv8.java:13366`, `sc4.c`, passes `reverseLayout = true`; section 9). Items are keyed by message id, with
   `fallback_<i>` when an id is missing. Virtualisation is the plain lazy list
   with stable keys; nothing custom.
 - Bottom-most extra items, in order: `queued_message` (the queued text),
@@ -458,6 +458,51 @@ also 0.9.139's: BottomDrawer fades on its open timing, the tool-detail sheet
 appears at once. `sheet-motion-0-9-139.test.tsx` and `sheet-spec.test.tsx` pin
 all of it.
 
+## 9. Opening a Code session (added 2026-10-15)
+
+Read for the report "the transcript only loads when i open the session and it
+starts to populate and scroll down". The app opens a session already at its
+newest message and nothing moves.
+
+- **Cache before the first frame.** An in-memory LRU of the last **4**
+  sessions (`tdu`, values `sdu` "CachedSession": session, events, model, rate
+  limit; events over **16 MB** are stored empty). The view model's constructor
+  reads it synchronously (`rs8.<init>` → `rs8.b5`, `rs8.java:897`, `:9265`) and
+  applies the events as one `Initialize` with source CacheSeed into a Compose
+  snapshot store (`sessions/store/a`). CacheSeed marks events loaded
+  (`rs8.J3`, `first_content_source = "cache"`), so the `loading` item
+  (`rs8.Y1`, `yv8.java:8694`) is not drawn on a cache hit.
+- **List.** `reverseLayout = true` (`yv8.java:13366`, `sc4.c`), state at
+  (0, 0) (`rememberLazyListState` defaults). Item order from the bottom:
+  `queued_message`, `pending_message`, `loading`, the messages newest first,
+  `history_spinner` last (the visual top). No effect scrolls on open; the list
+  simply starts at the bottom.
+- **Merging.** The connect path reads the newest page(s) (`xjw.b`,
+  "loadLatestPageV2": up to **2** pages of **200**, then **500**-event
+  backfill pages until a turn boundary, at most **10**) and applies them as ONE
+  `Initialize` that replaces the seed wholesale. Stream events after that are
+  single inserts or replaces by index.
+- **Following new content.** `pc0.a` scrolls to the newest only when the item
+  count grew, it was not a history prepend (the newest id unchanged), and the
+  first visible index was at most **1** before the change. Scrolls go through
+  `gjz.a` → `l030.g`: animate to item 0, then snap.
+- **Older pages.** Triggered when the last visible index is within **5** items
+  of the end (`wt8` case 0), has older history, no error; at most **6**
+  automatic loads in a row. One page of **500** by cursor (`ujw.g` → `m4v.g`),
+  applied as `Initialize` with source HistoryPrepend; `history_spinner` shows
+  meanwhile.
+
+Code UI: the inverted FlashList is the reversed layout; the kept copy
+(`ccr-transcript-persist.ts`) is the seed, read in the first render
+(`use-claude-anthropic-transcript.ts`); `CcrSessionLink.catchUp` reads up to 2
+newest pages of 200 and lands them in one change before the stream (merged by
+key when they reach the held events, replacing them when they do not); and
+the composer's height is remembered (`use-mobile-chat-dock.ts`) so the newest
+row is clear of the composer in the first frame, where the app's scaffold
+inset already is. Not copied: the 4-session LRU (the phone keeps 12, across
+restarts), and the older-page trigger stays FlashList's `onEndReached` at half
+a viewport rather than 5 items.
+
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.
@@ -469,3 +514,5 @@ all of it.
 - The meaning of three chat-list item kinds.
 - The shimmer's repeat-mode int, which was read from its −0.25 → 1.25 range
   rather than decoded.
+- What sets the app's `snapToBottom` flag on an `Initialize` (`ujw.b` did not
+  decompile).

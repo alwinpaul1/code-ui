@@ -105,4 +105,8 @@ beforeEach(async () => {
   // reuse row ids ('u1') from test to test: one test's claim must not settle the next's.
   const { resetNativeChatSendClaimsForTests } = await import('./src/storage/native-chat-send-claims')
   resetNativeChatSendClaimsForTests()
+  // The composer height a chat opens with is remembered across mounts on purpose
+  // (use-mobile-chat-dock.ts): one case's measured dock must not open the next case's chat.
+  const { resetChatDockHeightForTests } = await import('./src/session/use-mobile-chat-dock')
+  resetChatDockHeightForTests()
 })

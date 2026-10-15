@@ -200,7 +200,7 @@ export function MobileNativeChatView({
     loadingEarlier,
     onLoadEarlier
   })
-  const { dockHeight, onDockLayout } = useChatDock(pinToTail)
+  const { dockHeight, onDockLayout } = useChatDock(pinToTail, keyboardInset > 0)
   // The composer's popover may take only the room between the header and the
   // dock, keyboard included (mobile-native-chat-suggestion-popover.ts).
   const [rootHeight, onRootLayout] = useMeasuredHeight()
