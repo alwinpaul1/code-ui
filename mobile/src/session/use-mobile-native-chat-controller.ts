@@ -114,7 +114,7 @@ export function useMobileNativeChatController(
       onSendError
     })
   // A Claude tab is drawn from Anthropic: what retires the phone's own bubbles (drafts, outbox) reads the rows DRAWN, never Orca's (claude-anthropic-echo-rows.test.tsx).
-  const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaSettled: nativeChatSession.status === 'ready', orcaRowCount: nativeChatSession.messages.length }), drawnSession = claudeApi.session ?? nativeChatSession
+  const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaStatus: nativeChatSession.status, orcaRowCount: nativeChatSession.messages.length, orcaError: nativeChatSession.error }), drawnSession = claudeApi.session ?? nativeChatSession
   const handleBeacon = useAgentHudBeacon(activeHandle)
   // Only the beacon of the session this tab is showing: a beacon is keyed by
   // terminal handle, and a handle outlives the process that emitted into it,
