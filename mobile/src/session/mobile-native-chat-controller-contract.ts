@@ -1,3 +1,4 @@
+import type { ClaudeUsageSheetData } from './ClaudeUsageSheet'
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { ClaudeChatLive } from './claude-chat-live'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
@@ -296,6 +297,9 @@ export type MobileNativeChatController = {
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
+  /** A Claude tab's Usage sheet (ClaudeUsageSheet.tsx, use-ccr-usage-sheet.ts): the tab's own
+   *  session's context and its own account's plan; null on every other tab. */
+  nativeChatClaudeUsage?: { data: ClaudeUsageSheetData; onOpen: () => void } | null
   /** The usage windows the agent or the host states (hud-rate-limit-notice.ts), for the rate-limit
    *  banner. Empty when no source states one. */
   nativeChatRateLimits?: readonly RateLimitWindowReading[]

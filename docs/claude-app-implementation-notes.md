@@ -577,6 +577,100 @@ a kept session never shows the loader, the server's delta merges with no frame
 back on it, a session with nothing kept does show it, and a corrupt copy falls
 back to it.
 
+## 11. The context ring's Usage sheet (added 2026-10-15)
+
+Tapping the context ring opens a "Usage" sheet: a close cross on the left,
+"Usage" centred, a refresh button on the right, then three sections. Each
+section is a card of meter rows, and each row has a title, "N% used", a bar and
+a caption. The sections are "Context" (Context window), "Plan usage" (Current
+session) and "Weekly limits" (All models, and "<Model> only"). The weekly rows
+are one card split by a thin gap. The words come from `res/values/strings.xml`
+(`usage_*`, `ccr_context_bar_usage_description`).
+
+**The context figure is asked of the live session.** The app posts a
+`StdinMessage.ControlRequest` (`jhx.java`, `lhx.java`) to
+`v1/code/sessions/{cse}/events`. The body is `{type: "control_request", uuid,
+request_id, request: {subtype: "get_context_usage", detail}}`, with `detail`
+being "summary" or "full" (`rda.java`, `pda.java`; `g9a.java` and
+`tw9.java:40`). Each send gets a fresh uuid and request id
+(`j7v.java:683-688`). `j7v.h` waits **45 000 ms** (`j7v.java:1184`) for the
+`control_response` whose `response.request_id` matches. That response is an
+`SdkControlResponseEvent.Response` (`j7u.java`): `request_id`, `subtype`,
+`error`, `response`. The "summary" reply is `ContextUsageTotalsReply`
+(`waa.java`): `{totalTokens, rawMaxTokens, percentage?}`. The "full" reply
+adds categories, MCP tools, memory files and agents (`aaa.java`), which drive
+the chevron's breakdown. Code UI asks for "summary" only, because the user did
+not want the breakdown.
+
+The outcomes (`j7v.java:1199-1219`, `taa.java:129-168`, `rr3.java:595-660`)
+are:
+
+- An answer: the figure, with "145.5k of 400k tokens".
+- A reply that is not a success: the sheet stays as it was.
+- No session, a refused POST, or no reply within 45 s: "The session didn’t
+  respond. Tap the refresh button to try again."
+
+The percent (`v7a`) is the reply's `percentage` when it gives one. Otherwise
+it is round(used × 100 / window), clamped to 0..100. From 75% the row is a
+warning, and from 90% it is critical.
+
+When the app asks:
+
+- when the sheet opens;
+- when refresh is tapped (`aa6.java:310` → `w530.t`, which re-reads plan usage
+  beside it);
+- again each time the turn moves while the sheet shows a figure
+  (`n0l.java:103-117`).
+
+An answer stands only for the turn it was given in (`taa.g`). After that, the
+ring falls back to the session row's `external_metadata.context_usage`
+(`SessionContextUsage`, `a3v.java`: `used_tokens`, `max_tokens`,
+`after_boundary`) and the newest event that carries one (`v530.g`). That
+event's time is the "· Updated <time>" caption.
+
+**Plan usage** is `organizations/{orgId}/usage?skip_spend=1`
+(`d310.java:12-16`), `UsageResponse.limits` (`j610.java`). Each `UsageLimit`
+(`n510.java`) has `kind`, `group`, `percent`, `severity`, `resets_at`,
+`scope{model{display_name}, surface}` and `is_active`. `LimitKind` is
+"session", "weekly_all" or "weekly_scoped" (`tw9.java:24`). `group` "session"
+goes under "Plan usage" and "weekly" under "Weekly limits" (`t530.java:1830`).
+`/api/oauth/usage`, which the phone already calls with each account's own OAuth
+token, carries the same `limits` (live 2026-10-15, `scratchpad/probe/p6`). A
+failed refresh over rows already shown gives the snackbar "Couldn’t refresh
+usage" (`o610.java:190`).
+
+**What Code UI does** (`ccr-context-usage.ts`, `use-ccr-usage-sheet.ts`,
+`ccr-usage-sheet-model.ts`, `ClaudeUsageSheet.tsx`):
+
+- It sends the same request through the tab's shared session link. The reply
+  is matched on the link's stream, whether it arrives as an `ephemeral_event` or
+  a `client_event`.
+- It asks on open, on refresh, and at each turn's end while the chat is open,
+  so the ring tracks the session itself. Before this the ring read the status
+  line: 128k on the phone against 145.5k in the app.
+- The answer for the current turn leads the ring (`ccr-usage-hud.ts`).
+- Every figure is the tab's own: the session and account come from
+  `ccrSendTargetForTab`. The plan cards show that account's rows, or the
+  config dir's bound account before the match lands. Otherwise they show
+  "Loading", never another account's numbers.
+- There is no chevron and no breakdown.
+- The failed-refresh line sits inline under the cards, where the app uses a
+  snackbar.
+
+**Not matched or not determined:**
+
+- The code that chooses between "Resets in 1 hr 38 min" and "Resets Wed 6:59
+  pm" did not decompile. Code UI counts down within 24 hours and names the day
+  beyond that, which matches both screenshots. The minutes round up.
+- The exact format of the "Updated %3$s" time. Code UI writes "5:02 pm".
+- Whether `/api/oauth/usage` names the model in `scope.model.display_name` for
+  a `weekly_scoped` row. The app's own endpoint does. A scoped row with no
+  model is left out rather than given a guessed name. Probe P12 checks this.
+- Whether a Remote Control CLI answers `get_context_usage`. Claude Code 2.1.300
+  has the handler, plus a "not supported in this context" refusal for hosts
+  that do not register it. Probe P12 `--ask` checks this. A refusal leaves the
+  ring on its earlier sources.
+
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.

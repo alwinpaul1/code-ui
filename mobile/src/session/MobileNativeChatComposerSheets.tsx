@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
+import { ClaudeUsageSheet, type ClaudeUsageSheetData } from './ClaudeUsageSheet'
 import { MobileAutoModeOptInSheet } from './MobileAutoModeOptInSheet'
 import { loadAutoModeOptedIn, saveAutoModeOptedIn } from '../storage/auto-mode-opt-in'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
@@ -23,7 +24,8 @@ export function MobileNativeChatComposerSheets({
   onSelectAgentMode,
   showContextSheet,
   onCloseContextSheet,
-  contextWindow
+  contextWindow,
+  claudeUsage = null
 }: {
   showModeSheet: boolean
   onCloseModeSheet: () => void
@@ -36,6 +38,9 @@ export function MobileNativeChatComposerSheets({
   showContextSheet: boolean
   onCloseContextSheet: () => void
   contextWindow: TerminalHudContextWindow | null
+  /** A Claude tab's Usage sheet (ClaudeUsageSheet.tsx), which the ring opens in place of the
+   *  context card; `onOpen` asks the session and re-reads the plan as it opens. Null: the card. */
+  claudeUsage?: { data: ClaudeUsageSheetData; onOpen: () => void } | null
 }) {
   // Read once; until it answers the phone has not been told yes, so the
   // question is asked (the Claude app's opt-in, MobileAutoModeOptInSheet.tsx).
@@ -52,6 +57,15 @@ export function MobileNativeChatComposerSheets({
       live = false
     }
   }, [])
+  // Asked once per opening, on the flip to shown: the ring sets it on touch-down and on press.
+  const onOpenUsage = useRef(claudeUsage?.onOpen)
+  onOpenUsage.current = claudeUsage?.onOpen
+  const usageSheet = claudeUsage !== null
+  useEffect(() => {
+    if (showContextSheet && usageSheet) {
+      onOpenUsage.current?.()
+    }
+  }, [showContextSheet, usageSheet])
   const pickPermissionMode = (mode: TerminalPermissionMode): void => {
     onCloseModeSheet()
     // Asked only on the way INTO Auto: a session already in it was put there
@@ -93,11 +107,15 @@ export function MobileNativeChatComposerSheets({
         }}
         onClose={() => setAskAutoOptIn(false)}
       />
-      <MobileContextWindowSheet
-        visible={showContextSheet}
-        context={contextWindow}
-        onClose={onCloseContextSheet}
-      />
+      {claudeUsage ? (
+        <ClaudeUsageSheet visible={showContextSheet} data={claudeUsage.data} onClose={onCloseContextSheet} />
+      ) : (
+        <MobileContextWindowSheet
+          visible={showContextSheet}
+          context={contextWindow}
+          onClose={onCloseContextSheet}
+        />
+      )}
     </>
   )
 }

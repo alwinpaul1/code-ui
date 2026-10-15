@@ -304,12 +304,76 @@ const USAGE_WINDOWS = [
  * locked_reason}`; the other windows are null; `limits: [{kind, percent, ...}]` also comes.
  */
 export async function fetchCcrAccountUsage(fetchImpl: CcrFetch, token: string): Promise<CcrUsageWindow[]> {
+  return (await fetchCcrAccountPlan(fetchImpl, token)).windows
+}
+
+/** One row of the Usage sheet's "Plan usage" and "Weekly limits" cards. */
+export type CcrPlanRow = {
+  kind: 'session' | 'weekly_all' | 'weekly_scoped'
+  /** 0..100, as the reply states it. */
+  percent: number
+  /** Epoch SECONDS, or null when the reply states none. */
+  resetsAt: number | null
+  /** The model a `weekly_scoped` limit is for (`scope.model.display_name`, "Fable"); else null. */
+  modelName: string | null
+}
+
+const PLAN_ROW_KINDS: readonly CcrPlanRow['kind'][] = ['session', 'weekly_all', 'weekly_scoped']
+
+/**
+ * The Usage sheet's plan rows, as the Claude app 1.261009.20 reads them: the reply's `limits`
+ * (`UsageResponse.limits`, j610.java; `UsageLimit`, n510.java: `kind`, `group`, `percent`,
+ * `severity`, `resets_at`, `scope{model{display_name}, surface}`, `is_active`; `LimitKind`
+ * "session" | "weekly_all" | "weekly_scoped", yfj.java via tw9.java:24). The app asks
+ * `organizations/{orgId}/usage?skip_spend=1` (d310.java:12-16); `/api/oauth/usage`, which the phone
+ * can call with the account's own OAuth token, carries the same `limits` (live 2026-10-15). A kind
+ * the app does not know, a row with no percent, and a scoped row with no model are left out.
+ * With no `limits` at all, `five_hour` is the session row and `seven_day` the all-models row.
+ * Sessions first, then the weekly rows, each group in the reply's order.
+ */
+export function readCcrPlanRows(body: Record<string, unknown>): CcrPlanRow[] {
+  const rows: CcrPlanRow[] = []
+  if (Array.isArray(body.limits)) {
+    for (const item of body.limits) {
+      const limit = record(item)
+      const kind = PLAN_ROW_KINDS.find((entry) => entry === limit?.kind)
+      const percent = limit?.percent
+      if (!limit || !kind || typeof percent !== 'number' || !Number.isFinite(percent)) {
+        continue
+      }
+      const name = record(record(limit.scope)?.model)?.display_name
+      const modelName = kind === 'weekly_scoped' && typeof name === 'string' && name.trim() ? name.trim() : null
+      if (kind === 'weekly_scoped' && modelName === null) {
+        continue
+      }
+      rows.push({ kind, percent: Math.max(0, Math.min(100, Math.round(percent))), resetsAt: resetOf(limit.resets_at), modelName })
+    }
+  }
+  if (rows.length === 0) {
+    for (const [key, kind] of [['five_hour', 'session'], ['seven_day', 'weekly_all']] as const) {
+      const window = record(body[key])
+      const used = window?.utilization
+      if (window && typeof used === 'number' && Number.isFinite(used)) {
+        rows.push({ kind, percent: Math.max(0, Math.min(100, Math.round(used))), resetsAt: resetOf(window.resets_at), modelName: null })
+      }
+    }
+  }
+  const order = (row: CcrPlanRow): number => (row.kind === 'session' ? 0 : 1)
+  return rows.map((row, index) => ({ row, index })).sort((a, b) => order(a.row) - order(b.row) || a.index - b.index).map(({ row }) => row)
+}
+
+/** The account's plan usage in both shapes: the HUD's two windows and the Usage sheet's rows. */
+export async function fetchCcrAccountPlan(fetchImpl: CcrFetch, token: string): Promise<{ windows: CcrUsageWindow[]; rows: CcrPlanRow[] }> {
   const body = record(
     await getJson(fetchImpl, 'usage', `${CCR_API_BASE_URL}/api/oauth/usage`, ccrProfileHeaders(token))
   )
   if (!body) {
     throw new CcrApiError('usage', 'malformed')
   }
+  return { windows: readCcrUsageWindows(body), rows: readCcrPlanRows(body) }
+}
+
+function readCcrUsageWindows(body: Record<string, unknown>): CcrUsageWindow[] {
   const windows: CcrUsageWindow[] = []
   for (const { key, name, windowMinutes } of USAGE_WINDOWS) {
     const window = record(body[key])

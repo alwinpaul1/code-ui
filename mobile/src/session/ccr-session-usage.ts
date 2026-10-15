@@ -1,4 +1,4 @@
-import { fetchCcrAccountUsage, listCcrSessionEvents, type CcrEvent, type CcrSessionRow, type CcrUsageWindow } from './ccr-session-api'
+import { fetchCcrAccountPlan, listCcrSessionEvents, type CcrEvent, type CcrPlanRow, type CcrSessionRow, type CcrUsageWindow } from './ccr-session-api'
 import { ccrAccountForConfigDir, ccrAccountForTab, ccrSessionForTab } from './ccr-session-cache'
 import { CCR_EVENT_PAGE_SIZE, defaultLog, maskId, reasonOf, type CcrPipelineDeps } from './ccr-session-shared'
 
@@ -37,6 +37,9 @@ export type CcrUsageReading = {
   fetchedAt: number
   /** Plan windows, or null when the account's usage could not be read. */
   limits: readonly CcrUsageWindow[] | null
+  /** The same reply as the Usage sheet's rows ("Current session", "All models", "Fable only"), or
+   *  null/absent when it could not be read. Always this reading's account's own. */
+  planRows?: readonly CcrPlanRow[] | null
   /** The session's context, or null when neither its row nor its events state one. */
   context: CcrSessionContext | null
 }
@@ -210,9 +213,9 @@ export async function refreshCcrUsage(
     }
     const kept = rowContexts.get(tabId)
     const stated = kept && kept.sessionId === sessionId && kept.epoch === epoch ? kept.context : null
-    const [limits, context] = await Promise.all([
-      fetchCcrAccountUsage(deps.fetch, token).then(
-        (windows): readonly CcrUsageWindow[] | null => windows,
+    const [plan, context] = await Promise.all([
+      fetchCcrAccountPlan(deps.fetch, token).then(
+        (read): { windows: readonly CcrUsageWindow[]; rows: readonly CcrPlanRow[] } | null => read,
         (error: unknown) => {
           say(false, `plan usage: ${reasonOf(error)}`)
           return null
@@ -227,7 +230,8 @@ export async function refreshCcrUsage(
           })
         : Promise.resolve(null)
     ])
-    recordCcrUsage(tabId, { sessionId, accountId, epoch, fetchedAt: Date.now(), limits, context })
+    const limits = plan?.windows ?? null
+    recordCcrUsage(tabId, { sessionId, accountId, epoch, fetchedAt: Date.now(), limits, planRows: plan?.rows ?? null, context })
     say(
       true,
       `${account.label}: ${limits === null ? 'plan usage unread' : `${limits.length} plan window(s)`}, context ${
@@ -266,11 +270,11 @@ async function refreshBoundAccountUsage(
       forgetCcrUsage(tabId)
       return
     }
-    const limits = await fetchCcrAccountUsage(deps.fetch, account.accessToken).catch((error: unknown) => {
+    const plan = await fetchCcrAccountPlan(deps.fetch, account.accessToken).catch((error: unknown) => {
       say(false, `plan usage: ${reasonOf(error)}`)
       return null
     })
-    recordCcrUsage(tabId, { sessionId: null, accountId: account.id, epoch, fetchedAt: Date.now(), limits, context: null })
+    recordCcrUsage(tabId, { sessionId: null, accountId: account.id, epoch, fetchedAt: Date.now(), limits: plan?.windows ?? null, planRows: plan?.rows ?? null, context: null })
   } catch (error) {
     forgetCcrUsage(tabId)
     say(false, reasonOf(error))

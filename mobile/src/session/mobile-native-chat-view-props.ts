@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { ClaudeUsageSheetData } from './ClaudeUsageSheet'
 import type { LevelSource } from '../dictation/pcm-level'
 import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -160,6 +161,8 @@ export type MobileNativeChatViewProps = {
   /** Caret in the composer, so a take inserts there instead of at the end. */
   onComposerCursor?: (cursor: number) => void
   contextWindow?: TerminalHudContextWindow | null
+  /** A Claude tab's Usage sheet, which the ring opens (ClaudeUsageSheet.tsx). */
+  claudeUsage?: { data: ClaudeUsageSheetData; onOpen: () => void } | null
   permissionMode?: TerminalPermissionMode | null
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   agentMode?: TerminalAgentMode | null

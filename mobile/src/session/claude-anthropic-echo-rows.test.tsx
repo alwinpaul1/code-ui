@@ -20,7 +20,7 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
  */
 
 const orca = { messages: [] as NativeChatMessage[], status: 'ready', transcriptLoading: false }
-const api: { gate: ClaudeChatGate; session: MobileNativeChatSession | null } = { gate: { kind: 'off' }, session: null }
+const api: { gate: ClaudeChatGate; session: MobileNativeChatSession | null; events: readonly never[] } = { gate: { kind: 'off' }, session: null, events: [] }
 const draftsArgs: { messages: readonly NativeChatMessage[]; transcriptSettled: boolean; transcriptLoading?: boolean }[] = []
 const outboxArgs: { messages: readonly NativeChatMessage[]; transcriptSettled: boolean }[] = []
 
