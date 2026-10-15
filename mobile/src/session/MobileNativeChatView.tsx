@@ -449,7 +449,8 @@ export function MobileNativeChatView({
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}
       {notices}{sessionPills}
       <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
-      <MobileNativeChatComposer
+      {/* Like the Claude app, an unanswered question card takes the composer's place (2026-10-16). */}
+      {ask && askSentAt == null ? null : (<MobileNativeChatComposer
         banner={composerBanner} value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}
@@ -495,9 +496,8 @@ export function MobileNativeChatView({
         conversationCommands={conversationCommands}
         onNeedSkills={onNeedSkills}
         canStop={(canStop ?? agentWorking) === true}
-        stopping={stopping}
-        onStop={onStop}
-      />
+        stopping={stopping} onStop={onStop}
+      />)}
       </View>
     </View>
     </MobileNativeChatTasksProvider>

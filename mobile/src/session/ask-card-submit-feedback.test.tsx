@@ -41,7 +41,9 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(name, props, children)
   return {
+    ActivityIndicator: passthrough('ActivityIndicator'),
     Pressable: passthrough('Pressable'),
+    StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
     ScrollView: passthrough('ScrollView'),
     Text: passthrough('Text'),
     TextInput: passthrough('TextInput'),
@@ -49,7 +51,13 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 412, height: 915 })
   }
 })
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight'
+}))
 vi.mock('../ui/Button', () => ({ Button: 'Button' }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'Permission' }))
@@ -203,9 +211,9 @@ function isHost(node: ReactTestInstance, tag: string): boolean {
   return (node.type as unknown) === tag
 }
 
-/** The card's primary button, whatever it says (Next, Submit, Sending…). */
+/** The card's round send button, whatever it says (Next, Submit, Sending…). */
 function primary(): ReactTestInstance | null {
-  return renderer!.root.findAll((node) => isHost(node, 'Button') && node.props.variant === 'accent')[0] ?? null
+  return renderer!.root.findAll((node) => isHost(node, 'Pressable') && node.props.testID === 'ask-send')[0] ?? null
 }
 
 /** The Sent status that takes the button's place once the host accepts. */
@@ -239,8 +247,10 @@ async function pressEverything(): Promise<void> {
   }
 }
 
+/** Skip, which took Cancel's place (2026-10-16): with nothing answered it
+ *  declines the question, as Cancel did. */
 function cancelButton(): ReactTestInstance | null {
-  return renderer!.root.findAll((node) => isHost(node, 'Button') && node.props.label === 'Cancel')[0] ?? null
+  return renderer!.root.findAll((node) => isHost(node, 'Button') && node.props.label === 'Skip')[0] ?? null
 }
 
 function texts(): string[] {
@@ -297,8 +307,9 @@ describe('the ask card after Submit is tapped', () => {
     await tap(primary())
 
     expect(answers).toEqual([[{ indices: [0] }]])
-    expect(primary()!.props.label, 'the first tap left Submit looking untouched').toBe('Sending…')
-    expect(primary()!.props.loading).toBe(true)
+    expect(primary()!.props.accessibilityLabel, 'the first tap left Submit looking untouched').toBe('Sending…')
+    expect(primary()!.props.accessibilityState.busy).toBe(true)
+    expect(primary()!.findAll((node) => isHost(node, 'ActivityIndicator'))).toHaveLength(1)
     expect(cancelButton()!.props.disabled).toBe(true)
   })
 
@@ -390,7 +401,7 @@ describe('the ask card after Submit is tapped', () => {
     await tap(primary())
     await reply(false)
 
-    expect(primary()!.props.label).toBe('Submit')
+    expect(primary()!.props.accessibilityLabel).toBe('Submit')
     expect(primary()!.props.disabled).toBe(false)
     expect(primary()!.props.loading).not.toBe(true)
     expect(cancelButton()!.props.disabled).toBe(false)
@@ -428,7 +439,7 @@ describe('the ask card after Submit is tapped', () => {
     expect(askCard()).toBeNull()
   })
 
-  it('an accepted Cancel still takes the card away at once', async () => {
+  it('an accepted Skip with nothing answered still takes the card away at once', async () => {
     open(PUSH)
     await tap(cancelButton())
     expect(cancels).toBe(1)
@@ -469,7 +480,7 @@ describe('an approval raised while an answered question waits', () => {
     const messages = open(CODEX_REQUEST_USER_INPUT, 'codex')
     permission = APPROVAL
     render(messages)
-    expect(primary()!.props.label).toBe('Submit')
+    expect(primary()!.props.accessibilityLabel).toBe('Submit')
     expect(approvalCard()).toBeNull()
   })
 })
@@ -481,7 +492,7 @@ describe('the sent state on the other card shapes', () => {
     const messages = open(CODEX_REQUEST_USER_INPUT, 'codex')
     pick('Blue')
     await tap(primary())
-    expect(primary()!.props.label).toBe('Sending…')
+    expect(primary()!.props.accessibilityLabel).toBe('Sending…')
     await reply(true)
     expectSent()
     hook(took(CODEX_REQUEST_USER_INPUT, 'Blue', 'codex'), messages, 'codex')
@@ -492,13 +503,13 @@ describe('the sent state on the other card shapes', () => {
   it('a two-question card: Next, then Submit on the last question', async () => {
     const messages = open(ASK_USER_QUESTION_STACK_AND_LOOK)
     pick('Fork Orca mobile (Expo/RN) (Recommended)')
-    expect(primary()!.props.label).toBe('Next')
+    expect(primary()!.props.accessibilityLabel).toBe('Next')
     await tap(primary())
     expect(answers, 'Next sent something').toEqual([])
-    expect(primary()!.props.label).toBe('Submit')
+    expect(primary()!.props.accessibilityLabel).toBe('Submit')
     pick('Claude app: warm cream/ink, serif headings (Recommended)')
     await tap(primary())
-    expect(primary()!.props.label).toBe('Sending…')
+    expect(primary()!.props.accessibilityLabel).toBe('Sending…')
     // The pager cannot take the card back to a question whose answer is going out.
     const chevrons = renderer!.root.findAll(
       (node) =>
@@ -522,7 +533,7 @@ describe('the sent state on the other card shapes', () => {
     const input = renderer!.root.findAll((node) => isHost(node, 'TextInput'))[0]!
     act(() => input.props.onChangeText('the old simulator images'))
     await tap(primary())
-    expect(primary()!.props.label).toBe('Sending…')
+    expect(primary()!.props.accessibilityLabel).toBe('Sending…')
     const locked = renderer!.root.findAll((node) => isHost(node, 'TextInput'))[0]!
     expect(locked.props.editable, 'the Other text could be edited after it went out').toBe(false)
     await reply(true)

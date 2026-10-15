@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Pressable, TextInput, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { ActivityIndicator, Pressable, TextInput, View } from 'react-native'
+import { ArrowRight, ArrowUp, Check } from 'lucide-react-native'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { useTheme } from '../theme/theme-context'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { Txt } from '../ui/Txt'
+import { ASK_FOOTER_CONTROL_SIZE, ASK_SEND_GLYPH_SIZE } from './ask-card-claude-app-spec'
 
 /** The free answer's row, in the Claude app's words (`question_card_other_hint`,
  *  1.261009.20). */
@@ -43,6 +44,59 @@ export function PagerButton({
       }}
     >
       {children}
+    </Pressable>
+  )
+}
+
+/** The footer's round send button (dc5.java:1404-1410, `rbi.c` at qe4 "Small"):
+ *  an up arrow on the clay to send from the last page, a right arrow on the ink
+ *  to turn to the next one, and the badge grey with a muted arrow until the
+ *  page has an answer. While the answer is on its way a spinner takes the arrow
+ *  and the button keeps its fill, so the tap does not look missed. */
+export function SendButton({
+  last,
+  sending,
+  disabled,
+  onPress
+}: {
+  last: boolean
+  sending: boolean
+  disabled: boolean
+  onPress: () => void
+}): React.JSX.Element {
+  const { colors } = useTheme()
+  const live = !disabled || sending
+  const fill = !live ? colors.askBadgeStrong : last ? colors.askSubmitFill : colors.askNextFill
+  const ink = !live ? colors.askMuted : last ? colors.askSubmitLabel : colors.askNextLabel
+  const Arrow = last ? ArrowUp : ArrowRight
+  const label = sending ? 'Sending…' : last ? 'Submit' : 'Next'
+  return (
+    <Pressable
+      testID="ask-send"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || sending, busy: sending }}
+      disabled={disabled || sending}
+      onPress={onPress}
+      hitSlop={tapTargetHitSlop(
+        { width: ASK_FOOTER_CONTROL_SIZE, height: ASK_FOOTER_CONTROL_SIZE },
+        { horizontalGap: 0 }
+      )}
+      style={({ pressed }) => ({
+        width: ASK_FOOTER_CONTROL_SIZE,
+        height: ASK_FOOTER_CONTROL_SIZE,
+        borderRadius: ASK_FOOTER_CONTROL_SIZE / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: fill,
+        opacity: pressed && live ? 0.8 : 1
+      })}
+    >
+      {sending ? (
+        <ActivityIndicator size="small" color={ink} />
+      ) : (
+        <Arrow size={ASK_SEND_GLYPH_SIZE} color={ink} strokeWidth={2.2} />
+      )}
     </Pressable>
   )
 }
@@ -168,7 +222,10 @@ export function OptionRow({
     >
       <RowMark number={number} selected={selected} pressed={pressed} multi={multi === true} />
       <View style={{ flex: 1 }}>
-        <Txt variant="body" style={{ color: pressed ? colors.askText : colors.askLabel }}>
+        {/* xo7.C (15 / 400) in the app, whose face is heavier than Instrument
+            Sans at 400; the user's screenshot reads it a step above the
+            description (2026-10-16), so medium here. */}
+        <Txt variant="body" weight="medium" style={{ color: pressed ? colors.askText : colors.askLabel }}>
           {notificationPlainText(label)}
         </Txt>
         {description ? (

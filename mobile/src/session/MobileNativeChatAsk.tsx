@@ -1,12 +1,18 @@
 import { useMemo, useRef, useState } from 'react'
 import { notificationPlainText } from '../notifications/notification-plain-text'
-import { ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
+import { ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { useTheme } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
-import { OptionRow, OtherRow, PagerButton, Rule } from './MobileNativeChatAskRows'
+import { OptionRow, OtherRow, PagerButton, Rule, SendButton } from './MobileNativeChatAskRows'
+import {
+  ASK_CARD_RADIUS,
+  ASK_FOOTER,
+  ASK_SKIP_LABEL,
+  askCardMaxHeight
+} from './ask-card-claude-app-spec'
 import {
   ASK_SENT_WAITING_LINE,
   useSentWaitElapsed
@@ -32,35 +38,41 @@ type Props = {
 const DIMMED_CHOICE_OPACITY = 0.4
 /** The rows that were not chosen, once the answer is on its way (dc5.java:2298). */
 const LOCKED_ROW_OPACITY = 0.38
-/** The card's corner: bn7.j, 24 dp (zlw.java:16). */
-const ASK_CARD_RADIUS = 24
-
 
 /** Native renderer for an agent's AskUserQuestion prompt, drawn as the Claude
- *  app 1.261009.20 draws its question card (dc5.java; the numbers are in
- *  ask-card-claude-look.test.tsx): one question per page, a "1 of N" pager with
- *  chevrons in the header (no header chip, no tabs), numbered rows or
- *  checkboxes, a "Something else" field in the last row, and a footer with Next
- *  (Submit on the last page). A tap on an option only chooses it; nothing reaches
- *  the agent until Submit, which sends every page's answer at once. Desktop moves
- *  on by itself after a single-select pick (Orca #26288); the phone does not,
- *  because on the last page that move was the submit and the user lost the chance
- *  to change their mind (2026-10-13). The Claude app behaves the same way.
+ *  app 1.261013.20 draws its question card (dc5.java; the numbers are in
+ *  ask-card-claude-app-spec.ts and ask-card-claude-look.test.tsx): one question
+ *  per page inside a hairline edge, a "1 of N" pager with chevrons in the header
+ *  (no header chip, no tabs), numbered rows or checkboxes, a "Something else"
+ *  field in the last row, and a footer with the count, an outlined Skip and a
+ *  round arrow that turns the page (Next) or sends (Submit on the last page). A
+ *  tap on an option only chooses it; nothing reaches the agent until Submit,
+ *  which sends every page's answer at once. Desktop moves on by itself after a
+ *  single-select pick (Orca #26288); the phone does not, because on the last page
+ *  that move was the submit and the user lost the chance to change their mind
+ *  (2026-10-13). The Claude app hides its footer on such a card and submits on the
+ *  pick; this card keeps the footer for that reason.
  *
- *  Not the Claude app's: it has Skip beside Next, which clears the page's answer
- *  ("[No preference]"). Claude Code's own picker cannot be driven to "no answer"
- *  with keys, so that slot holds Cancel, which writes Escape. */
+ *  Skip is the app's: it lets go of the page's answer and turns the page, or
+ *  sends from the last one, a skipped page going out unanswered (the key
+ *  builders step past it). When nothing at all is answered there is nothing to
+ *  send, so Skip declines the question instead, which writes Escape: the old
+ *  Cancel, and Claude Code's own "no answer". */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null }: Props): React.JSX.Element {
   const { colors, space } = useTheme()
-  // 400 was a fixed guess: with the keyboard up on a short phone it grew the
-  // dock past the viewport and clipped the card's own question off the top,
-  // with nothing to scroll. The dock is bottom-anchored and has no cap of its
-  // own, so the card carries one that follows the screen.
+  // A fixed 400 grew the dock past the viewport with the keyboard up on a short
+  // phone and clipped the card's own question off the top. The dock is
+  // bottom-anchored and has no cap of its own, so the card carries one that
+  // follows the screen. It is 60 % since the card took the composer's place
+  // (2026-10-16): the composer's room is the card's now, and the old cap
+  // (52 %, at most 400) slid "Something else" under the footer.
   const { height: windowHeight } = useWindowDimensions()
-  const cardMaxHeight = Math.max(240, Math.min(400, Math.round(windowHeight * 0.52)))
+  const cardMaxHeight = askCardMaxHeight(windowHeight)
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  // Pages the user skipped: they count as dealt with, and go out unanswered.
+  const [skipped, setSkipped] = useState<boolean[]>(() => prompt.questions.map(() => false))
   // The row under a finger, so the rules beside it can let go (dc5.java j()).
   const [pressedRow, setPressedRow] = useState<number | null>(null)
   const [busy, setBusy] = useState<'sending' | 'cancelling' | null>(null)
@@ -84,6 +96,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     if (locked || busyRef.current) {
       return
     }
+    setSkipped((prev) => prev.map((cur, i) => (i === qi ? false : cur)))
     setSelections((prev) =>
       prev.map((cur, i) => {
         if (i !== qi) {
@@ -109,6 +122,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
       next[qi] = value
       return next
     })
+    if (value.trim().length > 0) {
+      setSkipped((prev) => prev.map((cur, i) => (i === qi ? false : cur)))
+    }
     if (!multi && value.trim().length > 0) {
       setSelections((prev) => prev.map((cur, i) => (i === qi ? [] : cur)))
     }
@@ -124,6 +140,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     const answer = selectionFor(qi)
     return answer.indices.length > 0 || (answer.other ?? '').length > 0
   }
+  const isDealtWith = (qi: number): boolean => isAnswered(qi) || skipped[qi] === true
 
   const total = prompt.questions.length
   const isLast = index === total - 1
@@ -132,22 +149,32 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selections, otherText, index]
   )
+  // Every page answered or skipped, and at least one answered: a card with
+  // every page skipped has nothing to send (Skip declines it instead).
   const allAnswered = useMemo(
-    () => prompt.questions.every((_, i) => isAnswered(i)),
+    () =>
+      prompt.questions.every((_, i) => isDealtWith(i)) &&
+      prompt.questions.some((_, i) => isAnswered(i)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [otherText, prompt.questions, selections]
+    [otherText, prompt.questions, selections, skipped]
   )
   const canAdvance = !locked && (isLast ? allAnswered : currentAnswered)
 
-  const submit = async (): Promise<void> => {
-    if (!prompt.questions.every((_, i) => isAnswered(i)) || busyRef.current || answeredAt !== null) {
+  // `skipPage` is the page Skip just let go of: its state has not rendered yet.
+  const submit = async (skipPage: number | null = null): Promise<void> => {
+    const answers = prompt.questions.map((_, i) =>
+      i === skipPage ? { indices: [] } : selectionFor(i)
+    )
+    const dealtWith = prompt.questions.every((_, i) => i === skipPage || isDealtWith(i))
+    const anyAnswered = answers.some((a) => a.indices.length > 0 || (a.other ?? '').length > 0)
+    if (!dealtWith || !anyAnswered || busyRef.current || answeredAt !== null) {
       return
     }
     busyRef.current = true
     setBusy('sending')
     let accepted = false
     try {
-      accepted = await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
+      accepted = await onAnswer(answers)
     } finally {
       // A refusal has already said why (the send path reports every false), so
       // the tap goes back at once. An accepted answer keeps the ref held.
@@ -166,6 +193,28 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
       await submit()
     } else if (!locked) {
       setIndex((i) => Math.min(i + 1, total - 1))
+    }
+  }
+
+  // Skip (dc5.java:847-861): let go of this page's answer, then turn the page,
+  // or send from the last one. With no page answered there is nothing to send,
+  // so the question is declined instead (Escape, the old Cancel).
+  const skip = async (): Promise<void> => {
+    if (locked || busyRef.current) {
+      return
+    }
+    setSelections((prev) => prev.map((cur, i) => (i === index ? [] : cur)))
+    setOtherText((prev) => prev.map((cur, i) => (i === index ? '' : cur)))
+    setSkipped((prev) => prev.map((cur, i) => (i === index ? true : cur)))
+    if (!isLast) {
+      setIndex((i) => Math.min(i + 1, total - 1))
+      return
+    }
+    const anyAnswered = prompt.questions.some((_, i) => i !== index && isAnswered(i))
+    if (anyAnswered) {
+      await submit(index)
+    } else {
+      await cancel()
     }
   }
 
@@ -211,6 +260,10 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
         marginBottom: space.xs,
         borderRadius: ASK_CARD_RADIUS,
         backgroundColor: colors.askCardFill,
+        // A 0 dp Compose border is a one-pixel hairline, in the rule colour
+        // (dc5.java:655, n55.java:15720).
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.askDivider,
         overflow: 'hidden'
       }}
     >
@@ -226,7 +279,15 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
           paddingBottom: 6
         }}
       >
-        <Txt variant="body" style={{ flex: 1, color: colors.askText }} accessibilityRole="header">
+        {/* The app sets it in xo7.C (15 / 400), whose face reads heavier than
+            Instrument Sans at 400; the user's screenshot of the app shows it
+            semibold beside our regular (2026-10-16). */}
+        <Txt
+          variant="body"
+          weight="semibold"
+          style={{ flex: 1, color: colors.askText }}
+          accessibilityRole="header"
+        >
           {notificationPlainText(q.question)}
         </Txt>
         {total > 1 ? (
@@ -310,20 +371,11 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
       <View style={{ height: 1, backgroundColor: colors.askDivider }} />
       {/* Footer (dc5.java d()): the count on the left, then the actions. */}
       <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          minHeight: 48,
-          paddingLeft: 20,
-          paddingTop: 6,
-          paddingRight: 16,
-          paddingBottom: 6,
-          gap: 8
-        }}
+        style={{ flexDirection: 'row', alignItems: 'center', ...ASK_FOOTER }}
       >
         <View style={{ flex: 1 }}>
           {answeredAt !== null ? (
-            // Sent: Cancel would write Escape into a turn the agent may already
+            // Sent: Skip could write Escape into a turn the agent may already
             // have started, so it goes, and the slot says what the card waits on.
             <Txt variant="label" style={{ color: colors.askLabel }} accessibilityLiveRegion="polite">
               {waitingLong ? ASK_SENT_WAITING_LINE : ''}
@@ -336,20 +388,22 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
           ) : null}
         </View>
         {answeredAt === null ? (
-          <Button label="Cancel" variant="ghost" size="sm" disabled={locked} onPress={() => void cancel()} />
+          // An outlined pill (af4 "Secondary", qe4 "Small", dc5.java:2270).
+          <Button
+            label={ASK_SKIP_LABEL}
+            variant="secondary"
+            size="sm"
+            style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border }}
+            labelColor={colors.askText}
+            disabled={locked}
+            onPress={() => void skip()}
+          />
         ) : null}
         {answeredAt === null ? (
-          <Button
-            label={busy === 'sending' ? 'Sending…' : isLast ? 'Submit' : 'Next'}
-            variant="accent"
-            size="sm"
-            // Next is the ink pill, Submit the clay one (kf4, gf4).
-            style={{ backgroundColor: isLast ? colors.askSubmitFill : colors.askNextFill }}
-            labelColor={isLast ? colors.askSubmitLabel : colors.askNextLabel}
-            // While sending the spinner is the feedback; Button keeps a loading
-            // one pressable-dead without dimming it to look like a missed tap.
-            disabled={!canAdvance && busy !== 'sending'}
-            loading={busy === 'sending'}
+          <SendButton
+            last={isLast}
+            sending={busy === 'sending'}
+            disabled={!canAdvance}
             onPress={() => void advance()}
           />
         ) : (

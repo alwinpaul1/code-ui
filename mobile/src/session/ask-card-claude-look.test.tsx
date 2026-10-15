@@ -14,7 +14,9 @@ import type { AskPrompt } from '../../../src/shared/native-chat-ask'
 //   Previews are always null for Claude Code, so there is no preview pane.
 //
 // Card (dc5.java:668): fill ad5.n0() = #FFFFFF / #20201F, shape bn7.j = 24 dp
-//   (zlw.java:16), no border, no shadow (aa20.n(.., z3 = false, default border 0)).
+//   (zlw.java:16), no shadow. Its border is the default 0 dp in ad5.A(), which
+//   Compose draws as a one-pixel hairline (Dp.Hairline); read again against
+//   1.261013.20 on 2026-10-16 (ask-card-claude-app-spec.ts), so the card has one.
 // Header (dc5.java:1724-1750, f()): padding 16 / 12 / 16 (8 with a pager) / 6;
 //   question text jn7.E 15/400/21 (jn7.java:46) in ad5.u0() #0B0B0B / #F0EFEC.
 // Pager (dc5.java:1842-1895, g()): prev chevron, "n of N" (jn7.E, ad5.y() #898781),
@@ -37,11 +39,10 @@ import type { AskPrompt } from '../../../src/shared/native-chat-ask'
 // Footer (dc5.java:1424-1465 c(), 1468 d()): a rule above, row padding
 //   20/6/16/6, min height 48, 8 dp gaps; "n selected" (jn7.H, ad5.y()) on the
 //   left for multi-select only (question_card_selected_count, dc5.java:1525);
-//   Skip, then Next (ink pill kf4: ad5.k0() #0B0B0B / #FFFFFF) or, on the last
-//   page, Submit (clay pill gf4: ad5.w0() #C6613F), 36 dp tall.
-//   Skip is not built: it clears the page's answer and moves on
-//   ("[No preference]", m62.java:23-24), and Claude Code's picker cannot be
-//   driven to "no answer" with keys. Cancel keeps that slot.
+//   Skip, then Next (ink: ad5.k0() #0B0B0B / #FFFFFF) or, on the last
+//   page, Submit (clay: ad5.w0() #C6613F), 36 dp. Since 2026-10-16 the send
+//   control is the app's round arrow button and Skip is built (both in
+//   ask-card-claude-app-spec.ts and ask-card-claude-app-footer.test.tsx).
 // Once answered the app swaps the card for a plain answered card (x920.java:
 //   caption "Question(s)" jn7.E ad5.x0(); each question jn7.B ad5.x0(), answer
 //   jn7.B ad5.u0(), "Skipped" for none). That card is the transcript's, not
@@ -54,7 +55,9 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(name, props, children)
   return {
+    ActivityIndicator: passthrough('ActivityIndicator'),
     Pressable: passthrough('Pressable'),
+    StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
     ScrollView: passthrough('ScrollView'),
     TextInput: passthrough('TextInput'),
     View: passthrough('View'),
@@ -63,6 +66,8 @@ vi.mock('react-native', async () => {
   }
 })
 vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
   Check: 'Check',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight'
@@ -119,8 +124,11 @@ const rows = (): ReactTestInstance[] =>
   )
 const byLabel = (label: string): ReactTestInstance =>
   root().find((n) => (n.type as unknown) === 'Pressable' && n.props.accessibilityLabel === label)
+/** The round send button, by what it says (Next, Submit). */
 const button = (label: string): ReactTestInstance =>
-  root().find((n) => (n.type as unknown) === 'Button' && n.props.label === label)
+  root().find(
+    (n) => (n.type as unknown) === 'Pressable' && n.props.testID === 'ask-send' && n.props.accessibilityLabel === label
+  )
 
 const single = (n = 3): AskPrompt =>
   ({
@@ -317,7 +325,7 @@ describe('the footer', () => {
     expect(root().findAll((n) => (n.type as unknown) === 'Txt' && text(n).endsWith(' selected'))).toHaveLength(0)
   })
 
-  it('says Next on an earlier page and Submit on the last, as one pill', () => {
+  it('says Next on an earlier page and Submit on the last, as one round button', () => {
     render(TWO)
     expect(button('Next')).toBeTruthy()
     act(() => byLabel('Next question').props.onPress())
@@ -328,12 +336,13 @@ describe('the footer', () => {
 describe.each(['light', 'dark'] as const)('the card’s colours in %s', (scheme) => {
   const colors = scheme === 'light' ? lightColors : darkColors
 
-  it('fills the card at 24 dp with no border, and sets the question in the primary ink', () => {
+  it('fills the card at 24 dp inside a hairline edge, and sets the question in the primary ink', () => {
     render(single(), scheme)
     const card = root().find((n) => (n.type as unknown) === 'View' && flatten(n.props.style).borderRadius === 24)
     const style = flatten(card.props.style)
     expect(style.backgroundColor).toBe(colors.askCardFill)
-    expect(style.borderWidth ?? 0).toBe(0)
+    expect(style.borderWidth).toBe(1)
+    expect(style.borderColor).toBe(colors.askDivider)
     const question = txts('Which library should we use for date formatting?')[0]!
     expect(flatten(question.props.style).color).toBe(colors.askText)
   })
@@ -353,10 +362,12 @@ describe.each(['light', 'dark'] as const)('the card’s colours in %s', (scheme)
     expect(rules.length).toBeGreaterThanOrEqual(4)
   })
 
-  it('fills Next with ink and Submit with the clay', () => {
+  it('fills Next with ink and Submit with the clay once the page has an answer', () => {
     render(TWO, scheme)
+    act(() => rows()[0]!.props.onPress())
     expect(flatten(button('Next').props.style).backgroundColor).toBe(colors.askNextFill)
     act(() => byLabel('Next question').props.onPress())
+    act(() => rows()[0]!.props.onPress())
     expect(flatten(button('Submit').props.style).backgroundColor).toBe(colors.askSubmitFill)
   })
 

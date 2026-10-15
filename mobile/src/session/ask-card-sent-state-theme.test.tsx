@@ -14,14 +14,20 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: <T,>(styles: T) => styles },
+  StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
   useColorScheme: () => 'light',
   useWindowDimensions: () => ({ width: 412, height: 915 })
 }))
-vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
+vi.mock('lucide-react-native', () => ({
+  ArrowRight: 'ArrowRight',
+  ArrowUp: 'ArrowUp',
+  Check: 'Check',
+  ChevronLeft: 'ChevronLeft',
+  ChevronRight: 'ChevronRight'
+}))
 
 import { ASK_SENT_WAIT_MS, ASK_SENT_WAITING_LINE, MobileNativeChatAsk } from './MobileNativeChatAsk'
 
@@ -49,6 +55,9 @@ afterEach(() => {
 })
 
 function flat(style: unknown): Record<string, unknown> {
+  if (typeof style === 'function') {
+    return flat((style as (state: { pressed: boolean }) => unknown)({ pressed: false }))
+  }
   if (Array.isArray(style)) {
     return Object.assign({}, ...style.map(flat))
   }
@@ -101,10 +110,10 @@ describe('the ask card after Submit, in light and dark', () => {
       button('Submit').props.onPress()
     })
 
-    // In flight: a spinner and a word on the accent pill, not a dimmed Submit.
+    // In flight: a spinner on the clay round button, not a greyed-out Submit.
     const spinner = renderer!.root.findAll((node) => (node.type as unknown) === 'ActivityIndicator')[0]
     expect(spinner?.props.color).toBe(palette.askSubmitLabel)
-    expect(flat(textNode('Sending…').props.style).color).toBe(palette.askSubmitLabel)
+    expect(flat(button('Sending…').props.style).backgroundColor).toBe(palette.askSubmitFill)
     expect(flat(button('Sending…').props.style).opacity).toBe(1)
 
     await act(async () => {
