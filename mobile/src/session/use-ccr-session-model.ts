@@ -63,7 +63,7 @@ export function useCcrSessionModel(args: {
     let active = true
     const deps = async () => depsRef.current ?? (await loadDefaultCcrPipelineDeps())
     const step = async () => {
-      if (ccrSessionForTab(tabId, epoch, agentSessionId)) {
+      if (ccrSessionForTab(tabId, epoch, agentSessionId, configDir)) {
         await refreshCcrModel(tabId, epoch, await deps(), agentSessionId)
       } else if (ccrMayRun(tabId, epoch)) {
         await runCcrImagePipeline(
@@ -78,7 +78,7 @@ export function useCcrSessionModel(args: {
         setTick((tick) => tick + 1)
         // Not found yet: a session just started may be listed a moment later, so the quick
         // retries (0.5, 1, 2, 4 s) are timed here rather than left to the minute's tick.
-        const retryAt = ccrSessionForTab(tabId, epoch, agentSessionId) ? null : ccrRetryAt(tabId, epoch)
+        const retryAt = ccrSessionForTab(tabId, epoch, agentSessionId, configDir) ? null : ccrRetryAt(tabId, epoch)
         const wait = retryAt === null ? null : retryAt - Date.now()
         if (wait !== null && wait <= QUICK_RETRY_LONGEST_MS) {
           quickRetry = setTimeout(() => void run(), Math.max(0, wait))
@@ -111,5 +111,5 @@ export function useCcrSessionModel(args: {
   }
   const reading = ccrModelForTab(tabId, epoch, nowRef.current())
   // A reading of the session the tab showed before (a /clear, another --resume) is not this one's.
-  return reading && reading.sessionId === ccrSessionForTab(tabId, epoch, agentSessionId) ? reading : null
+  return reading && reading.sessionId === ccrSessionForTab(tabId, epoch, agentSessionId, configDir) ? reading : null
 }

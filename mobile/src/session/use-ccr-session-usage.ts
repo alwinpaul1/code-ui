@@ -27,8 +27,8 @@ export function useCcrSessionUsage(args: {
     return { reading: null, matchedAccount: false, hostFeedAllowed: true }
   }
   const agentSessionId = args.agentSessionId ?? null
-  const sessionId = ccrSessionForTab(tabId, epoch, agentSessionId)
-  const accountId = ccrAccountForTab(tabId, epoch, agentSessionId)
+  const sessionId = ccrSessionForTab(tabId, epoch, agentSessionId, args.configDir)
+  const accountId = ccrAccountForTab(tabId, epoch, agentSessionId, args.configDir)
   // Matched to a session, else bound through the config dir: the tab's account is known either way.
   const boundId = accountId === null && args.configDir ? ccrAccountForConfigDir(args.configDir) : null
   const known = accountId ?? boundId

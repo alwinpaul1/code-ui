@@ -145,12 +145,12 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   }
   const extracted: CcrExtracted = emptyCcrExtracted()
   const agentSessionId = input.agentSessionId ?? null
-  let sessionId = ccrSessionForTab(input.tabId, input.epoch, agentSessionId)
+  let sessionId = ccrSessionForTab(input.tabId, input.epoch, agentSessionId, input.configDir)
   let auth: CcrAuth | undefined
   if (sessionId) {
     // The account the tab matched under is read again; if it is gone (signed out, or its token no
     // longer works) the tab is matched afresh across the accounts that remain.
-    auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch, agentSessionId))
+    auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch, agentSessionId, input.configDir))
     if (!auth) {
       forgetCcrMapping(input.tabId, agentSessionId)
       sessionId = null
@@ -165,9 +165,15 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   } else {
     /**
      * Matches the tab among one group of accounts. `final` is the last group asked: a group before it
-     * that holds no session of the tab says so and lets the next be asked, instead of failing.
+     * that holds no session of the tab says so and lets the next be asked, instead of failing. A group
+     * before it whose best session holds only an OLDER message of the tab says `older` and keeps
+     * nothing: another account's session may hold the newer ones (a conversation copied between
+     * profiles and resumed, 2026-10-15), so every account is then judged together.
      */
-    const matchAmong = async (group: readonly CcrAuth[], final: boolean): Promise<{ kind: 'matched' } | { kind: 'none' } | { kind: 'failed'; result: CcrPipelineResult }> => {
+    const matchAmong = async (
+      group: readonly CcrAuth[],
+      final: boolean
+    ): Promise<{ kind: 'matched' } | { kind: 'none' } | { kind: 'older' } | { kind: 'failed'; result: CcrPipelineResult }> => {
       // sessions: every account's list, all at once, so a work account's session is found beside the
       // default's in one round trip
       const listedRows: { row: CcrSessionRow; auth: CcrAuth }[] = []
@@ -237,6 +243,11 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       if (outcome.kind === 'ambiguous') {
         return { kind: 'failed', result: fail('match', `${outcome.sessionIds.length} sessions share messages with this tab (${outcome.sessionIds.map(maskId).join(', ')}); not guessing`) }
       }
+      const newestId = input.messageIds.at(-1)
+      if (outcome.kind === 'matched' && !final && newestId !== undefined && !outcome.pages.uuids.has(newestId)) {
+        report('match', true, `${accountCount > 1 ? `${group[0]!.label}: ` : ''}session ${maskId(outcome.candidate.row.id)} holds only older messages of this tab; asking every account`)
+        return { kind: 'older' }
+      }
       if (outcome.kind === 'matched') {
         const matched = outcome.candidate
         sessionId = matched.row.id
@@ -244,7 +255,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         extractCcrImages(outcome.pages.events, wanted, deps.maxBytes, extracted)
         cursor = outcome.pages.cursor
         pagesRead = outcome.pages.read
-        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId)
+        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId, input.configDir ?? null)
         // The tab's config dir is this account's from now on: its next tabs ask it first.
         if (input.configDir) {
           bindCcrConfigDir(input.configDir, auth.accountId)
@@ -279,6 +290,14 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         return outcome.result
       }
       if (outcome.kind === 'matched') {
+        break
+      }
+      if (outcome.kind === 'older') {
+        // The newest shared message decides across every account (ccr-session-match.ts).
+        const all = await matchAmong(auths, true)
+        if (all.kind === 'failed') {
+          return all.result
+        }
         break
       }
     }

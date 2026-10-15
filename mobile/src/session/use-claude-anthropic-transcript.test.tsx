@@ -23,12 +23,13 @@ type Seen = { gate: ClaudeChatGate; session: MobileNativeChatSession | null }
 let renderer: ReactTestRenderer | null = null
 const seen: Seen[] = []
 
-function Probe(props: { enabled?: boolean; epoch?: number; orcaSettled?: boolean; orcaRowCount?: number; orcaStatus?: MobileNativeChatSession['status']; orcaError?: string }) {
+function Probe(props: { enabled?: boolean; epoch?: number; orcaSettled?: boolean; orcaRowCount?: number; orcaStatus?: MobileNativeChatSession['status']; orcaError?: string; configDir?: string | null }) {
   seen.push(
     useClaudeAnthropicTranscript({
       enabled: props.enabled ?? true,
       tabId: TAB,
       agentSessionId: AGENT_SESSION,
+      configDir: props.configDir ?? null,
       epoch: props.epoch ?? EPOCH,
       orcaRowCount: props.orcaRowCount ?? 3,
       orcaStatus: props.orcaStatus ?? ((props.orcaSettled ?? true) ? 'ready' : 'loading'),
@@ -101,6 +102,22 @@ describe('a Claude tab reads only from Anthropic', () => {
     await mount()
     expect(last().gate).toEqual({ kind: 'unmatched', detail: 'none of 12 sessions holds this tab’s messages' })
     expect(last().session).toMatchObject({ status: 'error', error: CLAUDE_UNMATCHED_LINE, messages: [] })
+  })
+
+  // 2026-10-15: pr-12 was copied from ~/.claude-work to ~/.claude and resumed in the same pane;
+  // the match kept for its Claude session id named the work account's session, and the personal
+  // tab drew that session and its "Limit reached" (ccr-session-copied-profile.test.ts).
+  it('a tab whose session now writes under another config dir is not drawn from the session matched under the old one', async () => {
+    setCcrMapping(TAB, SESSION_A, EPOCH, ACCOUNT, AGENT_SESSION, '/Users/alwinpaul/.claude-work')
+    await mount({ configDir: '/Users/alwinpaul/.claude' })
+    expect(last().gate).toEqual({ kind: 'finding' })
+    expect(last().session).toMatchObject({ status: 'loading', messages: [] })
+  })
+
+  it('a tab still under the config dir it was matched under is drawn from that session', async () => {
+    setCcrMapping(TAB, SESSION_A, EPOCH, ACCOUNT, AGENT_SESSION, '/Users/alwinpaul/.claude-work')
+    await mount({ configDir: '/Users/alwinpaul/.claude-work' })
+    expect(last().gate).toEqual({ kind: 'matched', accountId: ACCOUNT, sessionId: SESSION_A })
   })
 
   it('while the match is still running, the chat is loading, never the desktop’s rows', async () => {

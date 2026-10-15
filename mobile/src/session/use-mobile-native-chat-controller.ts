@@ -116,7 +116,7 @@ export function useMobileNativeChatController(
     readsPrompts: showNativeChat && !activeChatStructured, promptStatus: activeChatPromptStatus, connected: connState === 'connected', tabsLive: args.tabsLive
   })
   // A Claude tab is drawn from Anthropic: what retires the phone's own bubbles (drafts, outbox) reads the rows DRAWN, never Orca's (claude-anthropic-echo-rows.test.tsx).
-  const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, epoch: lastConnectedAt, orcaStatus: nativeChatSession.status, orcaRowCount: nativeChatSession.messages.length, orcaError: nativeChatSession.error }), drawnSession = claudeApi.session ?? nativeChatSession
+  const lastConnectedAt = useLastConnectedAt(hostId), ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, configDir: claudeConfigDirFromTranscriptPath(activeChatResolution?.transcriptPath), epoch: lastConnectedAt, orcaStatus: nativeChatSession.status, orcaRowCount: nativeChatSession.messages.length, orcaError: nativeChatSession.error }), drawnSession = claudeApi.session ?? nativeChatSession
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,

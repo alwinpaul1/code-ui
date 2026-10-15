@@ -11,7 +11,9 @@ import { createPersistedMap } from './session-cache-persistence'
  * one-tap check.
  */
 
-type CcrMapping = { sessionId: string; epoch: number | null; accountId: string; agentSessionId: string | null }
+/** `configDir`: the Claude config dir the tab's session wrote under when it was matched, or null when
+ *  that was not known (or the match was kept by a build that did not record it). */
+type CcrMapping = { sessionId: string; epoch: number | null; accountId: string; agentSessionId: string | null; configDir: string | null }
 
 const mappingByTab = new Map<string, CcrMapping>()
 
@@ -22,7 +24,7 @@ const mappingByTab = new Map<string, CcrMapping>()
  * tab never inherits it, and only taken while that account is still signed in. A tab whose Claude
  * session is not known keeps its match in memory only, for the connection, as before.
  */
-type KeptCcrMapping = { sessionId: string; accountId: string }
+type KeptCcrMapping = { sessionId: string; accountId: string; configDir?: string | null }
 const KEPT_MAPPINGS_KEY = 'codeui:ccr-session-mapping-v1'
 const keptMappings = createPersistedMap<KeptCcrMapping>({ storageKey: KEPT_MAPPINGS_KEY, maxEntries: 200 })
 
@@ -97,10 +99,17 @@ export function ccrUserImages(messageId: string): string[] | undefined {
 
 /** Remembers which account the tab's session was found under, so later reads use that account's
  *  token and organization; with the tab's Claude Code session id, kept across restarts too. */
-export function setCcrMapping(tabId: string, sessionId: string, epoch: number | null, accountId: string, agentSessionId: string | null = null): void {
-  mappingByTab.set(tabId, { sessionId, epoch, accountId, agentSessionId })
+export function setCcrMapping(
+  tabId: string,
+  sessionId: string,
+  epoch: number | null,
+  accountId: string,
+  agentSessionId: string | null = null,
+  configDir: string | null = null
+): void {
+  mappingByTab.set(tabId, { sessionId, epoch, accountId, agentSessionId, configDir })
   if (agentSessionId) {
-    keptMappings.set(keptKey(tabId, agentSessionId), { sessionId, accountId })
+    keptMappings.set(keptKey(tabId, agentSessionId), { sessionId, accountId, configDir })
   }
 }
 
@@ -130,14 +139,39 @@ export function forgetCcrMapping(tabId: string, agentSessionId: string | null = 
 }
 
 /**
+ * Whether a match was made while the tab's session wrote under another Claude config dir than it
+ * does now, so it is not this tab's session any more. A session copied from `~/.claude-work` to
+ * `~/.claude` and resumed in the same pane keeps its Claude session id, but takes a new Remote
+ * Control session under the other account; the match kept for the id named the old one, and the
+ * tab drew the work account's transcript and its "Limit reached" on a personal session (user,
+ * 2026-10-15). A match recorded with no config dir (kept by an earlier build) is moved on only by
+ * evidence: the tab's config dir is bound to another account than the match's. Nothing is
+ * dropped when the tab's config dir is not known.
+ */
+function movedConfigDir(mapping: Pick<CcrMapping, 'accountId' | 'configDir'>, configDir: string | null | undefined): boolean {
+  if (!configDir) {
+    return false
+  }
+  if (mapping.configDir) {
+    return mapping.configDir !== configDir
+  }
+  const bound = configDirAccounts.get(configDir)
+  return bound !== undefined && bound !== mapping.accountId
+}
+
+/**
  * The tab's match, if it stands: made on this connection, or kept for this very Claude Code
  * session (then adopted for this connection, with no request). A match made for another Claude
- * session of the tab is dropped here: the tab now shows a different conversation.
+ * session of the tab, or under another Claude config dir (`movedConfigDir`), is dropped here: the
+ * tab now shows a different conversation, or the same one on another account.
  */
-function currentMapping(tabId: string, epoch: number | null, agentSessionId: string | null | undefined): CcrMapping | null {
+function currentMapping(tabId: string, epoch: number | null, agentSessionId: string | null | undefined, configDir: string | null | undefined): CcrMapping | null {
   const mapped = mappingByTab.get(tabId)
   if (mapped && agentSessionId && mapped.agentSessionId && mapped.agentSessionId !== agentSessionId) {
     mappingByTab.delete(tabId)
+  } else if (mapped && movedConfigDir(mapped, configDir)) {
+    forgetCcrMapping(tabId, agentSessionId ?? null)
+    return null
   } else if (mapped && (mapped.epoch === epoch || (agentSessionId && mapped.agentSessionId === agentSessionId))) {
     if (mapped.epoch !== epoch) {
       mapped.epoch = epoch
@@ -151,19 +185,24 @@ function currentMapping(tabId: string, epoch: number | null, agentSessionId: str
   if (!kept) {
     return null
   }
-  const adopted: CcrMapping = { sessionId: kept.sessionId, epoch, accountId: kept.accountId, agentSessionId }
+  const adopted: CcrMapping = { sessionId: kept.sessionId, epoch, accountId: kept.accountId, agentSessionId, configDir: kept.configDir ?? null }
+  if (movedConfigDir(adopted, configDir)) {
+    keptMappings.delete(keptKey(tabId, agentSessionId))
+    return null
+  }
   mappingByTab.set(tabId, adopted)
   return adopted
 }
 
-/** `agentSessionId`: the Claude Code session the tab shows now, when known. */
-export function ccrSessionForTab(tabId: string, epoch: number | null, agentSessionId?: string | null): string | null {
-  return currentMapping(tabId, epoch, agentSessionId)?.sessionId ?? null
+/** `agentSessionId`: the Claude Code session the tab shows now, when known. `configDir`: the Claude
+ *  config dir it writes under now, when known; a match made under another one does not stand. */
+export function ccrSessionForTab(tabId: string, epoch: number | null, agentSessionId?: string | null, configDir?: string | null): string | null {
+  return currentMapping(tabId, epoch, agentSessionId, configDir)?.sessionId ?? null
 }
 
 /** The account the tab's session was matched under, while that match stands (ccrSessionForTab). */
-export function ccrAccountForTab(tabId: string, epoch: number | null, agentSessionId?: string | null): string | null {
-  return currentMapping(tabId, epoch, agentSessionId)?.accountId ?? null
+export function ccrAccountForTab(tabId: string, epoch: number | null, agentSessionId?: string | null, configDir?: string | null): string | null {
+  return currentMapping(tabId, epoch, agentSessionId, configDir)?.accountId ?? null
 }
 
 // ─── Back-off ─────────────────────────────────────────────────────────────

@@ -191,8 +191,8 @@ export async function refreshCcrUsage(
   needContext: boolean,
   configDir: string | null = null
 ): Promise<void> {
-  const sessionId = ccrSessionForTab(tabId, epoch, agentSessionId)
-  const accountId = ccrAccountForTab(tabId, epoch, agentSessionId)
+  const sessionId = ccrSessionForTab(tabId, epoch, agentSessionId, configDir)
+  const accountId = ccrAccountForTab(tabId, epoch, agentSessionId, configDir)
   const log = deps.log ?? defaultLog
   const say = (ok: boolean, detail: string) => log(`[ccr-usage] ${ok ? 'ok' : 'failed'} — ${detail} (tab ${maskId(tabId)})`, ok)
   if (!sessionId || !accountId) {

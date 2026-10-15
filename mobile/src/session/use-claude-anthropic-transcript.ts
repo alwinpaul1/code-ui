@@ -89,6 +89,9 @@ export function useClaudeAnthropicTranscript(args: {
   enabled: boolean
   tabId: string | null
   agentSessionId: string | null
+  /** The Claude config dir the tab's session writes under now, from its transcript path: a match
+   *  made under another one (a session copied between profiles) is not this tab's. */
+  configDir?: string | null
   /** `useLastConnectedAt(hostId)`: a match is made per relay connection, and a new one retries a lost stream. */
   epoch: number | null
   /** Orca's read of the tab, for the gate only: its status, how many rows, and why it failed. */
@@ -100,8 +103,8 @@ export function useClaudeAnthropicTranscript(args: {
   useSyncExternalStore(subscribeAnthropicSignInPresence, anthropicSignInPresenceVersion, anthropicSignInPresenceVersion)
   useSyncExternalStore(subscribeCcrMatchOutcomes, ccrMatchOutcomesVersion, ccrMatchOutcomesVersion)
   const signedIn = anthropicSignedInCount()
-  const sessionId = enabled && tabId ? ccrSessionForTab(tabId, epoch, agentSessionId) : null
-  const accountId = enabled && tabId && sessionId ? ccrAccountForTab(tabId, epoch, agentSessionId) : null
+  const sessionId = enabled && tabId ? ccrSessionForTab(tabId, epoch, agentSessionId, args.configDir) : null
+  const accountId = enabled && tabId && sessionId ? ccrAccountForTab(tabId, epoch, agentSessionId, args.configDir) : null
   const outcome = enabled && tabId ? ccrMatchOutcome(tabId, epoch) : null
 
   const gate: ClaudeChatGate = useMemo(() => {
