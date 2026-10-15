@@ -134,7 +134,7 @@ describe('the pictures in a session’s events', () => {
 })
 
 describe('which session a tab is', () => {
-  const tab = new Set(['m1', 'm2', 'm3'])
+  const tab = ['m1', 'm2', 'm3']
   it('is the one session that shares messages with it', () => {
     expect(matchCcrSession(tab, [{ sessionId: 'A', uuids: new Set(['m1', 'm2', 'm3']) }, { sessionId: 'B', uuids: new Set(['x']) }])).toEqual({ kind: 'matched', sessionId: 'A', overlap: 3 })
   })
@@ -143,8 +143,8 @@ describe('which session a tab is', () => {
     expect(matchCcrSession(tab, [{ sessionId: 'A', uuids: new Set(['m3', 'later']) }])).toEqual({ kind: 'matched', sessionId: 'A', overlap: 1 })
   })
 
-  it('is refused when two sessions share messages with it', () => {
-    expect(matchCcrSession(tab, [{ sessionId: 'A', uuids: new Set(['m1']) }, { sessionId: 'B', uuids: new Set(['m2', 'm3']) }])).toEqual({ kind: 'ambiguous', sessionIds: ['A', 'B'] })
+  it('is refused when two sessions both hold its newest shared message', () => {
+    expect(matchCcrSession(tab, [{ sessionId: 'A', uuids: new Set(['m3']) }, { sessionId: 'B', uuids: new Set(['m2', 'm3']) }])).toEqual({ kind: 'ambiguous', sessionIds: ['A', 'B'] })
   })
 
   it('is none when nothing is shared', () => {
@@ -153,6 +153,6 @@ describe('which session a tab is', () => {
 
   it('is none with no candidates, or a tab with no messages', () => {
     expect(matchCcrSession(tab, [])).toEqual({ kind: 'none', candidates: 0 })
-    expect(matchCcrSession(new Set(), [{ sessionId: 'A', uuids: new Set(['m1']) }])).toEqual({ kind: 'none', candidates: 1 })
+    expect(matchCcrSession([], [{ sessionId: 'A', uuids: new Set(['m1']) }])).toEqual({ kind: 'none', candidates: 1 })
   })
 })

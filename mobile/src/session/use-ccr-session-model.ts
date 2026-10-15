@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ccrModelForTab, ccrModelVersion, CCR_MODEL_REFRESH_MS, subscribeCcrModel, type CcrModelReading } from './ccr-session-model'
 import { CCR_QUICK_RETRY_MS, ccrMayRun, ccrRetryAt, ccrSessionForTab, ccrTriggerVersion, clearCcrFailure, refreshCcrModel, runCcrImagePipeline, subscribeCcrTriggers, type CcrPipelineDeps } from './ccr-session-pipeline'
 import { loadDefaultCcrPipelineDeps } from './use-ccr-session-images'
+import { newestTranscriptMessageAt } from './ccr-session-match'
 
 /**
  * The model and effort the tab's session last reported to Anthropic, while
@@ -60,7 +61,7 @@ export function useCcrSessionModel(args: {
         await refreshCcrModel(tabId, epoch, await deps(), agentSessionId)
       } else if (ccrMayRun(tabId, epoch)) {
         await runCcrImagePipeline(
-          { tabId, epoch, agentSessionId, configDir, messageIds: messagesRef.current.map((message) => message.id), wanted: { toolUseIds: [], userMessageIds: [] } },
+          { tabId, epoch, agentSessionId, configDir, messageIds: messagesRef.current.map((message) => message.id), newestMessageAt: newestTranscriptMessageAt(messagesRef.current), wanted: { toolUseIds: [], userMessageIds: [] } },
           await deps()
         )
       }

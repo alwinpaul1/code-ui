@@ -1,6 +1,6 @@
 import type { CcrSessionRow } from './ccr-session-api'
 import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-session-cache'
-import { listAccountSessionsShared } from './ccr-session-lists'
+import { findAccountSessionRow } from './ccr-session-lists'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
 import {
   defaultLog,
@@ -31,10 +31,10 @@ export function noteModel(tabId: string, epoch: number | null, row: CcrSessionRo
 }
 
 /**
- * Re-reads the matched session's row for its model and effort: the first
- * pages of the session list (the row's shape is the list's, eyu.java), never
- * a guess at another endpoint's, shared with every other tab of the account
- * (ccr-session-lists.ts). Does nothing for a tab not matched on this
+ * Re-reads the matched session's row for its model and effort: the session
+ * list's pages until the row is on one (the row's shape is the list's,
+ * eyu.java), never a guess at another endpoint's; a whole list of the account
+ * already in flight is shared (ccr-session-lists.ts). Does nothing for a tab not matched on this
  * connection or for its Claude Code session (`agentSessionId`, a match kept
  * across restarts). A matched session no longer listed drops the match, kept
  * copy included. Failures leave one line and drop the reading, so the pill
@@ -77,8 +77,7 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
       )
       return result
     }
-    const listed = await listAccountSessionsShared(deps.fetch, { accountId: account.id, token, organizationUuid: org }, epoch, 0)
-    const row = listed.rows.find((candidate) => candidate.id === sessionId)
+    const row = await findAccountSessionRow(deps.fetch, { accountId: account.id, token, organizationUuid: org }, epoch, sessionId)
     if (row) {
       noteModel(tabId, epoch, row, report)
       return result

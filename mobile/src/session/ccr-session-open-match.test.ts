@@ -24,6 +24,7 @@ import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-
 import type { CcrFetch, CcrFetchResponse } from './ccr-session-api'
 import { ccrModelForTab, resetCcrModelForTests } from './ccr-session-model'
 import {
+  CCR_MATCH_WAVES,
   ccrMayRun,
   ccrSessionForTab,
   hydrateCcrSessionMappings,
@@ -179,14 +180,14 @@ describe('in an eye blink', () => {
     expect(startedWhenFirstAnswered).toBe(2)
   })
 
-  it('reads every candidate’s newest events at once, not one session after another', async () => {
+  it('reads a wave of candidates’ newest events at once, not one session after another', async () => {
     let startedWhenFirstAnswered = 0
     const h = harness([work()], {
       gate: async (entry, all) => {
         if (!entry.url.includes('/events')) {
           return
         }
-        for (let tick = 0; tick < 20 && eventReads(all).length < 9; tick += 1) {
+        for (let tick = 0; tick < 20 && eventReads(all).length < CCR_MATCH_WAVES[0]; tick += 1) {
           await new Promise((resolve) => setTimeout(resolve, 1))
         }
         if (startedWhenFirstAnswered === 0) {
@@ -195,7 +196,7 @@ describe('in an eye blink', () => {
       }
     })
     await runCcrImagePipeline(input(), h.deps)
-    expect(startedWhenFirstAnswered).toBe(9)
+    expect(startedWhenFirstAnswered).toBe(CCR_MATCH_WAVES[0])
   })
 
   it('lists each account once for three tabs opened together, not once per tab', async () => {

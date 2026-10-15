@@ -17,6 +17,7 @@ import { hostImageMissing, subscribeHostImageMissing } from './host-image-refusa
 import { isImageFilePath } from './mobile-native-chat-agent-images'
 import { toolCallKind } from './mobile-native-chat-tool-kind'
 import { NO_CCR_IMAGES, type CcrRemoteImages } from './ccr-remote-images'
+import { newestTranscriptMessageAt } from './ccr-session-match'
 
 /**
  * The pictures of a Claude tab that only Anthropic's copy of the session
@@ -97,6 +98,7 @@ export function useCcrSessionImages(args: {
   const reads = useMemo(() => ccrReadSlots(messages), [messages])
   const pasted = useMemo(() => ccrPastedMessageIds(messages, localPreviews), [localPreviews, messages])
   const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
+  const newestMessageAt = useMemo(() => newestTranscriptMessageAt(messages), [messages])
   /** Ids looked for on a connection and not found there: not asked again until the next one. */
   const triedRef = useRef(new Map<string, number | null>())
 
@@ -141,7 +143,7 @@ export function useCcrSessionImages(args: {
     }
     const injected = depsRef.current
     void (injected ? Promise.resolve(injected) : loadDefaultCcrPipelineDeps())
-      .then((deps) => runCcrImagePipeline({ tabId, epoch, agentSessionId: args.agentSessionId ?? null, configDir: args.configDir ?? null, messageIds, wanted }, deps))
+      .then((deps) => runCcrImagePipeline({ tabId, epoch, agentSessionId: args.agentSessionId ?? null, configDir: args.configDir ?? null, messageIds, newestMessageAt, wanted }, deps))
       .then((result) => {
         // A run that failed before it looked at any events may be asked again
         // once its back-off is over; a run that read the events has its answer.
@@ -157,7 +159,7 @@ export function useCcrSessionImages(args: {
         }
         console.warn(`[ccr-images] could not start: ${error instanceof Error ? error.message : String(error)}`)
       })
-  }, [enabled, epoch, messageIds, missingVersion, pasted, reads, shownVersion, tabId])
+  }, [enabled, epoch, messageIds, missingVersion, newestMessageAt, pasted, reads, shownVersion, tabId])
 
   return useMemo(() => {
     if (!enabled) {
