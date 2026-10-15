@@ -43,15 +43,15 @@ import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-conte
 import { takeUserUploads } from './mobile-native-chat-file-mentions'
 import { MobileNativeChatUploadCardRow } from './MobileNativeChatFileCard'
 import { ChatTextInPlaceSelectionContext } from '../components/chat-text-selectable-context'
-import { HoldTarget, ProseHold, useMobileNativeChatMessageHold, type HoldHandler } from './MobileNativeChatMessageHold'
+import { HoldTarget, useMobileNativeChatMessageHold, type HoldHandler } from './MobileNativeChatMessageHold'
 
 /** The message container: a sent prompt is tappable (it discloses its
  *  controls) and a hold opens its menu, Copy and Select text, as the Claude
  *  app's does. A hold used to copy the prompt at once (2026-09-21:
  *  "automatic copy on long hold instead of long hold and copy button"); the
  *  menu replaces that so the words can also be selected. A waiting message
- *  holds too, for Undo send. A reply's bubble is a plain view: its holds are
- *  taken by each run of its words (ProseHold), not by its tool rows. */
+ *  holds too, for Undo send. A reply's bubble is a plain view: a hold on its
+ *  words starts Android's own selection in place (ProseRun). */
 function Bubble({
   user,
   onToggle,
@@ -99,13 +99,31 @@ function Bubble({
   )
 }
 
-/** A message row: nothing in it is selected in place. A hold opens its menu and Select text is
- *  where words are selected, as in the Claude app's Code timeline (chat-text-selectable-context.ts). */
+/** A message row: only a reply's words select in place (ProseRun). A sent prompt opens its
+ *  menu on a hold, and its tool rows and thoughts select nothing, as in the Claude app's Code
+ *  timeline (chat-text-selectable-context.ts). */
 function MobileNativeChatMessageImpl(props: ComponentProps<typeof MobileNativeChatMessageRow>) {
   return (
     <ChatTextInPlaceSelectionContext.Provider value={false}>
       <MobileNativeChatMessageRow {...props} />
     </ChatTextInPlaceSelectionContext.Provider>
+  )
+}
+
+/**
+ * A run of a message's words. A reply's are selected where they are drawn: the Claude app
+ * (1.261013.20) wraps each text block of a message in its SelectionContainer (gy30.j through
+ * t8i.o), so a hold on Claude's
+ * words selects the word under the finger, with handles and Android's Copy / Select all bar, and
+ * opens no menu. Its tool rows are drawn outside it. The scroll still guards the hold: the
+ * document's native root stops a hold starting a selection while the list moves
+ * (ChatTextHoldSelectsContext).
+ */
+function ProseRun({ reply, children }: { reply: boolean; children: ReactNode }) {
+  return reply ? (
+    <ChatTextInPlaceSelectionContext.Provider value>{children}</ChatTextInPlaceSelectionContext.Provider>
+  ) : (
+    <>{children}</>
   )
 }
 
@@ -218,17 +236,13 @@ function MobileNativeChatMessageRow({
   const { copied, error: copyError, copy } = useMobileNativeChatMessageCopy(
     isUser ? MESSAGE_COPIED_MS : COPY_CHECK_HOLD_MS
   )
-  // A reply's held run copies through its own copy, so the turn's Copy glyph does not turn into a
-  // check for words it did not copy; a refusal still says so under the row.
-  const { error: heldCopyError, copy: copyHeld } = useMobileNativeChatMessageCopy(COPY_CHECK_HOLD_MS)
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
   const { holdOn, overlays: holdOverlays } = useMobileNativeChatMessageHold({
     messageId: message.id,
     onUndoSend: onCancelQueued,
-    copyBubble: copy,
-    copyRun: copyHeld
+    copy
   })
   // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
   const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
@@ -320,7 +334,7 @@ function MobileNativeChatMessageRow({
   // 2026-10-09), and the earlier words had no Copy of their own any more.
   const copiesTurn = isAgent && copyTurnText !== undefined
   const copyable = copiesTurn ? (turnHasProse ?? hasProse) : hasProse
-  // The Copy under a reply's turn: the words as drawn, not their Markdown (the hold's Copy gives that).
+  // The Copy under a reply's turn: the words as drawn, not their Markdown.
   const handleCopy = (): void => {
     const text = copiesTurn ? copyTurnText(message.id) : nativeChatReplyPlainText(drawn)
     if (!text) {
@@ -328,8 +342,8 @@ function MobileNativeChatMessageRow({
     }
     copy(text)
   }
-  // A sent prompt is held whole, from its bubble; a reply by each run of its words, from that run.
-  const holdBubble = isUser ? holdOn(nativeChatPromptPlainText(drawn), true) : undefined
+  // A sent prompt is held whole, from its bubble. A reply has no hold: its words select in place.
+  const holdBubble = isUser ? holdOn(nativeChatPromptPlainText(drawn)) : undefined
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
   const sentPromptControls =
@@ -401,7 +415,7 @@ function MobileNativeChatMessageRow({
               // No line beside the agent's own words, interim or final
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
-                <ProseHold onHold={isAgent ? holdOn(nativeChatReplyPlainText(segment.blocks), false) : undefined}>
+                <ProseRun reply={isAgent}>
                 {groupProseBlocks(segment.blocks).map((group, index, groups) => (
                   // Air between a picture and the caption under it, and
                   // between pictures that follow each other.
@@ -428,7 +442,7 @@ function MobileNativeChatMessageRow({
                     })}
                   </View>
                 ))}
-                </ProseHold>
+                </ProseRun>
                 {/* Under the turn's last words, above the work still running after them. */}
                 {segmentIndex === lastWordsSegment ? placeAt('words') : null}
               </View>
@@ -491,9 +505,9 @@ function MobileNativeChatMessageRow({
           />
         ) : null}
         {/* Under the bubble, in the page's ink rather than the bubble's. */}
-        {copyError || heldCopyError ? (
+        {copyError ? (
           <Txt variant="caption" tone="danger" style={{ marginTop: 4 }} accessibilityLiveRegion="polite">
-            {copyFailedNotice(copyError ?? heldCopyError ?? '')}
+            {copyFailedNotice(copyError)}
           </Txt>
         ) : null}
       </View>

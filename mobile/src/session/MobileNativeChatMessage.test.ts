@@ -231,11 +231,11 @@ describe('MobileNativeChatMessage', () => {
 
   // 2026-09-25, phone recording: a hold on the agent's reply mid-turn
   // selected nothing; a touchable above the prose had taken the hold first.
-  // Since 2026-10-15 a hold on a reply opens its menu, as the Claude app's
-  // does, so exactly one thing above each run of the reply's words takes a
-  // touch: that run's hold (no tap, no responder of its own), in a settled
-  // reply, an interim note, or a turn still working with a live tool row.
-  it('puts nothing but its hold above the agent reply’s prose, working or settled', () => {
+  // A hold on a reply selects its words in place, as the Claude app's does
+  // (1.261013.20, gy30.j's SelectionContainer), so nothing above the reply's
+  // words takes a touch first: in a settled reply, an interim note, or a turn
+  // still working with a live tool row.
+  it('puts nothing above the agent reply’s prose to take the hold, working or settled', () => {
     const TOUCH_PROPS = [
       'onPress',
       'onLongPress',
@@ -269,7 +269,7 @@ describe('MobileNativeChatMessage', () => {
           }
           claims.push(...TOUCH_PROPS.filter((prop) => typeof ancestor!.props[prop] === 'function'))
         }
-        expect({ label, claims }).toEqual({ label, claims: ['Pressable', 'onLongPress', 'onPressIn'] })
+        expect({ label, claims }).toEqual({ label, claims: [] })
       }
       act(() => tree.unmount())
     }

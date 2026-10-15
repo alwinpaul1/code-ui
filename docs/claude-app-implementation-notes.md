@@ -503,6 +503,65 @@ inset already is. Not copied: the 4-session LRU (the phone keeps 12, across
 restarts), and the older-page trigger stays FlashList's `onEndReached` at half
 a viewport rather than 5 items.
 
+## 10. Holding and copying in the Code timeline (added 2026-10-15)
+
+Read from **1.261013.20** (jadx output in the scratchpad's `claude-apk-1013`;
+that run stopped at 95%, so `qw30`, `uih`, `fpq`, `ipq`, `npq`, `kpq`, `hpq`,
+`oy6` and `wjz` were decompiled one class at a time with
+`--no-inline-anonymous --no-inline-methods`, and callers were found with
+`dexdump -d`). It overturns the 1.261009.20 reading recorded in
+`claude-app-parity-gaps.md` (2026-10-15 morning) that nothing in the timeline
+selects in place. The user's screenshot of the app agrees with this one.
+
+**The selection container.** Compose's `SelectionContainer` is `z530.k`
+(it builds the `SelectionRegistrar` `slu` and the `SelectionManager` `ilu`;
+`nqt` case 6 is its "does not support cursor" check). The app wraps it twice:
+`t8i.o(modifier, ulu state, clipboard, textToolbar, content)` provides the
+clipboard (`eq9.f`) and the text toolbar (`eq9.s`), both the platform defaults
+when the caller passes null, and `t8i.p` adds a floating-toolbar wrapper. The
+toolbar is therefore Android's own floating action mode: **Copy** and **Select
+all** on a read-only text, no Share, no Read aloud, no item of the app's own
+(`lpy.a`, the one list of extra items in the message row, is a
+CompositionLocal of accessibility custom actions holding "Open menu",
+`generic_button_open_menu`, not a toolbar item). Handle and highlight colours
+are the theme's `TextSelectionColors` (`k4y`, built in `bek.a` from the
+primary, highlight at 40%), read in 1.261009.20 and unchanged in what was seen
+here: clay handles, clay at 40% behind the words.
+
+**The timeline row.** The Code timeline is a LazyColumn of `wgz`
+(`TimelineDisplayRow`: id, content `mjz`, isEcho, reactions, replies,
+isEdited, menu, sentAt, ...). `fpq.i` draws an item; a message (`gjz`) goes
+through `ipq` to `npq.f`. Who wrote it is `gjz.b`: `bfz` is "Claude", `dfz`
+"Viewer", `cfz` a member; `gjz.e()` is "not Claude".
+
+| Row kind | What a long press does | Citation |
+|---|---|---|
+| Claude's prose | Selects the word under the finger in place, with handles and the Copy / Select all bar. No menu, no sheet. One selection per **text block**: its paragraphs, list items, inline code and code fences select together; another text block of the same message is a separate selection. | `npq.f` else-branch → `oy6` → `npq.a` → `kpq` case 0/1 → `gy30.a` → `gy30.j(k2v block, z82 parsed, ...)`: a `tpy` text block with its parsed Markdown (`z82` from `tsf.b(index)`) is drawn inside `t8i.o(... yz10 ...)` (gy30.java:31865 and its duplicates) |
+| The user's own prompt | Holds the message and opens the menu card: Copy, Select text (and Reply, Edit, which Code UI has no action for). The bubble has no SelectionContainer. | `npq.f` `gjz.e()` branch → `hpq` → `gy30.d` (plain `ewy.b` Texts, no `t8i.o`); menu items built in `ds8` (`yhz` Copy, `eiz` Select text, `zhz` Edit, `diz` Reply), drawn by `l1s`, chosen through `wjz` (Select text → `CodeRemoteBottomSheetDestination.SelectText`, pl6 case 11) |
+| The row's long-press modifier | `qs30.A(lyl, gjz.e())`: for Claude's rows a `detectTapGestures(onLongPress = open)` (`l87` case 4 → `ojy.f`); for the user's a right-click / stylus button only (`qu7.a` → `pu7` → `ou7`, buttons & 66) plus an accessibility "Open menu" action. On Claude's prose the SelectionContainer's own long press is what the user sees; whether the row's modifier also fires there was not settled (the screenshot shows no menu). | qs30.java:22-77 |
+| Tool-run rows, thinking | Drawn outside the SelectionContainer; nothing selects. Thinking opens its sheet on a tap (`ViewThinking`). Tool-detail sheets select (`qv30.a`/`r` → `u530.e`). | `fpq.i` switch on `mjz` kinds; qv30.java |
+| A mouse | `kt30.e` wraps some bodies in a selection only once a mouse or stylus has been used (`vkp`: `ukp` Never / Earlier / Now, `zku.b` checks SOURCE_MOUSE / stylus). Not a touch path. | kt30.java:402-497, vkp.java, gmj case 24 |
+| Images / attachments in a prompt | Tap opens the preview; the attachment card takes the message's `open` as its long press. | gy30.java ~7700 (`c(w7v, ..., rsf open)`) |
+
+**Scrolling.** Compose's selection long press and a LazyColumn share the
+pointer: once the list's drag passes the touch slop the long press is
+cancelled, so a scroll never starts a selection.
+
+**Code UI.** `MobileNativeChatMessage.tsx` turns in-place selection off for the
+row (`ChatTextInPlaceSelectionContext`) and back on around a reply's words only
+(`ProseRun`), so a hold on Claude's words starts Android's selection
+(SelectionCopyRootView: Copy and Select all only, clay handles and highlight
+from `chatSelectionColors`, light and dark). The reply's hold menu is gone; the
+user's prompt keeps its menu (Copy, Select text, Undo send). The scroll guard
+is the document root's `holdSelects`. Tests:
+`chat-reply-hold-selects-in-place.test.tsx`, `chat-message-hold-menu.test.tsx`.
+
+**What React Native cannot match.** One Compose selection spans a whole text
+block. In Code UI one selection spans one native Text: MobileMarkdown draws a
+run of paragraphs and list items as one Text, but a code fence, a table, an
+image or a visual is its own view, so a selection cannot be dragged across one
+into the prose on the other side, and Select all selects that Text only.
+
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.

@@ -101,9 +101,9 @@ export function Prose({
         typed={ownMarkdown}
       />
     )
-    // Selects nothing in place: the message row turns that off for every
-    // document in it (ChatTextInPlaceSelectionContext), and a hold opens the
-    // message's menu.
+    // A reply's document selects in place, as the Claude app's text blocks do;
+    // the user's own bubble selects nothing and a hold opens its menu. The
+    // message row says which (ChatTextInPlaceSelectionContext).
     return document
   }
   if (isImageRefBlock(block)) {

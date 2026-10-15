@@ -408,11 +408,10 @@ describe('a cell the list recycles for another message', () => {
 })
 
 describe('a reply', () => {
-  it('is held by its words, not as a sent prompt: no tap, no prompt label', () => {
+  it('is not held as a sent prompt: no tap, no prompt label, no menu hold (its words select in place)', () => {
     const root = render(reply)
     expect(root.findAll((node) => node.props.accessibilityLabel === 'Sent prompt')).toEqual([])
     const holds = root.findAll((node) => String(node.type) === 'Pressable' && typeof node.props.onLongPress === 'function')
-    expect(holds).toHaveLength(1)
-    expect(holds[0]!.props.onPress).toBeUndefined()
+    expect(holds).toHaveLength(0)
   })
 })

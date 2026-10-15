@@ -38,7 +38,8 @@ function iconFor(entry: ChatMessageMenuEntry): LucideIcon {
 /**
  * The menu a hold on a message opens, as the Claude app draws it for a Code session (fmg.java):
  * a card hung from the held message, under it or over it where there is no room, lined up with
- * its start (Claude's words) or its end (the user's), on a full-screen layer that dims nothing.
+ * its start or its end (the user's prompt, the one row Code UI holds), on a full-screen layer
+ * that dims nothing.
  * A tap anywhere off the card, or Back, puts the message down; a row puts it down first and then
  * acts (i35.java:611-627, `deselect` before the action).
  */
