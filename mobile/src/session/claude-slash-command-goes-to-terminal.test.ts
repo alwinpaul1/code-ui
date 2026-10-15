@@ -9,7 +9,7 @@ import { claudeComposerSend } from './claude-composer-send-route'
  * which classifies it (classifyMobileNativeChatSend) and types it as a command.
  */
 
-function sends(): { anthropic: ReturnType<typeof vi.fn>; terminal: ReturnType<typeof vi.fn> } {
+function sends() {
   return { anthropic: vi.fn(async (_text: string) => true), terminal: vi.fn(async (_text: string) => true) }
 }
 
