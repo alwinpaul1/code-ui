@@ -9,14 +9,9 @@
 //   tap             au8.java:105     the count's click label is `ccr_workflow_background_tasks`
 //                   ek8.java:180     ("Background tasks") and its action is `rs8.m5(...)`, the
 //                                    tasks sheet, then dismisses the menu
-//   spinner         nl7.java:47-78   `cc_spinner_sprite`: a 48 x 4032 px sprite, 84 frames of
-//                                    48 x 48 (the asterisk that opens, blooms and closes again),
-//                                    drawn 16 dp square (nl7.java:70-71), tinted with the line's
-//                                    clay `pl7.e` (nl7.java:61-65, SrcIn)
-//   frame clock     zn.java 13       a coroutine adds one to the frame every `delay(60)` and wraps
-//   (decompiled     (zn.x, simple    at 84, while the line is working; when it stops the frame is
-//   in fallback     mode)            set to 4, the 8-spoke star at rest (nl7.java:29 starts it at
-//   mode)                            0 when working and at 4 when not)
+//   spinner         1.261013.20 replaced the 84-frame `cc_spinner_sprite` with the working mark
+//                   (`zq20`, 20 dp of dots that open, loop and close by what the turn does);
+//                   claude-working-mark.ts has its lines. The sprite is gone from that build.
 //   verbs           nl7.java:14      the twenty words below, each shown with "..." after it
 //                   nl7.java:246
 //   verb clock      l8.java:120-150  (decompiled in fallback mode) starts on a RANDOM word; unless
@@ -26,8 +21,16 @@
 //                                    else); under reduced motion it keeps the first word (index 0
 //                                    when the OS asked for it, nl7.java:120)
 //   geometry        nl7.java:165,188 padding 16 dp top and bottom; spinner then an 8 dp gap while
-//                                    working (16 dp idle); text is `jn7.E` (15 / 400 / 1.4 =
-//                                    21 sp); idle count has a 48 dp minimum WIDTH (nl7.java:263: minWidth 48, minHeight 0)
+//                                    working; text is `jn7.E` (15 / 400 / 1.4 = 21 sp); idle count
+//                                    has a 48 dp minimum WIDTH (nl7.java:263: minWidth 48, minHeight 0)
+//                   wm7.a (1.261013.20) the same 16 dp top and bottom (`oxb.I(.., 0, 16, 1)`), the
+//                                    mark (20 dp) then 8 dp, `xo7.C` 15 / 400 / 1.4; idle draws
+//                                    the count alone (no mark, no gap); 16 dp at the sides come
+//                                    from the list's item modifier (`y07`, `rrb.Q(.., 16, 0, 2)`)
+//   placement       y07 case 15      the line is the chat list's item "thinking_spark", after the
+//                   (1.261013.20)    queued message and the session pills (the list is reversed,
+//                                    so it draws above them): it scrolls with the transcript and
+//                                    is never pinned over it
 //   separator       strings.xml:1309 `ccr_spark_segment_separator` is " · " (space, middle dot,
 //                                    space), spelled in the line's own text colour
 //   colours         nl7.java:377     verb and separator `pl7.e` (clay); the count is `ad5.C0()`
@@ -70,18 +73,11 @@ export const CLAUDE_WORKING_VERBS = [
   'Brewing'
 ] as const
 
-export const CLAUDE_SPINNER = {
-  /** Frames in `cc_spinner_sprite` (4032 px tall / 48 px). */
-  frames: 84,
-  /** `delay(60)` between frames: a loop of 5040 ms. */
-  frameMs: 60,
-  /** The frame the spinner rests on when nothing is working (and under reduced motion). */
-  restFrame: 4,
-  /** Drawn size, dp, both ways. */
-  size: 16,
-  /** Gap between the spinner and the verb while working, dp. */
-  gapWorking: 8
-} as const
+/** The gap between the working mark and the words, dp (`wm7.a`: `pmw.u(.., 8f)`). */
+export const CLAUDE_FOOTER_MARK_GAP = 8
+
+/** The line's sides, dp: the chat list's 16 dp gutter (`y07`), the transcript text's own inset. */
+export const CLAUDE_FOOTER_PADDING_HORIZONTAL = 16
 
 /** The line's own padding above and below, dp (`rrb.Q(..., 0, 16, 1)`, nl7.java:165). */
 export const CLAUDE_FOOTER_PADDING_VERTICAL = 16
@@ -101,11 +97,6 @@ export function verbChangeDelayMs(changes: number): number {
     return 4_000
   }
   return 6_000
-}
-
-/** The frame after `frame`, wrapping at the end of the sprite. */
-export function nextSpinnerFrame(frame: number): number {
-  return (frame + 1) % CLAUDE_SPINNER.frames
 }
 
 /** The word at a random index, as the app's `Random` picks it (repeats allowed). */

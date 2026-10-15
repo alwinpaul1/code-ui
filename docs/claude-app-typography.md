@@ -8,11 +8,15 @@ S23 Ultra), 2026-10-11:
 - splits pulled with `adb pull`: `base.apk`, `split_config.arm64_v8a.apk`,
   `split_config.xxhdpi.apk`
 - decompiled with jadx 1.5.6 in a scratch directory outside the repo. Only
-  names and numbers are recorded here. One exception, the user's choice on
-  2026-10-15 after being told it is Anthropic's artwork: the working spinner
-  sprite `cc_spinner_sprite` ships as
-  `mobile/assets/claude-spinner-sprite.webp`. Nothing else from the APK
-  (fonts, images, code) is in this repo.
+  names and numbers are recorded here. One exception: the working footer's
+  animation. On 2026-10-15 the user chose to ship the old spinner sprite
+  `cc_spinner_sprite` after being told it is Anthropic's artwork. App
+  1.261013.20 dropped that sprite for a "working mark" drawn from frame data,
+  and that frame data now ships as
+  `mobile/src/session/claude-working-mark-data.ts` in its place (see "Working
+  footer" below). It is Anthropic's animation data in the same way the sprite
+  was Anthropic's artwork. Nothing else from the APK (fonts, images, code) is
+  in this repo.
 
 The class names below are R8-obfuscated (`jn7`, `zv`, `pl7`, ...). They
 change with every release, so treat them as pointers for re-checking this
@@ -180,7 +184,7 @@ padding `vml.d/e/f/g`).
 | Tool-run row box | 12 dp radius, padding 8 dp sides, 6 dp top and bottom; label, 4 dp, 16 dp chevron (`caretRight`) in `pl7.Q` | – | `w55.b`, `da20.a` |
 | Live-run icon | 24 dp, nudged 2 dp left, then 4 dp gap | `ad5.y()` `#898781` both | `da20.c` |
 | Line-count pill ("+93 −2") | 8 dp after the label; 11 / 550 / 1.5 (`jn7.L`); two joined segments 18 tall with 6 horizontal padding; 4.5 sp corner radius | add `#1E9E3C` / `#32D74B` on itself at 20%; delete `#CD2054` / `#FF2C56` on itself at 20% | `ra20.a` |
-| Status line above the composer ("12s · 1,234 tokens · 3 running tasks · thinking…") | `jn7.E` 15 / 400 / 1.4; 16 dp clay spinner, 8 dp gap; separator " · "; 16 dp vertical padding | text `pl7.Q`; "N running tasks" link `ad5.C0()` `#184F95` / `#6DA7EC`; verb-only form ("Cooking...") in clay `pl7.e` | `nl7.b`, `au8` |
+| Working footer ("12s · 1,234 tokens · 3 running tasks · thinking…"); 1.261009.20 values, superseded by "Working footer" below | `jn7.E` 15 / 400 / 1.4; 16 dp clay spinner, 8 dp gap; separator " · "; 16 dp vertical padding | text `pl7.Q`; "N running tasks" link `ad5.C0()` `#184F95` / `#6DA7EC`; verb-only form ("Cooking...") in clay `pl7.e` | `nl7.b`, `au8` |
 | Status line, what it says (read 2026-10-15) | Four forms (`zaw`): `Stats` (stats, count, " · status", `yaw`), the random verb + "..." (`vaw`), a connection `Message` "Connecting..." / "Connection lost..." (`waw`, one line, trailing "…" swapped for "...") and an offline `Notice` (`xaw`, any lines). After thinking: "thought for %1$s" until 2000 ms after the span closed, span at least 1 s. Token figure counts up (first over 1200 ms, a rise over the gap since the last figure held to 300..3000 ms, a fall jumps; drawn 1..real). Idle with tasks: spinner at rest frame 4, 16 dp gap, count | same colours; messages in clay | `au8` case 0, `zs20.x` (886-1048), `g8y`, `xrd` default case, `nl7.b` 187-188 |
 | Composer shell | 24 dp radius, 0.5 dp border, shadow blur 8 / black 10% / y 2, 8 dp vertical padding | fill `pl7.p` at 96% (`#FFFFFF` / `#20201F`); border `pl7.x` | `o530.b` |
 | Composer text | `jn7.B` **17 / 400 / 1.4** (23.8 sp), padding **13 dp horizontal, 8 dp vertical**, 1 to 6 lines then scrolls | text and caret `pl7.O`; placeholder `pl7.Q` | `aj1` case 1, `ib8` |
@@ -192,6 +196,106 @@ padding `vml.d/e/f/g`).
 | Images in assistant or tool content | full width, max 400 dp tall, 12 dp radius, Fit, 8 dp from the text | tile `pl7.s` `#F0EFEC` / `#0D0D0D` | `y030.s` |
 | Scroll-to-bottom button | 40 dp circle, 48 dp target, 16 dp `arrowDown`, 0.5 dp border, shadow blur 8 / black 10% / y 2 | fill `pl7.p` at 96%; icon `pl7.O` | `gc20.c`, `c6b` |
 | Chat list gutters | 16 dp horizontal; most rows 12 dp above; tool runs and notices a further 8 dp each side | – | `yv8.x` |
+
+## Working footer (app 1.261013.20, read 2026-10-15)
+
+Re-read from **1.261013.20** (versionCode 26101320, installed 2026-10-14),
+the build the user's screen recording of 2026-10-15 was made with. It
+replaces the 16 dp sprite spinner of 1.261009.20 with a 20 dp "working
+mark", and the footer is a **row of the transcript list**, not a bar pinned
+above the composer. Code UI follows both after 0.9.154 (the change landed
+unreleased; check which release carries it).
+
+| What | App 1.261013.20 | Where in the decompile |
+|---|---|---|
+| Placement | A `LazyColumn` item keyed `"thinking_spark"`, the list's last row. In the reversed list it is emitted after `session_pills` and `queued_message`, so on screen it sits **above** a queued message and scrolls with the transcript | `y07` case 15, `d6j.k(.., "thinking_spark", ..)` |
+| Horizontal inset | the list item's 16 dp horizontal padding, the same gutter as the transcript's prose | `rrb.Q(.., 16f, 0, 2)` |
+| Row | fillMaxWidth, **16 dp padding top and bottom**, children centred vertically | `wm7.a`, `oxb.I(.., 0, 16, 1)` |
+| Mark | a **20 dp** canvas, then an **8 dp** spacer, then the label | `zq20.a`, `pmw.p(.., 20f)`, `pmw.u(.., 8f)` |
+| Label switching | `AnimatedContent` labelled `"spark line"`, keyed by the call id in the `Call` form and by a constant otherwise, so verb, stats and message swap **without** a transition | `el00.a`, `r0x`, `s0x` |
+| Forms (`w0x`) | `v0x` Stats: stats (rolling), " · " + count link, " · " + status, all muted; `t0x` Message (connection; a trailing "…" becomes "..."); `u0x` Notice; `s0x` verb + "..." in clay; `r0x` Call (a running call's text + 8 dp + clock), not ported | `wm7.b`, `wm7.d`, `z530.a` |
+| Idle with tasks | the count alone, no mark, min width 48 dp | `wm7.a` |
+| Text | 15 / 400 / 1.4 (21) | `xo7.C` |
+| Colours | verb clay `ro7.e` `#C6613F` / `#D97757`; stats and status `ro7.Q` `#7B7974` / `#97958D`; count link `ro7.a.C0()` `#184F95` / `#6DA7EC`; mark in the footer's clay (token `ro7.R` / `z74.b`, not pinned down; the recording's dots are clay) | `wm7.a`, `zq20` |
+| Separator | `ccr_spark_segment_separator` " · " | strings |
+| Elapsed | `ccr_thinking_elapsed_seconds` "%1$ds", minutes "%1$dm %2$ds" | `rt30`, `qq30.o` |
+| Verbs | the same 20, the same clock (3 s, 4 s, then every 6 s; read in 1.261009.20 `l8`, assumed unchanged) | `wm7.a` list |
+| Placeholder | `ccr_input_placeholder_existing_session_queue` "Queue a message…" (U+2026) | strings |
+| Stop | the composer's send slot, as before | `yg9` |
+
+**The working mark** (`zq20`, `tr20`, `vq20`, `ar20`, `aa10`, `ir20`). A 20 dp
+canvas drawing up to a handful of shapes per frame. Each shape is six shorts
+`(kind, cx, cy, r, a, b)` in thousandths of the box: kind 0 a filled circle,
+1 a ring of stroke width `a`, 2 an ellipse with radii `(r, a)` rotated `b`
+degrees. Some strips carry a colour per frame (Waiting for user does).
+
+| Kind (`rq20`) | opening | loop | exit frames | rest frame | closing |
+|---|---|---|---|---|---|
+| Think | 16 | 110 | 54 | 95 | 15 |
+| Generic | 16 | 40 | none (loop end) | 38 | 14 |
+| Search | 16 | 20 | none | 4 | 14 |
+| Read | 21 | 60 | none | 44 | 19 |
+| Code | 16 | 75 | 18, 37, 56 | 74 | 9 |
+| Write | 31 | 60 | none | 36 | 14 |
+| Waiting for user | 16 | 30 | none | 0 | 16 |
+| Grow (shared) | 10 | – | – | – | – |
+
+- Player (`tr20.a`): 30 frames a second (33,333,333 ns). Grow, then the
+  kind's opening, then its loop for ever.
+- Retarget (`aa10` case 10): play the current loop on to its next exit
+  frame, close it, open the new kind. Waiting for user does not wait more
+  than 1.5 s for an exit: it jumps to 20 frames before the loop's end.
+- A change that moves the frame cross-fades for 300 ms, eased
+  cubic-bezier(0.42, 0, 0.58, 1) (`ir20.c`, `jfd.c`).
+- Reduced motion or preview (`s7i.a`): the kind's loop rest frame, still.
+- Appear and disappear scale and fade over 400 ms with
+  cubic-bezier(0.22, 1, 0.36, 1) (`fr20`): **not ported**.
+- Which kind (`zr8` case 18): while working, the turn's running tool call
+  (`d1x.a`); with none running and no thinking under way, the turn's last
+  tool call; else Think. Tools map as Read/Grep/Glob and MCP resource reads →
+  Read; Edit/NotebookEdit/Write/TodoWrite and SendMessage/SendUserMessage/
+  SendUserFile → Write; Bash → Code; web tools → Search; Task, ExitPlanMode,
+  slash commands → Generic; any other tool → Code if it is a git tool
+  (`mcp__git__git_*`), else Generic. The packed-switch targets were matched
+  from jadx's grouping, not traced instruction by instruction.
+
+Regenerating the frame data after an app update: pull the APK, find the
+strips the clips in `vq20` point at, and re-run the two scratch scripts used
+on 2026-10-15 (`extract_mark.py` reads the `short[]` arrays and the frame
+offsets out of the decompiled class, `gen_ts.py` writes
+`claude-working-mark-data.ts`). The test
+`claude-working-mark.test.ts` checks every strip still tiles into its
+opening, loop and closing.
+
+**Rolling figures** (`z530.a`, `u95`, `z530.x`, `z530.y`): digit runs (with
+"," "." " " or "'" between two digits) are numbers; every digit is drawn in a
+slot as wide as the widest of 0..9; segments are keyed from the end; a
+changed digit slides by the full line height on spring(damping ratio 0.9,
+stiffness 380) and fades over 130 ms, upward when the number grew. Code UI:
+`claude-rolling-text.ts`, `ClaudeRollingText.tsx`.
+
+### Measured on the user's phone
+
+S23 Ultra, density 450 (2.8125 px/dp), font scale 1.0.
+
+| Measure | App recording, 2026-10-15 (1.261013.20) | Code UI 0.9.153 screenshot | Code UI after this change (by code) |
+|---|---|---|---|
+| Transcript prose left edge | 46–48 px (16.4 dp) | 16.4 dp | 16 dp |
+| Mark box | 45–101 px, dots 48–97 px (17–34.5 dp), centre y 1826 | 16 dp sprite, four 5.7 dp dots, 17.8–31 dp | 20 dp box at 16–36 dp, the app's frames |
+| Words start | 126 px (44.8 dp) | 44.8 dp | 16 + 20 + 8 = 44 dp + glyph bearing |
+| Text | 15 / 21, clay verb, muted stats, blue count | same | same |
+| Mark glyph size | dots about 3.5 dp | dots about 5.7 dp | the app's frames |
+| Cap top → composer shell | 48.4 dp | 47.7 dp | not measured |
+| Glyph bottom → composer shell | 93 px (33.1 dp) | 32.5 dp | not measured |
+| Footer box bottom → composer shell | about 47 px (16.7 dp) | – | 8 dp list padding + 4 dp composer inset = 12 dp by code; unverified on device |
+| Scroll behaviour | scrolls with the transcript | pinned over the transcript: at a scroll position the count sat on top of prose (0.9.154) | scrolls with the transcript |
+
+The 0.9.153 screenshot does not agree with that build's code: by code its
+words started at 36 dp and its line sat about 4 dp + padding above the
+composer, but the screenshot measures 44.8 dp and about 12 dp more. That
+difference is not explained, so the "after" column's 12 dp gap below the
+footer is a reading of the code, not a measurement. Check it on the device
+against the app's 16.7 dp before adjusting.
 
 ## Colour tokens used above
 

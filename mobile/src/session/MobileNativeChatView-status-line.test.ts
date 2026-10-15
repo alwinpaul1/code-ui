@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop', Circle: 'Circle', Ellipse: 'Ellipse', G: 'G' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 // The system interrupting a touch is not what these tests are about; see
 // use-mobile-native-chat-tail-follow.selection.test.ts for that.
@@ -37,7 +37,15 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('@shopify/flash-list', () => ({ FlashList: 'FlashList' }))
+// The list draws its header, where the working line lives as the transcript's last row; the
+// rows themselves are not needed here.
+vi.mock('@shopify/flash-list', async () => {
+  const React = await import('react')
+  return {
+    FlashList: (props: { ListHeaderComponent?: unknown }) =>
+      React.createElement('FlashList', props, props.ListHeaderComponent as never)
+  }
+})
 
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
@@ -186,7 +194,7 @@ function statusLine(instance: ReturnType<typeof create>): string[] | null {
     .filter((child): child is string => typeof child === 'string')
 }
 
-describe('the status line above the composer, as the Claude app draws it', () => {
+describe('the working footer at the transcript\'s foot, as the Claude app draws it', () => {
   let instance: ReturnType<typeof create> | null = null
   afterEach(() => {
     act(() => instance?.unmount())
@@ -199,7 +207,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     return instance!
   }
 
-  it('shows the Claude spinner and the running-task count on one line, and never the word Working', async () => {
+  it('shows the Claude working mark and the running-task count on one line, and never the word Working', async () => {
     const view = await show({
       messages: RUNNING_SHELL,
       folded: [],
@@ -208,7 +216,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     })
     expect(statusLine(view)!.join('')).toMatch(/^[A-Za-z]+\.\.\. · 1 running task$/)
     expect(statusLine(view)).not.toContain('Working')
-    expect(view.root.findAll((node) => node.props?.testID === 'claude-spinner-sprite').length).toBeGreaterThan(0)
+    expect(view.root.findAll((node) => node.props?.testID === 'claude-working-mark').length).toBeGreaterThan(0)
     expect(view.root.findAll((node) => String(node.type) === 'WorkingIndicator')).toHaveLength(0)
   })
 
@@ -254,14 +262,39 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     expect(sheet().props.visible).toBe(true)
   })
 
-  it('no longer draws the count a second time under the last message', async () => {
+  it('draws the count once, not a second time under the last message', async () => {
     const view = await show({ messages: RUNNING_SHELL, folded: [], agentWorking: false })
-    const header = view.root.findByType('FlashList' as never).props.ListHeaderComponent
-    let rendered!: ReturnType<typeof create>
-    act(() => {
-      rendered = create(header)
-    })
-    expect(rendered.root.findAll((node) => node.props?.runningCount !== undefined)).toHaveLength(0)
-    act(() => rendered.unmount())
+    const counts = view.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.children === '1 running task'
+    )
+    expect(counts).toHaveLength(1)
+  })
+
+  // The user's phone, 0.9.154 (2026-10-15): scrolled up, the blue "4 running tasks" was drawn ON
+  // the assistant's prose ("backgro|4 running tasks|und skill row"), because the line was pinned
+  // in the see-through dock above the composer. In the Claude app it is the list's last item
+  // (`y07` "thinking_spark"), so it scrolls with the messages and cannot overlap one.
+  it('draws the working line as the transcript\'s last row, so it scrolls with the messages and never lies over them', async () => {
+    const view = await show({ messages: RUNNING_SHELL, folded: [], agentWorking: true })
+    const dock = view.root.findAll((node) => node.props?.testID === 'native-chat-dock' && String(node.type) === 'View')[0]!
+    expect(dock.findAll((node) => node.props?.testID === 'native-chat-status-line')).toHaveLength(0)
+    const list = view.root.findByType('FlashList' as never)
+    expect(list.findAll((node) => node.props?.testID === 'native-chat-status-line')).toHaveLength(1)
+    // Below the newest message and above the room kept for the composer, as in the app.
+    const header = list.props.ListHeaderComponent as { props: { children: unknown[] } }
+    const order = (header.props.children as ({ type?: { name?: string }; props?: { testID?: string } } | null)[]).map(
+      (child) => child?.props?.testID ?? child?.type?.name ?? null
+    )
+    expect(order.indexOf('MobileNativeChatWorkingFooter')).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf('MobileNativeChatWorkingFooter')).toBeLessThan(order.indexOf('native-chat-dock-spacer'))
+  })
+
+  it('keeps the working line in the list when the session has no messages yet, and draws nothing there when idle', async () => {
+    const working = await show({ agentWorking: true })
+    expect(working.root.findByType('FlashList' as never).findAll((node) => node.props?.testID === 'native-chat-status-line')).toHaveLength(1)
+    act(() => working.unmount())
+    instance = null
+    const idle = await show({ agentWorking: false })
+    expect(idle.root.findAll((node) => node.props?.testID === 'native-chat-status-line')).toHaveLength(0)
   })
 })

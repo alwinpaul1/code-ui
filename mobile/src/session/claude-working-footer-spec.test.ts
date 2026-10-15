@@ -1,25 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_FOOTER_IDLE_MIN_WIDTH,
+  CLAUDE_FOOTER_MARK_GAP,
+  CLAUDE_FOOTER_PADDING_HORIZONTAL,
   CLAUDE_FOOTER_PADDING_VERTICAL,
   CLAUDE_FOOTER_SEPARATOR,
-  CLAUDE_SPINNER,
   CLAUDE_WORKING_VERBS,
-  nextSpinnerFrame,
   randomVerbIndex,
   verbChangeDelayMs
 } from './claude-working-footer-spec'
 
-// Values from com.anthropic.claude 1.261009.20 (nl7.java, l8.java, zn.java; see the spec file).
+// Values from com.anthropic.claude 1.261013.20 (`wm7.a`, `y07`; the verb clock from `l8` in
+// 1.261009.20; see the spec file). The working mark's own numbers are in claude-working-mark.test.ts.
 describe("the Claude app's working footer, pinned to the decompiled numbers", () => {
-  it('runs an 84-frame, 16 dp spinner at 60 ms a frame and rests on frame 4', () => {
-    expect(CLAUDE_SPINNER).toEqual({ frames: 84, frameMs: 60, restFrame: 4, size: 16, gapWorking: 8 })
-  })
-
-  it('wraps the frame at the end of the sprite and not before', () => {
-    expect(nextSpinnerFrame(0)).toBe(1)
-    expect(nextSpinnerFrame(82)).toBe(83)
-    expect(nextSpinnerFrame(83)).toBe(0)
+  it("leaves 8 dp between the working mark and the words, in the list's 16 dp gutter", () => {
+    expect(CLAUDE_FOOTER_MARK_GAP).toBe(8)
+    expect(CLAUDE_FOOTER_PADDING_HORIZONTAL).toBe(16)
   })
 
   it('changes the verb after 3 s, then 4 s, then every 6 s', () => {

@@ -9,18 +9,6 @@ export function makeChatViewStyles(theme: Theme) {
       flex: 1,
       backgroundColor: colors.chatBg
     },
-    chromeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: space.md
-    },
-    chromeLeft: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.sm
-    },
     sendError: {
       alignItems: 'center',
       paddingHorizontal: space.md,

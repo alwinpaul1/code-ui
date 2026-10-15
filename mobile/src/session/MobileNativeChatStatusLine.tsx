@@ -1,12 +1,15 @@
 import { Pressable, Text, View } from 'react-native'
 import { claudeStatusFooterPalette } from '../theme/claude-status-footer-palette'
 import { useTheme } from '../theme/theme-context'
-import { ClaudeSpinnerSprite } from './ClaudeSpinnerSprite'
+import { ClaudeRollingText } from './ClaudeRollingText'
+import { ClaudeWorkingMark } from './ClaudeWorkingMark'
+import type { WorkingMarkKind } from './claude-working-mark'
 import {
   CLAUDE_FOOTER_IDLE_MIN_WIDTH,
+  CLAUDE_FOOTER_MARK_GAP,
+  CLAUDE_FOOTER_PADDING_HORIZONTAL,
   CLAUDE_FOOTER_PADDING_VERTICAL,
-  CLAUDE_FOOTER_SEPARATOR,
-  CLAUDE_SPINNER
+  CLAUDE_FOOTER_SEPARATOR
 } from './claude-working-footer-spec'
 import { formatRunningTaskCount } from './mobile-background-task-labels'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
@@ -18,23 +21,24 @@ import { useClaudeFooterStats } from './use-claude-footer-stats'
 import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
 
 /**
- * The line above the composer, as the Claude app draws it (com.anthropic.claude 1.261009.20,
- * `nl7.b`, read 2026-10-15; every number is in claude-working-footer-spec.ts):
+ * The working line at the foot of the transcript, as the Claude app draws it (com.anthropic.claude
+ * 1.261009.20 `nl7.b` and 1.261013.20 `wm7.a`, read 2026-10-15; every number is in
+ * claude-working-footer-spec.ts). It is the transcript list's last row (MobileNativeChatView's
+ * list header), as the app's "thinking_spark" item is, so it scrolls with the messages; pinned
+ * above the composer it was drawn over them once the list scrolled (2026-10-15).
  *
  *   3 running tasks                         turn over, tasks still running: the count alone,
- *                                           link blue, no star (as the user's screenshot showed;
- *                                           the decompile's nl7.java:187-188 draws the sprite at
- *                                           rest frame 4 and a 16 dp gap here, unresolved)
- *   [spinner] Cooking... · 3 running tasks  working: the Claude spinner, a verb that changes
+ *                                           link blue, no mark (`wm7.a`, 1.261013.20)
+ *   [mark] Cooking... · 3 running tasks     working: the app's working mark, a verb that changes
  *                                           every few seconds, the count
- *   [spinner] Cooking...                    working, nothing running in the background
- *   [spinner] 15s · 2 running tasks · still thinking…
+ *   [mark] Cooking...                       working, nothing running in the background
+ *   [mark] 15s · 2 running tasks · still thinking…
  *                                           working, with the stats Anthropic's events give
  *                                           (claude-working-footer-stats.ts): elapsed time (and
  *                                           thinking tokens) muted, the count link blue, the
  *                                           status phrase muted. With no stats, the verb.
  *                                           After thinking: "· thought for 8s" for 2 s.
- *   [spinner] Connecting... · 2 running tasks
+ *   [mark] Connecting... · 2 running tasks
  *                                           working with the connection dialling or lost: the
  *                                           notice in place of verb and stats, in the clay (au8
  *                                           case 0, nl7.java:232-235); not a second row.
@@ -50,13 +54,16 @@ import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
  * `spinner` (the agent's own spinner line) is no longer read: the app's verbs are its own.
  */
 export function MobileNativeChatStatusLine({
-  working
+  working,
+  markKind = 'think'
 }: {
   /** Whether this line should say the agent is working. False on the structured lane, whose
    *  per-turn row already says it. */
   working: boolean
   /** Not read; kept so the callers that still pass it keep compiling. */
   spinner?: ClaudeSpinner | null
+  /** Which working mark the turn draws (claude-working-mark-kind.ts). */
+  markKind?: WorkingMarkKind
 }) {
   const { scheme, fonts, type } = useTheme()
   const { runningCount, openSheet } = useNativeChatTasks()
@@ -94,6 +101,7 @@ export function MobileNativeChatStatusLine({
         flexDirection: 'row',
         alignItems: 'center',
         flexShrink: 1,
+        paddingHorizontal: CLAUDE_FOOTER_PADDING_HORIZONTAL,
         paddingVertical: CLAUDE_FOOTER_PADDING_VERTICAL
       }}
       accessibilityLiveRegion="polite"
@@ -106,12 +114,11 @@ export function MobileNativeChatStatusLine({
             accessibilityLabel={message ?? 'Working'}
             style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}
           >
-            <ClaudeSpinnerSprite color={palette.clay} animating />
-            <View style={{ width: CLAUDE_SPINNER.gapWorking }} />
+            <ClaudeWorkingMark color={palette.clay} kind={markKind} />
+            <View style={{ width: CLAUDE_FOOTER_MARK_GAP }} />
             {stats ? (
-              <Text testID="native-chat-status-stats" style={[text, { color: palette.body }]} numberOfLines={1}>
-                {stats.stats}
-              </Text>
+              // The figures roll as the app's do (`z530.a`): each digit in a fixed slot.
+              <ClaudeRollingText testID="native-chat-status-stats" text={stats.stats} style={[text, { color: palette.body }]} />
             ) : (
               <Text style={[text, { color: palette.clay, flexShrink: 1 }]} numberOfLines={1}>
                 {message ?? `${verb}...`}

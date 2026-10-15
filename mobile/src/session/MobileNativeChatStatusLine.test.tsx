@@ -29,6 +29,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => mocks.reduced }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Circle: 'Circle', Ellipse: 'Ellipse', G: 'G' }))
 
 const LIGHT = { link: '#184F95', clay: '#C6613F', body: '#7B7974' }
 const DARK = { link: '#6DA7EC', clay: '#D97757', body: '#97958D' }
@@ -37,7 +38,7 @@ function flat(style: unknown): Record<string, unknown> {
   return Object.assign({}, ...[style].flat(3).filter(Boolean)) as Record<string, unknown>
 }
 
-describe('the status line above the composer, as the Claude app draws it', () => {
+describe('the working footer at the transcript\'s foot, as the Claude app draws it', () => {
   let renderer: ReactTestRenderer | null = null
   beforeEach(() => {
     vi.useFakeTimers()
@@ -73,7 +74,7 @@ describe('the status line above the composer, as the Claude app draws it', () =>
       .filter((child): child is string => typeof child === 'string')
   }
 
-  const star = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'claude-spinner-sprite')
+  const star = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'claude-working-mark' && (n.type as unknown) === 'View')
   const oldStar = (root: ReactTestInstance) => root.findAll((n) => n.props.testID === 'background-tasks-pulse')
 
   // The headline.
@@ -140,6 +141,44 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     const style = flat(root.findAllByType('Text' as never)[0]!.props.style)
     expect(style.fontSize).toBe(15)
     expect(style.lineHeight).toBe(21)
+  })
+
+  // Claude app 1.261013.20, `wm7.a` and `y07` (docs/claude-app-typography.md, "Working footer"):
+  // the row is the list's item, padded by the list's 16 dp gutter and 16 dp above and below; the
+  // working mark is a 20 dp box (`zq20.a`), then 8 dp, then the words. The recording measures the
+  // words starting 126 px (44.8 dp) in and the dots spanning 48..97 px, in a 45..101 px box.
+  it('sits in the transcript\'s 16 dp gutter, 16 dp above and below, with a 20 dp mark and 8 dp to the words', () => {
+    const root = draw({ runningCount: 1, working: true })
+    const line = root.find((n) => n.props.testID === 'native-chat-status-line')
+    expect(flat(line.props.style)).toMatchObject({ paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', alignItems: 'center' })
+    const mark = star(root)[0]!
+    expect(flat(mark.props.style)).toMatchObject({ width: 20, height: 20 })
+    // The mark's own component sits between its box and the row; step up to the row's child.
+    let slot = mark
+    while ((slot.parent!.type as unknown) !== 'View') {
+      slot = slot.parent!
+    }
+    const row = slot.parent!
+    const gap = row.children[row.children.indexOf(slot) + 1] as ReactTestInstance
+    expect(flat(gap.props.style)).toMatchObject({ width: 8 })
+  })
+
+  it('tints the working mark with the clay of whichever theme is on', () => {
+    for (const [scheme, want] of [
+      ['light', LIGHT],
+      ['dark', DARK]
+    ] as const) {
+      const root = draw({ runningCount: 0, working: true, scheme })
+      const fills = root.findAll((n) => (n.type as unknown) === 'Circle' || (n.type as unknown) === 'Ellipse').map((n) => n.props.fill ?? n.props.stroke)
+      expect(fills.length).toBeGreaterThan(0)
+      expect(new Set(fills)).toEqual(new Set([want.clay]))
+    }
+  })
+
+  it('an idle line with tasks is padded the same, so the count does not jump when a turn ends', () => {
+    const root = draw({ runningCount: 2, working: false })
+    const line = root.find((n) => n.props.testID === 'native-chat-status-line')
+    expect(flat(line.props.style)).toMatchObject({ paddingHorizontal: 16, paddingVertical: 16 })
   })
 
   it('opens the Background tasks sheet from the count, labelled for a screen reader', () => {

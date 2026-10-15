@@ -14,18 +14,11 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
-// The status line breathes through Animated; the row under test only needs
-// to know whether it rendered.
-vi.mock('./MobileNativeChatStatusLine', () => ({
-  MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
-}))
 vi.mock('lucide-react-native', () => ({
   Square: 'Square'
 }))
 
 const styles = {
-  chromeRow: {},
-  chromeLeft: {},
   pressed: {},
   sendError: {}
 } as unknown as ChatViewStyles
@@ -33,7 +26,9 @@ const styles = {
 // Stop moved into the composer's send slot, where the Claude app keeps it
 // (MobileNativeChatComposer.stop-in-send-slot.test.tsx). A second Stop left on
 // the status line ("Working · 2 running tasks … Stop") is what this pins out.
-describe('the status line above the composer', () => {
+// The working line itself left this row on 2026-10-15: it is the transcript's last row, as in
+// the Claude app (MobileNativeChatView-status-line.test.ts), so nothing is drawn here for it.
+describe('the chrome above the composer while the agent works', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {
@@ -41,23 +36,22 @@ describe('the status line above the composer', () => {
     renderer = null
   })
 
-  it.each(['light', 'dark'] as const)('draws no Stop of its own while the agent works (%s)', (scheme) => {
+  it.each(['light', 'dark'] as const)('draws no Stop and no working line of its own (%s)', (scheme) => {
     act(() => {
       renderer = create(
         createElement(
           ThemeProvider,
           { initialPreference: scheme },
           createElement(MobileNativeChatChromeRow, {
-            agentWorking: true,
-            // What the row used to take for its Stop; ignored now.
-            ...({ canStop: true, onStop: vi.fn() } as Record<string, unknown>),
+            // What the row used to take for its Stop and its working line; ignored now.
+            ...({ agentWorking: true, canStop: true, onStop: vi.fn() } as Record<string, unknown>),
             styles
           })
         )
       )
     })
     expect(renderer!.root.findAllByType('Pressable' as never)).toHaveLength(0)
-    expect(renderer!.root.findAllByType('MobileNativeChatStatusLine' as never)).toHaveLength(1)
+    expect(renderer!.toJSON()).toBeNull()
   })
 })
 

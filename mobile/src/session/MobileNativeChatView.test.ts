@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -7,11 +7,11 @@ import {
   saveChatExpandTools,
   saveChatFocusView
 } from '../storage/session-view-preferences'
-import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatView } from './MobileNativeChatView'; import { MobileNativeChatWorkingFooter } from './MobileNativeChatWorkingFooter'
 import type { ChatRowVisibility } from './native-chat-row-visibility'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop', Circle: 'Circle', Ellipse: 'Ellipse', G: 'G' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 // The system interrupting a touch is not what these tests are about; see
 // use-mobile-native-chat-tail-follow.selection.test.ts for that.
@@ -654,10 +654,9 @@ describe('MobileNativeChatView', () => {
       return (renderedRow(id) as { props: Record<string, unknown> }).props
     }
 
-    /** The status line above the composer, which says Working on the bridge lane. */
-    function workingLines(): ReactTestInstance[] {
-      return renderer!.root.findAll((node) => node.props?.testID === 'native-chat-status-line')
-    }
+    // The list header's working line when it says Working (FlashList is a bare host here).
+    const workingLines = () => Children.toArray((renderer!.root.findByType('FlashList').props.ListHeaderComponent as ReactElement<{ children: ReactNode }>).props.children)
+      .filter((child) => isValidElement<{ working?: boolean }>(child) && child.type === MobileNativeChatWorkingFooter && child.props.working === true)
 
     // Focus view (extension `claudeCode.focusView`) is a device preference the
     // Settings screen toggles; the chat that obeys it is this list, and a chat
@@ -758,7 +757,7 @@ describe('MobileNativeChatView', () => {
       expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
     })
 
-    it('keeps the bridge lane on the status line above the composer, with no turn status', async () => {
+    it('keeps the bridge lane on the working line at the transcript\'s foot, with no turn status', async () => {
       const folded = [userTurn('u1', 'go')]
       await render({ messages: folded, folded, agentWorking: true })
       const props = rowProps('u1')

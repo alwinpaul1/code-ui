@@ -7,14 +7,25 @@ import { CCR_IDLE_LIVE_STATE } from './ccr-live-state'
 import { ClaudeChatLiveContext, claudeChatLive, type ClaudeChatLive } from './claude-chat-live'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
 
-// The footer above the composer, as the Claude app drew it on 2026-10-15 with the relay down:
-// spinner, "15s · 2 running tasks · still thinking…" (nl7.java:188-224: stats and status in the
+// The working footer, as the Claude app drew it on 2026-10-15 with the relay down:
+// working mark, "15s · 2 running tasks · still thinking…" (nl7.java:188-224: stats and status in the
 // muted `pl7.Q`, the count in link blue `ad5.C0()`), and the running count from Anthropic's
 // `background_tasks_changed` when the relay's sources are stale.
 
 const running = vi.hoisted(() => ({ tasks: [] as { id: string; kind: string }[] }))
 
 vi.mock('react-native', () => ({
+  // The stats roll (ClaudeRollingText); reduced motion is on here, so nothing animates.
+  Animated: {
+    Text: 'AnimatedText',
+    Value: class {
+      setValue() {}
+      interpolate() {
+        return 0
+      }
+    }
+  },
+  Easing: { linear: (t: number) => t },
   Image: 'Image',
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
@@ -23,6 +34,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Circle: 'Circle', Ellipse: 'Ellipse', G: 'G' }))
 vi.mock('./use-mobile-running-task-count', () => ({ useMobileRunningTasks: () => running.tasks }))
 vi.mock('./MobileBackgroundTasksSheet', () => ({ MobileBackgroundTasksSheet: () => null }))
 vi.mock('./MobileNativeChatRunSheet', () => ({ MobileNativeChatRunSheet: () => null }))
@@ -69,16 +81,33 @@ function line(live: ClaudeChatLive | null, runningCount: number, working = true)
   )
 }
 
-/** Each drawn string with its colour, in order. */
+function colorOf(node: ReactTestInstance): string {
+  const style = ([] as unknown[]).concat(node.props.style).flat() as Array<{ color?: string } | undefined>
+  return style.reduce<string>((found, part) => part?.color ?? found, '')
+}
+
+/** Each drawn string with its colour, in order. The rolling stats draw one Text per character
+ *  (`z530.a`), so they count as one string: the line they say, in their characters' colour. */
 function texts(root: ReactTestInstance): Array<{ text: string; color: string }> {
-  return root
-    .findAllByType('Text' as never)
-    .filter((node) => typeof node.props.children === 'string')
-    .map((node) => {
-      const style = ([] as unknown[]).concat(node.props.style).flat() as Array<{ color?: string } | undefined>
-      const color = style.reduce<string>((found, part) => part?.color ?? found, '')
-      return { text: node.props.children as string, color }
-    })
+  const out: Array<{ text: string; color: string }> = []
+  const walk = (node: ReactTestInstance) => {
+    if (node.props.testID === 'native-chat-status-stats' && (node.type as unknown) === 'View') {
+      const shown = node.findAll((n) => (n.type as unknown) === 'Text' && n.props.importantForAccessibility !== 'no')
+      out.push({ text: node.props.accessibilityLabel as string, color: colorOf(shown[0]!) })
+      return
+    }
+    if ((node.type as unknown) === 'Text' && typeof node.props.children === 'string') {
+      out.push({ text: node.props.children as string, color: colorOf(node) })
+      return
+    }
+    for (const child of node.children) {
+      if (typeof child !== 'string') {
+        walk(child)
+      }
+    }
+  }
+  walk(root)
+  return out
 }
 
 describe('the footer reads Anthropic’s live state, as the Claude app’s does', () => {
@@ -92,7 +121,7 @@ describe('the footer reads Anthropic’s live state, as the Claude app’s does'
         { text: '2 running tasks', color: palette.link },
         { text: ' · still thinking…', color: palette.body }
       ])
-      expect(root.findAll((node) => node.props.testID === 'claude-spinner-sprite-strip').length).toBe(1)
+      expect(root.findAll((node) => node.props.testID === 'claude-working-mark' && (node.type as unknown) === 'View').length).toBe(1)
     })
   }
 

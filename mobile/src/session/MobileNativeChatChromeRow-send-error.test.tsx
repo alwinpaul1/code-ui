@@ -14,9 +14,6 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
-vi.mock('./MobileNativeChatStatusLine', () => ({
-  MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
-}))
 vi.mock('lucide-react-native', () => ({
   Square: 'Square'
 }))

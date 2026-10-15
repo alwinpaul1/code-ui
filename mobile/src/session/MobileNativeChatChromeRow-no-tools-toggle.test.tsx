@@ -12,20 +12,20 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
-vi.mock('./MobileNativeChatStatusLine', () => ({
-  MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
-}))
 vi.mock('lucide-react-native', () => ({ Square: 'Square' }))
 
 // 2026-10-10, the user: "remove the Tools from here and add as a toggle like
 // turn on or turn off, like the Wrap long lines toggle." Expanding tool calls
 // is a Settings switch now (Chat UI -> Expand tool calls); the row above the
-// composer keeps the status line and Stop, and nothing else.
+// composer kept the status line and Stop, and nothing else. Stop moved to the composer's send
+// slot, and on 2026-10-15 the working line moved into the transcript as its last row, so the row
+// now holds only the send-failure banner. Whether the agent works must not change that.
 
 function Row({ agentWorking }: { agentWorking: boolean }) {
   const theme = useTheme()
   return createElement(MobileNativeChatChromeRow, {
-    agentWorking,
+    // The prop the row used to take; ignored now, and kept here to prove it adds nothing back.
+    ...({ agentWorking } as Record<string, unknown>),
     styles: makeChatViewStyles(theme)
   })
 }
@@ -71,16 +71,13 @@ describe('the chrome row above the composer', () => {
     }
 
     it(`takes no height of its own when there is nothing to show (${scheme})`, () => {
-      // The Tools row used to hold the band open at 30dp. With it gone, an idle
-      // row with no Stop and no status line must collapse to nothing, so the
-      // composer sits where that row was. A minHeight or fixed height here
-      // would leave an empty band over the glass composer.
-      const tree = render(scheme, false)
-      const row = hostsOf(tree, 'View').find((node) => node.props.pointerEvents === 'box-none')
-      const style = Object.assign({}, ...[row?.props.style].flat())
-      expect(style.minHeight).toBeUndefined()
-      expect(style.height).toBeUndefined()
-      expect(hostsOf(tree, 'Pressable')).toHaveLength(0)
+      // The Tools row used to hold the band open at 30dp. With it, Stop and the working line all
+      // gone, a row with no send failure renders nothing at all, working or not, so no empty
+      // band sits over the glass composer.
+      for (const agentWorking of [false, true]) {
+        act(() => renderer?.unmount())
+        expect(render(scheme, agentWorking).toJSON()).toBeNull()
+      }
     })
   }
 })

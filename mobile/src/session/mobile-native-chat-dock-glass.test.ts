@@ -31,7 +31,9 @@ describe('touches on the dock’s empty parts', () => {
     const dock = /<View\s+style=\{\[styles\.dock[\s\S]*?>/.exec(view)?.[0] ?? ''
     expect(dock).toMatch(/pointerEvents="box-none"/)
     const row = readFileSync(new URL('./MobileNativeChatChromeRow.tsx', import.meta.url), 'utf8')
-    expect(row).toMatch(/<View style=\{styles\.chromeRow\} pointerEvents="box-none">/)
+    // The working line left this row for the transcript (2026-10-15); what is left, the
+    // send-failure banner, still lets a swipe through where it draws nothing.
+    expect(row).toMatch(/<View\s+style=\{styles\.sendError\}\s+pointerEvents="box-none"/)
   })
 })
 

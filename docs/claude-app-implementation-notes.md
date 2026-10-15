@@ -308,6 +308,11 @@ field `aj1`, placeholder `ib8`, custom measure policies `ai9` (button row) and
 
 ### Status line above the composer (`au8` → `nl7.b`)
 
+App 1.261013.20 changed this: the line is the transcript list's last row
+(`"thinking_spark"`), and the sprite became a 20 dp working mark drawn from
+frame data. The current values are in `claude-app-typography.md`, "Working
+footer". What follows is the 1.261009.20 reading.
+
 - A row with 16 dp vertical padding: a **16 dp** clay spinner sprite
   (`cc_spinner_sprite`), 8 dp gap while working, then 15 / 400 / 1.4 text,
   parts joined by " · " (`ccr_spark_segment_separator`).

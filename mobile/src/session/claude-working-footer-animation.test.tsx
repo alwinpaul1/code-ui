@@ -2,15 +2,25 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
-import { CLAUDE_SPINNER, CLAUDE_WORKING_VERBS } from './claude-working-footer-spec'
+import { CLAUDE_WORKING_VERBS } from './claude-working-footer-spec'
+import {
+  WORKING_MARK,
+  retargetWorkingMark,
+  workingMarkFrameAt,
+  workingMarkShapes,
+  workingMarkStillFrame,
+  type WorkingMarkFrame,
+  type WorkingMarkKind
+} from './claude-working-mark'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
 
 /**
- * The animation of the Claude app's working footer, pinned to what the app does
- * (com.anthropic.claude 1.261009.20: `zn` case 13 for the frame clock, `l8` for the verb clock;
- * numbers in claude-working-footer-spec.ts): 84 frames at 60 ms, a verb change after 3 s, 4 s,
- * then every 6 s. Reduced motion holds the star at rest and the first verb.
+ * The animation of the Claude app's working footer, pinned to what the app does: the working mark
+ * at 30 frames a second, growing, then opening and looping its kind (com.anthropic.claude
+ * 1.261013.20: `zq20`, `tr20`; claude-working-mark.ts), and the verb clock (`l8` in 1.261009.20,
+ * assumed unchanged): a verb change after 3 s, 4 s, then every 6 s. Reduced motion holds the
+ * kind's resting frame and the first verb.
  */
 
 const mocks = vi.hoisted(() => ({ reduced: false as boolean | null }))
@@ -24,6 +34,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => mocks.reduced }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Circle: 'Circle', Ellipse: 'Ellipse', G: 'G' }))
 
 describe('the working footer animation', () => {
   let renderer: ReactTestRenderer | null = null
@@ -38,7 +49,7 @@ describe('the working footer animation', () => {
     vi.useRealTimers()
   })
 
-  function draw(working: boolean, runningCount = 0): ReactTestInstance {
+  function draw(working: boolean, runningCount = 0, markKind: WorkingMarkKind = 'think'): ReactTestInstance {
     act(() => {
       renderer?.unmount()
       renderer = create(
@@ -46,7 +57,7 @@ describe('the working footer animation', () => {
           {createElement(
             NativeChatTasksContext.Provider,
             { value: { runningCount, openSheet: () => {} } },
-            createElement(MobileNativeChatStatusLine, { working })
+            createElement(MobileNativeChatStatusLine, { working, markKind })
           )}
         </ThemeProvider>
       )
@@ -54,11 +65,22 @@ describe('the working footer animation', () => {
     return renderer!.root
   }
 
-  const frameOf = (root: ReactTestInstance): number => {
-    const strip = root.find((n) => n.props.testID === 'claude-spinner-sprite-strip')
-    const translateY = (strip.props.style.transform as Array<{ translateY: number }>)[0]!.translateY
-    return -translateY / CLAUDE_SPINNER.size
+  /** The shapes the mark draws now, in the frame's own thousandths of the box. */
+  const drawn = (root: ReactTestInstance) => {
+    const layers = root.findAll((n) => n.props.testID === 'claude-working-mark-frame' && (n.type as unknown) === 'G')
+    expect(layers).toHaveLength(1)
+    return layers[0]!
+      .findAll((n) => (n.type as unknown) === 'Circle' || (n.type as unknown) === 'Ellipse')
+      .map((n) => ({ type: n.type as unknown as string, cx: n.props.cx, cy: n.props.cy, r: n.props.r ?? n.props.rx }))
   }
+  const shapesOf = (frame: WorkingMarkFrame) =>
+    workingMarkShapes(frame).map((shape) =>
+      shape.kind === 'ellipse'
+        ? { type: 'Ellipse', cx: shape.cx, cy: shape.cy, r: shape.rx }
+        : { type: 'Circle', cx: shape.cx, cy: shape.cy, r: shape.r }
+    )
+  // Fake timers run the 33.3 ms interval every 33 ms; the mark draws the frame due at each tick.
+  const TICK = Math.floor(WORKING_MARK.frameMs)
   const verbOf = (root: ReactTestInstance): string => {
     const text = root
       .findAllByType('Text' as never)
@@ -67,33 +89,24 @@ describe('the working footer animation', () => {
     return (text as string).replace('...', '')
   }
 
-  it('plays one frame every 60 ms from the first', () => {
+  it('grows for 10 frames at 30 a second, then opens and loops Think, as the app does', () => {
+    const start = Date.now()
     const root = draw(true)
-    expect(frameOf(root)).toBe(0)
-    act(() => { vi.advanceTimersByTime(59) })
-    expect(frameOf(root)).toBe(0)
-    act(() => { vi.advanceTimersByTime(1) })
-    expect(frameOf(root)).toBe(1)
-    act(() => { vi.advanceTimersByTime(60 * 9) })
-    expect(frameOf(root)).toBe(10)
+    const { player } = retargetWorkingMark(null, 'think', start)
+    expect(drawn(root)).toEqual(shapesOf(workingMarkFrameAt(player, start)))
+    for (const ticks of [1, 5, 11, 30, 60, 200]) {
+      act(() => { vi.advanceTimersByTime(ticks * TICK) })
+      const due = workingMarkFrameAt(player, Date.now())
+      expect(drawn(root)).toEqual(shapesOf(due))
+    }
   })
 
-  it('wraps from frame 83 to frame 0 and runs the 84 frames in 5040 ms', () => {
+  it('draws the mark in a 20 dp box', () => {
     const root = draw(true)
-    act(() => { vi.advanceTimersByTime(60 * 83) })
-    expect(frameOf(root)).toBe(83)
-    act(() => { vi.advanceTimersByTime(60) })
-    expect(frameOf(root)).toBe(0)
-    act(() => { vi.advanceTimersByTime(5040) })
-    expect(frameOf(root)).toBe(0)
-  })
-
-  it('draws the sprite as a 16 dp window on a strip 84 frames tall', () => {
-    const root = draw(true)
-    const window = root.find((n) => n.props.testID === 'claude-spinner-sprite')
-    expect(window.props.style).toMatchObject({ width: 16, height: 16, overflow: 'hidden' })
-    const strip = root.find((n) => n.props.testID === 'claude-spinner-sprite-strip')
-    expect(strip.props.style).toMatchObject({ width: 16, height: 16 * 84 })
+    const box = root.find((n) => n.props.testID === 'claude-working-mark' && (n.type as unknown) === 'View')
+    expect(box.props.style).toMatchObject({ width: 20, height: 20 })
+    const svg = root.find((n) => (n.type as unknown) === 'Svg')
+    expect(svg.props).toMatchObject({ width: 20, height: 20, viewBox: '0 0 1000 1000' })
   })
 
   it('stops the frame clock when the turn ends, and leaves no timer behind', () => {
@@ -103,20 +116,22 @@ describe('the working footer animation', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('under reduced motion holds the star at rest and starts no timer', () => {
+  it('under reduced motion holds each kind\'s resting frame and starts no timer', () => {
     mocks.reduced = true
-    const root = draw(true)
-    expect(frameOf(root)).toBe(4)
-    expect(vi.getTimerCount()).toBe(0)
-    act(() => { vi.advanceTimersByTime(10_000) })
-    expect(frameOf(root)).toBe(4)
-    expect(verbOf(root)).toBe('Clauding')
+    for (const kind of ['think', 'code', 'waitingForUser'] as const) {
+      const root = draw(true, 0, kind)
+      expect(drawn(root)).toEqual(shapesOf(workingMarkStillFrame(kind)))
+      expect(vi.getTimerCount()).toBe(0)
+      act(() => { vi.advanceTimersByTime(10_000) })
+      expect(drawn(root)).toEqual(shapesOf(workingMarkStillFrame(kind)))
+      expect(verbOf(root)).toBe('Clauding')
+    }
   })
 
-  it('holds the star at rest and the first verb while the OS has not said whether motion is reduced', () => {
+  it('holds the resting frame and the first verb while the OS has not said whether motion is reduced', () => {
     mocks.reduced = null
     const root = draw(true)
-    expect(frameOf(root)).toBe(4)
+    expect(drawn(root)).toEqual(shapesOf(workingMarkStillFrame('think')))
     expect(verbOf(root)).toBe('Clauding')
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -143,15 +158,18 @@ describe('the working footer animation', () => {
 
   it('animates beside the count too, with one task and with many', () => {
     for (const tasks of [1, 12]) {
+      const start = Date.now()
       const root = draw(true, tasks)
-      act(() => { vi.advanceTimersByTime(120) })
-      expect(frameOf(root)).toBe(2)
+      const { player } = retargetWorkingMark(null, 'think', start)
+      act(() => { vi.advanceTimersByTime(40 * TICK) })
+      expect(drawn(root)).toEqual(shapesOf(workingMarkFrameAt(player, Date.now())))
+      expect(drawn(root)).not.toEqual(shapesOf(workingMarkFrameAt(player, start)))
     }
   })
 
-  it('draws no spinner and runs no timer for tasks alone', () => {
+  it('draws no mark and runs no timer for tasks alone', () => {
     const root = draw(false, 3)
-    expect(root.findAll((n) => n.props.testID === 'claude-spinner-sprite')).toHaveLength(0)
+    expect(root.findAll((n) => n.props.testID === 'claude-working-mark')).toHaveLength(0)
     expect(vi.getTimerCount()).toBe(0)
   })
 })

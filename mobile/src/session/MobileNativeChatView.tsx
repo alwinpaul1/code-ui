@@ -26,6 +26,7 @@ import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectionProvider } from '../components/ChatTextSelectionProvider'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'; import { retrySendFromComposer } from './native-chat-send-error-retry'
+import { MobileNativeChatWorkingFooter } from './MobileNativeChatWorkingFooter'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useMobileNativeChatTurnEnds } from './use-mobile-native-chat-turn-ends'
 import { useNow } from '../hooks/use-now'
@@ -66,7 +67,6 @@ export function MobileNativeChatView({
   backgroundTaskReport,
   hostBackgroundTasks,
   hostConnection,
-  spinner = null,
   onStop,
   stopping = false,
   streaming,
@@ -222,7 +222,7 @@ export function MobileNativeChatView({
   )
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
-  // owns them; the bridge lane says Working on the status line above the composer.
+  // owns them; the bridge lane says Working on the working footer at the transcript's foot.
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
@@ -247,7 +247,7 @@ export function MobileNativeChatView({
   // The dock spacer lives in the header; the header only re-renders when
   // this changes, so the dock's height has to be part of it.
   const { held, heldIds, getItemType } = useChatHeldSelectionList()
-  const listExtraData = useMemo(() => [headerExtraData, dockHeight, heldIds], [headerExtraData, dockHeight, heldIds])
+  const listExtraData = useMemo(() => [headerExtraData, dockHeight, heldIds, agentWorking], [headerExtraData, dockHeight, heldIds, agentWorking])
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
@@ -378,17 +378,20 @@ export function MobileNativeChatView({
             // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={
               <>
-              <MobileNativeChatListHeader
-                agent={agent}
-                queuedMessages={queuedMessages}
-                onEditQueue={onEditQueue}
-                onSendQueueNow={onSendQueueNow} localQueue={localQueue}
-                agentWorking={agentWorking === true}
-                unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
-                turnActivity={turnActivity}
-              />
-              {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
-              <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
+                {/* The working line, the transcript's last row (MobileNativeChatWorkingFooter). The
+                    structured lane says "Working for N" per turn, so there only the count shows. */}
+                <MobileNativeChatWorkingFooter messages={messages} working={agentWorking === true && !structuredActivityUi} thinking={turnThinking === true} />
+                <MobileNativeChatListHeader
+                  agent={agent}
+                  queuedMessages={queuedMessages}
+                  onEditQueue={onEditQueue}
+                  onSendQueueNow={onSendQueueNow} localQueue={localQueue}
+                  agentWorking={agentWorking === true}
+                  unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
+                  turnActivity={turnActivity}
+                />
+                {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
+                <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
               </>
             }
             ListFooterComponent={
@@ -434,11 +437,6 @@ export function MobileNativeChatView({
         {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}
       />
       <MobileNativeChatChromeRow
-        agentWorking={agentWorking}
-        // The structured lane says "Working for N" per turn; a second, static
-        // "Working" on the status line would report the same fact twice.
-        showWorkingIndicator={!structuredActivityUi}
-        spinner={spinner}
         sendErrorMessage={sendErrorMessage} onRetrySend={() => retrySendFromComposer(composerText, handleSend, onClearSendError)}
         styles={styles}
       />
