@@ -25,6 +25,14 @@ import { splitAttachmentName } from './mobile-native-chat-file-mentions'
 const CHIP = 96
 const STRIP_GAP = 12
 const RING = 32
+/** The remove disc's touch target: 48 dp, Android's minimum, centred where the app draws its 18 dp
+ *  disc (4 dp in from the chip's top end, so 13 dp to its centre). The holder reaches 24 - 13 = 11
+ *  dp past the chip's top and end to take it, and gives that back with a negative margin, so the
+ *  strip's layout is unchanged; 11 fits inside the strip's 12 dp gap and top padding. */
+const REMOVE_TOUCH = 48
+const REMOVE_REACH = REMOVE_TOUCH / 2 - (4 + 9)
+const REMOVE_HOLDER = { paddingTop: REMOVE_REACH, paddingRight: REMOVE_REACH, marginTop: -REMOVE_REACH, marginRight: -REMOVE_REACH }
+const REMOVE_TARGET = { position: 'absolute', top: 0, right: 0, width: REMOVE_TOUCH, height: REMOVE_TOUCH, alignItems: 'center', justifyContent: 'center' } as const
 
 /** "Move earlier" / "Move later" where the chip can go, the Claude app's
  *  screen-reader reorder (ccr_reorder_move_earlier_a11y / _later_a11y). */
@@ -149,12 +157,12 @@ export function MobileNativeChatAttachmentChips({
           ? {}
           : { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center' as const, justifyContent: 'center' as const }
         const state = attachment.uploading ? (
-          <View pointerEvents="none" accessibilityLabel="Uploading" testID="attachment-uploading" style={statePlacement}>
+          <View pointerEvents="none" importantForAccessibility="no" accessibilityLabel="Uploading" testID="attachment-uploading" style={statePlacement}>
             <ActivityIndicator size={RING} color={colors.composerSend} />
           </View>
         ) : attachment.failed ? (
           // The retry is kept by chip id (mobile-native-chat-upload-retry.ts).
-          <View pointerEvents="box-none" accessibilityLabel="Upload failed" style={statePlacement}>
+          <View pointerEvents="box-none" importantForAccessibility="no" accessibilityLabel="Upload failed" style={statePlacement}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Retry upload"
@@ -166,83 +174,83 @@ export function MobileNativeChatAttachmentChips({
             </Pressable>
           </View>
         ) : null
+        // TalkBack reads the state in the chip's own label: the ring and the red disc are not
+        // focusable, and Retry and Remove are buttons of their own beside it, never inside it.
+        const stateWord = attachment.uploading ? ', uploading' : attachment.failed ? ', upload failed' : ''
         return (
-          <View key={attachment.id} style={isFile ? cardStyles.card : cardStyles.thumb}>
-            {isFile ? (
-              <View
-                accessible
-                accessibilityLabel={fileName}
-                accessibilityActions={reorderable}
-                onAccessibilityAction={onReorderAction(attachment.id)}
-                style={{ flex: 1 }}
-              >
-                {ext ? (
-                  <View style={cardStyles.badge}>
-                    <Text numberOfLines={1} style={cardStyles.badgeText}>
-                      {ext}
-                    </Text>
+          <View key={attachment.id} style={REMOVE_HOLDER}>
+            <View style={isFile ? cardStyles.card : cardStyles.thumb}>
+              {isFile ? (
+                <View style={{ flex: 1 }}>
+                  {ext ? (
+                    <View style={cardStyles.badge} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                      <Text numberOfLines={1} ellipsizeMode="tail" style={cardStyles.badgeText}>
+                        {ext}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <View style={cardStyles.spacer} />
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+                    <View
+                      accessible
+                      accessibilityLabel={`${fileName}${stateWord}`}
+                      accessibilityActions={reorderable}
+                      onAccessibilityAction={onReorderAction(attachment.id)}
+                      style={{ flex: 1 }}
+                    >
+                      <Text numberOfLines={3} style={cardStyles.name}>
+                        {stem}
+                      </Text>
+                    </View>
+                    {state}
                   </View>
-                ) : null}
-                <View style={cardStyles.spacer} />
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-                  <Text numberOfLines={3} style={[cardStyles.name, { flex: 1 }]}>
-                    {stem}
-                  </Text>
-                  {state}
                 </View>
-              </View>
-            ) : (
-              // A tap opens the photo full-screen, the way the Claude app does,
-              // and markup is the pencil there (2026-09-26; from 360ef269 a tap
-              // went straight into markup). No pencil while an upload has not
-              // settled, with no editor to hand, or on a video frame: its
-              // preview is a small copy kept only for the chip strip, and the
-              // pencil's re-upload would silently replace the real, full-size
-              // frame the desktop already has with that small copy
-              // (2026-09-27 review).
-              <Pressable
-                accessibilityRole="imagebutton"
-                accessibilityLabel="Preview image"
-                accessibilityActions={reorderable}
-                onAccessibilityAction={onReorderAction(attachment.id)}
-                style={{ flex: 1 }}
-                onPress={() =>
-                  openImagePreview(
-                    attachment.previewUri,
-                    attachment.name ?? 'Image',
-                    0,
-                    onEditAttachment && !attachment.uploading && !attachment.failed && !attachment.videoFrame
-                      ? () => onEditAttachment(attachment.id, attachment.previewUri)
-                      : undefined
-                  )
-                }
-              >
-                <Image source={{ uri: attachment.previewUri }} style={cardStyles.thumbImage} resizeMode="cover" />
-              </Pressable>
-            )}
-            {isFile ? null : state}
+              ) : (
+                // A tap opens the photo full-screen, the way the Claude app does,
+                // and markup is the pencil there (2026-09-26; from 360ef269 a tap
+                // went straight into markup). No pencil while an upload has not
+                // settled, with no editor to hand, or on a video frame: its
+                // preview is a small copy kept only for the chip strip, and the
+                // pencil's re-upload would silently replace the real, full-size
+                // frame the desktop already has with that small copy
+                // (2026-09-27 review).
+                <Pressable
+                  accessibilityRole="imagebutton"
+                  accessibilityLabel={`Preview image${stateWord}`}
+                  accessibilityActions={reorderable}
+                  onAccessibilityAction={onReorderAction(attachment.id)}
+                  style={{ flex: 1 }}
+                  onPress={() =>
+                    openImagePreview(
+                      attachment.previewUri,
+                      attachment.name ?? 'Image',
+                      0,
+                      onEditAttachment && !attachment.uploading && !attachment.failed && !attachment.videoFrame
+                        ? () => onEditAttachment(attachment.id, attachment.previewUri)
+                        : undefined
+                    )
+                  }
+                >
+                  <Image source={{ uri: attachment.previewUri }} style={cardStyles.thumbImage} resizeMode="cover" />
+                </Pressable>
+              )}
+              {isFile ? null : state}
+            </View>
             {onRemoveAttachment ? (
               // In every state, uploading too, as the Claude app draws it: a file on its way up can
-              // still be taken back. It comes after the ring in the tree, so it paints over it. Inset
-              // inside the chip: Android drops touches outside the parent's bounds.
+              // still be taken back. After the chip in the tree, so it paints over it, and outside
+              // it, so the chip's clip never cuts the 48 dp target down (Android also drops touches
+              // outside a parent's bounds, which is why it is a box and not a hitSlop).
               <Pressable
                 // The Claude app's words for it (ccr_remove_attachment).
+                accessibilityRole="button"
                 accessibilityLabel="Remove attachment"
-                style={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 4,
-                  width: 18,
-                  height: 18,
-                  borderRadius: 9,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.text
-                }}
+                style={REMOVE_TARGET}
                 onPress={() => onRemoveAttachment(attachment.id)}
-                hitSlop={10}
               >
-                <X size={12} color={colors.attachmentCardFill} strokeWidth={2.6} />
+                <View style={{ width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.text }}>
+                  <X size={12} color={colors.attachmentCardFill} strokeWidth={2.6} />
+                </View>
               </Pressable>
             ) : null}
           </View>
