@@ -1,6 +1,8 @@
 import { hydrateNativeChatOutbox, nativeChatOutboxEntries } from '../storage/native-chat-outbox'
 import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
+import type { Dispatch, SetStateAction } from 'react'
 import type { CcrComposerSendDeps } from './ccr-composer-send-deps'
+import { returnCcrQueueToComposer } from './ccr-local-queue'
 import { ccrEchoSeen, ccrSessionOffline } from './ccr-send'
 import { reasonOf } from './ccr-session-shared'
 import type { CcrEvent } from './ccr-session-api'
@@ -36,6 +38,8 @@ import { ccrSessionTail, sameCcrTarget, type CcrTo } from './use-ccr-tab-queues'
  *  awaited there), and the POSTs out now (the app's "a send already in flight"). */
 export class CcrSendFlight {
   claimed = false
+  /** Who holds the claim, when it says (a tab's turn-end delivery, use-ccr-composer-send.ts). */
+  holder: string | null = null
   private posts = 0
   private waiters: (() => void)[] = []
 
@@ -53,6 +57,7 @@ export class CcrSendFlight {
   /** The claim is over. */
   release(): void {
     this.claimed = false
+    this.holder = null
     this.wake()
   }
 
@@ -67,9 +72,10 @@ export class CcrSendFlight {
     }
   }
 
-  /** `run` under the claim, so nothing else starts beside it. */
-  async claim<T>(run: () => Promise<T>): Promise<T> {
+  /** `run` under the claim, so nothing else starts beside it, held by `holder` when named. */
+  async claim<T>(run: () => Promise<T>, holder: string | null = null): Promise<T> {
     this.claimed = true
+    this.holder = holder
     try {
       return await run()
     } finally {
@@ -219,4 +225,32 @@ export async function sendCcrQueueAhead(args: {
   }
   args.log(`[ccr-send] queued words sent ahead of a send with files, to session ${ccrSessionTail(to.sessionId)}`)
   return (await args.sendNow(held.text, origin, to)) === 'accepted'
+}
+
+/**
+ * Queued words that failed, or never went, back to the composer AHEAD of what it holds (typed after
+ * them), with everything still queued on the tab behind them: the order typed (second review of the
+ * attachment lane, 2026-10-15: they came back after the words typed later). `restoreQueued` is a
+ * failed queued POST's restore: its outbox entry and bubble as `restoreRejectedDraft` handles them,
+ * and the words through `giveBack`.
+ */
+export function ccrQueueGiveBack(
+  latest: { readonly current: { setComposerText: Dispatch<SetStateAction<string>>; restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void } },
+  queued: (tab: string) => string | undefined,
+  takeFromQueue: (tab: string, taken: string) => boolean
+): { giveBack: (tab: string, text: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
+  const giveBack = (tab: string, text: string): void => {
+    const rest = queued(tab)
+    const all = rest && takeFromQueue(tab, rest) ? (text ? `${text}\n\n${rest}` : rest) : text
+    if (all) {
+      latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))
+    }
+  }
+  return {
+    giveBack,
+    restoreQueued: (tab) => (origin, text) => {
+      latest.current.restoreRejectedDraft(origin, '')
+      giveBack(tab, text)
+    }
+  }
 }

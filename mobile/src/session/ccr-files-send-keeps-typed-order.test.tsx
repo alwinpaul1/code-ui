@@ -30,6 +30,8 @@ const deps: CcrComposerSendDeps = {
 const calls = { restore: vi.fn(), error: vi.fn() }
 const origin = (text: string): MobileNativeChatSendOrigin => ({ draftKey: 'k', draftEditGeneration: 0, pendingKey: 'p', normalizedText: text, baselineOccurrences: 0, baselineTailMessageId: null, baselineResolved: true })
 let working = false
+/** The composer, as setComposerText leaves it. */
+let composer = ''
 let streamed: string | null = 'connected'
 let renderer: ReactTestRenderer | null = null
 let api!: ReturnType<typeof useCcrComposerSend>
@@ -44,7 +46,7 @@ function Harness(): null {
     promptUp: false,
     attachments: () => 0,
     composerText: '',
-    setComposerText: vi.fn(),
+    setComposerText: (next) => { composer = typeof next === 'function' ? next(composer) : next },
     captureSendOrigin: origin,
     clearDraftForSend: vi.fn(),
     acceptSend: () => 'row-1',
@@ -76,6 +78,7 @@ afterEach(() => {
   statusRead = null
   streamed = 'connected'
   working = false
+  composer = ''
   vi.clearAllMocks()
 })
 
@@ -101,7 +104,19 @@ describe('a Claude tab send with files keeps the order the user typed', () => {
     failText = 'first'
     expect(await send('second, with a photo', PHOTO)).toBe('rejected')
     expect(sentInOrder()).toEqual(['first'])
-    expect(calls.restore).toHaveBeenCalledWith(expect.anything(), 'first')
+  })
+
+  it('queued words that fail ahead of a photo send come back ahead of the words typed after them', async () => {
+    working = true
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await send('first')
+    failText = 'first'
+    // The photo send's own words are still in the box when the queued ones come back.
+    composer = 'second, with a photo'
+    expect(await send('second, with a photo', PHOTO)).toBe('rejected')
+    expect(composer).toBe('first\n\nsecond, with a photo')
   })
 
   it('a photo sent while the turn-end queue send reads the session status does not overtake it', async () => {
