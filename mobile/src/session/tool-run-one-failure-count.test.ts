@@ -118,9 +118,9 @@ describe('a run row draws one failure count, never two different ones', () => {
     expect(row(blocks)).toEqual({ sentence: 'Ran 2 commands', label: null })
   })
 
-  it('keeps a Claude Bash run with one failed call as "Ran a command (1 failed)" with no label', () => {
+  it('keeps a Claude Bash run with one failed call as "Ran false (1 failed)" with no label', () => {
     expect(row([call('Bash', { command: 'false' }), result('exit 1', true)])).toEqual({
-      sentence: 'Ran a command (1 failed)',
+      sentence: 'Ran false (1 failed)',
       label: null
     })
   })

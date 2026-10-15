@@ -63,10 +63,11 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { agentTurnsByEnd } from './mobile-native-chat-turn-end'
 import { errorRowOf } from './mobile-native-chat-error-rows'
 
-// The Claude app draws a failed or stopped turn as its own row, apart from the
-// agent's words: an API error record, and the `result` row whose subtype
-// `error_during_execution` it names "Session interrupted" (qhu, 1.261009.20).
-// Ours drew both as the agent's prose, with a Copy under them.
+// A stopped turn from Orca's decoders (Claude Code's interrupt record, Codex's
+// `turn_aborted`) is its own row in the danger colour, named as the Claude
+// app's `result` row names it, "Session interrupted". An API error is the
+// agent's plain words, as the Claude app 1.261013.20 draws it (it was a red
+// row here from 2026-10-12 to 2026-10-15).
 
 /** Claude Code 2.1.283 (session on this machine, 2026-09-2x): the record is an
  *  assistant message with `isApiErrorMessage: true`, which Orca's reader drops,
@@ -95,14 +96,14 @@ function interrupted(id: string): NativeChatMessage {
 
 describe('which rows are error rows', () => {
   it.each([
-    ['a Claude Code 2.1.283 API error', assistant('e1', API_ERROR_2_1_283), API_ERROR_2_1_283],
-    ['a Claude Code 2.1.285 API error', assistant('e2', API_ERROR_2_1_285), API_ERROR_2_1_285],
     ['a stopped turn (Claude Code and Codex alike)', interrupted('i1'), 'Session interrupted']
   ])('reads %s as an error row', (_name, message, text) => {
     expect(errorRowOf(message)).toEqual({ text })
   })
 
   it.each([
+    ['a Claude Code 2.1.283 API error', assistant('e1', API_ERROR_2_1_283)],
+    ['a Claude Code 2.1.285 API error', assistant('e2', API_ERROR_2_1_285)],
     ['an answer that quotes an error below its first line', assistant('a1', 'Here is what failed.\n\nAPI Error: 500')],
     ['an answer that mentions one mid-sentence', assistant('a2', 'The API Error: 500 you saw came from the proxy.')],
     // Review of 2026-10-12: every recorded API error on this machine is one
@@ -158,7 +159,6 @@ describe('an error row on screen', () => {
   }
 
   it.each([
-    ['an API error', assistant('e1', API_ERROR_2_1_283), API_ERROR_2_1_283],
     ['a stopped turn', interrupted('i1'), 'Session interrupted']
   ])('draws %s in the danger colour with its glyph and no Copy, in light and in dark', (_name, message, text) => {
     for (const [scheme, colors] of [
@@ -174,19 +174,31 @@ describe('an error row on screen', () => {
     expect(darkColors.danger).not.toBe(lightColors.danger)
   })
 
+  it('draws an API error as the agent’s words, in neither theme’s danger colour, with no glyph', () => {
+    for (const [scheme, colors] of [
+      ['light', lightColors],
+      ['dark', darkColors]
+    ] as const) {
+      const tree = render(assistant('e1', API_ERROR_2_1_283), scheme)
+      expect(JSON.stringify(tree.toJSON())).toContain(API_ERROR_2_1_283)
+      expect(tree.root.findAllByType('AlertCircle' as never)).toHaveLength(0)
+      expect(colorOf(tree, API_ERROR_2_1_283)).not.toBe(colors.danger)
+    }
+  })
+
   it('no longer says "Conversation interrupted" as if the agent wrote it', () => {
     expect(texts(render(interrupted('i1')).root)).not.toContain(NATIVE_CHAT_INTERRUPTED_STATUS_TEXT)
   })
 })
 
 describe('the turn an error ends', () => {
-  it("keeps the turn's Copy under its last words, not under the error row", () => {
+  it('ends the turn on an API error, which is the agent’s words', () => {
     const rows: NativeChatMessage[] = [
       { id: 'u1', role: 'user', blocks: [{ type: 'text', text: 'go' }], timestamp: null, source: 'transcript' },
       assistant('a1', 'Looking at the tests now.'),
       assistant('e1', API_ERROR_2_1_283)
     ]
-    expect([...agentTurnsByEnd(rows).keys()]).toEqual(['a1'])
+    expect([...agentTurnsByEnd(rows).keys()]).toEqual(['e1'])
   })
 
   it('gives a stopped turn no turn of its own to hang a Copy on', () => {

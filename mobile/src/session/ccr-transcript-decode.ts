@@ -1,10 +1,6 @@
-import {
-  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
-  type NativeChatBlock,
-  type NativeChatMessage,
-  type NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage, NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import type { CcrEvent } from './ccr-session-api'
+import { joinAdjacentThoughts } from './ccr-thought-rows'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
@@ -264,11 +260,20 @@ export function ccrKeptImages(event: CcrEvent): { tool: Map<string, string>; use
   return { tool, user }
 }
 
+/** The Claude app's words for an `api_error` of `claude_code_version_too_old` (`ccr_model_requires_newer_cli`). */
+export const CCR_MODEL_REQUIRES_NEWER_CLI = 'Update Claude Code on the computer running this session to use this model.'
+
 /** The words Claude Code writes as the user's turn when a turn is interrupted. */
 const INTERRUPT_MARKERS = new Set(['[Request interrupted by user]', '[Request interrupted by user for tool use]'])
 
 function isInterruptMarker(blocks: readonly NativeChatBlock[]): boolean {
   return blocks.length === 1 && blocks[0]!.type === 'text' && INTERRUPT_MARKERS.has(blocks[0]!.text.trim())
+}
+
+/** Whether an event is the lead's Stop marker: no row, but the end of its turn (ccr-live-state.ts). */
+export function isCcrInterruptEvent(event: CcrEvent): boolean {
+  const payload = event.payload
+  return payload.type === 'user' && !str(payload.parent_tool_use_id) && isInterruptMarker(contentBlocks(record(payload.message)?.content).blocks)
 }
 
 // ─── Events → rows ─────────────────────────────────────────────────────────
@@ -332,6 +337,10 @@ function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp
   if (payload.isVisibleInTranscriptOnly === true || (role === 'user' && payload.isReplay === true && origin !== null && REPLAY_HIDDEN_ORIGINS.has(origin))) {
     return []
   }
+  // An API error is the agent's plain words, save the one class the app rewords (nx30.f, t5v n8u.o).
+  if (role === 'assistant' && payload.api_error === 'claude_code_version_too_old') {
+    return [{ id: uuid, role, blocks: [{ type: 'text', text: CCR_MODEL_REQUIRES_NEWER_CLI }], timestamp, source: 'transcript' }]
+  }
   const message = record(payload.message)
   const { blocks: text, thinking, pictures } = contentBlocks(message?.content)
   if (role === 'assistant' && isLocalCommandOutput(payload, message?.model)) {
@@ -353,8 +362,9 @@ function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp
   // The prompt's files lead its blocks: the chat draws them as a row of cards above the bubble.
   const files = role === 'user' ? readFileAttachments(payload.file_attachments).map(ccrAttachmentBlock) : []
   const decoded: NativeChatBlock[] = [...files, ...(named ? text : [...text, ...pictures.map((url): NativeChatBlock => ({ type: 'image-ref', url }))])]
+  // Stop's marker is no row in the app (u5a.j, t5v); the turn's end is read from it in ccr-live-state.ts.
   if (role === 'user' && isInterruptMarker(decoded)) {
-    return [{ id: uuid, role: 'system', blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }], timestamp, source: 'transcript' }]
+    return []
   }
   // Injected user turns (meta, synthetic, a compaction's summary) show only their tool results.
   const injected = role === 'user' && (payload.isMeta === true || payload.isSynthetic === true || payload.isCompactSummary === true)
@@ -381,7 +391,7 @@ export function decodeCcrEvents(events: readonly CcrEvent[], cache: WeakMap<CcrE
     }
     rows.push(...decoded)
   }
-  return rows
+  return joinAdjacentThoughts(rows)
 }
 
 const defaultCache = new WeakMap<CcrEvent, NativeChatMessage[]>()

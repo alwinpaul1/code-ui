@@ -129,6 +129,12 @@ function resolveSections(
     return { sections: inputsSection(call.input, call.name), generic: true }
   }
   const record = parseRecord(call.input)
+  // A proposed plan opens as the plan itself, under the Claude app's "Plan"
+  // (`ccr_tool_exit_plan_mode`), not as an input named `plan`.
+  const plan = call.name.trim() === 'ExitPlanMode' ? text(record?.plan) : null
+  if (plan) {
+    return { sections: markdown('Plan', plan), generic: true }
+  }
   if (record) {
     const known = knownSections(kind, record, hasChanges)
     if (known) {
@@ -196,10 +202,21 @@ function layoutFor(
   return null
 }
 
+/** Claude Code wraps a failed call's error in `<tool_use_error>`; the Claude app
+ *  shows only the words inside (1.261013.20, `u5a.i`). Only an output that is
+ *  that wrapper whole is unwrapped: a file or a grep that quotes the tag
+ *  mid-text is shown as it is. */
+const TOOL_USE_ERROR = /^\s*<tool_use_error[^>]*>([\s\S]*?)<\/tool_use_error>\s*$/
+
+function withoutToolUseErrorTags(output: string): string {
+  return TOOL_USE_ERROR.exec(output)?.[1] ?? output
+}
+
 /** The output's first {@link TOOL_DETAIL_OUTPUT_LINE_CAP} lines, then the
  *  shared character cap the inline row always had (a 100 KB string in one
  *  Android Text stalls the UI thread), and how many lines neither let through. */
-export function capToolDetailOutput(output: string): { text: string; hiddenLines: number } {
+export function capToolDetailOutput(raw: string): { text: string; hiddenLines: number } {
+  const output = withoutToolUseErrorTags(raw)
   const lines = output.split('\n')
   // A trailing newline ends the last line; it does not start another.
   const total = lines.length - (lines.length > 1 && lines.at(-1) === '' ? 1 : 0)

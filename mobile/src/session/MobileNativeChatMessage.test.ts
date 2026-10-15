@@ -127,8 +127,9 @@ describe('MobileNativeChatMessage', () => {
     const order = JSON.stringify(tree.toJSON())
     const before = order.indexOf('BEFORE the command')
     const after = order.indexOf('AFTER the command')
-    // The collapsed run names itself, not the tool inside it.
-    const work = order.indexOf('Ran a command')
+    // The collapsed run names itself, not the tool inside it: a lone
+    // undescribed command by its command, as the Claude app's row does.
+    const work = order.indexOf('Ran ls')
     expect(before).toBeGreaterThanOrEqual(0)
     expect(after).toBeGreaterThanOrEqual(0)
     expect(work).toBeGreaterThanOrEqual(0)

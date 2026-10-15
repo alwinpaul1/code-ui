@@ -14,13 +14,15 @@ const NOW = new Date(2026, 8, 13, 0, 10).getTime()
 const MIN = 60_000
 
 describe('chat time dividers', () => {
-  it('draws a rule before the message that came after a long pause, not before the first', () => {
+  // The Claude app's rule (1.261013.20): the first message, a new day, or more
+  // than an hour's pause; a 30-minute pause is none (chat-time-headers-claude-app-rule.test.tsx).
+  it('draws a header above the first message and none after a pause under an hour', () => {
     const t0 = new Date(2026, 8, 11, 20, 0).getTime()
     const labels = chatTimeDividerLabels(
       [msg('a', t0), msg('b', t0 + 3 * MIN), msg('c', t0 + 29 * MIN), msg('d', t0 + 30 * MIN)],
       NOW
     )
-    expect([...labels.keys()]).toEqual(['c'])
+    expect([...labels.keys()]).toEqual(['a'])
   })
 
   it('names a weekday for a pause earlier this week and only the clock for today', () => {
@@ -33,7 +35,7 @@ describe('chat time dividers', () => {
 
   it('skips messages without a timestamp and keeps the clock where it was', () => {
     const t0 = new Date(2026, 8, 12, 9, 0).getTime()
-    const labels = chatTimeDividerLabels([msg('a', t0), msg('b', null), msg('c', t0 + 25 * MIN)], NOW)
-    expect([...labels.keys()]).toEqual(['c'])
+    const labels = chatTimeDividerLabels([msg('a', t0), msg('b', null), msg('c', t0 + 61 * MIN)], NOW)
+    expect([...labels.keys()]).toEqual(['a', 'c'])
   })
 })

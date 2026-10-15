@@ -24,11 +24,13 @@ describe('a command run reads as commands on Claude and Codex alike', () => {
 
   // The control for a Codex code-mode command with braces in its cmd
   // (codex-stdin-poll-run-sentence.test.ts): Claude's Bash never went through
-  // the cell reader, and a brace in its command changes nothing.
-  it('reads a Claude Bash command holding braces as "Ran a command"', () => {
+  // the cell reader, and a brace in its command changes nothing. A lone
+  // undescribed Bash call reads by its command, as the Claude app's row does
+  // (`hqz.c`, 1.261013.20).
+  it('reads a Claude Bash command holding braces by the command, braces and all', () => {
     expect(
       toolRunSentence([call('Bash', { command: "awk '{print $1}' big.log | sort" }), result()])
-    ).toBe('Ran a command')
+    ).toBe("Ran awk '{print $1}' big.log | sort")
     expect(
       toolRunSentence([
         call('Bash', { command: 'echo ${HOME}' }),
