@@ -42,8 +42,12 @@ describe("the Claude app's sheet for CronDelete, three commands and an agent (20
     expect(rows.map((row) => row.detailIsKey)).toEqual([true, false, false, false, false])
   })
 
+  // The label is the Claude app's for a run holding a described agent (h330.i,
+  // `ccr_summary_agent_described_more`; tool-run-sentence-agent-described.test.ts).
+  // Re-pinned deliberately: the 2026-10-01 screenshot titled this sheet with the
+  // grouped sentence, from a build whose run-label code was not traced.
   it('titles the sheet with the past-tense sentence, even while the agent runs', () => {
-    expect(toolRunSentence(mixedRunWithBackgroundAgent(), 0)).toBe('Used a tool, ran 3 commands, ran an agent')
+    expect(toolRunSentence(mixedRunWithBackgroundAgent(), 0)).toBe(`Ran agent: ${MIXED_RUN_AGENT_DESCRIPTION} (+4 tools)`)
   })
 
   it('hands the agent row the id of the agent its call launched, and no other row one', () => {

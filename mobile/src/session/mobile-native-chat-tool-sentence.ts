@@ -4,6 +4,7 @@ import { createCodexPollFolder } from './codex-stdin-poll'
 import { editedFileCount, type ToolRunPair } from './mobile-native-chat-edited-files'
 import { toolCallKind } from './mobile-native-chat-tool-kind'
 import {
+  describedAgentRunWords,
   soleCallWords,
   TOOL_SUMMARY_WORDS,
   toolSummaryKind,
@@ -241,6 +242,12 @@ function buildSentence(
   lastFailureEnd: number
 } {
   const groups = runGroups(blocks)
+  // A run holding one described agent reads by it, with no failure count:
+  // the header's own label then states the run's failures.
+  const agentWords = describedAgentRunWords(groups.flatMap((entry) => entry.pairs))
+  if (agentWords) {
+    return { text: agentWords, spans: [{ text: agentWords }], failed: 0, lastFailureEnd: 0 }
+  }
   // A count short of the run's own would sit beside the header's label as a
   // second, different number, so the sentence then states none.
   const counted = shownGroups(groups).reduce((sum, entry) => sum + entry.failed, 0)

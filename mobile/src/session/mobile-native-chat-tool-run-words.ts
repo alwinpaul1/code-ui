@@ -1,3 +1,4 @@
+import { isAgentToolName } from './mobile-native-chat-agent-run'
 import { soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
 import { toolCallKind } from './mobile-native-chat-tool-kind'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
@@ -199,4 +200,30 @@ export function soleCallWords(pair: ToolRunPair): string | null {
       return unhandled
     }
   }
+}
+
+/**
+ * The app's label for a run that holds a described agent: "Ran agent:
+ * <description> (+N tools)", N the run's other calls
+ * (`ccr_summary_agent_described_more`, chosen in the run label `h330.i` from
+ * `z10` "AgentRunLabelInfo(description, otherCallCount)" before the grouped
+ * sentence). Null for a run of one call (its own verb and target stand), for
+ * an agent with no description, and for a run of two agents or more, which
+ * one description cannot name. Only Claude Code's own launchers count
+ * (`isAgentToolName`): a Codex spawn_agent keeps the grouped sentence.
+ */
+export function describedAgentRunWords(pairs: readonly ToolRunPair[]): string | null {
+  if (pairs.length < 2) {
+    return null
+  }
+  const agents = pairs.filter((pair) => isAgentToolName(pair.call.name))
+  if (agents.length !== 1) {
+    return null
+  }
+  const description = oneLine(record(agents[0]!.call.input), 'description')
+  if (!description) {
+    return null
+  }
+  const others = pairs.length - 1
+  return `Ran agent: ${description} (+${others} ${others === 1 ? 'tool' : 'tools'})`
 }
