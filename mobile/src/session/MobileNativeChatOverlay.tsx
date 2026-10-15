@@ -2,8 +2,7 @@ import type { LevelSource } from '../dictation/pcm-level'
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
-import { claudeSendRingShown } from './native-chat-send-ring'
-import { clipboardHasImage } from './mobile-clipboard-image-reader'
+import { clipboardHasImage } from './mobile-clipboard-image-reader'; import { claudeSendRingShown } from './native-chat-send-ring'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
@@ -445,8 +444,7 @@ export function MobileNativeChatOverlay({
         folded={folded}
         status={session.status}
         error={session.error}
-        agent={controller.nativeChatAgent}
-        sendRing={claudeSendRingShown(controller.nativeChatAgent, anthropicGate)}
+        agent={controller.nativeChatAgent} sendRing={claudeSendRingShown(controller.nativeChatAgent, anthropicGate)}
         agentWorking={controller.nativeChatAgentWorking}
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}

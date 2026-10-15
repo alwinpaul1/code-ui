@@ -62,10 +62,9 @@ type Props = {
   /** Reads user draft mutations owned above this renderable composer. */
   getComposerEditGeneration: () => number
   /** Active tab's agent — the slash autocomplete serves its command catalog. */
-  agent?: string | null
-  /** A Claude tab matched to its Anthropic session (claudeSendRingShown): its Send button rings
-   *  while a send is in flight. Off everywhere else, Codex included. */
-  sendRing?: boolean
+  /** `sendRing`: a Claude tab matched to its Anthropic session (claudeSendRingShown), whose Send
+   *  button rings while a send is in flight. Off everywhere else, Codex included. */
+  agent?: string | null; sendRing?: boolean
   /** Model/session-option pickers shown in the composer action row; null when
    *  the agent has no session-option catalog. */
   sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
@@ -186,8 +185,7 @@ export function MobileNativeChatComposer({
   sendSurfaceId,
   getSendCompletionGeneration,
   getComposerEditGeneration,
-  agent,
-  sendRing = false,
+  agent, sendRing = false,
   sessionOptions,
   onCaptureImage,
   onAttachImage,

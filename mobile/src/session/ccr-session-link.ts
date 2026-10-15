@@ -1,6 +1,6 @@
 import { CcrApiError, type CcrEventPage } from './ccr-session-api'
 import { readCcrEventStream, type CcrStreamFrame } from './ccr-event-stream'
-import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_STREAM_LOST_RETRY_MS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
+import { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, defaultCcrTimer, type CcrLinkDeps, type CcrLinkState } from './ccr-session-link-types'
 import { CCR_MAX_EVENT_PAGES, reasonOf } from './ccr-session-shared'
 import { CCR_SIGNED_OUT_LINE, CcrSignedOutError, readCcrHistoryPage, walkCcrHistory } from './ccr-link-history'
 import { readCcrTranscript } from './ccr-transcript-persist'
@@ -40,9 +40,6 @@ export class CcrSessionLink {
   private abort: AbortController | null = null
   private cancelTimer: (() => void) | null = null
   private readonly backoff = new CcrStreamBackoff()
-  /** Retries made since the stream was last lost (CCR_STREAM_LOST_RETRY_MS); back to 0 on a
-   *  connection good enough to start the back-off over, and on retry()/resume(). */
-  private lostRetries = 0
   private stopped = false
   private started = false
   private paused = false
@@ -201,12 +198,7 @@ export class CcrSessionLink {
       const now = this.deps.now ?? Date.now
       let openedAt: number | null = null
       // Whether this connection was good enough to start the back-off over (ccr-stream-backoff.ts).
-      const settle = () => {
-        this.backoff.settle(openedAt === null ? null : now() - openedAt, this.store.lastSequenceNum > from)
-        if (this.backoff.count === 0) {
-          this.lostRetries = 0
-        }
-      }
+      const settle = () => this.backoff.settle(openedAt === null ? null : now() - openedAt, this.store.lastSequenceNum > from)
       try {
         const end = await readCcrEventStream({
           fetch: this.deps.streamFetch,
@@ -301,26 +293,16 @@ export class CcrSessionLink {
 
   private scheduleReconnect(why: string): void {
     const wait = this.backoff.next()
+    // Once lost, one more attempt per lost-retry step with the back-off still spent, so a failure
+    // comes straight back here: one stream request per step, then none (ccr-stream-backoff.ts).
+    const after = wait ?? this.backoff.nextLostRetry()
     if (wait === null) {
       this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.backoff.count} reconnects: ${why}`)
-      this.set({ phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' })
-      // One more attempt per step, with the back-off still spent: a failure comes straight back
-      // here, so each step costs one stream request, and after the last the stream stays lost.
-      const later = CCR_STREAM_LOST_RETRY_MS[this.lostRetries]
-      if (later !== undefined) {
-        this.lostRetries += 1
-        this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => {
-          this.cancelTimer = null
-          this.connect()
-        }, later)
-      }
-      return
     }
-    this.set({ phase: 'reconnecting', streamThinking: null })
-    this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => {
-      this.cancelTimer = null
-      this.connect()
-    }, wait)
+    this.set(wait === null ? { phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' } : { phase: 'reconnecting', streamThinking: null })
+    if (after !== null) {
+      this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => void ((this.cancelTimer = null), this.connect()), after)
+    }
   }
 
   /** Older history (scroll to the start): the page before the oldest held. With no cursor kept (a
@@ -379,7 +361,6 @@ export class CcrSessionLink {
   private restart(): void {
     this.generation += 1
     this.backoff.reset()
-    this.lostRetries = 0
     this.refreshedAuth = false
     this.cancelTimer?.()
     this.cancelTimer = null
