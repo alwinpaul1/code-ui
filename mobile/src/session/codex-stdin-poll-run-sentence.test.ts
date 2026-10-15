@@ -22,7 +22,7 @@ function poll(session: number): NativeChatBlock[] {
 }
 
 describe('a Codex command polled with write_stdin reads as the one command it is', () => {
-  it('reads one exec_command polled four times as "Ran a command", as a Claude run of the same work reads', () => {
+  it('reads one exec_command polled four times as "Ran a command"', () => {
     const blocks = [
       call('exec_command', { cmd: 'npm test' }),
       result(),
@@ -32,7 +32,8 @@ describe('a Codex command polled with write_stdin reads as the one command it is
       ...poll(3)
     ]
     expect(toolRunSentence(blocks)).toBe('Ran a command')
-    expect(toolRunSentence([call('Bash', { command: 'npm test' }), result()])).toBe('Ran a command')
+    // A lone Claude Bash call reads by its command (the Claude app's `hqz.c`).
+    expect(toolRunSentence([call('Bash', { command: 'npm test' }), result()])).toBe('Ran npm test')
   })
 
   it('reads the function-call arguments Codex writes as a JSON string the same way', () => {

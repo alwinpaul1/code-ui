@@ -183,15 +183,17 @@ describe('a batch of tool calls in one run header', () => {
   // 2026-09-12: the fold reads as the Claude app writes it — one sentence
   // about what the tools did, not the agent's tool names and arguments.
   it('reads as one sentence about what the tools did', () => {
-    expect(render(LONG_RUN).texts).toContain('Ran a command, read 2 files, edited 2 files')
+    // The Claude app counts an Edit and a Write apart and names at most three
+    // categories (1.261013.20): the Write is the fourth, and drops.
+    expect(render(LONG_RUN).texts).toContain('Ran a command, read 2 files, edited a file')
   })
 
   it('does not name a tool or its argument in the collapsed row', () => {
     const { texts } = render(PUNCTUATED_RUN)
     expect(texts.join(' ')).not.toContain('browser.open')
-    // A single read names the file, the way the Claude app's row does.
-    // `browser.open` still has no plain-English verb, so it stays "a tool".
-    expect(texts).toContain('Used a tool, read README.md')
+    // Beside other work the Claude app names no file, only the category;
+    // `browser.open` has no plain-English verb, so it stays "a tool".
+    expect(texts).toContain('Used a tool, read a file')
   })
 
   it('falls back to a plain call count when no call has a name', () => {
@@ -216,7 +218,7 @@ describe('a batch of tool calls in one run header', () => {
         { type: 'tool-result', output: 'ok' }
       ]
       const { texts } = render(mixed, scheme)
-      expect(texts).toContain('Ran 2 commands (2 failed), read a.ts')
+      expect(texts).toContain('Ran 2 commands (2 failed), read a file')
       expect(texts).not.toContain('2 failed')
       expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
     }
@@ -228,7 +230,8 @@ describe('a batch of tool calls in one run header', () => {
       { type: 'tool-result', output: 'exit 1', isError: true }
     ]
     const { texts } = render(legacy)
-    expect(texts).toContain('Ran a command (1 failed)')
+    // A lone undescribed Bash call reads by its command, as the app's does.
+    expect(texts).toContain('Ran a (1 failed)')
     expect(texts).not.toContain('1 failed')
   })
 
@@ -402,7 +405,7 @@ describe('a batch of tool calls in one run header', () => {
   )
 
   it.each(['light', 'dark'] as const)(
-    'keeps a failed Claude Bash call as "Ran a command (1 failed)" with no label, and a clean polled run bare, in %s',
+    'keeps a failed Claude Bash call as "Ran false (1 failed)" with no label, and a clean polled run bare, in %s',
     (scheme) => {
       render(
         [
@@ -412,7 +415,7 @@ describe('a batch of tool calls in one run header', () => {
         scheme
       )
       expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe(
-        'Ran a command (1 failed)'
+        'Ran false (1 failed)'
       )
       expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
       act(() => renderer!.unmount())
@@ -488,10 +491,11 @@ const COMMAND_FAILED_RUN: NativeChatBlock[] = [
   { type: 'tool-result', output: 'exit 1', isError: true }
 ]
 const LONG_NAME = `${'a-very-long-generated-module-name-'.repeat(4)}index.ts`
+// Only a run of one call names a file now (the Claude app's rule), so the long
+// sentence is a lone Write of a long-named file.
 const LONG_SENTENCE_RUN: NativeChatBlock[] = [
-  { type: 'tool-call', name: 'Read', input: { file_path: `/repo/src/${LONG_NAME}` } },
-  { type: 'tool-result', output: 'ok' },
-  ...RAN_2_COMMANDS_1_FAILED_CREATED_FILE
+  { type: 'tool-call', name: 'Write', input: { file_path: `/repo/src/${LONG_NAME}`, content: FIFTEEN_LINES } },
+  { type: 'tool-result', output: `File created successfully at: /repo/src/${LONG_NAME}` }
 ]
 const EMPTY_FILE_CREATED: NativeChatBlock[] = [
   { type: 'tool-call', name: 'Write', input: { file_path: '/repo/EMPTY.md', content: '' } },
@@ -604,7 +608,7 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
     (scheme) => {
       const tree = render(COMMAND_FAILED_RUN, scheme)
       expect(tree.root.findByProps({ testID: 'tool-run-sentence' }).props.children).toBe(
-        'Ran a command (1 failed)'
+        'Ran false (1 failed)'
       )
       expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'ChevronRight'])
     }
@@ -623,16 +627,7 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
       expect(style.flexShrink).toBe(1)
       expect(style.flex ?? 0).toBe(0)
       expect(style.flexGrow ?? 0).toBe(0)
-      // Its "(1 failed)" sits past the long name, behind the ellipsis, so the
-      // row says it again where it cannot be cut.
-      expect(headerOrder(tree)).toEqual([
-        'tool-run-sentence',
-        'tool-run-failed-count',
-        'tool-run-diff-chip',
-        'ChevronRight'
-      ])
-      const label = tree.root.findByProps({ testID: 'tool-run-failed-count' })
-      expect(flat(label.props.style).flexShrink ?? 0).toBe(0)
+      expect(headerOrder(tree)).toEqual(['tool-run-sentence', 'tool-run-diff-chip', 'ChevronRight'])
       expectPill(tree, scheme, '+15', '−0')
     }
   )
@@ -763,7 +758,7 @@ describe('a tool run while the turn is still working', () => {
 
   it('goes back to the batch summary the moment the turn settles', () => {
     const tree = render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: false })
-    expect(texts(tree)).toContain('Read a.ts, ran a command')
+    expect(texts(tree)).toContain('Read a file, ran a command')
     expect(texts(tree).some((text) => text.startsWith('Running'))).toBe(false)
   })
 

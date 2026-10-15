@@ -1,78 +1,39 @@
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { isToolCallBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { createCodexPollFolder } from './codex-stdin-poll'
-import { editedFileCount, soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
-import { toolCallKind, type ToolRunKind as Kind } from './mobile-native-chat-tool-kind'
-import { toolCallPath } from './tool-call-path-keys'
+import { editedFileCount, type ToolRunPair } from './mobile-native-chat-edited-files'
+import { toolCallKind } from './mobile-native-chat-tool-kind'
+import {
+  soleCallWords,
+  TOOL_SUMMARY_WORDS,
+  toolSummaryKind,
+  type ToolSummaryKind as Kind
+} from './mobile-native-chat-tool-run-words'
 
 export { toolCallKind }
 
 /**
- * One plain sentence for a run of tool calls, the way the Claude app puts it:
- * "Ran 3 commands, read a file", "Ran 12 commands (2 failed), read 6 files",
- * "Ran Fix count wording and append cell diff" for a run of one described command,
- * "Ran skill", "Messaged @agent <summary or message>", "created a file" for
- * a Write the result is certain is new. Requested on 2026-09-12 in place of
- * "20× Bash cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
- * to the Claude app's own wording for a single described command, a Skill
- * call, a SendMessage, and a whole-file write. Tool names are grouped by what
- * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
- * and Codex's `shell`, `local_shell`, `exec_command`, `shell_command` and
+ * One plain sentence for a run of tool calls, in the Claude app's words: "Ran 3
+ * commands, read a file", "Ran 12 commands (2 failed), read 6 files", "Searched
+ * code, found files", and for a run of ONE call its verb and target: "Ran
+ * <description>", "Edited parser.ts", "Ran skill /unslop", "Messaged @agent
+ * <summary or message>". The categories, their words and the one-call targets
+ * are the app's (mobile-native-chat-tool-run-words.ts, Claude Android
+ * 1.261013.20). Requested 2026-09-12 in place of "20× Bash cd … +17 more";
+ * brought to the app's whole table 2026-10-15. Tool names are grouped by what
+ * they did to the reader, not by the agent's vocabulary, so Claude's `Bash` and
+ * Codex's `shell`, `local_shell`, `exec_command`, `shell_command` and
  * `write_stdin` all read as commands — a `write_stdin` that only polls a
  * command already counted folding into it (codex-stdin-poll.ts).
  */
-/** `#` in `many` is the count. */
-const NOUN: Record<Kind, { verb: string; one: string; many: string }> = {
-  command: { verb: 'ran', one: 'a command', many: '# commands' },
-  read: { verb: 'read', one: 'a file', many: '# files' },
-  edit: { verb: 'edited', one: 'a file', many: '# files' },
-  search: { verb: 'searched', one: 'once', many: '# times' },
-  agent: { verb: 'ran', one: 'an agent', many: '# agents' },
-  web: { verb: 'fetched', one: 'a page', many: '# pages' },
-  webSearch: { verb: 'searched', one: 'the web', many: 'the web # times' },
-  skill: { verb: 'ran', one: 'skill', many: '# skills' },
-  message: { verb: 'messaged', one: 'an agent', many: '# agents' },
-  other: { verb: 'used', one: 'a tool', many: '# tools' }
-}
+
+/** The most categories one sentence names (the app's summary builder): with
+ *  more, those with failures are taken first, then the rest, and the first
+ *  this many of that list are drawn, in run order. */
+export const TOOL_SENTENCE_MAX_CATEGORIES = 3
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
-}
-
-function readFileName(block: NativeChatBlock): string | null {
-  if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
-    return null
-  }
-  const path = toolCallPath(block.input)
-  if (path === null) {
-    return null
-  }
-  const name = path.split(/[/\\]/).pop()?.trim()
-  return name && name.length > 0 ? name : null
-}
-
-/** A run of one Bash-shaped call reads by its own `description` (real Claude
- *  Code `Bash` calls carry one alongside `command`), the way the Claude app's
- *  row says "Ran Count K*_F changes in section3 accountings" instead of "Ran a
- *  command". */
-function commandDescription(block: NativeChatBlock): string | null {
-  if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'command') {
-    return null
-  }
-  const input = record(block.input)
-  const description = input?.description
-  if (typeof description !== 'string') {
-    return null
-  }
-  const trimmed = description.trim()
-  return trimmed.length > 0 ? trimmed : null
-}
-
-/** The one label a single call's own data can give in place of the generic
- *  noun ("a command", "a file") — a read's file name, or a command's own
- *  description. Anything else keeps the generic noun. */
-function soleCallLabel(block: NativeChatBlock): string | null {
-  return readFileName(block) ?? commandDescription(block)
 }
 
 /** Longest SendMessage preview the row is given. The row draws one line and
@@ -172,7 +133,7 @@ function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
     if (!call || foldsIntoCommand(call.name, call.input)) {
       continue
     }
-    const kind = toolCallKind(call.name)
+    const kind = toolSummaryKind(call.name)
     let index = indexByKind.get(kind)
     if (index === undefined) {
       index = groups.length
@@ -249,6 +210,25 @@ export function toolRunSentenceSpans(
   return buildSentence(blocks, failedCallCount).spans
 }
 
+/** Categories counted in files changed, not in calls. */
+const FILE_KINDS: ReadonlySet<Kind> = new Set(['edit', 'write', 'notebook'])
+
+/** The groups the sentence names: every one, or with more than
+ *  TOOL_SENTENCE_MAX_CATEGORIES those with failures first, then the rest, cut
+ *  to that many and put back in run order. */
+function shownGroups(groups: readonly Group[]): readonly Group[] {
+  if (groups.length <= TOOL_SENTENCE_MAX_CATEGORIES) {
+    return groups
+  }
+  const picked = new Set(
+    [...groups.filter((entry) => entry.failed > 0), ...groups.filter((entry) => entry.failed === 0)].slice(
+      0,
+      TOOL_SENTENCE_MAX_CATEGORIES
+    )
+  )
+  return groups.filter((entry) => picked.has(entry))
+}
+
 function buildSentence(
   blocks: readonly NativeChatBlock[],
   failedCallCount?: number
@@ -263,7 +243,7 @@ function buildSentence(
   const groups = runGroups(blocks)
   // A count short of the run's own would sit beside the header's label as a
   // second, different number, so the sentence then states none.
-  const counted = groups.reduce((sum, entry) => sum + entry.failed, 0)
+  const counted = shownGroups(groups).reduce((sum, entry) => sum + entry.failed, 0)
   const statesFailures = failedCallCount === undefined || counted >= failedCallCount
   const spans: ToolRunSentenceSpan[] = []
   let failedTotal = 0
@@ -283,11 +263,13 @@ function buildSentence(
       lastFailureEnd = offset
     }
   }
-  for (const entry of groups) {
+  const sole = groups.length === 1 && groups[0]!.pairs.length === 1 ? groups[0]!.pairs[0]! : null
+  for (const entry of shownGroups(groups)) {
     const stated = statesFailures ? entry.failed : 0
     const failed = stated > 0 ? ` (${stated} failed)` : ''
-    const sole = entry.pairs.length === 1 ? entry.pairs[0]! : null
-    if (entry.kind === 'message' && sole) {
+    // A run of one call reads by its own target, as the app's row does; a
+    // call beside other work is only counted in its category.
+    if (sole && toolCallKind(sole.call.name) === 'message') {
       const detail = sendMessageDetail(sole.call)
       if (detail) {
         const preview = detail.preview ? ` ${detail.preview}` : ''
@@ -297,21 +279,20 @@ function buildSentence(
         )
         continue
       }
-    }
-    if (entry.kind === 'edit' && sole && soleCallCreatedFile(sole)) {
-      push([{ text: `created a file${failed}` }], stated)
+      push([{ text: `messaged an agent${failed}` }], stated)
       continue
     }
-    const noun = NOUN[entry.kind]
-    // A command reads by its own description only when it is the whole run:
-    // beside other work the Claude app says "ran a command" ("Created a file,
-    // ran a command", 2026-09-26), described or not.
-    const label = !sole || (entry.kind === 'command' && groups.length > 1) ? null : soleCallLabel(sole.call)
+    const words = sole ? soleCallWords(sole) : null
+    if (words) {
+      push([{ text: `${words}${failed}` }], stated)
+      continue
+    }
+    const noun = TOOL_SUMMARY_WORDS[entry.kind]
     // Edits count the files they changed, as the chip beside the row does;
     // every other kind counts its calls.
-    const count = entry.kind === 'edit' ? editedFileCount(entry.pairs) : entry.pairs.length
-    const amount = count === 1 ? (label ?? noun.one) : noun.many.replace('#', String(count))
-    push([{ text: `${noun.verb} ${amount}${failed}` }], stated)
+    const count = FILE_KINDS.has(entry.kind) ? editedFileCount(entry.pairs) : entry.pairs.length
+    const amount = count === 1 ? noun.one : noun.many.replace('#', String(count))
+    push([{ text: `${amount}${failed}` }], stated)
   }
   if (spans.length === 0) {
     return { text: '', spans: [], failed: 0, lastFailureEnd: 0 }

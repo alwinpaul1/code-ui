@@ -30,7 +30,9 @@ describe('toolRunSentence', () => {
     )
   })
 
-  it('names the one file a read opened, in the order the calls happened', () => {
+  // Beside other work the Claude app counts a read, it names no file: only a
+  // run of one call reads its target (1.261013.20, `hqz.c`).
+  it('counts a read beside a command, in the order the calls happened', () => {
     const read = (path: string): NativeChatBlock => ({
       type: 'tool-call',
       id: 'read-blade',
@@ -44,13 +46,13 @@ describe('toolRunSentence', () => {
         call('Bash'),
         result()
       ])
-    ).toBe('Read blade_flow_check.png, ran a command')
+    ).toBe('Read a file, ran a command')
   })
 
   // The file-name reader knew file_path, path and filePath; a notebook tool
   // names its notebook in `notebook_path`, which the created-file count's own
   // list already read (review, 2026-09-30).
-  it('names the notebook a NotebookRead opened, and counts NotebookEdits of it as one file', () => {
+  it('names the notebook a NotebookRead opened, and counts NotebookEdits of it as one notebook', () => {
     const notebook = (name: string): NativeChatBlock => ({
       type: 'tool-call',
       id: `nb-${name}-${Math.random()}`,
@@ -60,7 +62,7 @@ describe('toolRunSentence', () => {
     expect(toolRunSentence([notebook('NotebookRead'), result()])).toBe('Read analysis.ipynb')
     expect(
       toolRunSentence([notebook('NotebookEdit'), result(), notebook('NotebookEdit'), result()])
-    ).toBe('Edited a file')
+    ).toBe('Edited a notebook')
   })
 
   it('counts failures against the kind that failed', () => {
@@ -84,7 +86,7 @@ describe('toolRunSentence', () => {
     expect(toolCallKind('browser.open')).toBe('other')
     expect(
       toolRunSentence([call('Edit'), result(), call('Grep'), result(), call('Grep'), result()])
-    ).toBe('Edited a file, searched 2 times')
+    ).toBe('Edited a file, searched code')
   })
 
   it('is empty for a run with no calls', () => {
@@ -129,10 +131,10 @@ describe('toolRunSentence', () => {
     ).toBe('Ran 2 commands')
   })
 
-  // The Skill tool's own input carries `skill` (a name), never a description,
-  // and the Claude app's row for it says only "Ran skill" — no article, no
-  // skill name.
-  it('reads the Skill tool as "Ran skill"', () => {
+  // The Skill tool's own input carries `skill` (a name), never a description.
+  // The 2026-09-24 row read "Ran skill"; the 1.261013.20 decompile names the
+  // skill after it as "/name" (`xpz.a`).
+  it('reads the Skill tool as "Ran skill /<name>"', () => {
     expect(toolCallKind('Skill')).toBe('skill')
     const skill: NativeChatBlock = {
       type: 'tool-call',
@@ -140,7 +142,7 @@ describe('toolRunSentence', () => {
       name: 'Skill',
       input: { skill: 'unslop' }
     }
-    expect(toolRunSentence([skill, result()])).toBe('Ran skill')
+    expect(toolRunSentence([skill, result()])).toBe('Ran skill /unslop')
   })
 
   // SendMessage's own input carries `to` and `summary` (verified against real
@@ -266,7 +268,7 @@ describe('toolRunSentence', () => {
   // overwrote one; only the result's own "File created successfully" text (or
   // an explicit `command: "create"`) is certain evidence of a creation — the
   // same rule the inline diff card already applies (native-chat-edit-normalize).
-  it('reads a Write the result is certain created a new file as "created a file"', () => {
+  it('reads a lone Write the result is certain created a new file as "Created <name>"', () => {
     const write: NativeChatBlock = {
       type: 'tool-call',
       id: 'c-write-1',
@@ -278,10 +280,10 @@ describe('toolRunSentence', () => {
       toolCallId: 'x',
       output: 'File created successfully at: /repo/NEW.md'
     }
-    expect(toolRunSentence([write, created])).toBe('Created a file')
+    expect(toolRunSentence([write, created])).toBe('Created NEW.md')
   })
 
-  it('reads an ordinary overwrite as "edited a file", never a guessed creation', () => {
+  it('reads a lone ordinary overwrite as "Edited <name>", never a guessed creation', () => {
     const write: NativeChatBlock = {
       type: 'tool-call',
       id: 'c-write-2',
@@ -289,7 +291,7 @@ describe('toolRunSentence', () => {
       input: { file_path: '/repo/existing.md', content: 'updated\n' }
     }
     const overwritten: NativeChatBlock = { type: 'tool-result', toolCallId: 'x', output: 'ok' }
-    expect(toolRunSentence([write, overwritten])).toBe('Edited a file')
+    expect(toolRunSentence([write, overwritten])).toBe('Edited existing.md')
   })
 
   // The exact shape from the Claude app screenshot: two plain commands and one

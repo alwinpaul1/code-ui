@@ -109,13 +109,13 @@ describe('an image the agent read', () => {
   })
 
   // The phone's sentence names a lone read file (0ddee6f8).
-  it('is drawn in its step, under "Ran a command, read img39_1.jpeg", and a tap opens it full-screen', () => {
+  it('is drawn in its step, under "Ran a command, read a file", and a tap opens it full-screen', () => {
     const step = stepOf([BEFORE, ...bash, ...READ_IMAGE_ROWS, AFTER], { [READ_IMAGE_CALL_ID]: [FIRST_URI] })
     expect(step.blocks.map((block) => block.type)).toEqual(['text', 'tool-call', 'tool-result', 'tool-call', 'tool-result', 'image-ref'])
     const root = render(step)
     const order = JSON.stringify(renderer!.toJSON())
-    expect(order.indexOf('Ran a command, read img39_1.jpeg')).toBeGreaterThanOrEqual(0)
-    expect(order.indexOf('Ran a command, read img39_1.jpeg')).toBeLessThan(order.indexOf(FIRST_URI))
+    expect(order.indexOf('Ran a command, read a file')).toBeGreaterThanOrEqual(0)
+    expect(order.indexOf('Ran a command, read a file')).toBeLessThan(order.indexOf(FIRST_URI))
 
     const [thumb] = imageButtons(root)
     act(() => thumb!.props.onPress())

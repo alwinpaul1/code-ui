@@ -107,25 +107,27 @@ describe('the run sentence counts the files an edit changed, as the chip beside 
   // knew file_path, path and filePath, and Claude Code's NotebookEdit names its
   // notebook in `notebook_path`, so each call counted as an unnamed file of its
   // own (review, 2026-09-30).
-  it('reads two NotebookEdits of one notebook as "Edited a file"', () => {
+  // The Claude app counts notebooks in a category of their own
+  // (`ccr_summary_notebook_edit`, 1.261013.20).
+  it('reads two NotebookEdits of one notebook as "Edited a notebook"', () => {
     expect(
       toolRunSentence([...notebookEdit('/x/a.ipynb'), ...notebookEdit('/x/a.ipynb')])
-    ).toBe('Edited a file')
+    ).toBe('Edited a notebook')
     expect(
       toolRunSentence([...notebookEdit('/x/a.ipynb'), ...notebookEdit('/x/b.ipynb')])
-    ).toBe('Edited 2 files')
-    // A notebook and an Edit of another file are two files.
+    ).toBe('Edited 2 notebooks')
+    // A notebook and an Edit of another file are counted apart.
     expect(toolRunSentence([...notebookEdit('/x/a.ipynb'), ...edit('/x/a.py')])).toBe(
-      'Edited 2 files'
+      'Edited a notebook, edited a file'
     )
   })
 
   it('never merges NotebookEdits that name no notebook', () => {
-    expect(toolRunSentence([...notebookEdit(null), ...notebookEdit(null)])).toBe('Edited 2 files')
+    expect(toolRunSentence([...notebookEdit(null), ...notebookEdit(null)])).toBe('Edited 2 notebooks')
     expect(toolRunSentence([...notebookEdit(null), ...notebookEdit('/x/a.ipynb')])).toBe(
-      'Edited 2 files'
+      'Edited 2 notebooks'
     )
-    expect(toolRunSentence(notebookEdit(null))).toBe('Edited a file')
+    expect(toolRunSentence(notebookEdit(null))).toBe('Edited a notebook')
   })
 
   it('still counts Codex apply_patch calls on one file as one file', () => {
@@ -139,12 +141,13 @@ describe('the run sentence counts the files an edit changed, as the chip beside 
     )
   })
 
-  it('keeps the one-file and empty runs as they were', () => {
-    expect(toolRunSentence(edit('/repo/a.ts'))).toBe('Edited a file')
+  it('names the one file a lone edit changed, and keeps the empty run empty', () => {
+    expect(toolRunSentence(edit('/repo/a.ts'))).toBe('Edited a.ts')
     expect(toolRunSentence([])).toBe('')
-    // A patch that only adds one file still reads as the creation it is.
+    // A patch that only adds one file still reads as the creation it is, by
+    // the name the patch gives it.
     expect(toolRunSentence(applyPatch('*** Begin Patch\n*** Add File: c.ts\n+hello\n*** End Patch'))).toBe(
-      'Created a file'
+      'Created c.ts'
     )
   })
 })
