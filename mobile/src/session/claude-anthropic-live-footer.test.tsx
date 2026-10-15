@@ -128,6 +128,71 @@ describe('the footer reads Anthropic’s live state, as the Claude app’s does'
   })
 })
 
+describe('after thinking, and while the token figure grows, as the Claude app draws it', () => {
+  const live = (over: { thinking: boolean; thinkingTokens?: number | null }) =>
+    claudeChatLive({
+      live: { ...CCR_IDLE_LIVE_STATE, working: true, turnStartedAt: START, thinking: over.thinking, thinkingTokens: over.thinkingTokens ?? null },
+      linkPhase: 'live',
+      connectionStatus: null,
+      relayConnected: false
+    })
+  const redraw = (value: ClaudeChatLive | null) => act(() => renderer!.update(<ThemeProvider initialPreference="light">{line(value, 0)}</ThemeProvider>))
+
+  it('says "thought for 8s" for two seconds once Claude stops thinking, then goes back to the verb', () => {
+    const root = draw('light', line(live({ thinking: true }), 0))
+    act(() => {
+      vi.advanceTimersByTime(8_000)
+    })
+    redraw(live({ thinking: false }))
+    expect(texts(root).map((t) => t.text)).toEqual(['23s', ' · thought for 8s'])
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+    expect(texts(root).map((t) => t.text)).toEqual(['Clauding...'])
+  })
+
+  it('keeps the tokens after the phrase goes', () => {
+    const root = draw('light', line(live({ thinking: true, thinkingTokens: 40 }), 0))
+    act(() => {
+      vi.advanceTimersByTime(3_000)
+    })
+    redraw(live({ thinking: false, thinkingTokens: 40 }))
+    expect(texts(root).map((t) => t.text)).toEqual(['18s · 40 tokens', ' · thought for 3s'])
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+    expect(texts(root).map((t) => t.text)).toEqual(['20s · 40 tokens'])
+  })
+
+  it('a new turn forgets the last turn’s span', () => {
+    const root = draw('light', line(live({ thinking: true }), 0))
+    act(() => {
+      vi.advanceTimersByTime(4_000)
+    })
+    const nextTurn = claudeChatLive({
+      live: { ...CCR_IDLE_LIVE_STATE, working: true, turnStartedAt: START + 19_000, thinking: false },
+      linkPhase: 'live',
+      connectionStatus: null,
+      relayConnected: false
+    })
+    redraw(nextTurn)
+    expect(texts(root).map((t) => t.text)).toEqual(['Clauding...'])
+  })
+
+  it('counts the token figure up from 1 instead of jumping to it', () => {
+    const root = draw('light', line(live({ thinking: true, thinkingTokens: 1_200 }), 0))
+    expect(texts(root).map((t) => t.text)).toEqual(['15s · 1 token', ' · still thinking…'])
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(texts(root)[0]!.text).toBe('15s · 600 tokens')
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(texts(root)[0]!.text).toBe('16s · 1,200 tokens')
+  })
+})
+
 describe('the running count while the relay is down', () => {
   function providerLine(live: ClaudeChatLive | null) {
     return createElement(

@@ -19,6 +19,17 @@ describe('where the connection row and the rate-limit banner are mounted', () =>
     )
   })
 
+  it('the route hands the connection notice to the chat, whose status line draws it on its one line', () => {
+    const route = code('MobileSessionActiveContent.tsx')
+    expect(route).toMatch(
+      /<NativeChatConnectionNoticeProvider controller=\{controller\}>[\s\S]*?<MobileNativeChatOverlay[\s\S]*?<\/NativeChatConnectionNoticeProvider>/
+    )
+    expect(code('MobileNativeChatConnectionRow.tsx')).toMatch(
+      /const notice = connectionNoticeOf\(controller\)\s*return <NativeChatConnectionNoticeContext\.Provider value=\{notice\}>/
+    )
+    expect(code('MobileNativeChatStatusLine.tsx')).toMatch(/useNativeChatConnectionNotice\(\)/)
+  })
+
   it('the overlay forwards the slot to the chat view untouched', () => {
     const overlay = code('MobileNativeChatOverlay.tsx')
     expect(overlay).toMatch(/notices=\{notices\}/)

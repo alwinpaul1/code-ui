@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
+import { NativeChatConnectionNoticeContext } from './native-chat-connection-notice'
 
 /**
  * The line above the composer, drawn as the Claude app draws it (com.anthropic.claude
@@ -151,6 +152,60 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     expect(live.props.accessibilityLiveRegion).toBe('polite')
     const working = root.find((n) => n.props.accessibilityLabel === 'Working')
     expect(working.props.accessible).toBe(true)
+  })
+
+  // au8.java:51-72, :90-91 and nl7.java:232-235: with the connection connecting or lost, the app's
+  // ONE line says so in place of its verb and stats, "Connecting..." / "Connection lost...", in the
+  // clay, then the count. Ours drew the verb line and a second "Connecting..." row under it.
+  for (const [scheme, want] of [
+    ['light', LIGHT],
+    ['dark', DARK]
+  ] as const) {
+    it(`a turn whose connection drops says "Connecting... · 2 running tasks" on the one line (${scheme})`, () => {
+      act(() => {
+        renderer?.unmount()
+        renderer = create(
+          <ThemeProvider initialPreference={scheme}>
+            {createElement(
+              NativeChatConnectionNoticeContext.Provider,
+              { value: { kind: 'connecting', text: 'Connecting...' } },
+              createElement(
+                NativeChatTasksContext.Provider,
+                { value: { runningCount: 2, openSheet: () => {} } },
+                createElement(MobileNativeChatStatusLine, { working: true })
+              )
+            )}
+          </ThemeProvider>
+        )
+      })
+      const root = renderer!.root
+      expect(texts(root)).toEqual(['Connecting...', ' · ', '2 running tasks'])
+      const byText = (t: string) => root.findAllByType('Text' as never).find((n) => n.props.children === t)!
+      expect(flat(byText('Connecting...').props.style).color).toBe(want.clay)
+      expect(flat(byText(' · ').props.style).color).toBe(want.clay)
+      expect(flat(byText('2 running tasks').props.style).color).toBe(want.link)
+      expect(star(root).length).toBeGreaterThan(0)
+    })
+  }
+
+  it('an idle line with tasks ignores a connection notice: the app says it only while busy', () => {
+    act(() => {
+      renderer?.unmount()
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          {createElement(
+            NativeChatConnectionNoticeContext.Provider,
+            { value: { kind: 'lost', text: 'Connection lost...' } },
+            createElement(
+              NativeChatTasksContext.Provider,
+              { value: { runningCount: 1, openSheet: () => {} } },
+              createElement(MobileNativeChatStatusLine, { working: false })
+            )
+          )}
+        </ThemeProvider>
+      )
+    })
+    expect(texts(renderer!.root)).toEqual(['1 running task'])
   })
 
   it('does not say Working to a screen reader when the agent is idle', () => {

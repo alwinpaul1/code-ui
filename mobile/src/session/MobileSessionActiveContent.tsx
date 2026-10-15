@@ -7,7 +7,7 @@ import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileSessionPillRow } from './MobileSessionPillRow'
-import { MobileNativeChatConnectionRow } from './MobileNativeChatConnectionRow'
+import { MobileNativeChatConnectionRow, NativeChatConnectionNoticeProvider } from './MobileNativeChatConnectionRow'
 import { MobileNativeChatRateLimitBanner } from './MobileNativeChatRateLimitBanner'
 import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
 import { MobileSubagentActivityFeeds } from './MobileSubagentActivityFeeds'
@@ -349,6 +349,8 @@ export function MobileSessionActiveContent({
         />
       ))}
       <NativeChatFileReadProvider value={fileReader}>
+      {/* "Connecting..." / "Connection lost..." for the status line to draw on its one line. */}
+      <NativeChatConnectionNoticeProvider controller={controller}>
       <MobileNativeChatOverlay
         controller={nativeChatController}
         hasTerminalUnderneath={terminals.some((terminal) => terminal.handle === activeHandle)}
@@ -389,6 +391,7 @@ export function MobileSessionActiveContent({
         notices={<MobileNativeChatConnectionRow controller={controller} />}
         composerBanner={<MobileNativeChatRateLimitBanner controller={controller} />}
       />
+      </NativeChatConnectionNoticeProvider>
       </NativeChatFileReadProvider>
       {/* Opened from a subagent row in the background-tasks sheet, through its
           store; mounted here because this is the screen that knows the host. */}

@@ -84,7 +84,10 @@ vi.mock('./MobileNativeChatView', async () => {
   }
 })
 vi.mock('./MobileSessionPillRow', () => ({ MobileSessionPillRow: () => null }))
-vi.mock('./MobileNativeChatConnectionRow', () => ({ MobileNativeChatConnectionRow: () => null }))
+vi.mock('./MobileNativeChatConnectionRow', () => ({
+  MobileNativeChatConnectionRow: () => null,
+  NativeChatConnectionNoticeProvider: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('./MobileNativeChatRateLimitBanner', () => ({ MobileNativeChatRateLimitBanner: () => null }))
 vi.mock('./MobileSubagentTranscriptModal', () => ({ MobileSubagentTranscriptModal: () => null }))
 vi.mock('./MobileSubagentActivityFeeds', () => ({ MobileSubagentActivityFeeds: () => null }))

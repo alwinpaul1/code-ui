@@ -18,7 +18,7 @@ vi.mock('./MobileBackgroundTasksPulse', () => ({
 }))
 
 import { ThemeProvider } from '../theme/theme-context'
-import { ConnectionRowView, MobileNativeChatConnectionRow } from './MobileNativeChatConnectionRow'
+import { ConnectionRowView, MobileNativeChatConnectionRow, connectionNoticeOf } from './MobileNativeChatConnectionRow'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 let renderer: ReactTestRenderer | null = null
@@ -83,17 +83,35 @@ describe.each(['light', 'dark'] as const)('the connection row in %s mode', (sche
   })
 })
 
+// The row only stands for the status line on the structured lane, whose status line draws no
+// working line; everywhere else the status line says it on its own line, as the app's one line
+// does (au8 case 0), and a second row would say it twice.
 describe('the connected row', () => {
   const controller = (over: {
     connState: string
     verdict: string
     working: boolean
+    structured?: boolean
   }): MobileSessionController =>
     ({
       connState: over.connState,
       connectionVerdict: { kind: over.verdict, label: '' },
-      nativeChatController: { nativeChatAgentWorking: over.working }
+      nativeChatController: { nativeChatAgentWorking: over.working, nativeChatStructured: over.structured ?? true }
     }) as unknown as MobileSessionController
+
+  it('draws no second row where the status line says "Connecting..." itself', () => {
+    const value = controller({ connState: 'reconnecting', verdict: 'normal', working: true, structured: false })
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatConnectionRow controller={value} />
+        </ThemeProvider>
+      )
+    })
+    expect(renderer!.toJSON()).toBeNull()
+    // …while the notice the status line draws is still there.
+    expect(connectionNoticeOf(value)).toEqual({ kind: 'connecting', text: 'Connecting...' })
+  })
   const mount = (value: MobileSessionController) =>
     act(() => {
       renderer = create(

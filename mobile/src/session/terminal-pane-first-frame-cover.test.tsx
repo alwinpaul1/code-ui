@@ -79,6 +79,7 @@ function controllerFor(activeHandle: string, revealed: string[]): MobileSessionC
     worktreeId: 'wt-1',
     insets: { top: 0, bottom: 0, left: 0, right: 0 },
     connState: 'connected',
+    connectionVerdict: { kind: 'normal', label: '' },
     client: null,
     terminals: [
       { handle: ANTIGRAVITY, title: 'Terminal 1' },

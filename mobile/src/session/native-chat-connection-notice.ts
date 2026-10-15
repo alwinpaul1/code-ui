@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { ConnectionState } from '../transport/types'
 
@@ -36,6 +37,14 @@ export function waitingText(text: string): string {
   return `${withoutEllipsis}...`
 }
 
+/** The notice for the chat's status line, which draws it in place of its verb as the app's one
+ *  line does (MobileNativeChatStatusLine). Provided by the route, which holds the connection. */
+export const NativeChatConnectionNoticeContext = createContext<NativeChatConnectionNotice | null>(null)
+
+export function useNativeChatConnectionNotice(): NativeChatConnectionNotice | null {
+  return useContext(NativeChatConnectionNoticeContext)
+}
+
 export function nativeChatConnectionNotice(input: {
   connState: ConnectionState
   verdict: ConnectionVerdict['kind']
@@ -47,7 +56,10 @@ export function nativeChatConnectionNotice(input: {
   if (input.connState === 'connected' || !input.agentWorking || input.anthropicLive === true) {
     return null
   }
-  return input.verdict === 'normal'
-    ? { kind: 'connecting', text: waitingText(CONNECTING) }
-    : { kind: 'lost', text: waitingText(LOST) }
+  // One object per kind, so the route can hand it down a context without redrawing every reader
+  // on each render.
+  return input.verdict === 'normal' ? CONNECTING_NOTICE : LOST_NOTICE
 }
+
+const CONNECTING_NOTICE: NativeChatConnectionNotice = Object.freeze({ kind: 'connecting', text: waitingText(CONNECTING) })
+const LOST_NOTICE: NativeChatConnectionNotice = Object.freeze({ kind: 'lost', text: waitingText(LOST) })

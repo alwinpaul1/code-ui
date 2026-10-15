@@ -24,9 +24,23 @@ import { CLAUDE_FOOTER_SEPARATOR } from './claude-working-footer-spec'
 //                                      " · " in `pl7.Q` and the count in link blue `ad5.C0()`
 //                                      (nl7.java:257-290), then " · " + status in `pl7.Q`, one line
 //
-// Not drawn: the app's "thought for Ns" status (`ccr_thinking_status_thought_for`), shown for 2 s
-// after a thinking span ends. Its span comes from state jadx could not decompile (`y6y.n`), and a
-// span measured here from event times would be a guess.
+//   thought for    zs20.java:957-965   when NOT thinking and the last thinking span (`a6y`
+//                                      ThinkingBlockBounds: startedAt, endedAt, closedAt) closed
+//                                      under 2000 ms ago: "thought for %1$s"
+//                                      (`ccr_thinking_status_thought_for`), the span in whole
+//                                      seconds, at least 1, written by `zs20.n` (:996)
+//   count-up       g8y.java            the token figure is not drawn as it arrives: the first one
+//                                      counts up from 0 over 1200 ms; a rise runs from the figure
+//                                      reached so far over the time since the previous figure,
+//                                      held to 300..3000 ms; a fall jumps; no figure resets it.
+//                                      Drawn clamped to 1..the real figure (zs20.java:1014-1017).
+//                                      The clock ticks every 100 ms while it runs, else every
+//                                      1000 ms (xrd.java default case)
+//
+// The span's bounds are set in code jadx could not decompile (`y6y.n`). The app measures them on
+// its own clock (`cvb`, the same clock the d230 path builds an `a6y` from); here they are the
+// phone's clock at the moments the footer's `thinking` turns on and off
+// (use-claude-footer-stats.ts), the same kind of measurement.
 
 export const CLAUDE_THINKING_STATUS = [
   'thinking…',
@@ -84,15 +98,94 @@ export type ClaudeFooterStats = {
   status: string | null
 }
 
+/** `a6y` ThinkingBlockBounds, epoch ms. */
+export type ClaudeThinkingBounds = { startedAt: number; endedAt: number; closedAt: number }
+
+/** How long "thought for Ns" stays after the span closed (zs20.java:957). */
+export const CLAUDE_THOUGHT_FOR_MS = 2_000
+
+/** "thought for 8s" while the span closed under 2 s ago, else null (zs20.java:957-965, :996). */
+export function claudeThoughtFor(bounds: ClaudeThinkingBounds | null, now: number): string | null {
+  if (bounds === null || now >= bounds.closedAt + CLAUDE_THOUGHT_FOR_MS) {
+    return null
+  }
+  const seconds = Math.max(1, Math.floor((bounds.endedAt - bounds.startedAt) / 1000))
+  return `thought for ${formatClaudeElapsed(seconds)}`
+}
+
+export type ClaudeFooterView = {
+  /** The last closed thinking span of this turn, or null. */
+  lastThinking?: ClaudeThinkingBounds | null
+  /** Where the token count-up stands (`tokenTweenValue`); absent draws the real figure. */
+  shownTokens?: number | null
+}
+
 /** The app's `Stats(stats, status)` for a working line, or null when it has neither tokens nor a
  *  status (the line then draws its cycling verb). */
-export function claudeFooterStats(input: ClaudeFooterLiveInput, now: number): ClaudeFooterStats | null {
+export function claudeFooterStats(input: ClaudeFooterLiveInput, now: number, view: ClaudeFooterView = {}): ClaudeFooterStats | null {
   const elapsed = input.turnStartedAt === null ? 0 : Math.max(0, Math.floor((now - input.turnStartedAt) / 1000))
-  const status = input.thinking ? claudeThinkingStatus(elapsed) : null
-  const tokens = input.thinkingTokens !== null && input.thinkingTokens > 0 ? formatClaudeTokenCount(input.thinkingTokens) : null
+  const status = input.thinking ? claudeThinkingStatus(elapsed) : claudeThoughtFor(view.lastThinking ?? null, now)
+  const real = input.thinkingTokens !== null && input.thinkingTokens > 0 ? input.thinkingTokens : null
+  // zs20.java:1017: the count-up's figure, held to 1..the real one.
+  const shown = real === null ? null : Math.min(real, Math.max(1, view.shownTokens ?? real))
+  const tokens = shown === null ? null : formatClaudeTokenCount(shown)
   const time = formatClaudeElapsed(elapsed)
   if (tokens !== null) {
     return { stats: `${time}${CLAUDE_FOOTER_SEPARATOR}${tokens}`, status }
   }
   return status !== null ? { stats: time, status } : null
+}
+
+/** `g8y`: the token count-up. `target` the real figure (`a`), `from` where the run starts (`b`),
+ *  `at` when it started (`c`), `durationMs` its length (`d`), `lastAt` when the previous figure
+ *  came (`e`). */
+export type ClaudeTokenTween = {
+  target: number | null
+  from: number
+  at: number
+  durationMs: number
+  lastAt: number | null
+}
+
+export const CLAUDE_TOKEN_TWEEN_IDLE: ClaudeTokenTween = { target: null, from: 0, at: 0, durationMs: 0, lastAt: null }
+
+/** `g8y.b`: the figure the count-up has reached at `now`, or null with no figure. */
+export function tokenTweenValue(tween: ClaudeTokenTween, now: number): number | null {
+  if (tween.target === null) {
+    return null
+  }
+  if (tween.durationMs <= 0) {
+    return tween.target
+  }
+  const progress = Math.min(1, Math.max(0, (now - tween.at) / tween.durationMs))
+  return Math.trunc((tween.target - tween.from) * progress + tween.from)
+}
+
+/** Whether the count-up has reached its figure (the app's clock then slows to 1 s). */
+export function tokenTweenSettled(tween: ClaudeTokenTween, now: number): boolean {
+  return tokenTweenValue(tween, now) === tween.target
+}
+
+/** `g8y.a`: a new real figure (or none) at `now`. The same figure returns `tween` itself. */
+export function updateTokenTween(tween: ClaudeTokenTween, now: number, target: number | null): ClaudeTokenTween {
+  if (target === null) {
+    return tween.target === null ? tween : { ...tween, target: null, durationMs: 0, lastAt: null }
+  }
+  if (tween.target === target) {
+    return tween
+  }
+  if (tween.target === null) {
+    return { target, from: 0, at: now, durationMs: 1_200, lastAt: now }
+  }
+  if (target < tween.target) {
+    return { ...tween, target, durationMs: 0, lastAt: now }
+  }
+  const gap = tween.lastAt === null ? 3_000 : now - tween.lastAt
+  return {
+    target,
+    from: tokenTweenValue(tween, now) ?? target,
+    at: now,
+    durationMs: Math.min(3_000, Math.max(300, gap)),
+    lastAt: now
+  }
 }
