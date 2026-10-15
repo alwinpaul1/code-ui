@@ -275,8 +275,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-14 (later): the mic's sign-in gate, requireAnthropicSignIn (a useCallback), and the focus effect re-reading the phone's sign-in.
 // 2026-10-14: the releaseLiveInputKeyboard() calls above, inside those callback bodies.
 // 2026-10-15: readFileTab hands resolveMobileFileTabDoc the worktree's agent sessions
-// (nativeChatContexts), and its outside_worktree note says a terminal or chat vouches.
-const HEAD_CALLBACK_BODY_SHA256 = 'ae7653a8235bddae64fe6f88664278c7e530c7f761a94f1da444b0c14c4c6d23'
+// (nativeChatContexts) for an absolute path only, and its outside_worktree note says a terminal
+// or chat vouches.
+const HEAD_CALLBACK_BODY_SHA256 = '1318fa0ff64df4d5551d544a4b5c8cb1360a0a362f217696ea23164e51327085'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23

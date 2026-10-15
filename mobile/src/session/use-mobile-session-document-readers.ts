@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { RpcFailure } from '../transport/types'
-import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
+import { isAbsoluteTabPath, resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import {
   prefetchOutsideWorktreeFileTabs,
@@ -173,7 +173,10 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           // The worktree's agent sessions: a terminal vouches only for a path
           // under the temp dir, so a file the agent named anywhere else (a PDF
           // on the Desktop) is granted to the session whose transcript named it.
-          nativeChatContexts: nativeChatFileContextsOf(sessionTabsRef.current)
+          // Only an absolute path is ever resolved; a worktree read is untouched.
+          ...(isAbsoluteTabPath(tab.relativePath)
+            ? { nativeChatContexts: nativeChatFileContextsOf(sessionTabsRef.current) }
+            : {})
         })
         if (read) {
           rememberFileTabDoc(read, doc)
