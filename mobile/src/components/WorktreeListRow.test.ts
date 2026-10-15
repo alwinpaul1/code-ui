@@ -228,6 +228,27 @@ describe('memoized worktree rows', () => {
     })
   })
 
+  it('draws a workspace of Claude sessions in the theme, and leaves a Codex one as it was', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(ListRowHarness, {
+          item: { ...baseItem, status: 'working', agents: [agent({ agentType: 'claude' })] },
+          now: 2_000
+        })
+      )
+    })
+    expect(agentSpinnerRender).toHaveBeenLastCalledWith(expect.objectContaining({ themed: true }))
+
+    for (const agents of [[agent({ agentType: 'codex' })], [agent({ agentType: 'claude' }), agent({ paneKey: 'agent-2', agentType: 'codex' })], []]) {
+      act(() => renderer?.unmount())
+      await act(async () => {
+        renderer = create(createElement(ListRowHarness, { item: { ...baseItem, status: 'working', agents }, now: 2_000 }))
+      })
+      expect((agentSpinnerRender.mock.lastCall?.[0] as { themed?: boolean } | undefined)?.themed).toBeFalsy()
+      expect(agentSpinnerRender.mock.lastCall).toBeDefined()
+    }
+  })
+
   it('names the host with a glyph that matches the host kind', async () => {
     const textNodes = (): string[] =>
       renderer!.root
