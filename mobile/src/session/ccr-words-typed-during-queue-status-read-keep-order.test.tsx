@@ -41,7 +41,7 @@ function Harness(): null {
     events: [], connectionStatus: null, working, promptUp, attachments: () => 0,
     composerText: text, setComposerText: setText,
     captureSendOrigin: origin, clearDraftForSend: vi.fn(), acceptSend: () => 'row-1',
-    restoreRejectedDraft: vi.fn(), removePending: vi.fn(), onSendError, deps
+    restoreRejectedDraft: vi.fn(), returnQueueToDraft: vi.fn(), removePending: vi.fn(), onSendError, deps
   })
   return null
 }

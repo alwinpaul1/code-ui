@@ -117,6 +117,9 @@ export function useCcrComposerSend(args: {
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => string | null
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Queued words back into `draftKey`'s composer draft, ahead of what it holds, whether or not
+   *  its tab is on screen: a queued POST can fail after the user switched tabs. */
+  returnQueueToDraft: (draftKey: string, text: string) => void
   removePending: (id: string) => void
   onSendError: (message: string, details?: MobileNativeChatSendErrorDetails) => void
   deps?: CcrComposerSendDeps
@@ -236,7 +239,7 @@ export function useCcrComposerSend(args: {
     latest.current.onSendError(result, { retry: true })
     return 'rejected'
   }, [deps, flight, post, setDelivery, settle])
-  const { giveBack, restoreQueued } = useMemo(() => ccrQueueGiveBack(latest, (tab) => queuesRef.current[tab]?.text, takeFromQueue), [queuesRef, takeFromQueue])
+  const { giveBack, restoreQueued } = useMemo(() => ccrQueueGiveBack(latest, (tab) => queuesRef.current[tab], takeFromQueue), [queuesRef, takeFromQueue])
   const sendOlderFirst = useCallback((origin: MobileNativeChatSendOrigin, to: CcrTo) =>
     sendOlderCcrEntriesFirst({ origin, to, events: () => latest.current.events, captureSendOrigin: (text) => latest.current.captureSendOrigin(text), sendNow, log: deps.log }), [deps, sendNow])
 
@@ -366,7 +369,7 @@ export function useCcrComposerSend(args: {
         }
         if (takeFromQueue(tab, captured)) {
           // Behind the tab's older messages, or back to the composer.
-          await ((await sendOlderFirst(origin, held.target)) ? sendNow(verdict.text, origin, held.target, undefined, undefined, restoreQueued(tab)) : giveBack(tab, verdict.text))
+          await ((await sendOlderFirst(origin, held.target)) ? sendNow(verdict.text, origin, held.target, undefined, undefined, restoreQueued(tab)) : giveBack(tab, verdict.text, origin.draftKey))
         }
         return true
       }

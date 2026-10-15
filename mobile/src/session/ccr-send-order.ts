@@ -228,21 +228,31 @@ export async function sendCcrQueueAhead(args: {
 }
 
 /**
- * Queued words that failed, or never went, back to the composer AHEAD of what it holds (typed after
- * them), with everything still queued on the tab behind them: the order typed (second review of the
- * attachment lane, 2026-10-15: they came back after the words typed later). `restoreQueued` is a
- * failed queued POST's restore: its outbox entry and bubble as `restoreRejectedDraft` handles them,
- * and the words through `giveBack`.
+ * Queued words that failed, or never went, back to their tab's composer AHEAD of what it holds
+ * (typed after them), with everything still queued on the tab behind them: the order typed (second
+ * review of the attachment lane, 2026-10-15: they came back after the words typed later). Into the
+ * composer on screen only when it is that tab's; otherwise into that tab's own draft (`draftKey`,
+ * the send's origin or the queue's, from queueOnTab): a POST can fail after the user switched tabs,
+ * and the words went into the other tab's composer (second-pass review, 2026-10-15).
+ * `restoreQueued` is a failed queued POST's restore: its outbox entry and bubble as
+ * `restoreRejectedDraft` handles them, and the words through `giveBack`.
  */
 export function ccrQueueGiveBack(
-  latest: { readonly current: { setComposerText: Dispatch<SetStateAction<string>>; restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void } },
-  queued: (tab: string) => string | undefined,
+  latest: { readonly current: { tabId: string | null; setComposerText: Dispatch<SetStateAction<string>>; restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void; returnQueueToDraft: (draftKey: string, text: string) => void } },
+  queued: (tab: string) => { readonly text: string; readonly draftKey: string | null } | undefined,
   takeFromQueue: (tab: string, taken: string) => boolean
-): { giveBack: (tab: string, text: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
-  const giveBack = (tab: string, text: string): void => {
-    const rest = queued(tab)
+): { giveBack: (tab: string, text: string, draftKey?: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
+  const giveBack = (tab: string, text: string, draftKey?: string): void => {
+    const held = queued(tab)
+    const rest = held?.text
     const all = rest && takeFromQueue(tab, rest) ? (text ? `${text}\n\n${rest}` : rest) : text
-    if (all) {
+    const key = draftKey ?? held?.draftKey ?? null
+    if (!all) {
+      return
+    }
+    if ((latest.current.tabId ?? '') !== tab && key !== null) {
+      latest.current.returnQueueToDraft(key, all)
+    } else {
       latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))
     }
   }
@@ -250,7 +260,7 @@ export function ccrQueueGiveBack(
     giveBack,
     restoreQueued: (tab) => (origin, text) => {
       latest.current.restoreRejectedDraft(origin, '')
-      giveBack(tab, text)
+      giveBack(tab, text, origin.draftKey)
     }
   }
 }
