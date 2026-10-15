@@ -2,6 +2,7 @@ package expo.modules.orcaselectioncopy
 
 import android.content.Context
 import android.graphics.Rect
+import android.os.SystemClock
 import android.text.Selection
 import android.text.Spannable
 import android.util.Log
@@ -117,7 +118,7 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private var pendingSweep: Runnable? = null
 
   // Where this document stood in its window when the finger went down, and the window-scroll
-  // watch that runs from then until the finger lifts ([scrollTookTouch]).
+  // watch that runs from then until the finger lifts or the hold goes off ([scrollTookTouch]).
   private val downInWindow = IntArray(2)
   private val nowInWindow = IntArray(2)
   private val scrollWatch = ViewTreeObserver.OnScrollChangedListener { scrollTookTouch() }
@@ -125,7 +126,9 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
 
   override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
     // Every touch passes here, whichever view below ends up handling it, until a gesture-handler
-    // scroll above takes it: from then on nothing more of it comes, lift included ([scrollTookTouch]).
+    // scroll above takes it: from then on nothing more of that gesture comes, lift included, and
+    // its ACTION_CANCEL only at the next finger down (ViewGroup.cancelAndClearTouchTargets).
+    // [scrollTookTouch] covers that stretch.
     when (ev.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
         // A new gesture: the last one's sweep is not this one's (a tap to stop a fling, then a
@@ -172,8 +175,9 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
       MotionEvent.ACTION_CANCEL -> {
         unwatchScroll()
         gestures.ended()
-        // A parent took the touch the plain Android way (under gesture-handler none comes; see
-        // scrollTookTouch): a word a hold lit before it did will never get its menu.
+        // A parent took the touch the plain Android way. Under gesture-handler this comes only at
+        // the next finger down, for the gesture before it (see scrollTookTouch). Either way a
+        // word a hold lit before it will never get its menu.
         post(armSweep(gestures.gesture, "the touch went to the scroll before a menu opened"))
       }
     }
@@ -236,16 +240,34 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   }
 
   /**
-   * Something in the window scrolled while a finger is down here. If it moved this document under
-   * the finger, the list has taken the touch, and gesture-handler will pass this view nothing more
-   * of it: no MOVE, no CANCEL, no lift (ScrollTakesHold.kt). So it is a scroll, not a hold: the
-   * Texts' pending long press is cancelled before it can buzz or select, the gesture ends here, and
-   * anything a hold lit before the scroll, which will never get its menu, is swept. Runs in the
-   * frame of the MOVE that scrolled, ahead of the long-press callback.
+   * Something in the window scrolled while a finger is down here.
+   *
+   * The watch is only there to cancel a hold that has not gone off yet. Once it has (the timeout
+   * passed, or a Text below holds words this gesture lit), a scroll changes nothing and the watch
+   * stops: in a plain ScrollView the hold's own selection asks for focus and
+   * ReactScrollView.requestChildFocus scrolls the Text into view, and taking that for the list
+   * swept the word the hold had just lit before its menu opened at the lift (review of
+   * f93134c3d). The same goes for an animated scrollTo after the hold.
+   *
+   * Before that, if the scroll moved this document under the finger by more than rounding, the
+   * list has taken the touch, and gesture-handler will pass this view nothing more of the gesture:
+   * no MOVE, no lift, and its ACTION_CANCEL only at the next finger down (ScrollTakesHold.kt). So it
+   * is a scroll, not a hold: the Texts' pending long press is cancelled before it can buzz or
+   * select, the gesture ends here, and the stray sweep is armed. Dispatched from the frame's draw
+   * pass after the MOVE that scrolled, which as read from the Android source comes ahead of the
+   * long-press callback.
    */
   private fun scrollTookTouch() {
+    if (holdHasFired(SystemClock.uptimeMillis() - downAt, ViewConfiguration.getLongPressTimeout().toLong(), litThisGesture())) {
+      unwatchScroll()
+      return
+    }
     getLocationInWindow(nowInWindow)
-    if (!scrolledUnderFinger(downInWindow[0], downInWindow[1], nowInWindow[0], nowInWindow[1])) {
+    // About a dp: FlashList's anchor and content can disagree by a pixel or two mid-turn.
+    if (!scrolledUnderFinger(
+        downInWindow[0], downInWindow[1], nowInWindow[0], nowInWindow[1],
+        roundingTolerancePx(resources.displayMetrics.density)
+      )) {
       return
     }
     unwatchScroll()
@@ -258,6 +280,10 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
       Log.i("OrcaSelectionCopy", "The list scrolled under the finger: a hold there no longer selects")
     }
   }
+
+  /** Whether a Text below holds words it did not hold when this gesture's finger went down. */
+  private fun litThisGesture(): Boolean =
+    textViewsBelow(this).any { text -> selectedRangeIn(text)?.let { it != selectedAtDown[text] } == true }
 
   /** What each Text below holds selected now; a Text with nothing selected is left out. */
   private fun selectionsBelow(): Map<TextView, SelectedRange> {
