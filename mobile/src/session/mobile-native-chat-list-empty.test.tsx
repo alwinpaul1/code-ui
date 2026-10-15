@@ -118,6 +118,24 @@ describe('the empty chat of a Claude tab read from Anthropic', () => {
     expect(lines[0]?.color).toBe(colors.text)
   })
 
+  // Review 2026-10-15: on the `new` gate the chat draws Orca's read, and a read that settled with
+  // nothing in it lost its diagnostic line under the new title (CLAUDE.md rule 9: the line that
+  // says where to look is part of the empty state).
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('keeps the empty-read diagnostic under "What are we building?" (%s)', (scheme, colors) => {
+    const status: AgentStatusEntry = {
+      ...STATUS_WITHOUT_SESSION,
+      state: 'working',
+      providerSession: { key: 'session_id', id: 'ad1e3053-f9ac-40be-80be-8f33a800e9b1' }
+    }
+    const emptyState = mobileNativeChatEmptyState('ready', 'claude', undefined, { anthropicTab: true, agentStatus: status, transcriptMessageCount: 0 })
+    const lines = textNodes(render(emptyState, scheme))
+    expect(lines.map((line) => line.text)).toEqual(['What are we building?', 'The desktop read session ad1e3053 and sent no messages.'])
+    expect(lines[1]?.color).toBe(colors.textMuted)
+  })
+
   it('keeps the desktop’s words while Orca has not said the session is empty', () => {
     expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, { anthropicTab: true })?.title).toBe('Start a chat with Claude')
     expect(mobileNativeChatEmptyState('error', 'claude', 'The desktop could not read this session.', { anthropicTab: true })?.title).toBe('Could not load conversation')

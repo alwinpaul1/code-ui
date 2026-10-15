@@ -139,10 +139,9 @@ export function mobileNativeChatEmptyState(
     case 'waiting-session':
     case 'awaiting-transcript':
     case 'ready': {
-      if (status === 'ready' && evidence.anthropicTab === true) {
-        return { title: CLAUDE_APP_EMPTY_TITLE, subtitle: '' }
-      }
-      const copy = formatNativeChatEmptyStateCopy('empty', agentLabel)
+      // The Claude app's title on an Anthropic tab, with the diagnostic line kept under it: a read
+      // that came back empty still says where to look (review 2026-10-15).
+      const copy = status === 'ready' && evidence.anthropicTab === true ? { title: CLAUDE_APP_EMPTY_TITLE, subtitle: '' } : formatNativeChatEmptyStateCopy('empty', agentLabel)
       const detail = emptyConversationDetail(status, agent, agentLabel, evidence)
       return detail ? { ...copy, detail } : copy
     }
