@@ -54,7 +54,10 @@ export default defineConfig({
       // attachment hooks' tests.
       'expo-image-manipulator': fileURLToPath(
         new URL('./src/test/expo-image-manipulator-mock.ts', import.meta.url)
-      )
+      ),
+      // Why: expo-network needs expo-modules-core's native EventEmitter at import; the session
+      // route reaches it through the chat status line's offline read (use-phone-offline.ts).
+      'expo-network': fileURLToPath(new URL('./src/test/expo-network-mock.ts', import.meta.url))
     }
   },
   // Why: the app tsconfig intentionally excludes tests; Vite 8's OXC transform
