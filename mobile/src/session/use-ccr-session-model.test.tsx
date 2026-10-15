@@ -12,6 +12,8 @@ vi.mock('expo-linking', () => ({ openURL: vi.fn() }))
 import { useCcrSessionModel } from './use-ccr-session-model'
 import { CCR_MODEL_FRESH_MS, CCR_MODEL_REFRESH_MS, preferCcrModelPair, resetCcrModelForTests, type CcrModelReading } from './ccr-session-model'
 import { resetCcrPipelineForTests, type CcrPipelineDeps } from './ccr-session-pipeline'
+import { recordCcrFailure } from './ccr-session-cache'
+import { notifyAnthropicAccountsChanged } from '../dictation/anthropic-accounts-events'
 import {
   SESSION_A,
   TOKEN,
@@ -56,15 +58,15 @@ let renderer: ReactTestRenderer | null = null
 let reading: CcrModelReading | null = null
 let clock = Date.now()
 
-let current: { enabled: boolean; deps: CcrPipelineDeps; epoch: number } | null = null
+let current: { enabled: boolean; deps: CcrPipelineDeps; epoch: number; agentSessionId: string | null } | null = null
 
 function Probe(_props: { render: number }) {
-  reading = useCcrSessionModel({ enabled: current!.enabled, tabId: 'tab-1', messages: MESSAGES, epoch: current!.epoch, deps: current!.deps, now: () => clock })
+  reading = useCcrSessionModel({ enabled: current!.enabled, tabId: 'tab-1', agentSessionId: current!.agentSessionId, messages: MESSAGES, epoch: current!.epoch, deps: current!.deps, now: () => clock })
   return null
 }
 
-async function mount(args: { enabled?: boolean; deps: CcrPipelineDeps; epoch?: number }) {
-  current = { enabled: args.enabled ?? true, deps: args.deps, epoch: args.epoch ?? 1 }
+async function mount(args: { enabled?: boolean; deps: CcrPipelineDeps; epoch?: number; agentSessionId?: string | null }) {
+  current = { enabled: args.enabled ?? true, deps: args.deps, epoch: args.epoch ?? 1, agentSessionId: args.agentSessionId ?? null }
   await act(async () => {
     renderer = create(createElement(Probe, { render: 0 }))
   })
@@ -188,5 +190,51 @@ describe('the composer pill', () => {
       'nativeChatLiveModel: claudeModelPillPair(preferCcrModelPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, ccrModel, hudLiveBeacon?.receivedAt ?? null), transcriptModel.fallback)'
     )
     expect(code).toContain("const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled,")
+  })
+})
+
+// "It must match the session when i open asap", for an already running tab too (2026-10-15). A
+// back-off is for a tab left open that keeps failing; opening a tab, a sign-in, and a new Claude
+// session in the tab each get one attempt at once.
+describe('one attempt at once on each event, never a wait carried over', () => {
+  const listCalls = (requests: RecordedRequest[]) => requests.filter((request) => new URL(request.url).pathname === '/v1/code/sessions').length
+
+  it('matches a tab the moment it is opened, though a failure recorded while it was closed still has its wait to run', async () => {
+    recordCcrFailure('tab-1', 1, Date.now())
+    recordCcrFailure('tab-1', 1, Date.now())
+    const { deps: d, requests } = deps()
+    await mount({ deps: d })
+    expect(listCalls(requests)).toBe(1)
+    expect(reading).toMatchObject({ sessionId: SESSION_A, model: 'claude-opus-5-5' })
+  })
+
+  it('tries again at once when an account signs in, without waiting out the back-off', async () => {
+    const signedOut = deps(null)
+    await mount({ deps: signedOut.deps })
+    expect(reading).toBeNull()
+    const signedIn = deps()
+    current = { ...current!, deps: signedIn.deps }
+    await act(async () => {
+      notifyAnthropicAccountsChanged()
+    })
+    await settle()
+    expect(listCalls(signedIn.requests)).toBe(1)
+    expect(reading).toMatchObject({ sessionId: SESSION_A })
+  })
+
+  it('matches again at once when the tab’s Claude session changes under it, and only once', async () => {
+    const { deps: d, requests } = deps()
+    await mount({ deps: d, agentSessionId: 'e50745d9-3b6f-4381-9e9c-48cfb838fa5f' })
+    const before = requests.filter((request) => request.url.includes('/events')).length
+    current = { ...current!, agentSessionId: '0b8e2d6c-1f4a-4c55-9a7e-2d3c4b5a6f70' }
+    await act(async () => {
+      renderer!.update(createElement(Probe, { render: 1 }))
+    })
+    await settle()
+    await act(async () => {
+      renderer!.update(createElement(Probe, { render: 2 }))
+    })
+    await settle()
+    expect(requests.filter((request) => request.url.includes('/events')).length).toBe(before + 1)
   })
 })

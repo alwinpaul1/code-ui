@@ -5,7 +5,12 @@ import { CcrApiError, type CcrFetch, type CcrProfile } from './ccr-session-api'
 
 export const CCR_LIST_PAGE_SIZE = 50
 export const CCR_MAX_LIST_PAGES = 3
-export const CCR_MAX_CANDIDATES = 4
+/** Remote Control sessions compared per account, connected ones first, then newest. Four was too
+ *  few: on 2026-10-15 the work tab's session was the sixth newest of 28 written that day, and never
+ *  compared. Their events are read all at once, so this costs one round trip, not sixteen. */
+export const CCR_MAX_CANDIDATES = 16
+/** How long one account's session list serves every tab that asks (ccr-session-lists.ts). */
+export const CCR_LIST_SHARE_MS = 5_000
 /** Events per page. Observed live 2026-10-14 (the user's account, 4,000
  *  events): 84% are `system` events, so a small page holds few messages to
  *  match or pictures to find; `limit=100` was accepted. */
@@ -24,6 +29,9 @@ export type CcrPipelineInput = {
   epoch: number | null
   /** Transcript uuids of the tab's messages. */
   messageIds: readonly string[]
+  /** The Claude Code session the tab shows (the hook's `session_id`), when known: a match is kept
+   *  for it across restarts, and does not stand for another session of the tab. */
+  agentSessionId?: string | null
   wanted: CcrWanted
 }
 

@@ -209,7 +209,7 @@ export function useMobileNativeChatController(
   // A model command written after the beacon last heard is newer than it (a switch made while the phone was away).
   const claudeReported = claudeReportedOverLive(claudeLive, transcriptModel.fallback)
   // Anthropic's copy of the session (Remote Control on): the model/effort it reports, used when fresh and nothing in the terminal states one (ccr-session-model.ts), and the pictures the desktop cannot send (use-ccr-session-images.ts).
-  const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, messages: nativeChatSession.messages, epoch: lastConnectedAt }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, messages: nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
+  const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, messages: nativeChatSession.messages, epoch: lastConnectedAt }), ccrImages = useCcrSessionImages({ enabled: ccrEnabled, tabId: activeSessionTabId ?? null, agentSessionId: activeChatSessionId ?? null, messages: nativeChatSession.messages, localPreviews: chatImagePreviewsByMessageIdLocal, epoch: lastConnectedAt })
   const isCodexChat = activeChatResolution?.agent === 'codex', isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has
   // stated there name WHICH shell ended (the only source of that on a

@@ -42,14 +42,15 @@ export async function runCcrSelfTest(deps: CcrPipelineDeps): Promise<CcrSelfTest
   if (!context) {
     return [{ ok: false, label: 'Chat', detail: 'open a Claude chat first; the check runs against the chat on screen' }]
   }
-  forgetCcrMapping(context.tabId)
+  const agentSessionId = context.agentSessionId ?? null
+  forgetCcrMapping(context.tabId, agentSessionId)
   const result = await runCcrImagePipeline(
-    { tabId: context.tabId, epoch: context.epoch, messageIds: context.messageIds, wanted: context.wanted },
+    { tabId: context.tabId, epoch: context.epoch, agentSessionId, messageIds: context.messageIds, wanted: context.wanted },
     deps
   )
   const stages = [...result.stages]
   if (result.sessionId && !stages.some((stage) => stage.stage === 'model')) {
-    const model = await refreshCcrModel(context.tabId, context.epoch, deps)
+    const model = await refreshCcrModel(context.tabId, context.epoch, deps, agentSessionId)
     if (model) {
       stages.push(model)
     }

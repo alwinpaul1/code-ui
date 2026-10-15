@@ -80,6 +80,8 @@ export function useCcrSessionImages(args: {
   localPreviews: Record<string, string[]>
   /** `useLastConnectedAt(hostId)`: a new connection re-matches the tab and retries. */
   epoch: number | null
+  /** The Claude Code session the tab shows, when known: the match is the one made for it. */
+  agentSessionId?: string | null
   deps?: CcrPipelineDeps
 }): CcrRemoteImages {
   const { enabled, tabId, messages, localPreviews, epoch } = args
@@ -103,10 +105,11 @@ export function useCcrSessionImages(args: {
     setCcrSelfTestContext({
       tabId,
       epoch,
+      agentSessionId: args.agentSessionId ?? null,
       messageIds,
       wanted: { toolUseIds: reads.map((slot) => slot.toolUseId), userMessageIds: pasted }
     })
-  }, [enabled, epoch, messageIds, pasted, reads, tabId])
+  }, [args.agentSessionId, enabled, epoch, messageIds, pasted, reads, tabId])
   useEffect(
     () => () => {
       setCcrSelfTestContext(null)
@@ -135,7 +138,7 @@ export function useCcrSessionImages(args: {
     }
     const injected = depsRef.current
     void (injected ? Promise.resolve(injected) : loadDefaultCcrPipelineDeps())
-      .then((deps) => runCcrImagePipeline({ tabId, epoch, messageIds, wanted }, deps))
+      .then((deps) => runCcrImagePipeline({ tabId, epoch, agentSessionId: args.agentSessionId ?? null, messageIds, wanted }, deps))
       .then((result) => {
         // A run that failed before it looked at any events may be asked again
         // once its back-off is over; a run that read the events has its answer.

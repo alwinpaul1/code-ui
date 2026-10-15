@@ -37,6 +37,7 @@ vi.mock('expo-crypto', () => ({
 vi.mock('expo-linking', () => ({ openURL: async () => undefined }))
 
 import { fetchAccountCredentials, fetchAnthropicCredential } from './anthropic-credential-reader'
+import { subscribeAnthropicAccountsChanged } from './anthropic-accounts-events'
 import {
   clearCredential,
   exchangeCode,
@@ -453,5 +454,58 @@ describe('a sign-in whose profile read hangs (review of 2026-10-14)', () => {
     expect(accounts).toHaveLength(1)
     expect(accounts[0]!.id).toMatch(/^pending-/)
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'))
+  })
+})
+
+// A tab that failed to match before the work account signed in waited out its back-off (up to ten
+// minutes) for no reason: nothing told the sessions path the accounts had changed (2026-10-15).
+describe('telling the sessions path the accounts changed', () => {
+  function heard(): { count: () => number; stop: () => void } {
+    let count = 0
+    const stop = subscribeAnthropicAccountsChanged(() => {
+      count += 1
+    })
+    return { count: () => count, stop }
+  }
+
+  it('says so on a sign-in, a sign-out and a sign-out of everyone', async () => {
+    const ear = heard()
+    await signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    expect(ear.count()).toBe(1)
+    await signIn('w1', { account: WORK_ACCOUNT, org: WORK_ORG, name: 'NexDash' })
+    expect(ear.count()).toBe(2)
+    await removeAccount(DEFAULT_ACCOUNT)
+    expect(ear.count()).toBe(3)
+    await clearCredential()
+    expect(ear.count()).toBe(4)
+    ear.stop()
+  })
+
+  it('says so when a sign-in turns out to be an account already listed, and the two become one', async () => {
+    await signIn('known', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })
+    await signIn('mystery', 'unreadable')
+    const pending = (await listAccounts())[1]!
+    const ear = heard()
+    await rememberAccountProfile(pending.id, { accountUuid: DEFAULT_ACCOUNT, organizationUuid: DEFAULT_ORG, organizationName: 'Personal' })
+    expect(ear.count()).toBe(1)
+    ear.stop()
+  })
+
+  it('says nothing when the sessions path only names an account or forgets its organization', async () => {
+    await signIn('mystery', 'unreadable')
+    const pending = (await listAccounts())[0]!
+    const ear = heard()
+    await rememberAccountProfile(pending.id, { accountUuid: WORK_ACCOUNT, organizationUuid: WORK_ORG, organizationName: 'NexDash' })
+    await forgetAccountOrganization(WORK_ACCOUNT)
+    expect(ear.count()).toBe(0)
+    ear.stop()
+  })
+
+  it('says nothing when a sign-in could not be written', async () => {
+    const ear = heard()
+    fake.failWrites = true
+    await expect(signIn('a1', { account: DEFAULT_ACCOUNT, org: DEFAULT_ORG, name: 'Personal' })).rejects.toThrow()
+    expect(ear.count()).toBe(0)
+    ear.stop()
   })
 })

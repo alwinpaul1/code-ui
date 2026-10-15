@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CcrFetchResponse } from './ccr-session-api'
 import { ccrModelForTab, resetCcrModelForTests } from './ccr-session-model'
 import {
+  CCR_MAX_CANDIDATES,
   CCR_MAX_EVENT_PAGES,
   CCR_MAX_LIST_PAGES,
   ccrMayRun,
@@ -146,11 +147,12 @@ describe('the whole path, against recorded-shape replies', () => {
     expect(all).not.toContain(SESSION_A)
   })
 
-  it('compares only Remote Control sessions that are not archived, newest first, at most four', async () => {
+  it(`compares only Remote Control sessions that are not archived, newest first, at most ${CCR_MAX_CANDIDATES}`, async () => {
+    const hours = Array.from({ length: CCR_MAX_CANDIDATES + 2 }, (_, n) => String(n).padStart(2, '0'))
     const rows = [
       sessionRow(SESSION_CLOUD, { environment_kind: 'cloud' }),
       sessionRow('cse_01QXarchivedaaaaaaaaaaaa', { status: 'archived' }),
-      ...['1', '2', '3', '4', '5'].map((n) => sessionRow(`cse_01QXbridge${n}aaaaaaaaaaaaa`, { last_event_at: `2026-10-14T1${n}:00:00Z` }))
+      ...hours.map((n) => sessionRow(`cse_01QXbridge${n}aaaaaaaaaaaa`, { last_event_at: `2026-10-14T${n}:00:00Z` }))
     ]
     const h = harness([
       ...apiRoutes({ sessions: () => reply(200, sessionsReply(rows)) }),
@@ -158,7 +160,7 @@ describe('the whole path, against recorded-shape replies', () => {
     ])
     await runCcrImagePipeline(input(), h.deps)
     const asked = [...new Set(h.requests.filter((request) => request.url.includes('/events')).map((request) => new URL(request.url).pathname.split('/')[4]))]
-    expect(asked).toEqual(['cse_01QXbridge5aaaaaaaaaaaaa', 'cse_01QXbridge4aaaaaaaaaaaaa', 'cse_01QXbridge3aaaaaaaaaaaaa', 'cse_01QXbridge2aaaaaaaaaaaaa'])
+    expect(asked).toEqual(hours.toReversed().slice(0, CCR_MAX_CANDIDATES).map((n) => `cse_01QXbridge${n}aaaaaaaaaaaa`))
   })
 
   it('uses the cached organization and asks the profile nothing', async () => {

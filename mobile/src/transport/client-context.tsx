@@ -20,6 +20,7 @@ import {
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
+import { triggerCcrRematch } from '../session/ccr-session-cache'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
   HostClientAcquisitionRegistry,
@@ -373,6 +374,11 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // Why: nudge live clients when the OS signals the link may be back so sessions recover without a restart (issue #5049).
   useEffect(() => {
     return subscribeConnectionRevivalTriggers((reason) => {
+      // Back in the foreground: the open chat's tab is matched to its Remote Control session at
+      // once, whatever back-off was recorded while the app was away (ccr-session-cache.ts).
+      if (reason === 'app-resume') {
+        triggerCcrRematch('foreground')
+      }
       // The background watcher is already replacing the relay. A second nudge
       // from this tree would start another dial on top of that one.
       if (reason === 'network-change' && isBackgroundRelayListening()) {

@@ -1,9 +1,8 @@
-import { listCcrSessions, type CcrSessionRow } from './ccr-session-api'
-import { ccrAccountForTab, ccrSessionForTab } from './ccr-session-cache'
+import type { CcrSessionRow } from './ccr-session-api'
+import { ccrAccountForTab, ccrSessionForTab, forgetCcrMapping } from './ccr-session-cache'
+import { listAccountSessionsShared } from './ccr-session-lists'
 import { ccrModelOfRow, forgetCcrModel, recordCcrModel } from './ccr-session-model'
 import {
-  CCR_LIST_PAGE_SIZE,
-  CCR_MAX_LIST_PAGES,
   defaultLog,
   maskId,
   reasonOf,
@@ -34,12 +33,15 @@ export function noteModel(tabId: string, epoch: number | null, row: CcrSessionRo
 /**
  * Re-reads the matched session's row for its model and effort: the first
  * pages of the session list (the row's shape is the list's, eyu.java), never
- * a guess at another endpoint's. Does nothing for a tab not matched on this
- * connection. Failures leave one line and drop the reading, so the pill falls
- * back to today's sources.
+ * a guess at another endpoint's, shared with every other tab of the account
+ * (ccr-session-lists.ts). Does nothing for a tab not matched on this
+ * connection or for its Claude Code session (`agentSessionId`, a match kept
+ * across restarts). A matched session no longer listed drops the match, kept
+ * copy included. Failures leave one line and drop the reading, so the pill
+ * falls back to today's sources.
  */
-export async function refreshCcrModel(tabId: string, epoch: number | null, deps: CcrPipelineDeps): Promise<CcrStageReport | null> {
-  const sessionId = ccrSessionForTab(tabId, epoch)
+export async function refreshCcrModel(tabId: string, epoch: number | null, deps: CcrPipelineDeps, agentSessionId: string | null = null): Promise<CcrStageReport | null> {
+  const sessionId = ccrSessionForTab(tabId, epoch, agentSessionId)
   if (!sessionId) {
     return null
   }
@@ -51,14 +53,19 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
   }
   try {
     // The account the tab matched under answers: its token and its organization, not another's.
-    const accountId = ccrAccountForTab(tabId, epoch)
+    const accountId = ccrAccountForTab(tabId, epoch, agentSessionId)
     // Only that account is read, so a re-read refreshes no other account's token.
     const accounts = accountId ? await deps.accounts.list(accountId) : []
     const account = accounts.find((entry) => entry.id === accountId)
     const token = account?.accessToken ?? null
     const org = account?.organizationUuid ?? null
-    if (!token || !org) {
+    if (!account || !token || !org) {
       forgetCcrModel(tabId)
+      if (!account) {
+        // Signed out: the match cannot be read with it again. Dropped, the tab's next run matches
+        // it afresh across the accounts still signed in, instead of re-reading a dead one forever.
+        forgetCcrMapping(tabId, agentSessionId)
+      }
       report(
         'model',
         false,
@@ -70,21 +77,15 @@ export async function refreshCcrModel(tabId: string, epoch: number | null, deps:
       )
       return result
     }
-    let cursor: string | null = null
-    for (let page = 0; page < CCR_MAX_LIST_PAGES; page += 1) {
-      const listed = await listCcrSessions(deps.fetch, { token, organizationUuid: org }, { cursor, limit: CCR_LIST_PAGE_SIZE })
-      const row = listed.sessions.find((candidate) => candidate.id === sessionId)
-      if (row) {
-        noteModel(tabId, epoch, row, report)
-        return result
-      }
-      if (!listed.nextCursor || listed.nextCursor === cursor) {
-        break
-      }
-      cursor = listed.nextCursor
+    const listed = await listAccountSessionsShared(deps.fetch, { accountId: account.id, token, organizationUuid: org }, epoch, 0)
+    const row = listed.rows.find((candidate) => candidate.id === sessionId)
+    if (row) {
+      noteModel(tabId, epoch, row, report)
+      return result
     }
     forgetCcrModel(tabId)
-    report('model', false, `session ${maskId(sessionId)} is no longer in the account's list`)
+    forgetCcrMapping(tabId, agentSessionId)
+    report('model', false, `session ${maskId(sessionId)} is no longer in the account's list; the tab is matched again`)
   } catch (error) {
     forgetCcrModel(tabId)
     report('model', false, reasonOf(error))

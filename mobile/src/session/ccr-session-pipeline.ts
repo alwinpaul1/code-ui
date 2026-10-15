@@ -1,16 +1,15 @@
-import { listCcrSessionEvents, listCcrSessions, CcrApiError, type CcrEvent, type CcrSessionRow } from './ccr-session-api'
+import { listCcrSessionEvents, CcrApiError, type CcrEvent, type CcrSessionRow } from './ccr-session-api'
 import { clearCcrFailure, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
+import { forgetSharedCcrLists, listAccountSessionsShared } from './ccr-session-lists'
 import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
 import { emptyCcrExtracted, extractCcrImages, type CcrExtracted } from './ccr-session-images'
 import { matchCcrSession } from './ccr-session-match'
 import { noteModel } from './ccr-session-model-refresh'
 import {
   CCR_EVENT_PAGE_SIZE,
-  CCR_LIST_PAGE_SIZE,
   CCR_MATCH_PAGES,
   CCR_MAX_CANDIDATES,
   CCR_MAX_EVENT_PAGES,
-  CCR_MAX_LIST_PAGES,
   defaultLog,
   maskId,
   reasonOf,
@@ -30,9 +29,15 @@ export {
   ccrSessionForTab,
   ccrToolImage,
   ccrUserImages,
+  ccrTriggerVersion,
+  clearCcrFailure,
   forgetCcrMapping,
+  hydrateCcrSessionMappings,
+  restartCcrCacheForTests,
   setCcrSelfTestContext,
   subscribeCcrImages,
+  subscribeCcrTriggers,
+  triggerCcrRematch,
   type CcrSelfTestContext
 } from './ccr-session-cache'
 export { refreshCcrModel } from './ccr-session-model-refresh'
@@ -44,13 +49,16 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  * Stages, each leaving one log line that names success or the reason:
  *   sign-in  → the phone's Anthropic sign-ins (Voice settings), one per account;
  *   org      → the organization each acts for, kept per account;
- *   sessions → every account's Remote Control (`bridge`) sessions, newest first;
+ *   sessions → every account's Remote Control (`bridge`) sessions, all accounts
+ *              asked at once, each list shared by every tab for a few seconds
+ *              (ccr-session-lists.ts), connected sessions first, then newest;
  *   match    → the one whose recent events share message uuids with the tab
- *              (ccr-session-match.ts), cached per tab until the relay
- *              reconnects;
+ *              (ccr-session-match.ts), every candidate's events read at once;
+ *              cached per tab for the connection, and across restarts for the
+ *              tab's Claude Code session (ccr-session-cache.ts);
  *   images   → the wanted pictures out of that session's events.
  *
- * Bounded: at most MAX_CANDIDATES sessions are looked at, MATCH_PAGES pages
+ * Bounded: at most MAX_CANDIDATES sessions per account are looked at, MATCH_PAGES pages
  * of each to match, and MAX_EVENT_PAGES pages of the matched one. Every
  * failure leaves the tab as it was: the chips stay.
  *
@@ -62,6 +70,7 @@ const inFlight = new Map<string, { run: Promise<CcrPipelineResult>; wanted: Read
 
 export function resetCcrPipelineForTests(): void {
   inFlight.clear()
+  forgetSharedCcrLists()
   resetCcrCacheForTests()
 }
 
@@ -99,7 +108,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     return { stages, sessionId: null, found: 0, wanted: wantedCount }
   }
 
-  // sign-in and org, account by account
+  // sign-in and org, every account at once (ccr-session-accounts.ts)
   const resolved = await resolveCcrAuths(deps, report)
   const reportFailures = (failures: readonly { stage: CcrStage; detail: string }[]) => {
     for (const failure of failures) {
@@ -121,14 +130,15 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     userMessageIds: new Set(input.wanted.userMessageIds)
   }
   const extracted: CcrExtracted = emptyCcrExtracted()
-  let sessionId = ccrSessionForTab(input.tabId, input.epoch)
+  const agentSessionId = input.agentSessionId ?? null
+  let sessionId = ccrSessionForTab(input.tabId, input.epoch, agentSessionId)
   let auth: CcrAuth | undefined
   if (sessionId) {
     // The account the tab matched under is read again; if it is gone (signed out, or its token no
     // longer works) the tab is matched afresh across the accounts that remain.
-    auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch))
+    auth = auths.find((candidate) => candidate.accountId === ccrAccountForTab(input.tabId, input.epoch, agentSessionId))
     if (!auth) {
-      forgetCcrMapping(input.tabId)
+      forgetCcrMapping(input.tabId, agentSessionId)
       sessionId = null
     }
   }
@@ -139,7 +149,8 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     report('sessions', true, 'skipped: the tab is already matched on this connection')
     report('match', true, `session ${maskId(sessionId)} (cached for this tab)`)
   } else {
-    // sessions: every account's list, so a work account's session is found beside the default's
+    // sessions: every account's list, all at once, so a work account's session is found beside the
+    // default's in one round trip
     const candidates: { row: CcrSessionRow; auth: CcrAuth }[] = []
     /** A session listed by two accounts (two sign-ins in one organization) is one candidate, read
      *  with the first account that listed it; counted twice it was "2 sessions share messages" with
@@ -148,36 +159,30 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     const listFailures: string[] = []
     let listed = 0
     let malformed = 0
-    for (const account of auths) {
-      const prefix = accountPrefix(account.label, accountCount)
-      try {
-        const rows: CcrSessionRow[] = []
-        let listCursor: string | null = null
-        for (let page = 0; page < CCR_MAX_LIST_PAGES; page += 1) {
-          const result = await listCcrSessions(deps.fetch, account, { cursor: listCursor, limit: CCR_LIST_PAGE_SIZE })
-          rows.push(...result.sessions)
-          malformed += result.malformedRows
-          if (!result.nextCursor || result.nextCursor === listCursor) {
-            break
-          }
-          listCursor = result.nextCursor
-        }
-        listed += rows.length
-        for (const row of rows
-          .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
-          .sort((a, b) => b.activeAt - a.activeAt)
-          .slice(0, CCR_MAX_CANDIDATES)) {
-          if (!seen.has(row.id)) {
-            seen.add(row.id)
-            candidates.push({ row, auth: account })
-          }
-        }
-      } catch (error) {
+    const answers = await Promise.allSettled(auths.map((account) => listAccountSessionsShared(deps.fetch, account, input.epoch)))
+    for (const [index, answer] of answers.entries()) {
+      const account = auths[index]!
+      if (answer.status === 'rejected') {
+        const error: unknown = answer.reason
         if (error instanceof CcrApiError && (error.reason === 'unauthorized' || error.reason === 'forbidden')) {
           // The org may be stale for this sign-in: ask the profile again next time.
           await deps.accounts.forgetOrganization(account.accountId).catch(() => undefined)
         }
-        listFailures.push(`${prefix}${reasonOf(error)}`)
+        listFailures.push(`${accountPrefix(account.label, accountCount)}${reasonOf(error)}`)
+        continue
+      }
+      const { rows } = answer.value
+      listed += rows.length
+      malformed += answer.value.malformed
+      for (const row of rows
+        .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
+        // A tab whose agent is running has its bridge connected: those first, then the newest.
+        .sort((a, b) => Number(b.connectionStatus === 'connected') - Number(a.connectionStatus === 'connected') || b.activeAt - a.activeAt)
+        .slice(0, CCR_MAX_CANDIDATES)) {
+        if (!seen.has(row.id)) {
+          seen.add(row.id)
+          candidates.push({ row, auth: account })
+        }
       }
     }
     if (candidates.length === 0) {
@@ -204,24 +209,28 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     for (let round = 0; round < CCR_MATCH_PAGES && !sessionId; round += 1) {
       /** Candidates whose events could not be read this round, with the account's words for why. */
       const unreadable: string[] = []
-      for (const candidate of candidates) {
-        const held = pages.get(pageKey(candidate))
-        if (round > 0 && !held?.cursor) {
+      const reading = candidates.filter((candidate) => round === 0 || Boolean(pages.get(pageKey(candidate))?.cursor))
+      // Every candidate's page at once: one round trip for the whole comparison.
+      const read = await Promise.allSettled(
+        reading.map((candidate) =>
+          listCcrSessionEvents(deps.fetch, candidate.auth, candidate.row.id, { cursor: pages.get(pageKey(candidate))?.cursor ?? null, limit: CCR_EVENT_PAGE_SIZE })
+        )
+      )
+      for (const [index, answer] of read.entries()) {
+        const candidate = reading[index]!
+        if (answer.status === 'rejected') {
+          unreadable.push(`${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(answer.reason)}`)
           continue
         }
-        try {
-          const page = await listCcrSessionEvents(deps.fetch, candidate.auth, candidate.row.id, { cursor: held?.cursor ?? null, limit: CCR_EVENT_PAGE_SIZE })
-          const uuids = held?.uuids ?? new Set<string>()
-          for (const event of page.events) {
-            const uuid = event.payload.uuid
-            if (typeof uuid === 'string') {
-              uuids.add(uuid)
-            }
+        const held = pages.get(pageKey(candidate))
+        const uuids = held?.uuids ?? new Set<string>()
+        for (const event of answer.value.events) {
+          const uuid = event.payload.uuid
+          if (typeof uuid === 'string') {
+            uuids.add(uuid)
           }
-          pages.set(pageKey(candidate), { events: [...(held?.events ?? []), ...page.events], uuids, cursor: page.nextCursor })
-        } catch (error) {
-          unreadable.push(`${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(error)}`)
         }
+        pages.set(pageKey(candidate), { events: [...(held?.events ?? []), ...answer.value.events], uuids, cursor: answer.value.nextCursor })
       }
       if (unreadable.length > 0 && candidates.length === 1) {
         return fail('match', unreadable[0]!)
@@ -248,7 +257,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         extractCcrImages(held.events, wanted, deps.maxBytes, extracted)
         cursor = held.cursor
         pagesRead = round + 1
-        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId)
+        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId)
         report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${match.overlap} message${match.overlap === 1 ? '' : 's'} with this tab`)
         noteModel(input.tabId, input.epoch, matched.row, report)
       }
@@ -278,7 +287,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     }
   } catch (error) {
     if (error instanceof CcrApiError && error.reason === 'not-found') {
-      forgetCcrMapping(input.tabId)
+      forgetCcrMapping(input.tabId, agentSessionId)
     }
     keepFound(extracted, deps)
     return fail('images', `${reasonOf(error)} after ${pagesRead} page${pagesRead === 1 ? '' : 's'}`)

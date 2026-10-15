@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store'
 import type { CcrProfile } from '../session/ccr-session-api'
 import { isAccountUsable } from './anthropic-account-state'
+import { notifyAnthropicAccountsChanged } from './anthropic-accounts-events'
 
 export { isAccountUsable } from './anthropic-account-state'
 
@@ -204,7 +205,7 @@ export function upsertAccount(credential: StoredCredential, profile: CcrProfile 
       at = accounts.findIndex((account) => account.accountUuid === null && !isAccountUsable(account, now))
     }
     await writeAccounts(at === -1 ? [...accounts, fresh] : accounts.map((account, index) => (index === at ? fresh : account)))
-  })
+  }).then(notifyAnthropicAccountsChanged)
 }
 
 /** Of two entries for one account, the one whose credential to keep: one that still works over one
@@ -226,7 +227,7 @@ export function rememberAccountProfile(id: string, profile: CcrProfile): Promise
     const accounts = await loadAccounts()
     const me = accounts.find((account) => account.id === id)
     if (!me) {
-      return
+      return false
     }
     const twinAt = accounts.findIndex((account) => account.id === profile.accountUuid && account.id !== id)
     const twin = twinAt === -1 ? null : accounts[twinAt]!
@@ -243,6 +244,12 @@ export function rememberAccountProfile(id: string, profile: CcrProfile): Promise
     const place = twin ? Math.min(meAt, twinAt) : meAt
     const next = accounts.flatMap((account, index) => (index === place ? [identified] : account === me || account === twin ? [] : [account]))
     await writeAccounts(next)
+    return twin !== null
+  }).then((merged) => {
+    // Two entries became one: the accounts changed. Naming a pending entry alone does not.
+    if (merged) {
+      notifyAnthropicAccountsChanged()
+    }
   })
 }
 
@@ -259,7 +266,7 @@ export function removeAccount(id: string): Promise<void> {
   return withAccounts(async () => {
     const accounts = await loadAccounts()
     await writeAccounts(accounts.filter((account) => account.id !== id))
-  })
+  }).then(notifyAnthropicAccountsChanged)
 }
 
 /** Writes a refreshed credential over the account that held the old one (matched by its refresh
@@ -312,4 +319,5 @@ export async function clearAccounts(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined)
     await SecureStore.deleteItemAsync(ORG_STORE_KEY).catch(() => undefined)
   })
+  notifyAnthropicAccountsChanged()
 }

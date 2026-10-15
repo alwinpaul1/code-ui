@@ -45,6 +45,8 @@ export function createPersistedMap<T>(args: {
 }): {
   get: (key: string) => T | undefined
   set: (key: string, value: T) => void
+  /** Drops one entry, in memory and (debounced) in storage. */
+  delete: (key: string) => void
   /** Reads the stored copy into memory. Resolves once it has been read, or
    *  once the read failed; never rejects. A call after a failure reads
    *  again, and concurrent calls share one read. */
@@ -164,6 +166,11 @@ export function createPersistedMap<T>(args: {
       map.set(key, value)
       evictOverCap()
       scheduleWrite()
+    },
+    delete: (key) => {
+      if (map.delete(key)) {
+        scheduleWrite()
+      }
     },
     hydrate: async () => {
       // Visits made while the blob was unread are only in memory; once it

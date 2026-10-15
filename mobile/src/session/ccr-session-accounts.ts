@@ -28,32 +28,45 @@ export async function resolveCcrAuths(deps: CcrPipelineDeps, report: Report): Pr
   if (entries.length === 0) {
     return { auths: [], failures: [{ stage: 'sign-in', accountId: null, detail: 'not signed in to Anthropic on this phone (Voice settings → Sign in)' }] }
   }
+  // Each account at once: a profile read for one does not hold up another's (only an account with
+  // no organization kept reads one). Lines and results keep the accounts' order.
+  const resolved = await Promise.all(entries.map((entry) => resolveOne(deps, entry, accountPrefix(entry.label, entries.length))))
   const auths: CcrAuth[] = []
   const failures: CcrAccountFailure[] = []
-  for (const entry of entries) {
-    const prefix = accountPrefix(entry.label, entries.length)
-    if (!entry.accessToken) {
-      failures.push({ stage: 'sign-in', accountId: entry.id, detail: `${prefix}${entry.error ?? 'no usable token'}` })
-      continue
+  for (const one of resolved) {
+    for (const [stage, ok, detail] of one.lines) {
+      report(stage, ok, detail)
     }
-    report('sign-in', true, `${prefix}signed in`)
-    if (entry.organizationUuid) {
-      report('org', true, `${prefix}organization ${maskId(entry.organizationUuid)} (cached)`)
-      auths.push({ accountId: entry.id, label: entry.label, token: entry.accessToken, organizationUuid: entry.organizationUuid })
-      continue
-    }
-    try {
-      const profile = await fetchCcrProfile(deps.fetch, entry.accessToken)
-      // An account signed in without a profile gets its uuid as its id once the profile is kept.
-      const accountId = await deps.accounts.rememberProfile(entry.id, profile).catch((error: unknown) => {
-        console.warn(`[ccr-images] the profile could not be kept: ${reasonOf(error)}`)
-        return entry.id
-      })
-      report('org', true, `${prefix}organization ${maskId(profile.organizationUuid)} (from /api/oauth/profile)`)
-      auths.push({ accountId, label: entry.label, token: entry.accessToken, organizationUuid: profile.organizationUuid })
-    } catch (error) {
-      failures.push({ stage: 'org', accountId: entry.id, detail: `${prefix}${reasonOf(error)}` })
+    if ('auth' in one) {
+      auths.push(one.auth)
+    } else {
+      failures.push(one.failure)
     }
   }
   return { auths, failures }
+}
+
+type Resolved = { lines: [CcrStage, boolean, string][] } & ({ auth: CcrAuth } | { failure: CcrAccountFailure })
+
+async function resolveOne(deps: CcrPipelineDeps, entry: CcrAccountEntry, prefix: string): Promise<Resolved> {
+  if (!entry.accessToken) {
+    return { lines: [], failure: { stage: 'sign-in', accountId: entry.id, detail: `${prefix}${entry.error ?? 'no usable token'}` } }
+  }
+  const lines: [CcrStage, boolean, string][] = [['sign-in', true, `${prefix}signed in`]]
+  if (entry.organizationUuid) {
+    lines.push(['org', true, `${prefix}organization ${maskId(entry.organizationUuid)} (cached)`])
+    return { lines, auth: { accountId: entry.id, label: entry.label, token: entry.accessToken, organizationUuid: entry.organizationUuid } }
+  }
+  try {
+    const profile = await fetchCcrProfile(deps.fetch, entry.accessToken)
+    // An account signed in without a profile gets its uuid as its id once the profile is kept.
+    const accountId = await deps.accounts.rememberProfile(entry.id, profile).catch((error: unknown) => {
+      console.warn(`[ccr-images] the profile could not be kept: ${reasonOf(error)}`)
+      return entry.id
+    })
+    lines.push(['org', true, `${prefix}organization ${maskId(profile.organizationUuid)} (from /api/oauth/profile)`])
+    return { lines, auth: { accountId, label: entry.label, token: entry.accessToken, organizationUuid: profile.organizationUuid } }
+  } catch (error) {
+    return { lines, failure: { stage: 'org', accountId: entry.id, detail: `${prefix}${reasonOf(error)}` } }
+  }
 }
