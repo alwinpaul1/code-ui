@@ -26,6 +26,8 @@ export function live(events: readonly CcrEvent[] | null): ClaudeChatLive {
     sessionConnection: null,
     linkLive: events !== null,
     rateLimit: null,
+    streamPhase: events ? 'live' : null,
+    turnOpen: true,
     stream: events ? { events, accountId: 'acct', sessionId: 'session_01', tasks: deriveCcrBackgroundTasks(events) } : null
   }
 }

@@ -38,7 +38,7 @@ afterEach(() => {
 })
 
 function live(events: readonly CcrEvent[] | null, working = false): ClaudeChatLive | null {
-  return events ? { footer: null, working, runningCount: 0, sessionConnection: null, linkLive: true, rateLimit: null, stream: { events, accountId: 'acct', sessionId: 'cse_x', tasks: [] } } : null
+  return events ? { footer: null, working, runningCount: 0, sessionConnection: null, linkLive: true, rateLimit: null, streamPhase: 'live', turnOpen: working, stream: { events, accountId: 'acct', sessionId: 'cse_x', tasks: [] } } : null
 }
 
 function composer(chatLive: ClaudeChatLive | null, value: string, onChangeText: (text: string) => void, scheme: 'light' | 'dark') {

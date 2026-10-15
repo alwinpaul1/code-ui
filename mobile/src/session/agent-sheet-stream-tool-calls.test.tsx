@@ -74,7 +74,7 @@ const LAUNCH: NativeChatToolPair = {
 }
 
 function live(events: readonly CcrEvent[] | null): ClaudeChatLive {
-  return { footer: null, working: true, runningCount: 1, sessionConnection: null, linkLive: events !== null, rateLimit: null, stream: events ? { events, accountId: 'acct', sessionId: SESSION, tasks: [] } : null }
+  return { footer: null, working: true, runningCount: 1, sessionConnection: null, linkLive: events !== null, rateLimit: null, streamPhase: events ? 'live' : null, turnOpen: true, stream: events ? { events, accountId: 'acct', sessionId: SESSION, tasks: [] } : null }
 }
 
 const STREAM: CcrEvent[] = [
