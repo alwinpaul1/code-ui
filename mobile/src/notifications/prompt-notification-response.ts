@@ -5,6 +5,7 @@ import {
   answerPermissionFromNotification,
   type PromptAnswerOutcome
 } from './permission-notification-response'
+import type { CcrPermissionChoice } from '../session/ccr-permission-request'
 import {
   answerQuestionFromNotification,
   type QuestionAnswerSend
@@ -43,6 +44,9 @@ export async function answerPromptFromNotification(args: {
   resolveClient: (hostId: string) => RpcClient | null
   lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPrompt | null>
   sendPermission: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
+  /** A live Anthropic lane holding the same prompt (ccr-permission-answerers.ts): its answer goes
+   *  as a `control_response`, the terminal only when none holds it. */
+  viaAnthropic?: (input: { hostId: string; worktreeId: string; permissionKey: string; choice: CcrPermissionChoice; comment?: string }) => Promise<boolean> | null
   /** Deny with comment: the words, typed into Claude Code's own dialog. */
   sendPermissionComment?: (input: {
     client: RpcClient
@@ -59,6 +63,7 @@ export async function answerPromptFromNotification(args: {
     resolveClient,
     lookup,
     send: args.sendPermission,
+    ...(args.viaAnthropic ? { viaAnthropic: args.viaAnthropic } : {}),
     sendComment: args.sendPermissionComment
   })
   if (outcome === 'not-an-answer') {

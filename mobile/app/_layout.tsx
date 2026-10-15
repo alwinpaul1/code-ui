@@ -37,6 +37,7 @@ import { SESSION_REPLY_ACTION } from '../src/notifications/session-reply-notific
 import { sessionReplyTapKey } from '../src/notifications/session-reply-tap-key'
 import { sendClaudePermissionComment } from '../src/session/claude-permission-comment-send'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
+import { answerCcrPermissionFromNotification } from '../src/session/ccr-permission-answerers'
 import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
 import { repostBannerWithReplyVerdict } from '../src/notifications/question-reply-verdict'
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
@@ -213,6 +214,8 @@ function ThemedRoot() {
           resolveClient: (id) =>
             peekLiveHostClient(id) ?? getBackgroundLinkWatcher().peekClient(id),
           lookup: lookupPendingPrompt,
+          // A Claude tab whose Anthropic lane holds this prompt answers it there, relay or no relay.
+          viaAnthropic: answerCcrPermissionFromNotification,
           sendPermission: async ({ client, terminal, text }) =>
             (await sendMobileNativeChatPermissionResponse({
               client,
