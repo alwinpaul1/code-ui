@@ -118,10 +118,12 @@ describe('draws the Voice settings screen light in a light session', () => {
     )[0]
     expect(stylesOf(dictationModeLabel!.props.style).map((s) => s.color)).toContain(palette.text)
 
-    const signIn = root.findAll(
-      (node) => String(node.type) === 'Text' && node.props.children === 'Sign in to Anthropic'
-    )[0]
-    expect(stylesOf(signIn!.props.style).map((s) => s.color)).toContain(palette.text)
+    // Sign-in moved to Settings, Anthropic accounts (2026-10-15): Voice draws none of it.
+    expect(
+      root.findAll(
+        (node) => String(node.type) === 'Text' && node.props.children === 'Sign in to Anthropic'
+      )
+    ).toHaveLength(0)
 
     // Dictation is always on (2026-10-14): no switch is drawn in either scheme.
     expect(root.findAll((node) => String(node.type) === 'Switch')).toHaveLength(0)

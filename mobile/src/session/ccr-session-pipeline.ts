@@ -1,4 +1,5 @@
 import { listCcrSessionEvents, CcrApiError, type CcrSessionRow } from './ccr-session-api'
+import { recordCcrMatchOutcome } from './ccr-match-outcome'
 import { bindCcrConfigDir, clearCcrFailure, ccrAccountForConfigDir, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
 import { forgetSharedCcrLists, listAccountSessionsShared } from './ccr-session-lists'
 import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
@@ -51,7 +52,7 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  * app shows it, read through Anthropic's API with the phone's sign-in.
  *
  * Stages, each leaving one log line that names success or the reason:
- *   sign-in  → the phone's Anthropic sign-ins (Voice settings), one per account;
+ *   sign-in  → the phone's Anthropic sign-ins (Settings, Anthropic accounts), one per account;
  *   org      → the organization each acts for, kept per account;
  *   sessions → every account's Remote Control (`bridge`) sessions, all accounts
  *              asked at once, each list shared by the tabs asking together
@@ -93,7 +94,11 @@ export function runCcrImagePipeline(input: CcrPipelineInput, deps: CcrPipelineDe
   if (running) {
     return ids.every((id) => running.wanted.has(id)) ? running.run : running.run.then(() => runCcrImagePipeline(input, deps))
   }
-  const run = runOnce(input, deps).finally(() => {
+  // Each run's outcome is kept for the chat, which says why a tab has no session (ccr-match-outcome.ts).
+  const run = runOnce(input, deps).then((result) => {
+    recordCcrMatchOutcome(input.tabId, input.epoch, result)
+    return result
+  }).finally(() => {
     inFlight.delete(input.tabId)
   })
   inFlight.set(input.tabId, { run, wanted: new Set(ids) })

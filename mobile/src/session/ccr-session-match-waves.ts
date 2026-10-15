@@ -15,21 +15,36 @@ export type CcrWavesOutcome =
   | { kind: 'unreadable'; reasons: unknown[]; candidates: CcrCandidate[]; compared: number }
 
 /**
- * Reads the ranked candidates' events in waves until one wave's reads match the tab
- * (ccr-session-match.ts) or the candidates and their pages run out.
+ * Reads the ranked candidates' events in waves until one of them holds the tab's NEWEST message,
+ * or the candidates and their pages run out (ccr-session-match.ts).
  *
  * Each wave is one round trip: the next CCR_MATCH_WAVES candidates' newest
  * CCR_MATCH_FIRST_PAGE_SIZE events, and one page deeper (CCR_EVENT_PAGE_SIZE) of every candidate
- * read before that has more, up to CCR_MATCH_PAGES pages each. The match is judged over every
- * candidate read so far, so a wave never picks past an earlier candidate that shares messages.
+ * read before that has more, up to CCR_MATCH_PAGES pages each. Once the fresh candidates run out,
+ * waves of deeper pages alone continue until those run out too.
+ *
+ * Only a candidate holding the tab's newest message ends the reading early: nothing can beat it
+ * (two holding it are refused at once). A match on an OLDER message is not final, because the
+ * tab's own session may hold the newer one on a page or in a wave not read yet, while an earlier
+ * session of the same conversation (before a `claude --resume` restart, or a fork's parent)
+ * stopped at the older one. Reviewed 2026-10-15 on 33a6403c5, which returned a wave's match at
+ * once and so picked such an earlier session. When everything is read and nothing holds the newest
+ * message, the newest shared message decides, ties refused.
+ *
+ * Cost: the common case (the tab's session ranked in the first wave, its newest message on page
+ * one) is one wave of CCR_MATCH_WAVES[0] requests. The worst case reads every candidate's
+ * CCR_MATCH_PAGES pages once: CCR_MAX_CANDIDATES x CCR_MATCH_PAGES = 96 requests over five waves.
  * A wave with an unreadable candidate ends the reading: any of them may be the tab's.
  */
 export async function matchCcrSessionInWaves(fetchImpl: CcrFetch, candidates: readonly CcrCandidate[], tabMessageIds: readonly string[]): Promise<CcrWavesOutcome> {
   /** Paging per account and session: each account reads with its own cursor. */
   const pageKey = (candidate: CcrCandidate) => `${candidate.auth.accountId}\0${candidate.row.id}`
   const pages = new Map<string, CcrCandidatePages>()
+  const newestId = tabMessageIds.at(-1)
+  const holdsNewest = (sessionId: string) => newestId !== undefined && candidates.some((one) => one.row.id === sessionId && pages.get(pageKey(one))?.uuids.has(newestId) === true)
   let introduced = 0
-  for (const size of CCR_MATCH_WAVES) {
+  for (let wave = 0; ; wave += 1) {
+    const size = CCR_MATCH_WAVES[wave] ?? 0
     const deeper = candidates.slice(0, introduced).filter((candidate) => {
       const held = pages.get(pageKey(candidate))
       return held !== undefined && held.cursor !== null && held.read < CCR_MATCH_PAGES
@@ -73,15 +88,31 @@ export async function matchCcrSessionInWaves(fetchImpl: CcrFetch, candidates: re
     if (unreadable.length > 0) {
       return { kind: 'unreadable', reasons, candidates: unreadable, compared: introduced }
     }
-    const compared = candidates.slice(0, introduced)
-    const match = matchCcrSession(tabMessageIds, compared.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(pageKey(candidate))?.uuids ?? new Set() })))
-    if (match.kind === 'ambiguous') {
-      return { kind: 'ambiguous', sessionIds: match.sessionIds }
+    const settled = judge(candidates.slice(0, introduced))
+    if (settled.kind === 'matched' && holdsNewest(settled.candidate.row.id)) {
+      return settled
     }
-    if (match.kind === 'matched') {
-      const candidate = compared.find((one) => one.row.id === match.sessionId)!
-      return { kind: 'matched', candidate, pages: pages.get(pageKey(candidate))!, overlap: match.overlap }
+    if (settled.kind === 'ambiguous' && holdsNewest(settled.sessionIds[0]!)) {
+      return settled
     }
   }
-  return { kind: 'none' }
+  return judge(candidates.slice(0, introduced))
+
+  function judge(compared: readonly CcrCandidate[]): Exclude<CcrWavesOutcome, { kind: 'unreadable' }> {
+    const match = matchCcrSession(tabMessageIds, compared.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(pageKey(candidate))?.uuids ?? new Set() })))
+    switch (match.kind) {
+      case 'ambiguous':
+        return { kind: 'ambiguous', sessionIds: match.sessionIds }
+      case 'none':
+        return { kind: 'none' }
+      case 'matched': {
+        const candidate = compared.find((one) => one.row.id === match.sessionId)!
+        return { kind: 'matched', candidate, pages: pages.get(pageKey(candidate))!, overlap: match.overlap }
+      }
+      default: {
+        const unhandled: never = match
+        return unhandled
+      }
+    }
+  }
 }

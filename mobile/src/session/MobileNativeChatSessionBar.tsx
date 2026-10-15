@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Keyboard, Pressable, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import type { NativeChatTaskList } from '../../../src/shared/native-chat-task-list'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { tapTargetHitSlop } from '../ui/tap-target'
@@ -74,7 +75,8 @@ export function MobileNativeChatSessionBar({
   onOpenDiff?: () => void
   working?: boolean
 }): React.JSX.Element | null {
-  const { colors, space } = useTheme()
+  const { colors, space, scheme } = useTheme()
+  const claude = claudeSessionPillPalette(scheme)
   const [cardOpen, setCardOpen] = useState(false)
   const closeCard = useCallback(() => setCardOpen(false), [])
   const todo = todoPillModel(list)
@@ -139,12 +141,12 @@ export function MobileNativeChatSessionBar({
             Diff
           </Txt>
           {counts.added ? (
-            <Txt variant="label" style={{ color: colors.diffAddText }}>
+            <Txt variant="label" style={{ color: claude.countAddText }}>
               {counts.added}
             </Txt>
           ) : null}
           {counts.removed ? (
-            <Txt variant="label" style={{ color: colors.diffDelText }}>
+            <Txt variant="label" style={{ color: claude.countDelText }}>
               {counts.removed}
             </Txt>
           ) : null}

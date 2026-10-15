@@ -24,8 +24,8 @@ export const ADD_ACCOUNT_HINT = 'Switch to the other account on claude.ai first.
  * The phone's Anthropic sign-ins: one row per Claude account (the default profile and a work
  * profile on the desktop are different accounts in different organizations, and the sessions API
  * only shows a session to its own organization), "Add another account", and "Sign out" per
- * account. The first account is the one voice dictation uses. Rendered inside the Voice settings
- * ScrollView, which sets keyboardShouldPersistTaps for the code field.
+ * account. The first account is the one voice dictation uses. Rendered on the Anthropic accounts
+ * screen (Settings), whose ScrollView sets keyboardShouldPersistTaps for the code field.
  */
 export function AnthropicAccountsSection(): React.JSX.Element {
   const { colors } = useTheme()
@@ -36,7 +36,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** The saved sign-ins could not be read. The store refuses every write then, sign-in included,
-   *  so the screen offers the one way out: clearing them. */
+   *  so the screen offers the one way out: Sign out, which deletes them unread. */
   const [unreadable, setUnreadable] = useState(false)
   const [authCode, setAuthCode] = useState('')
   const [showCodeInput, setShowCodeInput] = useState(false)
@@ -118,14 +118,14 @@ export function AnthropicAccountsSection(): React.JSX.Element {
       await clearCredential()
       await reload()
     } catch (err) {
-      setError(`Could not clear the saved sign-ins: ${err instanceof Error ? err.message : String(err)}`)
+      setError(`Could not sign out: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setBusy(false)
     }
   }, [reload])
 
   const signedIn = accounts !== null && accounts.length > 0
-  // Voice uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
+  // Dictation uses the first account still signed in (readPrimaryAccount); one whose sign-in died says
   // so instead of "Signed in", as the single-account screen did (isLoggedIn) before 2026-10-14.
   const now = readAt
   const voiceAccountId = accounts?.find((account) => isAccountUsable(account, now))?.id ?? null
@@ -147,7 +147,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
                   {!isAccountUsable(account, now)
                     ? 'Signed out. Sign in to this account again.'
                     : account.id === voiceAccountId
-                      ? 'Signed in. Voice transcription uses this account.'
+                      ? 'Signed in. Dictation uses this account.'
                       : 'Signed in.'}
                 </Text>
               </View>
@@ -169,7 +169,7 @@ export function AnthropicAccountsSection(): React.JSX.Element {
           >
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>{signedIn ? 'Add another account' : 'Sign in to Anthropic'}</Text>
-              <Text style={styles.rowSublabel}>{signedIn ? ADD_ACCOUNT_HINT : 'Required for voice dictation.'}</Text>
+              <Text style={styles.rowSublabel}>{signedIn ? ADD_ACCOUNT_HINT : 'Used for sessions, usage and dictation.'}</Text>
             </View>
             {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
           </Pressable>
@@ -220,9 +220,17 @@ export function AnthropicAccountsSection(): React.JSX.Element {
             <Text style={styles.error}>{error}</Text>
           </View>
         ) : null}
-        {unreadable ? (
+        {unreadable || (accounts !== null && accounts.length > 1) ? (
           <View style={{ paddingHorizontal: spacing.md + 2, paddingBottom: spacing.sm }}>
-            <Button label="Clear saved sign-ins" variant="secondary" align="center" onPress={() => void handleClear()} disabled={busy} />
+            {/* Sign out is what clears. Unreadable sign-ins cannot be listed, so this one button
+                deletes the stored keys without reading them; with 2+ accounts it signs all out. */}
+            <Button
+              label={unreadable ? 'Sign out' : 'Sign out of all accounts'}
+              variant="secondary"
+              align="center"
+              onPress={() => void handleClear()}
+              disabled={busy}
+            />
           </View>
         ) : null}
       </View>

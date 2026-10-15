@@ -77,6 +77,14 @@ export function newestTranscriptMessageAt(messages: readonly Pick<NativeChatMess
   return newest
 }
 
+/** The tab's transcript uuids, oldest first: what a session's events can hold. A row from a hook
+ *  or the screen (an optimistic prompt, a scraped line) carries an id no session holds, and as the
+ *  tab's newest row it would hide the newest message the waves stop early on
+ *  (ccr-session-match-waves.ts), so every match would read every candidate's pages. */
+export function transcriptMessageIds(messages: readonly Pick<NativeChatMessage, 'id' | 'source'>[]): string[] {
+  return messages.filter((message) => message.source === 'transcript').map((message) => message.id)
+}
+
 /**
  * The order the candidates' events are read in, most likely first. A hint for speed, never
  * proof: the match is still the shared messages.

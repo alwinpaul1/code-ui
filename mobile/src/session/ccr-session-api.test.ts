@@ -117,7 +117,9 @@ describe('reading the replies', () => {
           connectionStatus: 'connected',
           activeAt: Date.parse('2026-10-14T16:20:00Z'),
           model: 'claude-opus-5-5',
-          effortLevel: 'high'
+          effortLevel: 'high',
+          contextUsage: null,
+          branches: []
         }
       ],
       nextCursor: 'next',

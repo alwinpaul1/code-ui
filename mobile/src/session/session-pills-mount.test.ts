@@ -28,9 +28,19 @@ describe('where the session pills are mounted', () => {
     expect(code('MobileNativeChatSessionBar.tsx')).not.toMatch(/MobileSessionPillRow|sessionPills/)
   })
 
-  it('draws no diff pill beside them: the user removed it on 2026-10-12', () => {
+  it('draws no diff pill of Orca’s numbers: the user removed that one on 2026-10-12', () => {
     const row = code('MobileSessionPillRow.tsx') + code('session-pill-row-model.ts')
-    expect(row).not.toMatch(/diff-pill|useSessionDiffTotals|sessionDiffTotals|Open diff/)
+    expect(row).not.toMatch(/useSessionDiffTotals|sessionDiffTotals|Open diff/)
+  })
+
+  it('draws a Diff pill only from Anthropic’s answer for the session, never from the Orca-fed builder', () => {
+    // 2026-10-15: the user asked for the Claude app's Diff pill back, its numbers from the same
+    // source as the app's. Orca's guess stays out: buildSessionPills never makes one.
+    const model = code('session-pill-row-model.ts')
+    const orcaBuilder = model.slice(model.indexOf('export function buildSessionPills'), model.indexOf('export function sessionPillActions'))
+    expect(orcaBuilder).not.toMatch(/kind: 'diff'/)
+    const claudeBuilder = model.slice(model.indexOf('export function buildClaudeSessionPills'))
+    expect(claudeBuilder).toMatch(/kind: 'diff'/)
   })
 })
 

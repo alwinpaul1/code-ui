@@ -7,9 +7,12 @@ S23 Ultra), 2026-10-11:
   26100920 (from `dumpsys package`)
 - splits pulled with `adb pull`: `base.apk`, `split_config.arm64_v8a.apk`,
   `split_config.xxhdpi.apk`
-- decompiled with jadx 1.5.6 in a scratch directory outside the repo. Nothing
-  from the APK (fonts, images, code) is in this repo. Only names and numbers
-  are recorded here.
+- decompiled with jadx 1.5.6 in a scratch directory outside the repo. Only
+  names and numbers are recorded here. One exception, the user's choice on
+  2026-10-15 after being told it is Anthropic's artwork: the working spinner
+  sprite `cc_spinner_sprite` ships as
+  `mobile/assets/claude-spinner-sprite.webp`. Nothing else from the APK
+  (fonts, images, code) is in this repo.
 
 The class names below are R8-obfuscated (`jn7`, `zv`, `pl7`, ...). They
 change with every release, so treat them as pointers for re-checking this

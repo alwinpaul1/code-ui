@@ -7,6 +7,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -318,13 +319,13 @@ describe('an agent file edit in the chat transcript', () => {
     "heads the edit run's card and its run with the Claude app's +14 −2, in %s",
     (scheme) => {
       const { texts } = render(EDITED_A_FILE_RUN, scheme)
-      const palette = scheme === 'dark' ? darkColors : lightColors
+      const claude = claudeSessionPillPalette(scheme)
       expect(texts).not.toContain('Diff truncated')
       for (const [id, text, colour] of [
-        ['diff-card-added', '+14', palette.diffAddText],
-        ['diff-card-removed', '−2', palette.diffDelText],
-        ['tool-run-diff-added', '+14', palette.diffAddText],
-        ['tool-run-diff-removed', '−2', palette.diffDelText]
+        ['diff-card-added', '+14', claude.countAddText],
+        ['diff-card-removed', '−2', claude.countDelText],
+        ['tool-run-diff-added', '+14', claude.chipAddText],
+        ['tool-run-diff-removed', '−2', claude.chipDelText]
       ] as const) {
         const node = renderer!.root.findByProps({ testID: id })
         expect(node.props.children).toBe(text)

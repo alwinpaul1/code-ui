@@ -54,7 +54,7 @@ export type CcrFetchResponse = {
   json: () => Promise<unknown>
   text?: () => Promise<string>
 }
-export type CcrFetch = (url: string, init: { method: 'GET'; headers: Record<string, string> }) => Promise<CcrFetchResponse>
+export type CcrFetch = (url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }) => Promise<CcrFetchResponse>
 
 export type CcrFailureReason =
   | 'unauthorized'
@@ -65,7 +65,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'events'
+export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage'
 
 export class CcrApiError extends Error {
   constructor(
@@ -107,10 +107,10 @@ export function ccrProfileHeaders(token: string): Record<string, string> {
 
 const UNTRUSTED_DEVICE = /trusted[\s_-]?device|device[\s_-]?(?:identity|trust)/i
 
-async function getJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>): Promise<unknown> {
+async function getJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>, post?: { body: string }): Promise<unknown> {
   let response: CcrFetchResponse
   try {
-    response = await fetchImpl(url, { method: 'GET', headers })
+    response = await fetchImpl(url, post ? { method: 'POST', headers, body: post.body } : { method: 'GET', headers })
   } catch {
     throw new CcrApiError(stage, 'network')
   }
@@ -173,12 +173,55 @@ export type CcrSessionRow = {
    *  absent or not a string. */
   model: string | null
   effortLevel: string | null
+  /** The session's own context statement, `external_metadata.context_usage` (`used_tokens`,
+   *  `max_tokens`): Claude Code writes it each turn (2.1.300, `ct()`: the latest response's input +
+   *  cache creation + cache read, and the window it works to), and the Claude app's ring reads it
+   *  (`SessionContextUsage`, afu.java; `SessionExternalMetadata.context_usage`, iju.java:29). Null
+   *  when absent, or when `max_tokens` is not positive or `used_tokens` negative (afu.java:17). */
+  contextUsage?: { usedTokens: number; maxTokens: number } | null
+  /** The repo and branch pairs the session works on, as the Claude app asks the branch status
+   *  about them (`vy20.i`, jadx): `external_metadata.current_branches` (repo to branch) first, then
+   *  each branch of `config.outcomes[].git_info` (`ojn`, `tjn`: `repo`, `branches`). Empty when the
+   *  row names none; a pair is kept only when both halves are non-empty strings. */
+  branches?: readonly CcrBranchRef[]
 }
+
+export type CcrBranchRef = { repo: string; branch: string }
 
 export type CcrSessionPage = { sessions: CcrSessionRow[]; nextCursor: string | null; malformedRows: number }
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null
+}
+
+/** The repo and branch pairs a session row names (see `CcrSessionRow.branches`). */
+export function branchesOfRow(row: Record<string, unknown>): CcrBranchRef[] {
+  const pairs: CcrBranchRef[] = []
+  const add = (repo: unknown, branch: unknown) => {
+    if (typeof repo === 'string' && repo && typeof branch === 'string' && branch && !pairs.some((pair) => pair.repo === repo && pair.branch === branch)) {
+      pairs.push({ repo, branch })
+    }
+  }
+  const current = record(record(row.external_metadata)?.current_branches)
+  for (const [repo, branch] of Object.entries(current ?? {})) {
+    add(repo, branch)
+  }
+  const outcomes = record(row.config)?.outcomes
+  for (const outcome of Array.isArray(outcomes) ? outcomes : []) {
+    const info = record(record(outcome)?.git_info)
+    const branches = info?.branches
+    for (const branch of Array.isArray(branches) ? branches : []) {
+      add(info?.repo, branch)
+    }
+  }
+  return pairs
+}
+
+function contextUsageOf(value: unknown): { usedTokens: number; maxTokens: number } | null {
+  const stated = record(value)
+  const used = stated?.used_tokens
+  const max = stated?.max_tokens
+  return typeof used === 'number' && Number.isFinite(used) && used >= 0 && typeof max === 'number' && Number.isFinite(max) && max > 0 ? { usedTokens: used, maxTokens: max } : null
 }
 
 function timeOf(row: Record<string, unknown>): number {
@@ -215,26 +258,81 @@ export async function listCcrSessions(
   const sessions: CcrSessionRow[] = []
   let malformedRows = 0
   for (const item of body.data) {
-    const row = record(item)
-    if (!row || !isCcrSessionId(row.id)) {
+    const row = parseCcrSessionRow(item)
+    if (!row) {
       malformedRows += 1
       continue
     }
-    sessions.push({
-      id: row.id,
-      environmentKind: stringOrNull(row.environment_kind),
-      title: stringOrNull(row.title),
-      status: stringOrNull(row.status),
-      connectionStatus: stringOrNull(row.connection_status),
-      activeAt: timeOf(row),
-      model: stringOrNull(record(row.external_metadata)?.model),
-      effortLevel: stringOrNull(record(row.external_metadata)?.effort_level)
-    })
+    sessions.push(row)
   }
   return { sessions, nextCursor: cursorOf(body.next_cursor), malformedRows }
 }
 
-export type CcrEvent = { eventId: string | null; payload: Record<string, unknown> }
+/** One session row (eyu.java's fields), or null when it has no usable id. */
+export function parseCcrSessionRow(item: unknown): CcrSessionRow | null {
+  const row = record(item)
+  if (!row || !isCcrSessionId(row.id)) {
+    return null
+  }
+  return {
+    id: row.id,
+    environmentKind: stringOrNull(row.environment_kind),
+    title: stringOrNull(row.title),
+    status: stringOrNull(row.status),
+    connectionStatus: stringOrNull(row.connection_status),
+    activeAt: timeOf(row),
+    model: stringOrNull(record(row.external_metadata)?.model),
+    effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
+    contextUsage: contextUsageOf(record(row.external_metadata)?.context_usage),
+    branches: branchesOfRow(row)
+  }
+}
+
+/** One session's row: `GET v1/code/sessions/{id}` (the app's m4v.java), the same row a list page holds. */
+export async function getCcrSession(fetchImpl: CcrFetch, auth: { token: string; organizationUuid: string }, sessionId: string): Promise<CcrSessionRow> {
+  if (!isCcrSessionId(sessionId)) {
+    throw new CcrApiError('session', 'malformed')
+  }
+  const url = `${CCR_API_BASE_URL}/v1/code/sessions/${encodeURIComponent(sessionId)}`
+  const row = parseCcrSessionRow(await getJson(fetchImpl, 'session', url, ccrSessionHeaders(auth.token, auth.organizationUuid)))
+  if (!row) {
+    throw new CcrApiError('session', 'malformed')
+  }
+  return row
+}
+
+export type CcrEvent = {
+  eventId: string | null
+  payload: Record<string, unknown>
+  /** The server's order (`sequence_num`; a POST's reply carries it as a string, "16"). */
+  sequenceNum?: number | null
+  /** `worker` (Claude Code) or `client` (a phone or the web), as observed. */
+  source?: string | null
+  /** Epoch ms of `created_at`, or null. */
+  createdAt?: number | null
+}
+
+function sequenceOf(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : Number.NaN
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
+}
+
+/** One event as a history page or a stream frame holds it; `fallbackSequence` is the frame's SSE id. */
+export function parseCcrEvent(item: unknown, fallbackSequence: string | null = null): CcrEvent | null {
+  const event = record(item)
+  const payload = record(event?.payload)
+  if (!event || !payload) {
+    return null
+  }
+  const created = typeof event.created_at === 'string' ? Date.parse(event.created_at) : Number.NaN
+  return {
+    eventId: stringOrNull(event.event_id),
+    payload,
+    sequenceNum: sequenceOf(event.sequence_num) ?? sequenceOf(fallbackSequence),
+    source: stringOrNull(event.source),
+    createdAt: Number.isFinite(created) ? created : null
+  }
+}
 export type CcrEventPage = { events: CcrEvent[]; nextCursor: string | null }
 
 export async function listCcrSessionEvents(
@@ -257,11 +355,71 @@ export async function listCcrSessionEvents(
   }
   const events: CcrEvent[] = []
   for (const item of body.data) {
-    const event = record(item)
-    const payload = record(event?.payload)
-    if (event && payload) {
-      events.push({ eventId: stringOrNull(event.event_id), payload })
+    const event = parseCcrEvent(item)
+    if (event) {
+      events.push(event)
     }
   }
   return { events, nextCursor: cursorOf(body.next_cursor) }
+}
+
+/** A POST with a JSON body to the code API, errors as the other stages' (`getJson`'s). */
+export function postCcrJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
+  return getJson(fetchImpl, stage, url, { ...headers, 'Content-Type': 'application/json' }, { body: JSON.stringify(body) })
+}
+
+/** One plan-usage window of an account, as the phone's rows draw it. */
+export type CcrUsageWindow = {
+  name: 'Session' | 'Weekly'
+  /** Percent of the window used, 0 to 100 (Claude Code floors it for `/usage`). */
+  usedPercent: number
+  windowMinutes: number
+  /** Epoch SECONDS, or null when the reply states none. */
+  resetsAt: number | null
+}
+
+/** The reply's reset: an ISO time, or epoch seconds (milliseconds when it is that large). */
+function resetOf(value: unknown): number | null {
+  if (typeof value === 'string') {
+    const at = Date.parse(value)
+    return Number.isFinite(at) ? Math.floor(at / 1000) : null
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value > 1e12 ? value / 1000 : value)
+  }
+  return null
+}
+
+const USAGE_WINDOWS = [
+  { key: 'five_hour', name: 'Session', windowMinutes: 300 },
+  { key: 'seven_day', name: 'Weekly', windowMinutes: 10_080 }
+] as const
+
+/**
+ * The account's own 5-hour and weekly plan usage: `GET /api/oauth/usage` with THAT account's token,
+ * the call Claude Code's `/usage` makes (2.1.300, `fetchUtilization`), with the profile call's headers
+ * (live 2026-10-15: 200 for both accounts with and without the OAuth beta header, so none is sent).
+ * Its `five_hour` and `seven_day` carry `utilization` in percent
+ * (`${Math.floor(limit.utilization)}% used`) and `resets_at`. A window the reply omits or leaves null
+ * is not drawn; a reply with none is an account with no plan window (an API key): no rows.
+ * Live shape, 2026-10-15 (shapes only): `five_hour` and `seven_day` are `{utilization: number, resets_at:
+ * ISO string with microseconds and an offset, limit_dollars, used_dollars, remaining_dollars,
+ * locked_reason}`; the other windows are null; `limits: [{kind, percent, ...}]` also comes.
+ */
+export async function fetchCcrAccountUsage(fetchImpl: CcrFetch, token: string): Promise<CcrUsageWindow[]> {
+  const body = record(
+    await getJson(fetchImpl, 'usage', `${CCR_API_BASE_URL}/api/oauth/usage`, ccrProfileHeaders(token))
+  )
+  if (!body) {
+    throw new CcrApiError('usage', 'malformed')
+  }
+  const windows: CcrUsageWindow[] = []
+  for (const { key, name, windowMinutes } of USAGE_WINDOWS) {
+    const window = record(body[key])
+    const used = window?.utilization
+    if (window && typeof used === 'number' && Number.isFinite(used)) {
+      windows.push({ name, usedPercent: Math.max(0, Math.min(100, used)), windowMinutes, resetsAt: resetOf(window.resets_at) })
+    }
+  }
+  return windows
 }

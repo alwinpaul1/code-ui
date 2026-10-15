@@ -135,7 +135,8 @@ describe('the screen photos reach the chat', () => {
       /nativeChatScreenSentPhotos: activeChatStructured \|\| connState !== 'connected' \? \[\] : screenSentPhotos/
     )
     expect(code('./MobileNativeChatOverlay.tsx')).toMatch(
-      /useScreenSentPhotos\(\s*controller\.nativeChatScreenSentPhotos \?\? NO_SENT_PHOTOS,\s*foldedWithoutPhotos,/
+      // A Claude tab read from Anthropic already holds its photos, so only other tabs draw the screen's.
+      /useScreenSentPhotos\(\s*apiTab \? NO_SENT_PHOTOS : \(controller\.nativeChatScreenSentPhotos \?\? NO_SENT_PHOTOS\),\s*foldedWithoutPhotos,/
     )
   })
 })

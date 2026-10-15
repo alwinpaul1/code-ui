@@ -16,6 +16,9 @@ const MOTION_SITES = [
   'components/RightDrawer.tsx',
   'components/DraggableDetailSheet.tsx',
   'session/MobileBackgroundTasksPulse.tsx',
+  // The working footer's spinner frames and its verb that changes on a clock (claude-working-footer-spec.ts).
+  'session/ClaudeSpinnerSprite.tsx',
+  'session/use-claude-working-verb.ts',
   // The running rows' label sweep (agent, command and tool rows alike).
   'session/MobileNativeChatShimmerText.tsx',
   'session/MobileNativeChatTurnStatus.tsx',

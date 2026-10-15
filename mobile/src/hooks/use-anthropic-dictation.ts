@@ -22,7 +22,7 @@ export type UseAnthropicDictationOptions = {
 export type UseAnthropicDictationResult = UseMobileDictationResult & {
   /** Someone is signed in to Anthropic on the phone, as of the last read of its store. */
   available: boolean
-  /** Reads the phone's store again (after a sign-in on Voice settings) and says whether anyone
+  /** Reads the phone's store again (after a sign-in on the Anthropic accounts screen) and says whether anyone
    *  is signed in now. */
   refreshAvailable: () => Promise<boolean>
   /** The microphone level 0..1 from the streamed PCM, for the recording row's waveform. Held
@@ -95,13 +95,13 @@ export function useAnthropicDictation(
     activeRef.current = true
 
     // Read fresh on every start, never a token held from an earlier read: a sign-in (or sign-out)
-    // on Voice settings takes effect on the next tap (2026-10-14).
+    // on the Anthropic accounts screen takes effect on the next tap (2026-10-14).
     const cred = await fetchAnthropicCredential().catch(() => null)
     setAvailable(cred !== null)
     if (!cred) {
       activeRef.current = false
       setStatus('error')
-      const msg = 'Sign in to Anthropic in Voice settings to dictate'
+      const msg = 'Sign in to Anthropic in Settings, Anthropic accounts, to dictate'
       setError(msg)
       onErrorRef.current?.(new Error(msg))
       return

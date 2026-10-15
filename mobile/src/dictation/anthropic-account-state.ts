@@ -1,5 +1,5 @@
 /** The parts of a stored account that decide whether it can still get a token. No keystore in
- *  here, so the Voice settings list can ask without loading the secure store. */
+ *  here, so the Anthropic accounts list can ask without loading the secure store. */
 export type AccountSignInState = {
   readonly credential: { readonly accessToken: string; readonly refreshToken: string; readonly expiresAt: number }
   /** The token endpoint refused this account's refresh token (HTTP 400/401/403). */

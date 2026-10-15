@@ -108,8 +108,8 @@ Reference only: where the CLI keeps its own token. Code UI does **not** read it.
 2026-10-14 the phone fell back to opening a hidden desktop terminal to run the command below
 when nobody was signed in on the phone; the voice server rejected that token ("unstructured
 server error") and CLAUDE.md forbids opening a terminal on the user's machine to read files. The
-reader was removed: signing in on the phone (Voice settings) is mandatory, and a signed-out mic
-tap opens Voice settings.
+reader was removed: signing in on the phone (Settings, Anthropic accounts) is mandatory, and a signed-out mic
+tap opens Anthropic accounts.
 
 ```
 Service:  "Claude Code-credentials"

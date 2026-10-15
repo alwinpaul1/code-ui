@@ -26,6 +26,7 @@ vi.mock('react-native', () => ({
   },
   Easing: { linear: 0, quad: 0, inOut: () => 0, out: () => 0 },
   ActivityIndicator: 'ActivityIndicator',
+  Image: 'Image',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -198,31 +199,35 @@ describe('the status line above the composer, as the Claude app draws it', () =>
     return instance!
   }
 
-  it('says Working and the running-task count on one line, whatever the spinner\'s verb', async () => {
+  it('shows the Claude spinner and the running-task count on one line, and never the word Working', async () => {
     const view = await show({
       messages: RUNNING_SHELL,
       folded: [],
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: null, thinking: null }
     })
-    expect(statusLine(view)).toEqual(['Working', '·', '1 running task'])
+    expect(statusLine(view)!.join('')).toMatch(/^[A-Za-z]+\.\.\. · 1 running task$/)
+    expect(statusLine(view)).not.toContain('Working')
+    expect(view.root.findAll((node) => node.props?.testID === 'claude-spinner-sprite').length).toBeGreaterThan(0)
     expect(view.root.findAll((node) => String(node.type) === 'WorkingIndicator')).toHaveLength(0)
   })
 
-  // The user asked for words, not the spinner's time (2026-09-25).
-  it('keeps saying Working once the agent\'s line shows a time, with its thinking status', async () => {
+  // The user asked for words, not the spinner's time (2026-09-25); the Claude app's line has the
+  // verb it picks itself and no thinking status (2026-10-15).
+  it('does not repeat the agent\'s own time or thinking status beside the count', async () => {
     const view = await show({
       messages: RUNNING_SHELL,
       folded: [],
       agentWorking: true,
       spinner: { verb: 'Cooking', elapsed: '1m 16s', thinking: 'thinking some more' }
     })
-    expect(statusLine(view)).toEqual(['Working', '·', '1 running task', '·', 'thinking some more…'])
+    expect(statusLine(view)!.join(' ')).not.toMatch(/thinking|1m 16s/)
   })
 
-  it('says Working when no spinner has been read', async () => {
+  it('shows the spinner and a verb when no spinner has been read and no task runs', async () => {
     const view = await show({ agentWorking: true })
-    expect(statusLine(view)).toEqual(['Working'])
+    expect(statusLine(view)).toHaveLength(1)
+    expect(statusLine(view)![0]).toMatch(/^[A-Za-z]+\.\.\.$/)
   })
 
   it('keeps the count there after the turn ends, counted from the unfiltered transcript', async () => {

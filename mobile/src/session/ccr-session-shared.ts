@@ -16,7 +16,8 @@ export const CCR_LIST_SHARE_MS = 400
 /** Remote Control sessions compared per group of accounts, most likely first
  *  (ccr-session-match.ts, rankCcrCandidates). Sixteen, connected and newest first, were not enough
  *  on 2026-10-15: two idle work tabs matched none of the 16 compared of 150 listed. They are read in waves,
- *  CCR_MATCH_WAVES new ones each, and a wave that matches ends the match. */
+ *  CCR_MATCH_WAVES new ones each, and a wave whose match holds the tab's newest message ends the
+ *  match (ccr-session-match-waves.ts). */
 export const CCR_MAX_CANDIDATES = 32
 /** New candidates per wave. The first stays under OkHttp's five requests per host (React
  *  Native's fetch on Android), so it costs one round trip; the rest are read only when it misses. */
@@ -109,7 +110,7 @@ export function reasonOf(error: unknown): string {
   if (error instanceof CcrApiError) {
     switch (error.reason) {
       case 'unauthorized':
-        return `the sign-in was refused (HTTP ${error.status ?? 401}); sign in again in Voice settings`
+        return `the sign-in was refused (HTTP ${error.status ?? 401}); sign in again in Settings, Anthropic accounts`
       case 'untrusted-device':
         return `this phone is not a trusted device for the organization (HTTP ${error.status ?? 403})`
       case 'forbidden':

@@ -4,6 +4,7 @@ import { ccrModelForTab, ccrModelVersion, CCR_MODEL_REFRESH_MS, subscribeCcrMode
 import { CCR_QUICK_RETRY_MS, ccrMayRun, ccrRetryAt, ccrSessionForTab, ccrTriggerVersion, clearCcrFailure, refreshCcrModel, runCcrImagePipeline, subscribeCcrTriggers, type CcrPipelineDeps } from './ccr-session-pipeline'
 import { loadDefaultCcrPipelineDeps } from './use-ccr-session-images'
 import { newestTranscriptMessageAt } from './ccr-session-match'
+import { refreshCcrUsage } from './ccr-session-usage'
 
 /**
  * The model and effort the tab's session last reported to Anthropic, while
@@ -32,6 +33,9 @@ export function useCcrSessionModel(args: {
   configDir?: string | null
   messages: readonly NativeChatMessage[]
   epoch: number | null
+  /** False while a live beacon or screen already states this session's context: the events read
+   *  for it (ccr-session-usage.ts) is then skipped. The plan usage is read either way. */
+  needsContext?: boolean
   deps?: CcrPipelineDeps
   /** For tests: the clock the freshness is read against. */
   now?: () => number
@@ -39,6 +43,8 @@ export function useCcrSessionModel(args: {
   const { enabled, tabId, messages, epoch } = args
   const agentSessionId = args.agentSessionId ?? null
   const configDir = args.configDir ?? null
+  const needsContextRef = useRef(args.needsContext ?? true)
+  needsContextRef.current = args.needsContext ?? true
   const depsRef = useRef(args.deps)
   depsRef.current = args.deps
   const messagesRef = useRef(messages)
@@ -65,6 +71,9 @@ export function useCcrSessionModel(args: {
           await deps()
         )
       }
+      // The matched account's plan usage and this session's context, for the ring (ccr-session-usage.ts).
+      // An unmatched tab is read through its config dir's account (ccr-session-usage.ts).
+      await refreshCcrUsage(tabId, epoch, await deps(), agentSessionId, needsContextRef.current, configDir)
       if (active) {
         setTick((tick) => tick + 1)
         // Not found yet: a session just started may be listed a moment later, so the quick

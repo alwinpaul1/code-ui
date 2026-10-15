@@ -1,26 +1,16 @@
-import { useState, type ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
-import {
-  Copy,
-  GitBranch,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft
-} from 'lucide-react-native'
+import { useState } from 'react'
+import { Linking, Pressable, StyleSheet, View } from 'react-native'
+import { Copy, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { useClipboardWriter } from '../platform/clipboard'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme } from '../theme/theme-context'
-import type { ThemeColors } from '../theme/tokens'
 import { Txt } from '../ui/Txt'
-import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   LOCAL_CHANGES_HINT_MAX_WIDTH,
   sessionCiSpoken,
   sessionPillActions,
-  type SessionCiStatus,
-  type SessionPill,
-  type SessionPrTint
+  type SessionPill
 } from './session-pill-row-model'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionPills } from './use-session-pills'
@@ -32,166 +22,13 @@ import { useSessionPills } from './use-session-pills'
 // "CI") or, for a merged PR, the word Merged on a violet chip. Create PR tints its icon `pl7.n`
 // blue. Local changes opens a hint (`jc20.g`) at most 280 dp wide with 10 dp above and below.
 //
-// Code UI's own tokens stand in where the app's have no match: the chip surface is the composer's
-// (`composerFill`, the same `pl7.p`), its hairline is the 30% step (`composerBorderFocused`, the
-// nearest to `pl7.v`'s 40%), the blue is `info`, and 550 weight is the medium face the app ships.
-// A 40% hairline, the `pl7.n` blue and the violet chip fills are tokens for Batch 2's token commit.
+// Colours are the app's own, resolved per scheme in claude-session-pill-palette.ts (surface `pl7.p`,
+// hairline `pl7.v` at 40%, a state's icon by `w130.o`, merged `ad5.i0()`/`ad5.a0()`/`ad5.T()`, the CI
+// dot by `jc20.l`). The Diff pill (`jc20.p`, `ju8`) is the same chip: "Diff" at 13/550, an 8 dp gap,
+// then "+N" green and " -M" red at 13 regular (`jlc.b`), a count of nothing not drawn. The blue of
+// Create PR's icon is `info`, and 550 weight is the medium face the app ships.
 
-const CHIP_RADIUS = 14
-const CHIP_PADDING_X = 12
-const CHIP_PADDING_Y = 8
-const CHIP_GAP = 8
-const ICON_SIZE = 16
-/** Icon slot (16) plus the padding above and below it (2 x 8) is less than the label's own line,
- *  so the chip is as tall as 18 dp of text and the padding. */
-const CHIP_MIN_HEIGHT = 34
-const CHIP_HIT_SLOP = tapTargetHitSlop({ minHeight: CHIP_MIN_HEIGHT })
-/** The merged chip's violet over the surface, as a share of the violet. */
-const MERGED_FILL_ALPHA = 0.18
-const MERGED_FILL_ALPHA_PRESSED = 0.26
-const MERGED_BORDER_ALPHA = 0.4
-
-function withAlpha(color: string, alpha: number): string {
-  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color)
-  if (!match) {
-    return color
-  }
-  const [r, g, b] = [match[1], match[2], match[3]].map((channel) =>
-    Number.parseInt(channel ?? '0', 16)
-  )
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-function tintColor(tint: SessionPrTint, colors: ThemeColors): string {
-  switch (tint) {
-    case 'success':
-      return colors.success
-    case 'muted':
-      return colors.textMuted
-    case 'danger':
-      return colors.danger
-    case 'merged':
-      return colors.mergedPurple
-    default: {
-      const unreachable: never = tint
-      return unreachable
-    }
-  }
-}
-
-/** The state's own glyph (`w130.l`: draft, open, closed and merged each have one), 16 dp. */
-function PrStateIcon({
-  state,
-  color
-}: {
-  state: Extract<SessionPill, { kind: 'pull-request' }>['state']
-  color: string
-}): React.JSX.Element {
-  switch (state) {
-    case 'draft':
-      return <GitPullRequestDraft size={ICON_SIZE} color={color} strokeWidth={2.1} />
-    case 'closed':
-      return <GitPullRequestClosed size={ICON_SIZE} color={color} strokeWidth={2.1} />
-    case 'merged':
-      return <GitMerge size={ICON_SIZE} color={color} strokeWidth={2.1} />
-    case 'open':
-      return <GitPullRequest size={ICON_SIZE} color={color} strokeWidth={2.1} />
-    default: {
-      const unreachable: never = state
-      return unreachable
-    }
-  }
-}
-
-function ciDotColor(ci: Exclude<SessionCiStatus, 'pending'>, colors: ThemeColors): string {
-  switch (ci) {
-    case 'passed':
-      return colors.success
-    case 'failed':
-      return colors.danger
-    case 'unavailable':
-      return colors.textMuted
-    default: {
-      const unreachable: never = ci
-      return unreachable
-    }
-  }
-}
-
-function Chip({
-  testID,
-  accessibilityLabel,
-  accessibilityHint,
-  accessibilityExpanded,
-  merged = false,
-  onPress,
-  onLongPress,
-  children
-}: {
-  testID: string
-  accessibilityLabel: string
-  accessibilityHint?: string
-  accessibilityExpanded?: boolean
-  merged?: boolean
-  onPress: () => void
-  onLongPress?: () => void
-  children: ReactNode
-}): React.JSX.Element {
-  const { colors } = useTheme()
-  return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={accessibilityExpanded === undefined ? undefined : { expanded: accessibilityExpanded }}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      hitSlop={CHIP_HIT_SLOP}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexShrink: 1,
-        gap: CHIP_GAP,
-        borderRadius: CHIP_RADIUS,
-        paddingHorizontal: CHIP_PADDING_X,
-        paddingVertical: CHIP_PADDING_Y,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: merged
-          ? withAlpha(colors.mergedPurple, MERGED_BORDER_ALPHA)
-          : colors.composerBorderFocused,
-        backgroundColor: merged
-          ? withAlpha(colors.mergedPurple, pressed ? MERGED_FILL_ALPHA_PRESSED : MERGED_FILL_ALPHA)
-          : pressed
-            ? colors.composerControlPressed
-            : colors.composerFill
-      })}
-    >
-      {children}
-    </Pressable>
-  )
-}
-
-function CiPart({ ci }: { ci: SessionCiStatus }): React.JSX.Element {
-  const { colors } = useTheme()
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={{ width: 12, height: 12, alignItems: 'center', justifyContent: 'center' }}>
-        {ci === 'pending' ? (
-          <ActivityIndicator size="small" color={colors.textMuted} style={{ transform: [{ scale: 0.6 }] }} />
-        ) : (
-          <View
-            testID="ci-dot"
-            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ciDotColor(ci, colors) }}
-          />
-        )}
-      </View>
-      <Txt variant="label" tone="muted" numberOfLines={1}>
-        CI
-      </Txt>
-    </View>
-  )
-}
+import { Chip, CHIP_PADDING_X, CHIP_RADIUS, CiPart, ICON_SIZE, PrStateIcon, stateChip, stateColor } from './MobileSessionPillChip'
 
 function PullRequestChip({
   pill,
@@ -202,9 +39,10 @@ function PullRequestChip({
   onPress: () => void
   onLongPress: () => void
 }): React.JSX.Element {
-  const { colors } = useTheme()
-  const tint = tintColor(pill.tint, colors)
-  const merged = pill.state === 'merged'
+  const { scheme } = useTheme()
+  const palette = claudeSessionPillPalette(scheme)
+  const tint = stateColor(pill.state, palette)
+  const own = stateChip(pill.state, palette)
   // The app's icon says the state, the number says the pull request, CI says its sentence.
   const spoken = [pill.spoken, pill.stateLabel, pill.ci ? sessionCiSpoken(pill.ci) : null]
     .filter((part): part is string => part !== null)
@@ -214,25 +52,61 @@ function PullRequestChip({
       testID="pull-request-pill"
       accessibilityLabel={spoken}
       accessibilityHint="Opens the pull request. Hold to copy its number"
-      merged={merged}
+      own={own}
       onPress={onPress}
       onLongPress={onLongPress}
     >
       <PrStateIcon state={pill.state} color={tint} />
       <Txt
         variant="label"
-        style={{ color: merged ? colors.mergedPurple : colors.textMuted, flexShrink: 1 }}
+        style={{ color: own ? tint : palette.pillText, flexShrink: 1 }}
         numberOfLines={1}
       >
         {pill.label}
       </Txt>
-      {merged ? (
-        <Txt variant="label" weight="medium" style={{ color: colors.mergedPurple }} numberOfLines={1}>
+      {own ? (
+        <Txt variant="label" weight="medium" style={{ color: tint }} numberOfLines={1}>
           {pill.stateLabel}
         </Txt>
       ) : pill.ci ? (
         <CiPart ci={pill.ci} />
       ) : null}
+    </Chip>
+  )
+}
+
+/** The Diff pill (`jc20.p`): the label, then the PR's added and removed line totals (`jlc.b`). */
+function DiffChip({
+  pill,
+  onPress
+}: {
+  pill: Extract<SessionPill, { kind: 'diff' }>
+  onPress: () => void
+}): React.JSX.Element {
+  const { colors, scheme } = useTheme()
+  const palette = claudeSessionPillPalette(scheme)
+  return (
+    <Chip
+      testID="diff-pill"
+      accessibilityLabel={`Diff, ${pill.added} lines added, ${pill.removed} lines removed`}
+      accessibilityHint="Opens the pull request's changed files"
+      onPress={onPress}
+    >
+      <Txt variant="label" weight="medium" style={{ color: colors.text }} numberOfLines={1}>
+        {pill.label}
+      </Txt>
+      <Txt variant="label" numberOfLines={1}>
+        {pill.added > 0 ? (
+          <Txt testID="diff-pill-added" variant="label" style={{ color: palette.countAddText }}>
+            {`+${pill.added}`}
+          </Txt>
+        ) : null}
+        {pill.removed > 0 ? (
+          <Txt testID="diff-pill-removed" variant="label" style={{ color: palette.countDelText }}>
+            {`${pill.added > 0 ? ' ' : ''}-${pill.removed}`}
+          </Txt>
+        ) : null}
+      </Txt>
     </Chip>
   )
 }
@@ -244,11 +118,15 @@ function PullRequestChip({
 export function SessionPillRowView({
   pills,
   onOpenPullRequest,
+  onOpenUrl,
   onCopyPrNumber
 }: {
   pills: readonly SessionPill[]
   /** The pull request pill and Create PR both land on the pull request panel. */
   onOpenPullRequest: () => void
+  /** A pull request Anthropic reported (`source: 'claude'`) and the Diff pill open its page: the
+   *  Orca panel is for the worktree's own branch, which is not that one. */
+  onOpenUrl?: (url: string) => void
   onCopyPrNumber: (number: number) => void
 }): React.JSX.Element | null {
   const { colors, space } = useTheme()
@@ -307,12 +185,22 @@ export function SessionPillRowView({
       <View style={{ flexDirection: 'row', gap: space.sm }}>
         {pills.map((pill) => {
           switch (pill.kind) {
+            case 'diff':
+              return (
+                <DiffChip
+                  key="diff"
+                  pill={pill}
+                  onPress={() => (onOpenUrl ? onOpenUrl(pill.url) : onOpenPullRequest())}
+                />
+              )
             case 'pull-request':
               return (
                 <PullRequestChip
                   key={`pr-${pill.number}`}
                   pill={pill}
-                  onPress={onOpenPullRequest}
+                  onPress={() =>
+                    pill.source === 'claude' && pill.url && onOpenUrl ? onOpenUrl(pill.url) : onOpenPullRequest()
+                  }
                   onLongPress={() => setCopyingNumber(pill.number)}
                 />
               )
@@ -375,6 +263,20 @@ export function SessionPillRowView({
   )
 }
 
+/** Opens the page of a pull request Anthropic reported. Only an https address is opened, and a
+ *  refusal says so: a tap that does nothing is indistinguishable from a slow one. */
+async function openPullRequestUrl(url: string, showToast: (message: string, durationMs?: number) => void): Promise<void> {
+  try {
+    if (!/^https:\/\//i.test(url)) {
+      throw new Error('not an https address')
+    }
+    await Linking.openURL(url)
+  } catch (error) {
+    console.warn(`[session-pills] could not open the pull request: ${error instanceof Error ? error.message : String(error)}`)
+    showToast("Couldn't open the pull request", 1500)
+  }
+}
+
 /**
  * The session pills above the composer, fed by what Orca answered for this worktree's branch.
  * Mounted through the chat overlay's pill slot; draws nothing until there is something to say.
@@ -392,6 +294,7 @@ export function MobileSessionPillRow({
     <SessionPillRowView
       pills={pills}
       onOpenPullRequest={() => handlePanelTap('pr')}
+      onOpenUrl={(url) => void openPullRequestUrl(url, showToast)}
       onCopyPrNumber={(number) => void actions.copyPrNumber(number)}
     />
   )

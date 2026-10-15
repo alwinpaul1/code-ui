@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import type { NativeChatToolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
@@ -25,8 +26,9 @@ const DIFF_PILL_TYPE_SCALE = 0.85
 /** docs/claude-app-parity.md item 3: the run header's "+A −R" line count, as
  *  the Claude app draws it (2026-09-26): one rounded pill, green "+A" on a
  *  green tint joined to red "−R" on a red tint, right after the sentence, a
- *  step smaller than the sentence's own type. The same diff tokens `MobileNativeChatDiffCard`'s
- *  header uses, so the two read as one system. "+0 −0" is still a whole pill. */
+ *  step smaller than the sentence's own type. Text and tint are the Claude app's `ra20.a`
+ *  (`ad5.J()` on `ad5.f0()`, `ad5.h()` on `ad5.s()`, claude-session-pill-palette.ts), the same in
+ *  the file rows of the run sheet. "+0 −0" is still a whole pill. */
 export function ToolRunDiffChip({
   stat,
   styles
@@ -55,19 +57,20 @@ export function DiffPill({
   fontFamily: string | undefined
   fontSize: number
 }): React.JSX.Element {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const claude = claudeSessionPillPalette(scheme)
   const type = { fontFamily, fontSize }
   return (
     <View testID="tool-run-diff-chip" style={pill.pill}>
       <Text
         testID="tool-run-diff-added"
-        style={[pill.segment, type, { color: colors.diffAddText, backgroundColor: colors.diffAddBg }]}
+        style={[pill.segment, type, { color: claude.chipAddText, backgroundColor: claude.chipAddFill }]}
       >
         {`+${stat.added}`}
       </Text>
       <Text
         testID="tool-run-diff-removed"
-        style={[pill.segment, type, { color: colors.diffDelText, backgroundColor: colors.diffDelBg }]}
+        style={[pill.segment, type, { color: claude.chipDelText, backgroundColor: claude.chipDelFill }]}
       >
         {`−${stat.removed}`}
       </Text>

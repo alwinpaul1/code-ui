@@ -29,7 +29,6 @@ import {
   setDictationConfig,
   type MobileSpeechSetup
 } from '../src/dictation/mobile-dictation-setup'
-import { AnthropicAccountsSection } from '../src/components/AnthropicAccountsSection'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -142,8 +141,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <AnthropicAccountsSection />
-
         {/* ── Dictation (requires desktop) ───────────────────────── */}
         {!client ? (
           <View style={[styles.loading, { marginTop: spacing.lg }]}>

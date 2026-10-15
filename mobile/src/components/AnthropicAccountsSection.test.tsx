@@ -2,7 +2,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * The phone's Anthropic accounts on the Voice settings screen: one row per signed-in account with
+ * The phone's Anthropic accounts on the Anthropic accounts screen: one row per signed-in account with
  * its own "Sign out", "Add another account" (the same paste-the-code flow), and light and dark
  * both drawn from the live theme. The user runs Claude Code under two accounts on the desktop, so
  * the phone signs in to each (2026-10-14).
@@ -111,6 +111,8 @@ const textNode = (root: ReactTestInstance, text: string) =>
   root.findAll((node) => String(node.type) === 'Text' && node.props.children === text)[0]
 const button = (root: ReactTestInstance, label: string, nth = 0) =>
   root.findAll((node) => String(node.type) === 'Button' && node.props.label === label)[nth]
+const buttons = (root: ReactTestInstance) =>
+  root.findAll((node) => String(node.type) === 'Button').map((node) => String(node.props.label))
 const settle = () =>
   act(async () => {
     for (let i = 0; i < 6; i += 1) {
@@ -157,7 +159,7 @@ describe('the accounts list', () => {
     store.accounts = [PERSONAL, WORK]
     const root = await draw()
     expect(texts(root).filter((text) => text === 'Personal' || text === 'NexDash')).toEqual(['Personal', 'NexDash'])
-    expect(texts(root)).toContain('Signed in. Voice transcription uses this account.')
+    expect(texts(root)).toContain('Signed in. Dictation uses this account.')
     expect(texts(root)).toContain('Signed in.')
     expect(root.findAll((node) => String(node.type) === 'Button' && node.props.label === 'Sign out')).toHaveLength(2)
   })
@@ -194,7 +196,7 @@ describe('an account whose sign-in died (review of 2026-10-14)', () => {
     const all = texts(root)
     expect(all).toContain('Signed out. Sign in to this account again.')
     // Voice uses the account that still works, and only that one says so.
-    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual(['Signed in. Voice transcription uses this account.'])
+    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual(['Signed in. Dictation uses this account.'])
     expect(stylesOf(textNode(root, 'Signed out. Sign in to this account again.')!.props.style).map((s) => s.color)).toContain(palette.textSecondary)
   })
 
@@ -318,22 +320,59 @@ describe('when the saved sign-ins cannot be read', () => {
 
   // An unreadable store is never written over (review of 2026-10-14), so a sign-in on it is
   // refused too. Without a way to start over, a corrupt store locked the user out for good.
-  it('offers to clear the saved sign-ins, and after that the screen reads signed out', async () => {
+  it('offers a single Sign out that clears them, and after that the screen reads signed out', async () => {
     store.listFails = new Error('The saved sign-ins could not be parsed')
     const root = await draw()
     await act(async () => {
-      button(root, 'Clear saved sign-ins')!.props.onPress()
+      button(root, 'Sign out')!.props.onPress()
     })
     await settle()
     expect(store.cleared).toBe(1)
     expect(texts(root).some((text) => text.startsWith('Could not read the saved sign-ins'))).toBe(false)
-    expect(button(root, 'Clear saved sign-ins')).toBeUndefined()
+    expect(button(root, 'Sign out')).toBeUndefined()
     expect(texts(root)).toContain('Sign in to Anthropic')
   })
 
-  it('does not offer to clear anything when the sign-ins read fine', async () => {
+  it('says Sign out, never Clear saved sign-ins', async () => {
+    store.listFails = new Error('keystore locked')
+    const root = await draw()
+    expect(buttons(root)).not.toContain('Clear saved sign-ins')
+    expect(buttons(root)).toContain('Sign out')
+  })
+
+  it.each(['light', 'dark'] as const)('draws Sign out of all accounts on the %s theme', async (scheme) => {
+    store.accounts = [PERSONAL, WORK]
+    const root = await draw(scheme)
+    expect(buttons(root)).toEqual(['Sign out', 'Sign out', 'Sign out of all accounts'])
+  })
+
+  it('has no Sign out of all accounts with one account signed in', async () => {
     store.accounts = [PERSONAL]
     const root = await draw()
-    expect(button(root, 'Clear saved sign-ins')).toBeUndefined()
+    expect(button(root, 'Sign out of all accounts')).toBeUndefined()
+  })
+
+  it('signs every account out at once with Sign out of all accounts, and the screen reads signed out', async () => {
+    store.accounts = [PERSONAL, WORK]
+    const root = await draw()
+    await act(async () => {
+      button(root, 'Sign out of all accounts')!.props.onPress()
+    })
+    await settle()
+    expect(store.cleared).toBe(1)
+    expect(store.removed).toEqual([])
+    expect(texts(root)).toContain('Sign in to Anthropic')
+  })
+
+  it('signs only the tapped account out with its own Sign out', async () => {
+    store.accounts = [PERSONAL, WORK]
+    const root = await draw()
+    await act(async () => {
+      button(root, 'Sign out')!.props.onPress()
+    })
+    await settle()
+    expect(store.removed).toEqual(['acct-personal'])
+    expect(store.cleared).toBe(0)
+    expect(texts(root)).toContain('NexDash')
   })
 })

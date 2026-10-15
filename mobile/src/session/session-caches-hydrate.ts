@@ -12,6 +12,7 @@ import { hydrateScreenModelRecords } from './claude-screen-model-pair'
 import { hydrateClaudeTranscriptModelReadings } from './claude-transcript-model-scan'
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 import { hydrateCcrSessionMappings } from './ccr-session-cache'
+import { hydrateCcrTranscripts } from './ccr-transcript-persist'
 
 /** Load the persisted project caches once at app start, before any project opens. */
 export function hydrateSessionCaches(): Promise<void> {
@@ -50,6 +51,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateClaudeTranscriptModelReadings(),
     // Why: which Remote Control session each tab's Claude session was matched to, so reopening a
     // tab after a restart needs no match before its model is read (ccr-session-cache.ts).
-    hydrateCcrSessionMappings()
+    hydrateCcrSessionMappings(),
+    // Why: each matched Claude tab's last 200 events from Anthropic, so it paints its conversation
+    // in the first frame, before the stream catches up (ccr-transcript-persist.ts).
+    hydrateCcrTranscripts()
   ]).then(() => undefined)
 }

@@ -17,7 +17,7 @@ import { hostImageMissing, subscribeHostImageMissing } from './host-image-refusa
 import { isImageFilePath } from './mobile-native-chat-agent-images'
 import { toolCallKind } from './mobile-native-chat-tool-kind'
 import { NO_CCR_IMAGES, type CcrRemoteImages } from './ccr-remote-images'
-import { newestTranscriptMessageAt } from './ccr-session-match'
+import { newestTranscriptMessageAt, transcriptMessageIds } from './ccr-session-match'
 
 /**
  * The pictures of a Claude tab that only Anthropic's copy of the session
@@ -97,7 +97,7 @@ export function useCcrSessionImages(args: {
   const cacheVersion = useSyncExternalStore(subscribeCcrImages, ccrImagesVersion, ccrImagesVersion)
   const reads = useMemo(() => ccrReadSlots(messages), [messages])
   const pasted = useMemo(() => ccrPastedMessageIds(messages, localPreviews), [localPreviews, messages])
-  const messageIds = useMemo(() => messages.map((message) => message.id), [messages])
+  const messageIds = useMemo(() => transcriptMessageIds(messages), [messages])
   const newestMessageAt = useMemo(() => newestTranscriptMessageAt(messages), [messages])
   /** Ids looked for on a connection and not found there: not asked again until the next one. */
   const triedRef = useRef(new Map<string, number | null>())

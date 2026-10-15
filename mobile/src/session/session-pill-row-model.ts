@@ -2,6 +2,7 @@ import type { PRState } from '../../../src/shared/github/pull-request-types'
 import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
 import type { ClipboardWriter } from '../platform/clipboard'
 import type { MobileCreatePrEligibilityState } from '../source-control/mobile-create-pr-action'
+import type { CcrBranchPr } from './ccr-session-branch-status'
 import type { PrSidebarState } from './mobile-pr-sidebar-state'
 
 /**
@@ -17,7 +18,9 @@ import type { PrSidebarState } from './mobile-pr-sidebar-state'
  * what a screen reader says. A merged PR says the word Merged in its place. "Copy PR number" is
  * the pull request pill's hold menu, not a pill.
  *
- * The user removed the Diff pill on 2026-10-12; there is none here.
+ * The Diff pill is drawn only from Anthropic's own answer for the tab's Remote Control session
+ * (`buildClaudeSessionPills`): the user removed the one Orca's numbers fed on 2026-10-12, and the
+ * app's two numbers are not something Orca can state for a branch the agent works on elsewhere.
  *
  * Every pill rests on something Orca answered: the PR read, the PR's own checks, the host's
  * review-creation eligibility. A read that failed, has not come back, or names a state the app has
@@ -32,11 +35,11 @@ export const LOCAL_CHANGES_HINT =
 /** The hint's widest it may be, in dp (`jc20.g`: widthIn(max = 280)). */
 export const LOCAL_CHANGES_HINT_MAX_WIDTH = 280
 
-export type SessionPrState = PRState
+export type SessionPrState = PRState | 'queued'
 
 /** The colour a pull request state takes, named by role so the view resolves it from the live
  *  theme (success = open, muted = draft, danger = closed, merged = the merged violet). */
-export type SessionPrTint = 'success' | 'muted' | 'danger' | 'merged'
+export type SessionPrTint = 'success' | 'muted' | 'danger' | 'merged' | 'queued'
 
 export type SessionCiStatus = 'pending' | 'passed' | 'failed' | 'unavailable'
 
@@ -55,6 +58,18 @@ export type SessionPill =
       /** `session_pill_pull_request_numbered`: "Pull request #7701". */
       spoken: string
       url: string | null
+      /** `claude`: read from Anthropic's branch status for the tab's session, so a tap opens its URL
+       *  rather than Orca's panel for the worktree's own branch. Absent: Orca's read. */
+      source?: 'claude'
+    }
+  | {
+      /** The app's Diff pill (`jc20.p`): "Diff" and the PR's two line totals, green and red. */
+      kind: 'diff'
+      label: 'Diff'
+      added: number
+      removed: number
+      /** The pull request's file list, the closest thing the phone has to the app's diff sheet. */
+      url: string
     }
   | { kind: 'create-pr'; label: 'Create PR' }
   | { kind: 'local-changes'; label: 'Local changes'; hint: string }
@@ -63,14 +78,16 @@ const STATE_LABELS: Record<SessionPrState, string> = {
   open: 'Open',
   draft: 'Draft',
   closed: 'Closed',
-  merged: 'Merged'
+  merged: 'Merged',
+  queued: 'Queued'
 }
 
 const STATE_TINTS: Record<SessionPrState, SessionPrTint> = {
   open: 'success',
   draft: 'muted',
   closed: 'danger',
-  merged: 'merged'
+  merged: 'merged',
+  queued: 'queued'
 }
 
 /** `session_pill_ci_status_*`: what the CI part of the pull request pill says to a screen reader. */
@@ -187,4 +204,31 @@ export function sessionPillActions(deps: {
       }
     }
   }
+}
+
+/**
+ * The pills of a session whose pull request Anthropic reported: the Diff pill, then the pull
+ * request pill, in the order the app lays them (i35.java:261-266). A Diff of no added and no
+ * removed lines is not drawn (the app draws no counts for it either, `jc20.p`'s `ju8`). The
+ * pull request's URL is the only thing a tap can open: the Orca panel is for the worktree's own
+ * branch, which is not this one.
+ */
+export function buildClaudeSessionPills(pr: CcrBranchPr): SessionPill[] {
+  const pills: SessionPill[] = []
+  if (pr.additions > 0 || pr.deletions > 0) {
+    pills.push({ kind: 'diff', label: 'Diff', added: pr.additions, removed: pr.deletions, url: `${pr.url.replace(/\/+$/, '')}/files` })
+  }
+  pills.push({
+    kind: 'pull-request',
+    number: pr.number,
+    label: `#${pr.number}`,
+    state: pr.state,
+    stateLabel: STATE_LABELS[pr.state],
+    tint: STATE_TINTS[pr.state],
+    ci: pr.ci,
+    spoken: `Pull request #${pr.number}`,
+    url: pr.url,
+    source: 'claude'
+  })
+  return pills
 }
