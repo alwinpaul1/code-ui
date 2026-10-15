@@ -294,16 +294,19 @@ export class CcrSessionLink {
   }
 
   /** Older history (scroll to the start): the page before the oldest held. With no cursor kept (a
-   *  copy cut to its newest events), walks back from the newest page past what is held. */
+   *  copy cut to its newest events), walks back from the newest page past what is held. Either
+   *  way it stops only once a row OLDER than the oldest drawn is held (or at the start, or the page
+   *  cap): a newest page's undrawn system events are new to a kept copy, and stopping on them drew
+   *  nothing older on a cold start's first scroll to the top (review 2026-10-15). */
   async loadOlder(): Promise<void> {
     if (this.stopped || this.state.loadingOlder || !this.state.hasOlder) {
       return
     }
     this.set({ loadingOlder: true })
-    const before = this.ordered.length
+    const oldest = this.store.oldestDrawingSequence()
     const last = await this.walkBack(this.olderCursor, CCR_OLDER_PAGE_EVENTS, (page) => {
       this.olderCursor = page.nextCursor
-      return this.ordered.length > before
+      return this.store.drawsOlderThan(oldest)
     }, 'older page')
     this.set({ loadingOlder: false, ...(last ? { hasOlder: last.nextCursor !== null } : {}) })
     this.persist()

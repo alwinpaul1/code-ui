@@ -53,4 +53,28 @@ export class CcrEventStore {
   drawing(): CcrEvent[] {
     return this.ordered.filter(ccrEventDrawsRow)
   }
+
+  /** The sequence number of the oldest event that draws a row; null when none does (or none
+   *  carries one). */
+  oldestDrawingSequence(): number | null {
+    for (const event of this.ordered) {
+      if (event.sequenceNum != null && ccrEventDrawsRow(event)) {
+        return event.sequenceNum
+      }
+    }
+    return null
+  }
+
+  /** Whether a row older than `sequence` is held; with `sequence` null, whether any row is. */
+  drawsOlderThan(sequence: number | null): boolean {
+    for (const event of this.ordered) {
+      if (sequence !== null && (event.sequenceNum == null || event.sequenceNum >= sequence)) {
+        return false
+      }
+      if (ccrEventDrawsRow(event)) {
+        return true
+      }
+    }
+    return false
+  }
 }

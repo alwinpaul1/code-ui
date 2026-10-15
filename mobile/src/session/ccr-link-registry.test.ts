@@ -4,7 +4,7 @@ import type { CcrFetch } from './ccr-session-api'
 import { acquireCcrLink, CCR_LINK_LINGER_MS, foregroundCcrLinks, openCcrLink, pauseCcrLinks, resetCcrLinksForTests, setCcrLinkDepsLoader, setCcrLinkTimerForTests } from './ccr-link-registry'
 import { CCR_STREAM_RECONNECT_MS, type CcrLinkDeps, type CcrSessionLink } from './ccr-session-link'
 import { ccrToolImage, ccrUserImages, resetCcrCacheForTests } from './ccr-session-cache'
-import { flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
+import { CCR_PERSISTED_EVENTS, flushCcrTranscriptsForTests, hydrateCcrTranscripts, readCcrTranscript, resetCcrTranscriptsForTests, restartCcrTranscriptsForTests } from './ccr-transcript-persist'
 import { decodeCcrEvents } from './ccr-transcript-decode'
 import { PNG_1PX, SESSION_A, SESSION_B, event, eventsReply, imageBlock, pasteEvent, readResultEvent, reply } from './fixtures/ccr-session-api-2026-10-14'
 import { sseBody, sseFrame, streamFetch, type StreamReply } from './fixtures/ccr-session-stream'
@@ -282,6 +282,53 @@ describe('the transcript a link holds', () => {
     expect(rowsOf(link)).toEqual(['user:u0', 'user:u1'])
     expect(link.getState().hasOlder).toBe(false)
     expect(new URL(w.pageRequests[1]!.url).searchParams.get('cursor')).toBe('c2')
+  })
+
+  // Review 2026-10-15: a kept copy cut to its newest 200 rows knows no older cursor, so the first
+  // scroll to the top walked from the newest page and stopped as soon as anything new was held,
+  // which that page's undrawn system events always were: nothing older was drawn (200 > 200).
+  it('cold start from a cut kept copy: the first scroll to the top draws rows older than it held', async () => {
+    const oldest = text('u-old', 'user', 'from before the kept copy')
+    const kept = Array.from({ length: CCR_PERSISTED_EVENTS + 20 }, (_row, index) => text(`k${index}`, index % 2 ? 'assistant' : 'user', `row ${index}`))
+    const status = Array.from({ length: 30 }, (_row, index) => event({ type: 'system', subtype: 'status', uuid: `s${index}`, session_id: SESSION_A }))
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    // Everything once, newest first: the copy is written cut to its newest 200 rows.
+    w.pages[SESSION_A] = () => eventsReply([...kept, ...status])
+    acquireCcrLink(ACCOUNT_A, SESSION_A).release()
+    await flush()
+    await flushCcrTranscriptsForTests()
+    expect(readCcrTranscript(ACCOUNT_A, SESSION_A)).toMatchObject({ olderCursor: null, hasOlder: true })
+    resetCcrLinksForTests()
+    restartCcrTranscriptsForTests()
+    await hydrateCcrTranscripts()
+    const w2 = world(() => ({ status: 200, chunks: [], hold: true }))
+    w2.pages[SESSION_A] = (cursor) => (cursor === 'c2' ? eventsReply([oldest, ...kept.slice(0, 20)], null) : eventsReply([...kept.slice(20), ...status], 'c2'))
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS)
+    await link.loadOlder()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS + 21)
+    expect(rowsOf(link)[0]).toBe('user:u-old')
+    expect(link.getState().hasOlder).toBe(false)
+  })
+
+  it('cold start from a cut copy whose history holds nothing older stops at the start, drawing nothing new', async () => {
+    const kept = Array.from({ length: CCR_PERSISTED_EVENTS + 1 }, (_row, index) => text(`k${index}`, 'user', `row ${index}`))
+    const w = world(() => ({ status: 200, chunks: [], hold: true }))
+    w.pages[SESSION_A] = () => eventsReply(kept)
+    acquireCcrLink(ACCOUNT_A, SESSION_A).release()
+    await flush()
+    await flushCcrTranscriptsForTests()
+    resetCcrLinksForTests()
+    restartCcrTranscriptsForTests()
+    await hydrateCcrTranscripts()
+    const w2 = world(() => ({ status: 200, chunks: [], hold: true }))
+    w2.pages[SESSION_A] = () => eventsReply(kept.slice(1), null)
+    const { link } = acquireCcrLink(ACCOUNT_A, SESSION_A)
+    await flush()
+    await link.loadOlder()
+    expect(rowsOf(link)).toHaveLength(CCR_PERSISTED_EVENTS)
+    expect(link.getState().hasOlder).toBe(false)
   })
 
   it('pictures arrive as files, are drawn from the image cache, and no base64 is held or kept', async () => {
