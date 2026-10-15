@@ -25,6 +25,11 @@ vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///ca
 // 2. A grant for a PDF threw outside_worktree on purpose ("the chunked read
 //    has no grant form"), though files.readTerminalArtifactPreview serves a PDF
 //    as base64 up to 10 MiB, which is how the chat tap's preview shows one.
+//
+// The host below vouches for the absolute spelling, which the real one did not:
+// the real session wrote `~/Downloads/…`, and Orca matches the transcript word
+// for word, so 0.9.152 still refused. Orca's own replies for that case are in
+// mobile-file-tab-session-spelling.test.ts.
 const PDF_PATH = '/Users/alwin/Desktop/BLADE_TACO_final.pdf'
 const PDF_BASE64 = 'JVBERi0xLjQKJcfsj6IKMSAwIG9iago8PC9UeXBlL0NhdGFsb2c+PgplbmRvYmoKdHJhaWxlcgo8PC9Sb290IDEgMCBSPj4KJSVFT0YK'
 const SESSION_ID = '5b7c2d4e-1f3a-4c8b-9e2d-7a6f0c1b3d5e'

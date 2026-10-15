@@ -5,6 +5,7 @@ import {
   type NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
 import type { CcrEvent } from './ccr-session-api'
+import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
 
@@ -274,7 +275,7 @@ export function decodeCcrEvent(event: CcrEvent): NativeChatMessage[] {
       // `model_refusal_fallback` / `model_refusal_no_fallback` are cards there (ucr/xcr); their
       // fields have not been captured, so they draw nothing here rather than a guess.
       return payload.subtype === 'compact_boundary' && !str(payload.parent_tool_use_id)
-        ? [{ id: uuid, role: 'system', blocks: [{ type: 'text', text: NATIVE_CHAT_NOTICE_COMPACTION_TEXT, presentation: 'compaction' }], timestamp, source: 'transcript' }]
+        ? [{ id: uuid, role: 'system', blocks: [{ type: 'text', text: compactionCaption(readCompactionTokens(payload.compact_metadata ?? payload.compactMetadata)), presentation: 'compaction' }], timestamp, source: 'transcript' }]
         : []
     case 'conversation_reset':
       // A /clear: the app's "Context cleared" divider (qhu.java:1132-1158, yv8.java:10435).
@@ -293,9 +294,6 @@ export function decodeCcrEvent(event: CcrEvent): NativeChatMessage[] {
       return []
   }
 }
-
-/** The words of the app's compaction divider (`ccr_context_compacted`), as the phone's notice row draws it. */
-const NATIVE_CHAT_NOTICE_COMPACTION_TEXT = 'Compacted conversation'
 
 function decodeMessage(payload: Record<string, unknown>, uuid: string, timestamp: number | null): NativeChatMessage[] {
   // A subagent's own messages (`parent_tool_use_id` set) belong to its Agent call, not to the

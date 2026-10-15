@@ -7,12 +7,10 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { compactionCaptionOf } from './compaction-caption'
+import { MobileNativeChatDivider } from './MobileNativeChatDivider'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
-  /** The Claude app's word for the boundary (`ccr_context_compacted`,
-   *  1.261009.20). It adds "· saved N tokens" from the stream's pre/post token
-   *  counts; Orca's status row carries no counts, so the phone says no number. */
-  compaction: 'Compacted conversation',
   contextCleared: 'Context cleared',
   plan: 'Plan'
 } as const
@@ -41,18 +39,12 @@ export function MobileNativeChatNoticeRow({
   if (cleared || block.presentation === 'compaction') {
     // A rule, not a sentence: compaction is a break in the conversation, and a
     // line of prose there reads as something the agent said.
+    // The decoder of Anthropic's events writes "· saved N tokens" into the caption when the event
+    // stated its counts (compaction-caption.ts); any other source draws the plain words.
     const label = cleared
       ? block.text.trim() || NATIVE_CHAT_NOTICE_COPY.contextCleared
-      : NATIVE_CHAT_NOTICE_COPY.compaction
-    return (
-      <View style={styles.compaction} accessibilityRole="none" accessibilityLabel={label}>
-        <View style={styles.rule} />
-        <Txt variant="caption" tone="muted">
-          {label}
-        </Txt>
-        <View style={styles.rule} />
-      </View>
-    )
+      : compactionCaptionOf(block.text)
+    return <MobileNativeChatDivider label={label} />
   }
 
   if (block.presentation === 'plan-document') {
@@ -99,17 +91,6 @@ export function MobileNativeChatNoticeRow({
 
 function makeNoticeStyles({ colors, radius, space }: Theme) {
   return StyleSheet.create({
-    compaction: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.sm,
-      paddingVertical: space.xs
-    },
-    rule: {
-      flex: 1,
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: colors.border
-    },
     card: {
       gap: space.xs,
       padding: space.md,

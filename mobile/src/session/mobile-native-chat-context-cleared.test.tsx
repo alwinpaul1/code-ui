@@ -122,10 +122,10 @@ describe('the boundary a /clear leaves in the chat', () => {
         (node) => (node.type as unknown) === 'View' && node.props.accessibilityLabel === 'Context cleared'
       )
       const colors = scheme === 'light' ? lightColors : darkColors
-      const rules = divider.findAll(
-        (node) =>
-          (node.type as unknown) === 'View' && node.props.style?.backgroundColor === colors.border
-      )
+      // Two wavy lines in the divider ink (`pl7.w`), as the Claude app draws it (n030.java:404-457).
+      const rules = divider
+        .findAllByType('Path' as never)
+        .filter((node) => node.props.stroke === colors.transcriptDividerInk)
       expect(rules).toHaveLength(2)
       expect(tree.root.findAllByType('Copy' as never)).toHaveLength(0)
     }
