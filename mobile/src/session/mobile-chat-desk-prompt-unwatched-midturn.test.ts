@@ -377,10 +377,15 @@ describe('the session screen telling the chat its tab list is the host’s', () 
 
   it('hands the chat whether the host’s tab list has come in', () => {
     expect(code('use-mobile-session-native-chat-dictation.ts')).toMatch(/\btabsLive:\s*scope\.terminalsLoaded\b/)
+    // The controller hands it to the beacon hook (moved out in dcff79598)...
     const controller = code('use-mobile-native-chat-controller.ts')
-    const start = controller.indexOf('useAgentStatusPrompts(')
+    const handOff = controller.slice(controller.indexOf('useActiveChatBeacon('), controller.indexOf('\n  })', controller.indexOf('useActiveChatBeacon(')))
+    expect(handOff).toMatch(/\btabsLive:\s*args\.tabsLive\b/)
+    // ...which passes it on as the status reader's last argument.
+    const beacon = code('use-active-chat-beacon.ts')
+    const start = beacon.indexOf('useAgentStatusPrompts(')
     // The call's arguments, up to its closing parenthesis on its own line.
-    const call = controller.slice(start, controller.indexOf('\n  )', start))
+    const call = beacon.slice(start, beacon.indexOf('\n  )', start))
     expect(call).toMatch(/,\s*args\.tabsLive\s*$/)
   })
 
