@@ -131,6 +131,9 @@ export type ThemeColors = {
   attachmentCardFill: string
   /** Its 1 dp border and its badge's hairline: `pl7.w`, ink or bone at 30%. */
   attachmentCardBorder: string
+  /** The caption and the two wavy lines of a transcript divider ("Compacted conversation",
+   *  "Context cleared"): `pl7.w`, ink or bone at 30% (`n030.e`, com.anthropic.claude 1.261009.20). */
+  transcriptDividerInk: string
   /** Its name and badge text: `pl7.P` (#383835 / #C3C2B7). */
   attachmentCardText: string
   /** Send's fill: `pl7.e`, the clay `yg9.f` gives its container (#C6613F light, #D97757
@@ -257,6 +260,7 @@ export const lightColors: ThemeColors = {
   jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
   attachmentCardFill: '#FFFFFF',
   attachmentCardBorder: 'rgba(30, 30, 29, 0.3)',
+  transcriptDividerInk: 'rgba(30, 30, 29, 0.3)',
   attachmentCardText: '#383835',
   composerSend: '#C6613F',
   composerSendGlyph: '#FFFFFF',
@@ -345,6 +349,7 @@ export const darkColors: ThemeColors = {
   jumpButtonShadow: 'rgba(0, 0, 0, 0.1)',
   attachmentCardFill: '#20201F',
   attachmentCardBorder: 'rgba(225, 224, 217, 0.3)',
+  transcriptDividerInk: 'rgba(225, 224, 217, 0.3)',
   attachmentCardText: '#C3C2B7',
   composerSend: '#D97757',
   composerSendGlyph: '#FFFFFF',

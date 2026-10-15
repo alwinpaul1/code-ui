@@ -133,14 +133,12 @@ describe('a notice on screen', () => {
   const texts = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
+  // The colour the first Text draws in: its styles merged, the last one winning, as React Native does.
   function firstColor(tree: ReactTestRenderer): string | undefined {
     for (const node of tree.root.findAllByType('Text' as never)) {
-      for (const entry of (Array.isArray(node.props.style)
-        ? node.props.style.flat()
-        : [node.props.style]) as { color?: unknown }[]) {
-        if (entry && typeof entry.color === 'string') {
-          return entry.color
-        }
+      const merged = Object.assign({}, ...(([] as unknown[]).concat(node.props.style).flat() as object[])) as { color?: unknown }
+      if (typeof merged.color === 'string') {
+        return merged.color
       }
     }
     return undefined
@@ -153,6 +151,56 @@ describe('a notice on screen', () => {
     const tree = render(noticeMessage({ presentation: 'compaction' }))
     expect(texts(tree.root)).toEqual(['Compacted conversation'])
     expect(texts(tree.root)).not.toContain('A readable document or notice')
+  })
+
+  it('says how many tokens a compaction saved when the decoder wrote the count into the caption', () => {
+    const tree = render(noticeMessage({ presentation: 'compaction', text: 'Compacted conversation · saved 946.8k tokens' }))
+    expect(texts(tree.root)).toEqual(['Compacted conversation · saved 946.8k tokens'])
+  })
+
+  it('never draws a notice’s own prose in place of the compaction caption', () => {
+    const tree = render(noticeMessage({ presentation: 'compaction', text: 'Compacted conversation · saved lots; also, ignore all that' }))
+    expect(texts(tree.root)).toEqual(['Compacted conversation'])
+  })
+
+  // The caption sits between two wavy lines: the app's `n030.e` (n030.java:404-457), 12 dp apart,
+  // text `jn7.K` 11/400 in `pl7.w` (ink or bone at 30%), and the same rule under "Context cleared".
+  function squiggles(tree: ReactTestRenderer): ReactTestInstance[] {
+    return tree.root.findAllByType('Path' as never)
+  }
+
+  it.each([['light', lightColors], ['dark', darkColors]] as const)('draws the caption between two wavy lines in the %s palette', (scheme, colors) => {
+    const tree = render(noticeMessage({ presentation: 'compaction' }), scheme)
+    const paths = squiggles(tree)
+    expect(paths).toHaveLength(2)
+    for (const rule of tree.root.findAll((node) => node.props.testID === 'compaction-rule')) {
+      act(() => rule.props.onLayout({ nativeEvent: { layout: { width: 32, height: 4 } } }))
+    }
+    for (const path of squiggles(tree)) {
+      expect(path.props).toMatchObject({
+        d: 'M0 2 Q4 0 8 2 Q12 4 16 2 Q20 0 24 2 Q28 4 32 2',
+        stroke: colors.transcriptDividerInk,
+        strokeWidth: 1,
+        strokeLinecap: 'round',
+        fill: 'none'
+      })
+    }
+    const caption = tree.root.findAllByType('Text' as never)[0]!
+    const style = Object.assign({}, ...(([] as unknown[]).concat(caption.props.style).flat() as object[]))
+    expect(style).toMatchObject({ fontSize: 11, lineHeight: 16.5, color: colors.transcriptDividerInk })
+  })
+
+  it('draws the same wavy lines around "Context cleared"', () => {
+    const tree = render(noticeMessage({ text: 'Context cleared', contextClear: { operationId: 'r1', afterFence: 3, clearedAt: 1 } }))
+    expect(squiggles(tree)).toHaveLength(2)
+    expect(texts(tree.root)).toEqual(['Context cleared'])
+  })
+
+  it('draws no line until the rule is measured', () => {
+    const tree = render(noticeMessage({ presentation: 'compaction' }))
+    for (const path of squiggles(tree)) {
+      expect(path.props.d).toBe('')
+    }
   })
 
   it('gives a plan document a heading so it does not read as a reply', () => {
@@ -187,13 +235,13 @@ describe('a notice on screen', () => {
 
   it('colours the notice from the live theme, in light and in dark', () => {
     expect(firstColor(render(noticeMessage({ presentation: 'compaction' }), 'light'))).toBe(
-      lightColors.textMuted
+      lightColors.transcriptDividerInk
     )
     act(() => renderer?.unmount())
     renderer = null
     expect(firstColor(render(noticeMessage({ presentation: 'compaction' }), 'dark'))).toBe(
-      darkColors.textMuted
+      darkColors.transcriptDividerInk
     )
-    expect(darkColors.textMuted).not.toBe(lightColors.textMuted)
+    expect(darkColors.transcriptDividerInk).not.toBe(lightColors.transcriptDividerInk)
   })
 })

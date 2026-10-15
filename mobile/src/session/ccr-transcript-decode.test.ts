@@ -102,6 +102,24 @@ describe('a matched Claude tab draws Anthropic’s events as the Claude app does
     expect(reset[0]!.blocks[0]).toMatchObject({ text: 'Context cleared', contextClear: { operationId: 'r1' } })
   })
 
+  it('a compaction divider carries how many tokens it saved, from the event’s own counts', () => {
+    // compact_boundary as Claude Code 2.1.296 writes it on this machine (preTokens 167968,
+    // postTokens 14060 in the transcript record), in the stream form the app reads
+    // (`CompactionDivider.pre_tokens` / `.post_tokens`, k23.java:1245).
+    const text = (compactMetadata: unknown): unknown =>
+      rows(event({ type: 'system', subtype: 'compact_boundary', uuid: 's1', session_id: SESSION_A, compact_metadata: compactMetadata }))[0]!.blocks[0]
+    expect(text({ trigger: 'auto', pre_tokens: 167968, post_tokens: 14060 })).toMatchObject({ text: 'Compacted conversation · saved 153.9k tokens', presentation: 'compaction' })
+    expect(text({ trigger: 'manual', pre_tokens: 1_000_000, post_tokens: 53_200 })).toMatchObject({ text: 'Compacted conversation · saved 946.8k tokens' })
+  })
+
+  it('a compaction divider with no usable counts says only "Compacted conversation"', () => {
+    const text = (compactMetadata: unknown): unknown =>
+      rows(event({ type: 'system', subtype: 'compact_boundary', uuid: 's1', session_id: SESSION_A, compact_metadata: compactMetadata }))[0]!.blocks[0]
+    expect(text(undefined)).toMatchObject({ text: 'Compacted conversation' })
+    expect(text({ trigger: 'auto', pre_tokens: 160000 })).toMatchObject({ text: 'Compacted conversation' })
+    expect(text({ trigger: 'auto', pre_tokens: 'many', post_tokens: null })).toMatchObject({ text: 'Compacted conversation' })
+  })
+
   it('status, init, results, rate limits and control traffic draw no row', () => {
     expect(
       rows(
