@@ -115,7 +115,7 @@ export function MobileNativeChatDictationRow({
       </Pressable>
       <View style={{ flex: 1, minWidth: 0, height: WAVEFORM_HEIGHT, justifyContent: 'center' }}>
         {phase === 'off' ? null : (
-          <Animated.View style={[{ flex: 1, flexDirection: 'row' }, waveformStyle]} testID="dictation-waveform-fade">
+          <Animated.View style={[{ flex: 1, flexDirection: 'row' }, waveformStyle]} collapsable={false} testID="dictation-waveform-fade">
             <DictationWaveform level={transcribing ? 0 : level} levelSource={transcribing ? undefined : levelSource} />
           </Animated.View>
         )}

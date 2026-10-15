@@ -187,6 +187,19 @@ describe('the composer while the mic is on', () => {
     expect(byTestId('native-chat-composer-actions').parent!.props.accessibilityElementsHidden).toBe(true)
   })
 
+  // 2026-10-15, the user's screenshot ("getting cluttered"): "Transcribing…" drawn over
+  // "Opus 5.5 Medium", the Stop square over the mic, the Cancel X over the +. The recording row
+  // faded in and the action row never faded out. Its wrapper's only style is the animated
+  // opacity, and at opacity 1 such a View forms no stacking context on Android, so Fabric
+  // flattens it and the fade has no native view to land on (MobileNativeChatPendingDim.tsx).
+  it('keeps the action row its own native view, so the fade that hides it under the recording row reaches it on Android', async () => {
+    await render({ micActive: false })
+    expect(byTestId('native-chat-composer-actions').parent!.props.collapsable).toBe(false)
+    // The same for the waveform, which starts at opacity 1 and fades out for "Transcribing…".
+    await rerender({ micActive: true })
+    expect(byTestId('dictation-waveform-fade').props.collapsable).toBe(false)
+  })
+
   it('folds the field even when it holds text, as the Claude app does', async () => {
     await render({ value: 'a long draft that was there before the mic', micActive: true })
     expect(shown().field).toBe(0)

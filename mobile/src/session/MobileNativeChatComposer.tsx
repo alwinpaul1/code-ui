@@ -490,7 +490,7 @@ export function MobileNativeChatComposer({
           </View>
           </Animated.View>
           <View testID="native-chat-composer-action-area">
-          <Animated.View style={dictationRow.actionsStyle} {...dictationRow.hiddenWhileUp}>
+          <Animated.View style={dictationRow.actionsStyle} collapsable={false} {...dictationRow.hiddenWhileUp}>
           <View
             style={{
               minHeight: COMPOSER_BUTTON + 2 * COMPOSER_ROW_PAD,
