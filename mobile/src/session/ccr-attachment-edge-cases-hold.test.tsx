@@ -1,8 +1,8 @@
 /**
  * The edges of a Claude tab's attachments on the Anthropic lane (ccr-file-upload.ts), from the
  * lane's review of 2026-10-15: a file the server refuses as too large, a retry after the tab left
- * the lane, the banner's Retry on a message with no words, and a send tapped before the tab's
- * account is read.
+ * the lane, the banner's Retry on a message with no words, and a send with chips while the tab
+ * has no send target (refused whole, with the target's own reason).
  */
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'

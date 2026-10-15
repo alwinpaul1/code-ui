@@ -98,51 +98,48 @@ export function MobileNativeChatAttachmentChips({
       }}
     >
       {videoFrameExtraction ? (
-        <View
-          style={{
-            height: CHIP,
-            maxWidth: 210,
-            paddingRight: 26,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.bgRaised
-          }}
-        >
+        // The same holder as a chip's Remove: the cancel disc sits where Remove's does (13 dp to
+        // its centre), so its 48 dp target is the same box (second review, 2026-10-15: 20 dp and
+        // an 8 dp hitSlop, about 36 dp).
+        <View style={REMOVE_HOLDER}>
           <View
             style={{
-              flex: 1,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: space.xs,
-              paddingLeft: space.sm
+              height: CHIP,
+              maxWidth: 210,
+              paddingRight: 26,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.bgRaised
             }}
           >
-            <Film size={20} color={colors.textSecondary} strokeWidth={1.8} />
-            <Txt variant="caption" weight="medium" numberOfLines={2} style={{ maxWidth: 140 }}>
-              {videoFrameExtraction.total === null
-                ? 'Reading a video…'
-                : `Reading frames ${videoFrameExtraction.done}/${videoFrameExtraction.total}…`}
-            </Txt>
+            <View
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: space.xs,
+                paddingLeft: space.sm
+              }}
+            >
+              <Film size={20} color={colors.textSecondary} strokeWidth={1.8} />
+              <Txt variant="caption" weight="medium" numberOfLines={2} style={{ maxWidth: 140 }}>
+                {videoFrameExtraction.total === null
+                  ? 'Reading a video…'
+                  : `Reading frames ${videoFrameExtraction.done}/${videoFrameExtraction.total}…`}
+              </Txt>
+            </View>
           </View>
           {onCancelVideoFrameExtraction ? (
             <Pressable
+              accessibilityRole="button"
               accessibilityLabel="Cancel reading frames"
-              style={{
-                position: 'absolute',
-                top: 3,
-                right: 3,
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.text
-              }}
+              style={REMOVE_TARGET}
               onPress={onCancelVideoFrameExtraction}
-              hitSlop={8}
             >
-              <X size={12} color={colors.textInverse} strokeWidth={2.6} />
+              <View style={{ width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.text }}>
+                <X size={12} color={colors.textInverse} strokeWidth={2.6} />
+              </View>
             </Pressable>
           ) : null}
         </View>

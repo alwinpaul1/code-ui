@@ -5,6 +5,8 @@
  *  - The remove disc's usable target was about 32 dp: its hitSlop reached past the chip, whose
  *    `overflow: 'hidden'` (and Android's touch rule) dropped the part outside it.
  *  - A long extension (".webmanifest") ran its badge under the remove disc.
+ * Second review, 2026-10-15: the video-frame chip's cancel kept a 20 dp target with an 8 dp
+ * hitSlop, about 36 dp, below Android's 48.
  */
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -145,5 +147,35 @@ describe('the extension badge on a document chip', () => {
     // The badge's right edge, from the card's left edge, stays clear of the disc (18 dp, 4 dp in).
     const badgeRight = (card.borderWidth as number) + (card.padding as number) + (badge.maxWidth as number)
     expect(badgeRight).toBeLessThanOrEqual((card.width as number) - 4 - 18 - 4)
+  })
+})
+
+describe('the cancel on a video being read into frames', () => {
+  it.each(SCHEMES)('takes a 48 dp touch round its 20 dp disc, as Remove does (%s)', (scheme) => {
+    const onCancel = vi.fn()
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference={scheme}>
+          <MobileNativeChatAttachmentChips attachments={[]} videoFrameExtraction={{ done: 2, total: 5, batch: 'b1' }} onCancelVideoFrameExtraction={onCancel} />
+        </ThemeProvider>
+      )
+    })
+    const cancel = pressable(renderer!, 'Cancel reading frames')
+    const target = styleOf(cancel)
+    expect(target).toMatchObject({ position: 'absolute', top: 0, right: 0 })
+    expect(target.width).toBeGreaterThanOrEqual(48)
+    expect(target.height).toBeGreaterThanOrEqual(48)
+    expect(cancel.props.accessibilityRole).toBe('button')
+    expect(ancestors(cancel).some((up) => styleOf(up).overflow === 'hidden')).toBe(false)
+    // The disc drawn is unchanged: 20 dp in the theme's text colour, its cross inverse, its centre
+    // 13 dp in from the chip's top end (3 dp inset + 10 dp radius).
+    const disc = cancel.find((node) => String(node.type) === 'View' && styleOf(node).width === 20)
+    expect(styleOf(disc)).toMatchObject({ width: 20, height: 20, borderRadius: 10, backgroundColor: PALETTE[scheme].text })
+    expect(disc.findAll((node) => String(node.type) === 'X')[0]?.props.color).toBe(PALETTE[scheme].textInverse)
+    const reach = styleOf(cancel.parent!).paddingTop as number
+    expect(styleOf(cancel.parent!)).toMatchObject({ paddingTop: reach, paddingRight: reach, marginTop: -reach, marginRight: -reach })
+    expect((target.height as number) / 2 - reach).toBe(13)
+    act(() => cancel.props.onPress())
+    expect(onCancel).toHaveBeenCalledOnce()
   })
 })
