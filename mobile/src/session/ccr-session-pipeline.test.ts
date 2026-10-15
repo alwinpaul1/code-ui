@@ -111,9 +111,9 @@ describe('the whole path, against recorded-shape replies', () => {
     expect(result).toMatchObject({ sessionId: SESSION_A, found: 2, wanted: 2 })
     expect(h.requests.map((request) => request.url)).toEqual([
       'https://api.anthropic.com/api/oauth/profile',
-      'https://api.anthropic.com/v1/code/sessions?limit=50',
-      `https://api.anthropic.com/v1/code/sessions/${SESSION_A}/events?sort_order=desc&limit=100`,
-      `https://api.anthropic.com/v1/code/sessions/${SESSION_B}/events?sort_order=desc&limit=100`
+      'https://api.anthropic.com/v1/code/sessions?limit=100',
+      `https://api.anthropic.com/v1/code/sessions/${SESSION_A}/events?sort_order=desc&limit=25`,
+      `https://api.anthropic.com/v1/code/sessions/${SESSION_B}/events?sort_order=desc&limit=25`
     ])
     for (const request of h.requests.slice(1)) {
       expect({ ...request.headers, Authorization: request.headers.Authorization === `Bearer ${TOKEN}` ? '<token>' : 'wrong' }).toEqual({
@@ -148,11 +148,11 @@ describe('the whole path, against recorded-shape replies', () => {
   })
 
   it(`compares only Remote Control sessions that are not archived, newest first, at most ${CCR_MAX_CANDIDATES}`, async () => {
-    const hours = Array.from({ length: CCR_MAX_CANDIDATES + 2 }, (_, n) => String(n).padStart(2, '0'))
+    const minutes = Array.from({ length: CCR_MAX_CANDIDATES + 2 }, (_, n) => String(n).padStart(2, '0'))
     const rows = [
       sessionRow(SESSION_CLOUD, { environment_kind: 'cloud' }),
       sessionRow('cse_01QXarchivedaaaaaaaaaaaa', { status: 'archived' }),
-      ...hours.map((n) => sessionRow(`cse_01QXbridge${n}aaaaaaaaaaaa`, { last_event_at: `2026-10-14T${n}:00:00Z` }))
+      ...minutes.map((n) => sessionRow(`cse_01QXbridge${n}aaaaaaaaaaaa`, { last_event_at: `2026-10-14T16:${n}:00Z` }))
     ]
     const h = harness([
       ...apiRoutes({ sessions: () => reply(200, sessionsReply(rows)) }),
@@ -160,7 +160,7 @@ describe('the whole path, against recorded-shape replies', () => {
     ])
     await runCcrImagePipeline(input(), h.deps)
     const asked = [...new Set(h.requests.filter((request) => request.url.includes('/events')).map((request) => new URL(request.url).pathname.split('/')[4]))]
-    expect(asked).toEqual(hours.toReversed().slice(0, CCR_MAX_CANDIDATES).map((n) => `cse_01QXbridge${n}aaaaaaaaaaaa`))
+    expect(asked).toEqual(minutes.toReversed().slice(0, CCR_MAX_CANDIDATES).map((n) => `cse_01QXbridge${n}aaaaaaaaaaaa`))
   })
 
   it('uses the cached organization and asks the profile nothing', async () => {
@@ -195,8 +195,8 @@ describe('pages of the session list', () => {
     const result = await runCcrImagePipeline(input(), h.deps)
     expect(result.sessionId).toBe(SESSION_A)
     expect(h.requests.map((request) => request.url).filter((url) => url.includes('/v1/code/sessions?'))).toEqual([
-      'https://api.anthropic.com/v1/code/sessions?limit=50',
-      'https://api.anthropic.com/v1/code/sessions?cursor=p2&limit=50'
+      'https://api.anthropic.com/v1/code/sessions?limit=100',
+      'https://api.anthropic.com/v1/code/sessions?cursor=p2&limit=100'
     ])
   })
 
@@ -328,7 +328,7 @@ describe('every failure leaves the chips and one line saying why', () => {
       'no session shares a message',
       () => harness(apiRoutes({ sessions: () => reply(200, sessionsReply([sessionRow(SESSION_B)])), events: { [SESSION_B]: () => reply(200, eventsReply([systemEvent('x')])) } })),
       'match',
-      'none of 1 Remote Control session shares a message with this tab in its latest 200 events'
+      'none of 1 Remote Control session shares a message with this tab in its newest 25 to 225 events'
     ],
     [
       'two sessions share messages',
@@ -336,7 +336,7 @@ describe('every failure leaves the chips and one line saying why', () => {
         harness(
           apiRoutes({
             sessions: () => reply(200, sessionsReply([sessionRow(SESSION_A), sessionRow(SESSION_B)])),
-            events: { [SESSION_A]: () => reply(200, sessionAPage), [SESSION_B]: () => reply(200, eventsReply([systemEvent(TAB_MESSAGES[0]!)])) }
+            events: { [SESSION_A]: () => reply(200, sessionAPage), [SESSION_B]: () => reply(200, eventsReply([systemEvent(PASTE_ID)])) }
           })
         ),
       'match',

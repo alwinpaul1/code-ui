@@ -1,12 +1,14 @@
-import { listCcrSessionEvents, CcrApiError, type CcrEvent, type CcrSessionRow } from './ccr-session-api'
+import { listCcrSessionEvents, CcrApiError, type CcrSessionRow } from './ccr-session-api'
 import { bindCcrConfigDir, clearCcrFailure, ccrAccountForConfigDir, ccrAccountForTab, ccrSessionForTab, forgetCcrMapping, recordCcrFailure, resetCcrCacheForTests, setCcrMapping, storeCcrImages } from './ccr-session-cache'
 import { forgetSharedCcrLists, listAccountSessionsShared } from './ccr-session-lists'
 import { accountPrefix, resolveCcrAuths, type CcrAuth } from './ccr-session-accounts'
 import { emptyCcrExtracted, extractCcrImages, type CcrExtracted } from './ccr-session-images'
-import { matchCcrSession } from './ccr-session-match'
+import { rankCcrCandidates } from './ccr-session-match'
+import { matchCcrSessionInWaves } from './ccr-session-match-waves'
 import { noteModel } from './ccr-session-model-refresh'
 import {
   CCR_EVENT_PAGE_SIZE,
+  CCR_MATCH_FIRST_PAGE_SIZE,
   CCR_MATCH_PAGES,
   CCR_MAX_CANDIDATES,
   CCR_MAX_EVENT_PAGES,
@@ -53,15 +55,17 @@ export { refreshCcrModel } from './ccr-session-model-refresh'
  *   org      → the organization each acts for, kept per account;
  *   sessions → every account's Remote Control (`bridge`) sessions, all accounts
  *              asked at once, each list shared by the tabs asking together
- *              (ccr-session-lists.ts), connected sessions first, then newest;
- *   match    → the one whose recent events share message uuids with the tab
- *              (ccr-session-match.ts), every candidate's events read at once;
+ *              (ccr-session-lists.ts), most likely first: the sessions whose last
+ *              event is nearest the tab's newest message (ccr-session-match.ts);
+ *   match    → the one whose newest events share message uuids with the tab
+ *              (ccr-session-match.ts), read in waves (CCR_MATCH_WAVES): a few
+ *              candidates' small first pages at once, more only on a miss;
  *              cached per tab for the connection, and across restarts for the
  *              tab's Claude Code session (ccr-session-cache.ts);
  *   images   → the wanted pictures out of that session's events.
  *
- * Bounded: at most MAX_CANDIDATES sessions per account are looked at, MATCH_PAGES pages
- * of each to match, and MAX_EVENT_PAGES pages of the matched one. Every
+ * Bounded: at most CCR_MAX_CANDIDATES sessions per group of accounts are looked at,
+ * CCR_MATCH_PAGES pages of each to match, and CCR_MAX_EVENT_PAGES pages of the matched one. Every
  * failure leaves the tab as it was: the chips stay.
  *
  * Ids in log lines are masked (first three and last three characters, and
@@ -161,7 +165,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
     const matchAmong = async (group: readonly CcrAuth[], final: boolean): Promise<{ kind: 'matched' } | { kind: 'none' } | { kind: 'failed'; result: CcrPipelineResult }> => {
       // sessions: every account's list, all at once, so a work account's session is found beside the
       // default's in one round trip
-      const candidates: { row: CcrSessionRow; auth: CcrAuth }[] = []
+      const listedRows: { row: CcrSessionRow; auth: CcrAuth }[] = []
       /** A session listed by two accounts (two sign-ins in one organization) is one candidate, read
        *  with the first account that listed it; counted twice it was "2 sessions share messages" with
        *  the same id twice, and never matched. */
@@ -184,17 +188,15 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         const { rows } = answer.value
         listed += rows.length
         malformed += answer.value.malformed
-        for (const row of rows
-          .filter((row) => row.environmentKind === 'bridge' && row.status !== 'archived')
-          // A tab whose agent is running has its bridge connected: those first, then the newest.
-          .sort((a, b) => Number(b.connectionStatus === 'connected') - Number(a.connectionStatus === 'connected') || b.activeAt - a.activeAt)
-          .slice(0, CCR_MAX_CANDIDATES)) {
-          if (!seen.has(row.id)) {
+        for (const row of rows) {
+          if (row.environmentKind === 'bridge' && row.status !== 'archived' && !seen.has(row.id)) {
             seen.add(row.id)
-            candidates.push({ row, auth: account })
+            listedRows.push({ row, auth: account })
           }
         }
       }
+      // The most likely first (ccr-session-match.ts): the waves below read them in this order.
+      const candidates = rankCcrCandidates(listedRows, input.newestMessageAt ?? null).slice(0, CCR_MAX_CANDIDATES)
       if (candidates.length === 0) {
         if (listFailures.length > 0) {
           if (!final) {
@@ -211,78 +213,42 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       report('sessions', true, `${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} to compare (${listed} listed)`)
 
       // match
-      const tabIds = new Set(input.messageIds)
-      if (tabIds.size === 0) {
+      if (input.messageIds.length === 0) {
         return { kind: 'failed', result: fail('match', 'the tab has no transcript messages to compare yet', true) }
       }
-      /** Paging per account and session: each account reads with its own cursor. */
-      const pageKey = (candidate: { row: CcrSessionRow; auth: CcrAuth }) => `${candidate.auth.accountId}\0${candidate.row.id}`
-      const pages = new Map<string, { events: CcrEvent[]; uuids: Set<string>; cursor: string | null }>()
-      for (let round = 0; round < CCR_MATCH_PAGES && !sessionId; round += 1) {
-        /** Candidates whose events could not be read this round, with the account's words for why. */
-        const unreadable: string[] = []
-        const reading = candidates.filter((candidate) => round === 0 || Boolean(pages.get(pageKey(candidate))?.cursor))
-        // Every candidate's page at once: one round trip for the whole comparison.
-        const read = await Promise.allSettled(
-          reading.map((candidate) =>
-            listCcrSessionEvents(deps.fetch, candidate.auth, candidate.row.id, { cursor: pages.get(pageKey(candidate))?.cursor ?? null, limit: CCR_EVENT_PAGE_SIZE })
-          )
-        )
-        for (const [index, answer] of read.entries()) {
-          const candidate = reading[index]!
-          if (answer.status === 'rejected') {
-            unreadable.push(`${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(answer.reason)}`)
-            continue
-          }
-          const held = pages.get(pageKey(candidate))
-          const uuids = held?.uuids ?? new Set<string>()
-          for (const event of answer.value.events) {
-            const uuid = event.payload.uuid
-            if (typeof uuid === 'string') {
-              uuids.add(uuid)
-            }
-          }
-          pages.set(pageKey(candidate), { events: [...(held?.events ?? []), ...answer.value.events], uuids, cursor: answer.value.nextCursor })
+      const outcome = await matchCcrSessionInWaves(deps.fetch, candidates, input.messageIds)
+      if (outcome.kind === 'unreadable') {
+        const reasons = outcome.candidates.map((candidate, index) => `${accountPrefix(candidate.auth.label, accountCount)}${reasonOf(outcome.reasons[index])}`)
+        if (candidates.length === 1) {
+          return { kind: 'failed', result: fail('match', reasons[0]!) }
         }
-        if (unreadable.length > 0 && candidates.length === 1) {
-          return { kind: 'failed', result: fail('match', unreadable[0]!) }
+        // A session whose events could not be read may be the one that shares the tab's messages,
+        // or a second one that does: picking among the rest is a guess the cache would then keep.
+        // Each reason is logged, and nothing is matched or cached until every candidate reads.
+        reportFailures(reasons.map((detail) => ({ stage: 'match', detail })))
+        const of = outcome.compared
+        return { kind: 'failed', result: fail('match', `${reasons.length} of ${of} Remote Control session${of === 1 ? '' : 's'} could not be read, so any of them may be this tab's; not guessing`) }
+      }
+      if (outcome.kind === 'ambiguous') {
+        return { kind: 'failed', result: fail('match', `${outcome.sessionIds.length} sessions share messages with this tab (${outcome.sessionIds.map(maskId).join(', ')}); not guessing`) }
+      }
+      if (outcome.kind === 'matched') {
+        const matched = outcome.candidate
+        sessionId = matched.row.id
+        auth = matched.auth
+        extractCcrImages(outcome.pages.events, wanted, deps.maxBytes, extracted)
+        cursor = outcome.pages.cursor
+        pagesRead = outcome.pages.read
+        setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId)
+        // The tab's config dir is this account's from now on: its next tabs ask it first.
+        if (input.configDir) {
+          bindCcrConfigDir(input.configDir, auth.accountId)
         }
-        if (unreadable.length > 0) {
-          // A session whose events could not be read may be the one that shares the tab's messages,
-          // or a second one that does: picking among the rest is a guess the cache would then keep.
-          // Each reason is logged, and nothing is matched or cached until every candidate reads.
-          reportFailures(unreadable.map((detail) => ({ stage: 'match', detail })))
-          return {
-            kind: 'failed',
-            result: fail(
-              'match',
-              `${unreadable.length} of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} could not be read, so any of them may be this tab's; not guessing`
-            )
-          }
-        }
-        const match = matchCcrSession(tabIds, candidates.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(pageKey(candidate))?.uuids ?? new Set() })))
-        if (match.kind === 'ambiguous') {
-          return { kind: 'failed', result: fail('match', `${match.sessionIds.length} sessions share messages with this tab (${match.sessionIds.map(maskId).join(', ')}); not guessing`) }
-        }
-        if (match.kind === 'matched') {
-          sessionId = match.sessionId
-          const matched = candidates.find((candidate) => candidate.row.id === sessionId)!
-          auth = matched.auth
-          const held = pages.get(pageKey(matched))!
-          extractCcrImages(held.events, wanted, deps.maxBytes, extracted)
-          cursor = held.cursor
-          pagesRead = round + 1
-          setCcrMapping(input.tabId, sessionId, input.epoch, auth.accountId, agentSessionId)
-          // The tab's config dir is this account's from now on: its next tabs ask it first.
-          if (input.configDir) {
-            bindCcrConfigDir(input.configDir, auth.accountId)
-          }
-          report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${match.overlap} message${match.overlap === 1 ? '' : 's'} with this tab`)
-          noteModel(input.tabId, input.epoch, matched.row, report)
-        }
+        report('match', true, `${accountCount > 1 ? `${auth.label}: ` : ''}session ${maskId(sessionId)} shares ${outcome.overlap} message${outcome.overlap === 1 ? '' : 's'} with this tab`)
+        noteModel(input.tabId, input.epoch, matched.row, report)
       }
       if (!sessionId || !auth) {
-        const detail = `none of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} shares a message with this tab in its latest ${CCR_MATCH_PAGES * CCR_EVENT_PAGE_SIZE} events`
+        const detail = `none of ${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} shares a message with this tab in ${candidates.length === 1 ? 'its' : 'their'} newest ${CCR_MATCH_FIRST_PAGE_SIZE} to ${CCR_MATCH_FIRST_PAGE_SIZE + (CCR_MATCH_PAGES - 1) * CCR_EVENT_PAGE_SIZE} events`
         if (!final) {
           report('match', true, `${accountCount > 1 ? `${group[0]!.label}: ` : ''}${detail}; asking the other accounts`)
           return { kind: 'none' }

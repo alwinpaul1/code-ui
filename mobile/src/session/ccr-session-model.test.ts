@@ -53,7 +53,7 @@ describe('the pill’s pair', () => {
   const nothing = { model: null, label: null, effort: null }
 
   it('is the session’s reported pair when nothing live states one', () => {
-    expect(preferCcrModelPair(nothing, reading(), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'xhigh' })
+    expect(preferCcrModelPair(nothing, reading(), null)).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh' })
   })
 
   // Review of 2026-10-14: a row fetched after the beacon can still name the
@@ -74,14 +74,14 @@ describe('the pill’s pair', () => {
   })
 
   it('never mixes a reported model with another source’s effort', () => {
-    expect(preferCcrModelPair(nothing, reading({ effort: null }), null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: null })
+    expect(preferCcrModelPair(nothing, reading({ effort: null }), null)).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: null })
   })
 
   it('outranks the transcript scan’s fallback in the pill', () => {
     const pair = preferCcrModelPair(nothing, reading(), null)
     expect(claudeModelPillPair(pair, { kind: 'transcript', model: { model: 'claude-sonnet-5', label: 'Sonnet 5' }, freshAsOf: 0 })).toEqual({
       model: 'claude-opus-5-5',
-      label: null,
+      label: 'Opus 5.5',
       effort: 'xhigh'
     })
   })

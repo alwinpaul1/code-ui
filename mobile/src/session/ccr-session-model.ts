@@ -103,5 +103,6 @@ export function preferCcrModelPair<T extends ModelPillPair>(today: T, reading: C
   if (!reading || beaconAt !== null || today.model) {
     return today
   }
-  return { ...today, model: reading.model, label: null, effort: reading.effort }
+  // Named as the Claude app names it ("Opus 5.5"): with no label the pill drew the raw id.
+  return { ...today, model: reading.model, label: claudeTranscriptModelName(reading.model), effort: reading.effort }
 }

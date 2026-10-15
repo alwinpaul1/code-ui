@@ -100,7 +100,7 @@ describe('the model and effort a matched session reports', () => {
   it('states the pill’s pair once the tab is matched', async () => {
     await mount({ deps: deps().deps })
     expect(reading).toMatchObject({ sessionId: SESSION_A, model: 'claude-opus-5-5', effort: 'high' })
-    expect(preferCcrModelPair({ model: null, label: null, effort: null }, reading, null)).toEqual({ model: 'claude-opus-5-5', label: null, effort: 'high' })
+    expect(preferCcrModelPair({ model: null, label: null, effort: null }, reading, null)).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'high' })
   })
 
   it('is re-read every minute while the chat is shown, following an /effort typed on the desktop', async () => {

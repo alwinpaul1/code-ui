@@ -442,7 +442,7 @@ export function useMobileNativeChatController(
       // here, so its report is always the live one; so is OMP's, see above.
       reportedModelSource: isCodexChat || isOmpChat ? 'live' : claudeReported.source,
       modelSwitchCommand: isOmpChat ? activeChatAgentStatus?.modelSwitchCommand : undefined,
-      transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan,
+      transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan, ccrModel: isCodexChat || isOmpChat ? null : ccrModel, beaconAt: hudLiveBeacon?.receivedAt ?? null,
       terminalHandle: activeHandle, queuedMessages: visibleQueuedMessages,
       openRequest: modelSheetRequest + headerModelRequests,
       structured: {
