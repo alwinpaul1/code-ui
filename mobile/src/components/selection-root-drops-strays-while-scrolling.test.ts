@@ -65,17 +65,18 @@ describe('a scroll never leaves words lit that the reader did not select', () =>
 
   it('clears a selection the cancelled gesture made before any menu opened', () => {
     const dispatch = body(root(), 'dispatchTouchEvent')
-    expect(dispatch).toMatch(/ACTION_CANCEL[\s\S]*sweepStrays\(/)
+    expect(dispatch).toMatch(/ACTION_CANCEL[\s\S]*armSweep\(/)
+    expect(body(root(), 'armSweep')).toMatch(/sweepStrays\(/)
     const sweep = body(root(), 'sweepStrays')
     expect(sweep).toMatch(/isStraySelection\(/)
-    expect(sweep).toMatch(/LiveSelections\.watching\(/)
+    expect(sweep).toMatch(/LiveSelections\.isLive\(/)
     expect(sweep).toMatch(/Selection\.removeSelection\(/)
     expect(sweep).toMatch(/Log\.w\(/)
   })
 
   it('clears one still without a menu a while after the finger lifted', () => {
     const dispatch = body(root(), 'dispatchTouchEvent')
-    expect(dispatch).toMatch(/ACTION_UP[\s\S]*postDelayed\([\s\S]*sweepStrays\(/)
+    expect(dispatch).toMatch(/ACTION_UP[\s\S]*postDelayed\(armSweep\(/)
   })
 
   it('compares against what each Text held when the finger went down, so a held selection is never a stray', () => {
@@ -101,5 +102,80 @@ describe('a row handed to another message drops the selection it held', () => {
 
   it('takes the key as a prop', () => {
     expect(code('OrcaSelectionCopyModule.kt')).toMatch(/Prop\("documentKey"\)[\s\S]*setDocumentKey\(/)
+  })
+})
+
+// Review of 1245b7fdd: every lift armed a sweep 2.5 s later that belonged to no gesture. Tap to stop
+// a fling, press a word 1.6-2.0 s later and keep holding: the long press lights it at 2.1-2.5 s,
+// the tap's old sweep fires at 2.5 s, sees lit words with no menu (that opens only at the lift)
+// and clears them under the finger, and the hold gives nothing. The decision is GestureClock,
+// pinned in StraySweepTest.kt; these pin that the root actually consults it.
+describe('a sweep armed by one gesture never runs in the next', () => {
+  it('starts a new gesture, and cancels the pending sweep, on every finger down', () => {
+    const dispatch = body(root(), 'dispatchTouchEvent')
+    const down = dispatch.slice(dispatch.indexOf('ACTION_DOWN'), dispatch.indexOf('ACTION_MOVE'))
+    expect(down).toMatch(/gestures\.down\(\)/)
+    expect(down).toMatch(/cancelPendingSweep\(\)/)
+    expect(body(root(), 'cancelPendingSweep')).toMatch(/removeCallbacks\(it\)/)
+    // A new sweep replaces the last one's, so only one is ever pending to cancel.
+    expect(body(root(), 'armSweep')).toMatch(/cancelPendingSweep\(\)[\s\S]*pendingSweep = sweep/)
+  })
+
+  it('a cancelled sweep hands its baseline on, so words the last gesture lit with no menu are still strays', () => {
+    // Without this, a second tap inside the grace would snapshot the first gesture's stray as
+    // "held before this gesture" and nothing would ever clear it.
+    const dispatch = body(root(), 'dispatchTouchEvent')
+    const down = dispatch.slice(dispatch.indexOf('ACTION_DOWN'), dispatch.indexOf('ACTION_MOVE'))
+    expect(down).toMatch(/val unswept = cancelPendingSweep\(\)[\s\S]*selectedAtDown = unswept \?: selectionsBelow\(\)/)
+    expect(body(root(), 'cancelPendingSweep')).toMatch(/return before/)
+  })
+
+  it('the lift sweep checks the gesture it was armed in before it clears anything', () => {
+    const source = root()
+    const dispatch = body(source, 'dispatchTouchEvent')
+    const up = dispatch.slice(dispatch.indexOf('ACTION_UP'), dispatch.indexOf('ACTION_CANCEL'))
+    expect(up).toMatch(/gestures\.ended\(\)/)
+    expect(up).toMatch(/postDelayed\(armSweep\(gestures\.gesture,/)
+    const arm = body(source, 'armSweep')
+    expect(arm).toMatch(/if \(!gestures\.stillDue\(armed\)\)[\s\S]*return[\s\S]*sweepStrays\(/)
+  })
+
+  it('the cancel sweep checks its gesture too', () => {
+    const dispatch = body(root(), 'dispatchTouchEvent')
+    const cancel = dispatch.slice(dispatch.indexOf('ACTION_CANCEL'))
+    expect(cancel).toMatch(/gestures\.ended\(\)/)
+    expect(cancel).toMatch(/post\(armSweep\(gestures\.gesture,/)
+  })
+
+  it('cancels a pending sweep when the document leaves the window', () => {
+    expect(body(root(), 'onDetachedFromWindow')).toMatch(/cancelPendingSweep\(\)/)
+  })
+})
+
+describe('the sweep never clears a selection put back and waiting for its menu', () => {
+  it('a sweep counts a restore awaiting its menu as live', () => {
+    expect(body(root(), 'sweepStrays')).toMatch(/LiveSelections\.isLive\(text, after\)/)
+    expect(code('StraySelection.kt')).toMatch(
+      /fun isLive\(text: TextView, current: SelectedRange\?\): Boolean =\s*live\.containsKey\(text\) \|\| awaitingMenu\.isAwaiting\(text, current\)/,
+    )
+  })
+
+  it('every put-back marks its words as awaiting their menu, and an opening clears the mark', () => {
+    expect(body(code('HeldSelection.kt'), 'reselect')).toMatch(/LiveSelections\.restored\(/)
+    expect(body(code('StraySelection.kt'), 'opened')).toMatch(/awaitingMenu\.forget\(text\)/)
+  })
+})
+
+describe('the static selection registry never keeps a Text that left the window', () => {
+  it('a watched Text that detaches leaves the registry', () => {
+    const source = root()
+    expect(body(source, 'onCreateActionMode')).toMatch(/addOnAttachStateChangeListener\(this\)/)
+    expect(body(source, 'onViewDetachedFromWindow')).toMatch(/stopWatching\(\)/)
+    expect(body(source, 'stopWatching')).toMatch(/removeOnAttachStateChangeListener\(this\)/)
+  })
+
+  it('dropping a selection whose Text already left finishes no mode and reports nothing', () => {
+    const drop = body(root(), 'drop')
+    expect(drop).toMatch(/if \(!text\.isAttachedToWindow\) \{[\s\S]*?stopWatching\(\)[\s\S]*?return\s*\}/)
   })
 })
