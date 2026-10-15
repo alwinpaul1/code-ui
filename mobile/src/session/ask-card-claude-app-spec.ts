@@ -67,11 +67,21 @@ const ASK_CARD_KEYBOARD_FLOOR = 120
  *  "Something else" raised it, and a card sized from the whole window pushed its
  *  own question off the top. With the keyboard up the share is taken of the room
  *  above it, which the app's header and the dock's other rows share with the
- *  card. The floor keeps the question and a row drawn when even that is tiny. */
-export function askCardMaxHeight(windowHeight: number, keyboardInset = 0): number {
+ *  card. The floor keeps the question and a row drawn when even that is tiny.
+ *
+ *  `besideComposer`: the composer is still drawn under the card (the agent is
+ *  not confirmed waiting on it, or dictation runs), so the card keeps the cap it
+ *  had beside one: 52 % of the window, at most 400. */
+export function askCardMaxHeight(
+  windowHeight: number,
+  keyboardInset = 0,
+  besideComposer = false
+): number {
+  const share = besideComposer ? 0.52 : 0.6
+  const ceiling = besideComposer ? 400 : Infinity
   if (keyboardInset <= 0) {
-    return Math.max(240, Math.round(windowHeight * 0.6))
+    return Math.max(240, Math.min(ceiling, Math.round(windowHeight * share)))
   }
   const room = Math.max(0, windowHeight - keyboardInset)
-  return Math.max(ASK_CARD_KEYBOARD_FLOOR, Math.round(room * 0.6))
+  return Math.max(ASK_CARD_KEYBOARD_FLOOR, Math.min(ceiling, Math.round(room * share)))
 }

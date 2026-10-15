@@ -14,12 +14,16 @@ export type MobileNativeChatPromptCardProps = {
   askKey?: string | null
   /** When this phone's answer to `ask` was accepted; the card shows it sent. */
   askSentAt?: number | null
-  /** Declining the ask only takes the card down, writing no Escape: the
-   *  question is the transcript's copy alone while the agent works, so an
-   *  Escape would interrupt the turn instead of answering anything. */
-  askDeclineLocally?: boolean
+  /** Declining the ask is refused, with a reason on the card: the question is
+   *  the transcript's copy alone while the agent works, so an Escape would
+   *  interrupt the turn. Nor is the card dismissed: the transcript can run ahead
+   *  of the hook row, and a dismissal keyed on the question would keep the card
+   *  hidden once the row flips to waiting on it. */
+  askDeclineHeld?: boolean
   /** The chat view's keyboard inset, for the ask card's height cap. */
   keyboardInset?: number
+  /** The composer is drawn under the ask card (askTakesComposerPlace false). */
+  askBesideComposer?: boolean
   onDismissAsk?: (outcome?: AskDismissOutcome) => void
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
@@ -34,6 +38,9 @@ export type MobileNativeChatPromptCardProps = {
   terminalWait?: NativeChatTerminalWait | null
   onOpenTerminal?: () => void
 }
+
+/** Why Skip declined nothing (MobileNativeChatPromptCardProps.askDeclineHeld). */
+export const ASK_DECLINE_HELD_NOTE = 'Not declined: the agent is working. Stop it first.'
 
 /** Like the Claude app, a question card takes the composer's place (2026-10-16),
  *  but only while the agent is confirmed waiting on it (`askLive`). The
@@ -62,8 +69,9 @@ export function MobileNativeChatPromptCard({
   ask,
   askKey,
   askSentAt,
-  askDeclineLocally = false,
+  askDeclineHeld = false,
   keyboardInset = 0,
+  askBesideComposer = false,
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
@@ -85,7 +93,8 @@ export function MobileNativeChatPromptCard({
         key={askKey ?? 'ask'}
         prompt={ask}
         sentAt={askSentAt ?? null}
-        keyboardInset={keyboardInset}
+        keyboardInset={keyboardInset} besideComposer={askBesideComposer}
+        declineRefusal={askDeclineHeld ? ASK_DECLINE_HELD_NOTE : null}
         onAnswer={async (selections) => {
           const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
           if (accepted) {
@@ -94,9 +103,8 @@ export function MobileNativeChatPromptCard({
           return accepted
         }}
         onCancel={async () => {
-          if (askDeclineLocally) {
-            onDismissAsk?.()
-            return true
+          if (askDeclineHeld) {
+            return false
           }
           const accepted = (await onCancelAsk?.()) ?? false
           if (accepted) {

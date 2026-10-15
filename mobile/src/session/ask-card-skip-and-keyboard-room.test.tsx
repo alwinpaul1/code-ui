@@ -173,6 +173,64 @@ describe('Skip on the last page with a page passed over by the chevron', () => {
   })
 })
 
+describe('Skip on a question the agent is not confirmed waiting on', () => {
+  it.each(['light', 'dark'] as const)(
+    'says why it declines nothing instead of writing Escape into a working turn (%s)',
+    (scheme) => {
+      const onCancel = vi.fn(async () => true)
+      act(() => {
+        tree = create(
+          createElement(
+            ThemeProvider as never,
+            { initialPreference: scheme },
+            createElement(MobileNativeChatAsk, {
+              prompt: ONE,
+              onAnswer: vi.fn(async () => true),
+              onCancel,
+              declineRefusal: 'Not declined: the agent is working'
+            })
+          )
+        )
+      })
+      act(() => skip().props.onPress())
+      expect(onCancel).not.toHaveBeenCalled()
+      const note = txts('Not declined: the agent is working')
+      expect(note).toHaveLength(1)
+      const colors = scheme === 'light' ? lightColors : darkColors
+      expect(flatten(note[0]!.props.style).color).toBe(colors.askMuted)
+    }
+  )
+})
+
+// Second review of this fix: the 60 % share assumed the composer was gone. Under
+// a question the agent is not confirmed waiting on, the composer now stays, so
+// the card goes back to the cap it had beside one (52 % of the window, at most 400).
+describe('the card’s room beside a composer', () => {
+  it('keeps the old cap when the composer is still drawn under the card', () => {
+    expect(askCardMaxHeight(915, 0, true)).toBe(400)
+    expect(askCardMaxHeight(600, 0, true)).toBe(312)
+    expect(askCardMaxHeight(823, 330, true)).toBeLessThanOrEqual(askCardMaxHeight(823, 330))
+    expect(askCardMaxHeight(915, 0)).toBeGreaterThanOrEqual(500)
+  })
+
+  it('takes the composer’s room only when the card is told it has it', () => {
+    act(() => {
+      tree = create(
+        createElement(
+          ThemeProvider as never,
+          { initialPreference: 'light' },
+          createElement(MobileNativeChatAsk, {
+            prompt: ONE,
+            onAnswer: vi.fn(async () => true),
+            besideComposer: true
+          })
+        )
+      )
+    })
+    expect(cardMaxHeight()).toBe(askCardMaxHeight(823, 0, true))
+  })
+})
+
 describe('the card’s room with the keyboard up', () => {
   it('keeps the question on screen when the keyboard takes the bottom of the window', () => {
     // 823 dp window, a 330 dp keyboard: 493 dp above it, which the app's header

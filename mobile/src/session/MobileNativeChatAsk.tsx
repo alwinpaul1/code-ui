@@ -34,6 +34,13 @@ type Props = {
   /** How much of the window the keyboard takes (the chat view's inset). The
    *  window does not shrink for it, so the card's cap must. */
   keyboardInset?: number
+  /** Set when declining must not write Escape (the agent is working and the
+   *  question is the transcript's copy alone): Skip with nothing answered then
+   *  says this in the footer instead of declining. */
+  declineRefusal?: string | null
+  /** The composer is still drawn under the card, so the card keeps the
+   *  smaller cap it had beside one (askCardMaxHeight). */
+  besideComposer?: boolean
 }
 
 /** How far the choices fade once a single-select answer is typed in the free
@@ -68,7 +75,9 @@ export function MobileNativeChatAsk({
   onAnswer,
   onCancel,
   sentAt = null,
-  keyboardInset = 0
+  keyboardInset = 0,
+  declineRefusal = null,
+  besideComposer = false
 }: Props): React.JSX.Element {
   const { colors, space } = useTheme()
   // A fixed 400 grew the dock past the viewport with the keyboard up on a short
@@ -80,7 +89,7 @@ export function MobileNativeChatAsk({
   // does not shrink for the keyboard, so with it up the share is of the room
   // above it (askCardMaxHeight).
   const { height: windowHeight } = useWindowDimensions()
-  const cardMaxHeight = askCardMaxHeight(windowHeight, keyboardInset)
+  const cardMaxHeight = askCardMaxHeight(windowHeight, keyboardInset, besideComposer)
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -89,6 +98,10 @@ export function MobileNativeChatAsk({
   // The row under a finger, so the rules beside it can let go (dc5.java j()).
   const [pressedRow, setPressedRow] = useState<number | null>(null)
   const [busy, setBusy] = useState<'sending' | 'cancelling' | null>(null)
+  // A refused decline's reason, shown while the refusal still holds: once the
+  // agent is seen waiting on the question, Skip declines it as usual.
+  const [declineNote, setDeclineNote] = useState<string | null>(null)
+  const shownDeclineNote = declineRefusal ? declineNote : null
   const busyRef = useRef(false)
   const otherInputRef = useRef<TextInput | null>(null)
   // Once the host accepts the answer the card never takes another: a second
@@ -251,6 +264,10 @@ export function MobileNativeChatAsk({
     if (busyRef.current || answeredAt !== null || !onCancel) {
       return
     }
+    if (declineRefusal) {
+      setDeclineNote(declineRefusal)
+      return
+    }
     busyRef.current = true
     setBusy('cancelling')
     try {
@@ -408,6 +425,10 @@ export function MobileNativeChatAsk({
             // have started, so it goes, and the slot says what the card waits on.
             <Txt variant="label" style={{ color: colors.askLabel }} accessibilityLiveRegion="polite">
               {waitingLong ? ASK_SENT_WAITING_LINE : ''}
+            </Txt>
+          ) : shownDeclineNote ? (
+            <Txt variant="label" style={{ color: colors.askMuted }} accessibilityLiveRegion="polite">
+              {shownDeclineNote}
             </Txt>
           ) : heldBackBy >= 0 ? (
             <Txt variant="label" style={{ color: colors.askMuted }} accessibilityLiveRegion="polite">

@@ -195,24 +195,30 @@ describe('the ask card in the dock', () => {
     expect(composer.props.canStop).toBe(true)
   })
 
-  it('declines a question only the transcript shows without writing Escape while the agent works', async () => {
+  // Neither an Escape (it would interrupt the turn) nor a dismissal: the
+  // transcript can run ahead of the hook row, and a dismissal keyed on the
+  // question would keep the card hidden once the row flips to waiting on it
+  // (second review of this fix). The card says why instead.
+  it('writes no Escape and hides nothing when a question only the transcript shows is declined while the agent works', async () => {
     const onCancelAsk = vi.fn().mockResolvedValue(true)
     const onDismissAsk = vi.fn()
     await render({ ask: ASK, askKey: 'ask-1', askLive: false, onCancelAsk, onDismissAsk })
     const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    expect(card.props.declineRefusal).toEqual(expect.stringContaining('working'))
     let declined: boolean | undefined
     await act(async () => {
       declined = await card.props.onCancel()
     })
-    expect(declined).toBe(true)
+    expect(declined).toBe(false)
     expect(onCancelAsk).not.toHaveBeenCalled()
-    expect(onDismissAsk).toHaveBeenCalledTimes(1)
+    expect(onDismissAsk).not.toHaveBeenCalled()
   })
 
   it('still writes Escape to decline a question the agent is waiting on', async () => {
     const onCancelAsk = vi.fn().mockResolvedValue(true)
     await render({ ask: ASK, askKey: 'ask-1', askLive: true, onCancelAsk, onDismissAsk: vi.fn() })
     const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    expect(card.props.declineRefusal ?? null).toBeNull()
     await act(async () => {
       await card.props.onCancel()
     })
@@ -234,6 +240,13 @@ describe('the ask card in the dock', () => {
     await render({ ask: ASK, askKey: 'ask-1', askLive: true, keyboardInset: 330 })
     const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
     expect(card.props.keyboardInset).toBe(330)
+    expect(card.props.besideComposer).toBe(false)
+  })
+
+  it('tells the question card when the composer is still drawn under it', async () => {
+    await render({ ask: ASK, askKey: 'ask-1', askLive: false })
+    const card = renderer!.root.find((node) => String(node.type) === 'ChatAsk')
+    expect(card.props.besideComposer).toBe(true)
   })
 })
 

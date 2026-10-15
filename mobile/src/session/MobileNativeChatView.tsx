@@ -315,7 +315,7 @@ export function MobileNativeChatView({
   // for it (2026-10-16: the user saw a plain spinner where the Claude app shows Clawd).
   const showLoading = messages.length === 0 && (status === 'loading' || status === 'idle' || loadingEarlier === true)
 
-  const lockReason = useMobileNativeChatInputLock(inputLockReason)
+  const lockReason = useMobileNativeChatInputLock(inputLockReason), askTakesComposer = askTakesComposerPlace({ ask, askLive, askSentAt, micActive, micTranscribing })
 
   return (
     <MobileNativeChatTasksProvider
@@ -437,7 +437,7 @@ export function MobileNativeChatView({
           height is measured with the dock, which is what the list's spacer
           clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
-        ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk} askDeclineLocally={!askLive && agentWorking === true} keyboardInset={keyboardInset}
+        ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk} askDeclineHeld={!askLive && agentWorking === true} keyboardInset={keyboardInset} askBesideComposer={!askTakesComposer}
         onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}
@@ -450,7 +450,7 @@ export function MobileNativeChatView({
       {notices}{sessionPills}
       <MobileNativeChatSessionBar list={composerList} working={agentWorking === true} />
       {/* Like the Claude app, a live question card takes the composer's place (askTakesComposerPlace). */}
-      {askTakesComposerPlace({ ask, askLive, askSentAt, micActive, micTranscribing }) ? null : (<MobileNativeChatComposer
+      {askTakesComposer ? null : (<MobileNativeChatComposer
         banner={composerBanner} value={composerText}
         onChangeText={onComposerTextChange}
         focusRequest={composerFocusRequest}
