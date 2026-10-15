@@ -4,12 +4,12 @@ import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
 import { useAnthropicDictation } from '../hooks/use-anthropic-dictation'
-import type { DictationPaint } from '../hooks/mobile-live-transcript'
+import { paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-transcript'
 import { chooseDictationEngine } from '../dictation/dictation-engine'
 import { useDictationHoldMode } from './use-dictation-hold-mode'
 import {
   deliverSessionDesktopDictation,
-  placeSpokenText,
+  placeLiveTranscript,
   type LiveDictationTarget
 } from '../dictation/place-dictation-transcript'
 import { eraseLiveTranscript, ptyDictationTarget } from '../dictation/live-terminal-dictation'
@@ -83,20 +83,50 @@ export function useMobileSessionNativeChatDictation(
   // The take's words for the caption above the recording row (MobileNativeChatDictationCaption).
   const [dictationCaption, setDictationCaption] = useState('')
   const liveTargetRef = useRef<LiveDictationTarget>({ kind: 'chat' })
+  // A chat take's words live in the caption until the take ends and only then move into the
+  // draft, as the Claude app's do (docs/claude-mobile-dictation-decompiled.md, "Where the words
+  // go"). `open` turns false once the take has committed or been cancelled, so a final that lands
+  // after a Cancel cannot bring the words back.
+  const chatTakeRef = useRef({ open: false, spoken: '' })
 
-  const onSpoken = (text: string, _final?: boolean, interim = '') => {
-    hold.markTextProduced()
-    if (liveTargetRef.current.kind === 'chat') {
-      setDictationCaption(text)
+  const commitChatTake = (spoken: string) => {
+    chatTakeRef.current = { open: false, spoken: '' }
+    if (!spoken.trim()) {
+      return
     }
     const { prefix, suffix } = chatInsertRef.current
-    setDictationPaint(placeSpokenText(
-      text, interim, liveTargetRef.current, prefix, suffix,
-      liveBaseTextRef.current, nativeChatController.setChatComposerText,
-      setInput, sendLiveTerminalInput
-    ))
+    const painted = paintSpokenAtCursor(prefix, suffix, spoken, '')
+    nativeChatController.setChatComposerText(() => painted.text)
+    setDictationPaint(painted)
   }
-  const onSpokenError = (err: Error) => { triggerError(); showToast(err.message) }
+
+  const onSpoken = (text: string, final?: boolean) => {
+    hold.markTextProduced()
+    if (liveTargetRef.current.kind === 'chat') {
+      if (!chatTakeRef.current.open) {
+        return
+      }
+      chatTakeRef.current.spoken = text
+      setDictationCaption(text)
+      if (final === true) {
+        commitChatTake(text)
+      }
+      return
+    }
+    // The terminal's command box and live PTY line still take the words as they come.
+    placeLiveTranscript(
+      text, liveBaseTextRef.current, liveTargetRef.current,
+      nativeChatController.setChatComposerText, setInput, sendLiveTerminalInput
+    )
+  }
+  const onSpokenError = (err: Error) => {
+    // The words heard before the failure still move in (the Claude app's Error(partialText)).
+    if (liveTargetRef.current.kind === 'chat' && chatTakeRef.current.open) {
+      commitChatTake(chatTakeRef.current.spoken)
+    }
+    triggerError()
+    showToast(err.message)
+  }
   const liveTranscription = useMobileLiveTranscription({ onTranscript: onSpoken, onError: onSpokenError })
   const clipboard = useClipboardWriter()
   const desktopDictation = useMobileDictation({
@@ -144,6 +174,7 @@ export function useMobileSessionNativeChatDictation(
         liveBaseTextRef.current = draft
         setDictationPaint(null)
         setDictationCaption('')
+        chatTakeRef.current = { open: true, spoken: '' }
       } else if (activeHandle && liveInputTerminalHandles.has(activeHandle)) {
         liveTargetRef.current = ptyDictationTarget(activeHandle, liveTargetRef.current)
       } else {
@@ -171,8 +202,9 @@ export function useMobileSessionNativeChatDictation(
       const base = liveBaseTextRef.current
       const target = liveTargetRef.current
       liveBaseTextRef.current = forSend ? '' : base
-      if (!forSend && target.kind === 'chat') {
-        nativeChatController.setChatComposerText(() => base)
+      if (target.kind === 'chat') {
+        // The draft was never touched while the take ran, so there is nothing to put back.
+        chatTakeRef.current = { open: false, spoken: '' }
       } else if (target.kind === 'buffered') {
         setInput(() => base)
       } else if (target.kind === 'pty') {

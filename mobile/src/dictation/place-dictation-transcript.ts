@@ -1,4 +1,4 @@
-import { applyLiveTranscript, paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-transcript'
+import { applyLiveTranscript } from '../hooks/mobile-live-transcript'
 import {
   appendBufferedDictation,
   routeDictationTranscript
@@ -11,27 +11,6 @@ export type LiveDictationTarget = { kind: 'chat' } | { kind: 'buffered' } | PtyD
 
 type ComposerUpdate = (update: () => string) => void
 type InputUpdate = (update: (current: string) => string) => void
-
-export function placeSpokenText(
-  text: string,
-  interim: string,
-  target: LiveDictationTarget,
-  prefix: string,
-  suffix: string,
-  base: string,
-  setChatComposerText: ComposerUpdate,
-  setInput: InputUpdate,
-  sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
-): DictationPaint | null {
-  if (target.kind === 'chat') {
-    const painted = paintSpokenAtCursor(prefix, suffix, text, interim)
-    setChatComposerText(() => painted.text)
-    // Always, interim or not: the composer puts the caret at `caret` while the app dictates.
-    return painted
-  }
-  placeLiveTranscript(text, base, target, setChatComposerText, setInput, sendLiveTerminalInput)
-  return null
-}
 
 export function placeLiveTranscript(
   text: string,
