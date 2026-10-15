@@ -22,7 +22,13 @@ export type MobileNativeChatEmptyStateEvidence = {
   /** The session the chat reads, and the one a nested agent's status named
    *  instead (native-chat-kept-session.ts). Absent: the status's own session. */
   sessionIdentity?: NativeChatSessionIdentity | null
+  /** A Claude tab whose chat is Anthropic's copy of its session: an empty conversation there is
+   *  the Claude app's "What are we building?" (rp30.java:882), with no subtitle. */
+  anthropicTab?: boolean
 }
+
+/** The Claude app's title for a session with no message (`code_empty_what_are_we_building_title`). */
+export const CLAUDE_APP_EMPTY_TITLE = 'What are we building?'
 
 /** Agents whose own hooks name their transcript on every event, so a status
  *  of theirs that names none is most likely another agent's
@@ -133,6 +139,9 @@ export function mobileNativeChatEmptyState(
     case 'waiting-session':
     case 'awaiting-transcript':
     case 'ready': {
+      if (status === 'ready' && evidence.anthropicTab === true) {
+        return { title: CLAUDE_APP_EMPTY_TITLE, subtitle: '' }
+      }
       const copy = formatNativeChatEmptyStateCopy('empty', agentLabel)
       const detail = emptyConversationDetail(status, agent, agentLabel, evidence)
       return detail ? { ...copy, detail } : copy
