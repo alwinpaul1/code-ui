@@ -35,3 +35,20 @@ export function composerPlaceholder(
   // The Claude app's own (`ccr_input_placeholder_existing_session` / `_queue`, 1.261009.20).
   return agentWorking ? 'Queue a message…' : 'Type / for commands'
 }
+
+/** The composer's lock for the tab on screen. An agent-session tab is locked by the relay alone.
+ *  A terminal tab is locked by its input lease ("Reconnecting…", "Waiting for terminal…"), except
+ *  while a matched Claude tab's Anthropic lane is live (use-ccr-control-lane.ts): its text sends
+ *  are a POST into the session then, which needs no terminal, and the Claude app locks its
+ *  composer on none of this (parity audit 2026-10-15, gap 1). */
+export function nativeChatComposerLockReason(input: {
+  agentSessionTab: boolean
+  relayConnected: boolean
+  leaseLock: 'waiting' | 'disconnected' | null
+  anthropicLaneLive: boolean
+}): 'waiting' | 'disconnected' | null {
+  if (input.agentSessionTab) {
+    return input.relayConnected ? null : 'disconnected'
+  }
+  return input.anthropicLaneLive ? null : input.leaseLock
+}

@@ -320,8 +320,13 @@ export type MobileNativeChatController = {
    *  the header pill states; see session-model-pill.ts for why not the
    *  snapshot. */
   nativeChatLiveModel: { model: string | null; label: string | null; effort: string | null }
-  /** Permission mode from the terminal footer, or null when no status line is observed. */
+  /** Permission mode: a matched Claude tab's own word on Anthropic's stream while its link is live
+   *  (use-ccr-control-lane.ts), else the terminal footer or beacon; null when neither states one. */
   nativeChatPermissionMode: TerminalPermissionMode | null
+  /** A matched Claude tab's Anthropic control lane (use-ccr-control-lane.ts): whether it drives the
+   *  tab now (the composer's lease lock is lifted then), and a mode pick through
+   *  `set_permission_mode`, absent while the lane is not live (Shift+Tab then). */
+  nativeChatAnthropicControl?: { live: boolean; setPermissionMode?: (mode: TerminalPermissionMode) => Promise<string | null> }
   /** Codex collaboration mode (Default / Plan) from its footer, or null. */
   nativeChatAgentMode: TerminalAgentMode | null
   /** Claude Code's spinner line off the screen, for the status line; null on

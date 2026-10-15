@@ -22,6 +22,7 @@ import {
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
+import { nativeChatComposerLockReason } from './use-mobile-native-chat-input-lock'
 import { useMobileNativeChatSendError, mobileNativeChatSendErrorMessage } from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
@@ -60,10 +61,13 @@ export function useMobileSessionNativeChatDictation(
   const sendErrorMessage = useMemo(() => mobileNativeChatSendErrorMessage({ message: sendErrorText, failure: sendErrorFailure }, chatMessages), [sendErrorText, sendErrorFailure, chatMessages])
   nativeChatSendError.bannerMountedRef.current = showNativeChat
   nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
-  const nativeChatOverlayInputLockReason =
-    activeSessionTab?.type === 'agent-session'
-      ? connState === 'connected' ? null : 'disconnected'
-      : nativeChatInputLockReason
+  // A matched Claude tab whose Anthropic lane is live sends with no terminal: its lease lock is lifted (gap 1).
+  const nativeChatOverlayInputLockReason = nativeChatComposerLockReason({
+    agentSessionTab: activeSessionTab?.type === 'agent-session',
+    relayConnected: connState === 'connected',
+    leaseLock: nativeChatInputLockReason,
+    anthropicLaneLive: nativeChatController.nativeChatAnthropicControl?.live === true
+  })
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
     onBlur: resetLiveInputFocus,

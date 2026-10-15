@@ -3,6 +3,17 @@ import { mobileChatPermissionKey } from '../session/mobile-native-chat-permissio
 import type { ClaudePermissionCommentOutcome } from '../session/claude-permission-comment-send'
 import type { PendingPrompt } from './permission-lookup'
 import { PERMISSION_COMMENT_ACTION } from './permission-notification-content'
+import type { CcrPermissionChoice } from '../session/ccr-permission-request'
+import type { CcrNotificationAnswer } from '../session/ccr-permission-answerers'
+
+const ESCAPE = String.fromCharCode(27)
+
+/** A banner button as a choice on Anthropic's lane: the approval envelope's two options ('1' to
+ *  allow, Escape to refuse, parseApprovalFromStatus) and Deny with comment. Any other key has no
+ *  choice there and takes the terminal path. */
+function anthropicChoice(isComment: boolean, text: string | undefined): CcrPermissionChoice | null {
+  return isComment || text === ESCAPE ? 'deny' : text === '1' ? 'allow' : null
+}
 
 /** What a permission notification carries so its buttons can be answered. */
 export type PermissionNotificationData = {
@@ -15,6 +26,9 @@ export type PermissionNotificationData = {
   /** The banner offers Deny with comment (PERMISSION_COMMENT_ACTION). Absent for a banner that
    *  does not, so a tap that names it anyway answers nothing. */
   comment?: true
+  /** The Anthropic `can_use_tool` request the banner was built for, when a live lane held it then
+   *  (ccr-permission-answerers.ts): a tap answers that request or nothing on that lane. */
+  ccrRequestId?: string
 }
 
 /** How a tap on a prompt banner's button ended. Shared by the permission and
@@ -45,6 +59,7 @@ function readData(value: unknown): PermissionNotificationData | null {
   const permissionKey: unknown = Reflect.get(box, 'permissionKey')
   const sends: unknown = Reflect.get(box, 'sends')
   const comment: unknown = Reflect.get(box, 'comment')
+  const ccrRequestId: unknown = Reflect.get(box, 'ccrRequestId')
   if (
     typeof hostId !== 'string' ||
     typeof worktreeId !== 'string' ||
@@ -59,7 +74,8 @@ function readData(value: unknown): PermissionNotificationData | null {
     worktreeId,
     permissionKey,
     sends: sends as Record<string, string>,
-    ...(comment === true ? { comment: true as const } : {})
+    ...(comment === true ? { comment: true as const } : {}),
+    ...(typeof ccrRequestId === 'string' && ccrRequestId ? { ccrRequestId } : {})
   }
 }
 
@@ -102,6 +118,9 @@ export async function answerPermissionFromNotification(args: {
   resolveClient: (hostId: string) => RpcClient | null
   lookup: (client: RpcClient, worktreeId: string) => Promise<PendingPrompt | null>
   send: (input: { client: RpcClient; terminal: string; text: string }) => Promise<boolean>
+  /** A live Anthropic lane holding the same prompt answers it with a `control_response`
+   *  (ccr-permission-answerers.ts); null when none does, and the terminal path runs. */
+  viaAnthropic?: (input: CcrNotificationAnswer) => Promise<boolean | 'stale'> | null
   /** Types a comment into the agent's own dialog (Deny with comment). */
   sendComment?: (input: {
     client: RpcClient
@@ -119,7 +138,7 @@ export async function answerPermissionFromNotification(args: {
     const text = data.sends[args.actionIdentifier]
     if (isComment) {
       // Only a banner that offered the button can be answered through it.
-      if (data.comment !== true || !args.sendComment) {
+      if (data.comment !== true || (!args.sendComment && !args.viaAnthropic)) {
         return 'not-an-answer'
       }
       if (comment === '') {
@@ -129,6 +148,13 @@ export async function answerPermissionFromNotification(args: {
       // Android delivers the DEFAULT identifier when the body is tapped rather
       // than a button. That is "open the app", not "answer", and must not send.
       return 'not-an-answer'
+    }
+    // The Claude app's road first: the session's own lane, which needs no relay.
+    const choice = anthropicChoice(isComment, text)
+    const viaAnthropic = choice ? args.viaAnthropic?.({ hostId: data.hostId, worktreeId: data.worktreeId, permissionKey: data.permissionKey, ...(data.ccrRequestId ? { requestId: data.ccrRequestId } : {}), choice, ...(isComment ? { comment } : {}) }) : null
+    if (viaAnthropic) {
+      const answered = await viaAnthropic
+      return answered === 'stale' ? 'stale' : answered ? 'sent' : 'failed'
     }
     const client = args.resolveClient(data.hostId)
     if (!client) {
@@ -155,7 +181,7 @@ export async function answerPermissionFromNotification(args: {
           reason: `the prompt is waiting in ${pending.agent}, whose dialog this was not verified against`
         })
       }
-      return await args.sendComment!({ client, terminal: pending.terminal, comment })
+      return args.sendComment ? await args.sendComment({ client, terminal: pending.terminal, comment }) : 'unroutable'
     }
     // Why the option must still be on offer: an agent can re-ask the same
     // question with different choices, which passes the key check while the

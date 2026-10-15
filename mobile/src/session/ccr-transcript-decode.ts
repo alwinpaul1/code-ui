@@ -319,7 +319,8 @@ export function decodeCcrEvent(event: CcrEvent): NativeChatMessage[] {
       ]
     default:
       // `result` anchors the turn and draws nothing (m330.java:311); `rate_limit_event` is a banner,
-      // `control_request`/`control_response` are cards, `stream_event` is the live draft.
+      // `stream_event` is the live draft. A `can_use_tool` `control_request` is the permission card,
+      // read off the events by ccr-permission-request.ts (use-ccr-control-lane.ts), not a row.
       return []
   }
 }
