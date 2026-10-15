@@ -8,9 +8,10 @@ export const SESSION_INTERRUPTED_TEXT = 'Session interrupted'
  * The words of a row drawn as an error rather than as the agent speaking, or
  * null for any other row: only the status row Orca's decoders write for a
  * stopped turn (Claude Code's `interruptedMessageId` record, Codex's
- * `turn_aborted`), in the Claude app's words. A matched Claude tab never has
- * one: the app draws nothing after Stop, and its decoder writes none
- * (ccr-transcript-decode.ts).
+ * `turn_aborted`), in the Claude app's words. Only Codex draws it: the Claude
+ * app draws nothing after Stop, so a matched Claude tab's decoder writes none
+ * (ccr-transcript-decode.ts) and a Claude tab Orca reads leaves Orca's out of
+ * its list (buildMobileNativeChatTransientData).
  *
  * A Claude Code API error is the agent's plain words, as the Claude app draws
  * it (1.261013.20: an assistant item, no error styling; `nx30.f` rewords only

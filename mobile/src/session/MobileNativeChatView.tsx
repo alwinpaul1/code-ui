@@ -161,9 +161,10 @@ export function MobileNativeChatView({
         folded,
         streaming,
         pending,
-        imagePreviewsByMessageId
+        imagePreviewsByMessageId,
+        agent
       }),
-    [messages, folded, streaming, pending, imagePreviewsByMessageId]
+    [messages, folded, streaming, pending, imagePreviewsByMessageId, agent]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
   // A reply's actions are drawn once, under the turn's last message; its Copy

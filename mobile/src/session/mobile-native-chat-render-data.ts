@@ -14,6 +14,7 @@ import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholder
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import {
   isImageRefBlock,
+  isInterruptedStatusMessage,
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
@@ -185,7 +186,8 @@ export function buildMobileNativeChatTransientData({
   folded,
   streaming,
   pending,
-  imagePreviewsByMessageId
+  imagePreviewsByMessageId,
+  agent
 }: {
   /** Raw transcript rows, used to project folded-away send boundaries. */
   messages: NativeChatMessage[]
@@ -194,9 +196,15 @@ export function buildMobileNativeChatTransientData({
   streaming: string | null
   pending: MobileNativeChatPendingItem[]
   imagePreviewsByMessageId?: Record<string, string[]>
+  /** The tab's agent. A Claude tab draws no row for a Stop, as the Claude app
+   *  draws none (1.261013.20: `u5a.j`, `t5v`, `gy30`); Orca's decoder still
+   *  writes one for a tab not matched to an Anthropic session. A send placed
+   *  after that row sits after the row before it. Codex keeps its row. */
+  agent?: string | null
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
-  const previewsByFoldedId = remapPreviewsToFold(messages, folded, imagePreviewsByMessageId)
-  const renderedFolded = folded.map((message) => {
+  const shown = agent === 'claude' ? folded.filter((message) => !isInterruptedStatusMessage(message)) : folded
+  const previewsByFoldedId = remapPreviewsToFold(messages, shown, imagePreviewsByMessageId)
+  const renderedFolded = shown.map((message) => {
     const previews = previewsByFoldedId?.[message.id]
     if (message.role === 'assistant') {
       // The transcript gives the phone no image block for a Read, and only a
