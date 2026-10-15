@@ -9,6 +9,7 @@ import { useStableEchoes } from './use-stable-echoes'
 import { preferredWitnessReading, readingGluesToolRowsOnto } from './mobile-native-chat-witness-dedupe'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { rowsFromAnchor } from './rows-from-anchor'
+import { sameRecalledWords } from './queue-recalls'
 import {
   normalizeNativeChatUserText,
   stripImagePromptMarker
@@ -119,7 +120,11 @@ export function useAbsorbedQueueWitness(
   // empty: the box is taken to hold what it held, so nothing is held or
   // revived on it, and a message the agent took meanwhile is held at the next
   // read that sees the box, where it arrived.
-  boxReadable = true
+  boxReadable = true,
+  // The entries this read saw recalled into the agent's input for editing
+  // (useQueueRecalls): they left the box without being taken, and are never
+  // drawn as a message sent (queue-recalls.ts).
+  recalled: readonly string[] = []
 ): { echoes: MobileNativeChatPendingMessage[]; box: readonly BoxSighting[] } {
   /** By `seq`, not by words: two messages of the same words are two echoes. */
   const held = useRef(new Map<number, HeldEcho>())
@@ -178,8 +183,14 @@ export function useAbsorbedQueueWitness(
   // read (matchBoxSlots). An entry that matched none arrived; one of the last
   // read that nothing matched left the box, and the agent has it. A read that
   // could not see the box is none of those: the last read stands.
+  // An entry recalled into the agent's input (Up at the desk, the phone's
+  // pencil or tap) left the box without being sent, so it is forgotten here,
+  // not held: no echo. Whatever the box lists now is a new message with a
+  // sighting of its own, edited words that go on from the old ones included,
+  // which matchBoxSlots would otherwise take for the old entry read longer
+  // (queue-recalls.ts, 2026-10-15).
   const { slots, left, arrived } = boxReadable
-    ? matchBoxSlots(previous.current, queued, anchorId, !seenBox.current)
+    ? matchBoxSlots(withoutRecalled(previous.current, recalled), queued, anchorId, !seenBox.current)
     : { slots: [...previous.current], left: [], arrived: [] }
   seenBox.current ||= boxReadable
   const hold = (slot: BoxSlot): void => {
@@ -322,6 +333,22 @@ export function useAbsorbedQueueWitness(
     echoes: useStableEchoes(echoes),
     box: boxReadable ? slots.map(({ row, text, sighting, firstRead }) => ({ row, text, sighting, firstRead })) : []
   }
+}
+
+/** The box as last read less the entries recalled since, the newest entry
+ *  of each recalled message's words. */
+function withoutRecalled(before: readonly BoxSlot[], recalled: readonly string[]): readonly BoxSlot[] {
+  if (recalled.length === 0) {
+    return before
+  }
+  const out = [...before]
+  for (const text of recalled) {
+    const index = out.findLastIndex((slot) => sameRecalledWords(slot.text, text))
+    if (index !== -1) {
+      out.splice(index, 1)
+    }
+  }
+  return out
 }
 
 /** A screen reading that stops short of the row that landed — the parser ends

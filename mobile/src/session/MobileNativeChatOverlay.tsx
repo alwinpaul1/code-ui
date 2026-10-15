@@ -31,8 +31,8 @@ import { screenRowBodies, type BeaconAgentMessage, type StatusSubagentMessage } 
 import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
-import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueWitness } from './use-absorbed-queue-echoes'
+import { useRecalledQueueCopies } from './queue-recalls'
 import { queuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
 import { openImageMarkup } from './image-markup-store'
 import { setChatMarkupAttachTarget } from './chat-image-markup-target'
@@ -48,7 +48,6 @@ import { placedByHarnessTurns } from './desk-prompt-harness-turns'
 import { useWithoutScheduledTicks } from './scheduled-prompt-ticks'
 const CLIPBOARD_POLL_MS = 3000
 
-const NO_PROMPTS: DesktopPrompt[] = []
 const NO_SCREEN_PROMPTS: string[] = []
 const NO_PEER_ROWS: ScreenPeerRow[] = []
 const NO_AGENT_MESSAGES: BeaconAgentMessage[] = []
@@ -190,10 +189,15 @@ export function MobileNativeChatOverlay({
   }, [])
 
   const agentWorking = controller.nativeChatAgentWorking === true
+  // A queued message recalled into the agent's input for editing (Up, the
+  // pencil, a tap) left the box without being sent: no echo is drawn for it,
+  // and the copies the chat held of it are withdrawn, so an edit never draws
+  // the message as sent beside its own queue row (queue-recalls.ts, 2026-10-15).
+  const recalls = useRecalledQueueCopies(controller)
   // A send made mid-turn is queued from the moment it exists, not from the
   // first screen read that finds it in the agent's box (2026-09-25).
   const projectedQueue = useQueuedOwnSends(
-    controller.chatPending,
+    recalls.pending,
     queuedMessages,
     controller.nativeChatAgentWorking === true,
     {
@@ -239,7 +243,7 @@ export function MobileNativeChatOverlay({
   // ride the HUD beacon instead (2026-09-13).
   // A held copy the transcript can now place goes to its run
   // (desk-prompt-harness-turns.ts, 2026-09-27).
-  const statusAndBeaconPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  const statusAndBeaconPrompts = recalls.prompts
   // A loop's tick is no person's prompt: no bubble (scheduled-prompt-ticks.ts).
   const unticked = useWithoutScheduledTicks(statusAndBeaconPrompts, session.messages, controller.nativeChatSessionIdentity?.sessionId)
   const desktopPrompts = useMemo(() => placedByHarnessTurns(unticked, session.messages), [session.messages, unticked])
@@ -255,9 +259,9 @@ export function MobileNativeChatOverlay({
   const pairingPending = useMemo(
     () =>
       waitingPhotoSends?.length
-        ? [...controller.chatPending, ...waitingPhotoSends.filter((send) => !controller.chatPending.some((item) => item.id === send.id))]
-        : controller.chatPending,
-    [controller.chatPending, waitingPhotoSends]
+        ? [...recalls.pending, ...waitingPhotoSends.filter((send) => !recalls.pending.some((item) => item.id === send.id))]
+        : recalls.pending,
+    [recalls.pending, waitingPhotoSends]
   )
   const hookPairing = useMemo(
     () => pairPendingWithHookPrompts(pairingPending, desktopPrompts, session.messages, boundPhotoCopy, isOwnPhotoStatusCopy),
@@ -307,7 +311,8 @@ export function MobileNativeChatOverlay({
     session.status === 'ready' && session.baseRetained !== true,
     controller.nativeChatPromptHook === true
   )
-  const { echoes: absorbedEchoes, box: boxSightings } = useAbsorbedQueueWitness(
+  // The box as the witness read it, kept for a recall's withdrawals.
+  const { echoes: absorbedEchoes, box: boxSightings } = recalls.saw(useAbsorbedQueueWitness(
     queuedMessages ?? [],
     controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
     baseFolded,
@@ -317,9 +322,10 @@ export function MobileNativeChatOverlay({
     controller.nativeChatStreamScopeKey,
     session.messages,
     ownPrompts,
-    // A read that could not see the box is unknown, not an empty box.
-    controller.nativeChatQueueReadable !== false
-  )
+    // A read that could not see the box is unknown, not an empty box; an
+    // entry recalled for editing is no message taken.
+    controller.nativeChatQueueReadable !== false, recalls.recalled
+  ))
   // Drawn where Claude took it, at the live end until then (mid-turn-take-point.ts);
   // the witness memory keeps the send's place, and drawing starts from there.
   const takenDesktopEchoes = useMemo(() => placeWhereTaken(desktopEchoes, session.messages, agentWorking), [agentWorking, desktopEchoes, session.messages])
@@ -377,7 +383,7 @@ export function MobileNativeChatOverlay({
   // A message still in the agent's queue box too (use-queued-desk-witnesses.ts).
   useRememberedWitnesses(
     [...absorbedEchoes, ...desktopEchoes],
-    queuedDeskWitnesses(projectedQueue.queue, boxSightings, session.messages),
+    recalls.listed(queuedDeskWitnesses(projectedQueue.queue, boxSightings, session.messages)),
     controller.rememberEcho
   )
   const pendingWithDesktopPrompts = useMemo(() => {

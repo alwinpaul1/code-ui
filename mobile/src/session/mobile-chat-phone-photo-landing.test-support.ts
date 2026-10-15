@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { resetPhotoCopyBindingsForTests } from './desktop-prompt-photo-copies'
 import { resetScreenPeerNoticesForTests } from './use-screen-peer-notices'
+import { resetQueueRecallsForTests } from './queue-recalls'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { mergeImagePreviews } from './use-host-image-previews'
@@ -116,6 +117,9 @@ export type Tick = {
   /** Whether the screen read behind `queued` could see the agent's queue box
    *  (the controller's `nativeChatQueueReadable`); left out, it could. */
   queueReadable?: boolean
+  /** The words in the agent's input on the read behind `queued` (the
+   *  controller's `nativeChatAgentInput`); left out, it was empty. */
+  input?: string
   screen?: string[]
   agent?: 'claude' | 'codex'
   /** The subagent messages the prompt beacon carried (the controller's
@@ -179,6 +183,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
     // Each case is its own app launch: no send pairs with a copy from another.
     resetPhotoCopyBindingsForTests()
     resetScreenPeerNoticesForTests()
+    resetQueueRecallsForTests()
   })
   afterEach(async () => {
     act(() => renderer?.unmount())
@@ -227,6 +232,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatDesktopPrompts: tick.prompts,
       nativeChatQueuedMessages: tick.queued ?? [],
       nativeChatQueueReadable: tick.queueReadable ?? true,
+      nativeChatAgentInput: tick.input ?? '',
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
       nativeChatAgentMessages: tick.agentMessages ?? [],
       nativeChatScreenPeerNotices: tick.peerRows === undefined ? [] : tick.peerRows,

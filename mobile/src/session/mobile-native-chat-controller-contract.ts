@@ -111,6 +111,10 @@ export type MobileNativeChatController = {
    *  only then: under a Claude rule that carries the session name Orca
    *  publishes no draft and the recall is refused (native-queue-editor.ts). */
   nativeChatQueueEditable?: boolean
+  /** The words in the agent's own input on the same read (QueueBoxRead.input),
+   *  '' when empty. A queued message that leaves the box into it was recalled
+   *  for editing, not sent (queue-recalls.ts). Absent reads as empty. */
+  nativeChatAgentInput?: string
   chatImagePreviewsByMessageId: Record<string, string[]>
   /** What a refused picture's placeholder needs to ask the agent for it; null
    *  where pictures are never asked of the host (agent-image-share-ask.ts). */

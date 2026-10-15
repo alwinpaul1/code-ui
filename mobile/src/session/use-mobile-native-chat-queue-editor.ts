@@ -21,6 +21,7 @@ import {
   type QueueEditorIo
 } from './native-queue-editor'
 import { recallNativeQueueFor } from './native-queue-recall-target'
+import { notePhoneQueueRecall } from './queue-recalls'
 export type { QueueEditorAgent } from './native-queue-editor'
 
 /** A recall whose read failed leaves an unknown amount on the agent. The line
@@ -187,6 +188,9 @@ export function useMobileNativeChatQueueEditor(args: {
         const recalled = await recallNativeQueueFor(target, watched, agent, index, tapped)
         recall = recalled.recall
         target = recalled.target
+        // What left the agent's queue went into its input, unsent: the chat
+        // must not draw it as a message the agent took (queue-recalls.ts).
+        notePhoneQueueRecall(recall.segments ?? [recall.text])
       } catch (cause) {
         if (wrote) {
           // Up has already emptied the queue into the agent's composer. Whatever
@@ -203,8 +207,18 @@ export function useMobileNativeChatQueueEditor(args: {
       // A recalled message is now an unsent draft. Its former optimistic bubble
       // must not reappear as delivered when the queue preview disappears.
       // Match the full original, never a truncated terminal preview.
+      // The phone's own send only: a witness the chat stored of a message sent
+      // elsewhere (`absorbed-`, `desk-`) is withdrawn by the chat, by the id of
+      // the entry that was recalled (queue-recalls.ts). Taken here by its words,
+      // the newest of them could be an earlier message's, and when the message
+      // went back in the queue before any read saw it leave, its own witness
+      // was gone and its take was drawn nowhere (2026-10-15).
       const pending = start.pending?.findLast(
-        (item) => !item.images?.length && item.text.trim() === recall.text.trim()
+        (item) =>
+          !item.images?.length &&
+          !item.id.startsWith('absorbed-') &&
+          !item.id.startsWith('desk-') &&
+          item.text.trim() === recall.text.trim()
       )
       if (pending) {
         start.removePending?.(pending.id)
