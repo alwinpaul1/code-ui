@@ -157,6 +157,16 @@ describe('the rolling line on screen', () => {
     expect(moving.map((n) => n.props.children)).toEqual(['9', '0'])
   })
 
+  // Second review of bbe93c5a9: the leaving and arriving digits slide a full line height, and an
+  // unclipped slot paints them over the message above and the composer below for ~130 ms.
+  it('clips a rolling digit to its own line, so it never paints over the message above', () => {
+    const root = draw('9s')
+    draw('10s')
+    const moving = root.findAll((n) => (n.type as unknown) === 'AnimatedText')
+    const slot = moving[0]!.parent!
+    expect(slot.props.style).toMatchObject({ overflow: 'hidden', height: 21 })
+  })
+
   it('under reduced motion draws the new digit with no roll', () => {
     mocks.reduced = true
     const root = draw('9s')

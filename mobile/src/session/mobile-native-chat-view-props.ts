@@ -85,7 +85,8 @@ export type MobileNativeChatViewProps = {
   reportBackgroundTaskFailure?: (message: string) => void
   /** The host connection: the Background tasks sheet's rows read "Status unknown" while it is down. */
   hostConnection?: BackgroundTasksConnection
-  /** Claude Code's spinner line as its screen paints it, for the status line. */
+  /** Claude Code's spinner line as its screen paints it. Unread since the working footer moved into
+   *  the list (bbe93c5a9): the footer takes its verb and stats from the controller and Anthropic. */
   spinner?: ClaudeSpinner | null
   /** Interrupt the agent mid-turn: Stop in the composer's send slot while
    *  nothing is typed. */

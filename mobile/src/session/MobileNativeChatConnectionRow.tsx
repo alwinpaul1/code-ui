@@ -11,14 +11,15 @@ import {
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 // The Claude app's connection row (com.anthropic.claude 1.261009.20, `nl7.b` drawing `au8`'s message).
-// A row 16 dp above and below (`rrb.Q(.., 0, 16)`), the 16 dp clay mark, an 8 dp gap (`ixv.u(8)`), the
+// A row 16 dp above and below (`rrb.Q(.., 0, 16)`), the clay mark, an 8 dp gap (`ixv.u(8)`), the
 // message at `jn7.E` 15/400/1.4 in `pl7.e` (`nl7.d`: one line here, `maxLines` 1). The mark is drawn
 // animated whenever a message is (`nl7.b` passes the busy flag to it for every message state).
 //
 // Code UI's tokens stand in where the app's have no match: the clay `pl7.e` (#C6613F light, #D97757
-// dark) is `composerSend`, the same value; the mark is Code UI's own starburst
-// (MobileBackgroundTasksPulse), 15 dp where the app's sprite is 16. The row's side padding is the
-// dock's (`space.md`), where the app's parent supplies its own.
+// dark) is `composerSend`, the same value; the mark here is Code UI's own starburst
+// (MobileBackgroundTasksPulse), 15 dp. The status line's mark is the app's own 20 dp frames
+// (ClaudeWorkingMark). The row's side padding is the dock's (`space.md`), where the app's parent
+// supplies its own.
 //
 // Since 2026-10-15 the status line itself draws the notice in place of its verb and stats, on its
 // one line with the count, as `au8` hands the message to `nl7.b` (MobileNativeChatStatusLine). This

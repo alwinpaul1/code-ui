@@ -52,8 +52,9 @@ export function chatRowItemType(row: { id: string }, held: ReadonlySet<string>):
  * `renderItem`, Header, Footer, etc. functions depend on anything outside of
  * the `data` prop, stick it here and treat it immutably."
  *
- * The chat list's header draws the running-background-tasks row, the queue and
- * the unanchored turn status — none of which live in `data`, which is only the
+ * The chat list's header draws the working footer (MobileNativeChatWorkingFooter,
+ * woken by `agentWorking` in listExtraData), the running-background-tasks row, the
+ * queue and the unanchored turn status — none of which live in `data`, which is only the
  * messages. Without this marker the header keeps whatever it last rendered, so
  * the "N running tasks" row went stale while the background-tasks sheet, which
  * re-derives on its own tick, showed the true set.

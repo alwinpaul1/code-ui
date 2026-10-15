@@ -111,8 +111,10 @@ function RollingDigit({
     )
   }
   const sign = upward ? 1 : -1
+  // Clipped to its own line while it rolls: the digits slide a full line height, and unclipped
+  // they would paint over the message above and the composer below.
   return (
-    <View style={slot}>
+    <View style={{ ...slot, height, overflow: 'hidden' }}>
       <Animated.Text
         style={[
           style,
