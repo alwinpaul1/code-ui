@@ -157,7 +157,7 @@ describe('a Claude tab opening its transcript', () => {
 
   async function draw(
     scheme: 'light' | 'dark',
-    props: { agent: string; status: 'loading' | 'ready'; messages: NativeChatMessage[]; hasMore?: boolean; loadingEarlier?: boolean }
+    props: { agent: string; status: 'loading' | 'ready' | 'idle'; messages: NativeChatMessage[]; hasMore?: boolean; loadingEarlier?: boolean }
   ): Promise<void> {
     await act(async () => {
       const screen = (
@@ -221,6 +221,28 @@ describe('a Claude tab opening its transcript', () => {
     })
     expect(clawd()).toHaveLength(0)
     expect(spinners()).toHaveLength(1)
+  })
+
+  // 2026-10-16, from the device: "When a claude session is loading show the screen with the mascot
+  // and loading session text"; the user saw a plain spinner. Two empty states that are still loading
+  // drew one: the relay still dialling (no client yet, status 'idle', which drew an empty list) and
+  // a first page with nothing drawable whose older history was already on its way (the lone
+  // load-earlier spinner).
+  it.each(SCHEMES)('shows Clawd, not an empty list, while the relay is still connecting, in %s', async (scheme) => {
+    await draw(scheme, { agent: 'claude', status: 'idle', messages: [] })
+    expect(clawd()).toHaveLength(1)
+    expect(loadingLabel()).toHaveLength(1)
+  })
+
+  it.each(SCHEMES)('shows Clawd, not a lone spinner, while the first rows are still coming as older history, in %s', async (scheme) => {
+    await draw(scheme, { agent: 'claude', status: 'ready', messages: [], hasMore: true, loadingEarlier: true })
+    expect(clawd()).toHaveLength(1)
+    expect(spinners()).toHaveLength(0)
+  })
+
+  it.each(SCHEMES)('keeps the list, so older history can still be asked for, when nothing is loading, in %s', async (scheme) => {
+    await draw(scheme, { agent: 'claude', status: 'ready', messages: [], hasMore: true, loadingEarlier: false })
+    expect(clawd()).toHaveLength(0)
   })
 
   it.each(SCHEMES)("leaves a Codex tab's loading spinner alone (Clawd is Claude's), in %s", async (scheme) => {

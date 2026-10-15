@@ -308,7 +308,12 @@ export function MobileNativeChatView({
     agentStatus, sessionIdentity, anthropicTab, hasOlder: hasMore === true,
     transcriptMessageCount: messages.length
   })
-  const showLoading = status === 'loading' && messages.length === 0
+  // Every empty state that is still on its way draws the loading mark: the read in flight, the
+  // relay still dialling ('idle': no client yet, which drew an empty list), and a first page with
+  // nothing drawable while older history is already loading (which drew the load-earlier spinner
+  // alone). A page with older history and no load running keeps the list, whose end is what asks
+  // for it (2026-10-16: the user saw a plain spinner where the Claude app shows Clawd).
+  const showLoading = messages.length === 0 && (status === 'loading' || status === 'idle' || loadingEarlier === true)
 
   const lockReason = useMobileNativeChatInputLock(inputLockReason)
 
