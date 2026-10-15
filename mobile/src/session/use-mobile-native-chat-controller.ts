@@ -499,7 +499,7 @@ export function useMobileNativeChatController(
     card: promptCard, dialogBeforeAnswer, rereadAfterAnswer, onSendResolved,
     answers: { ask: handleNativeChatAnswerAsk, cancelAsk: handleNativeChatCancelAsk, question: legacyHandleNativeChatQuestionAnswer, permission: activeChatStructured ? structuredNativeChat.respondPermission : legacyHandleNativeChatRespondPermission }
   })
-  const ccrSend = useCcrComposerSend({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: 0, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, removePending, onSendError }); if (ccrLane) { shareSendRef.current.send = (text) => ccrSend.sendWithOutcome(text) }
+  const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: 0, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, removePending, onSendError }); if (ccrLane) { shareSendRef.current.send = (text) => ccrSend.sendWithOutcome(text) }
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
     client,
     enabled: inputSendable,
