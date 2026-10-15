@@ -1,5 +1,5 @@
 // A running row's Stop on the Anthropic lane, as the Claude app's (dt2.b, j7v.t, 1.261013.20).
-// The switch that ships it, CCR_STOP_TASK_THROUGH_ANTHROPIC, is off until the control lane lands;
+// The switch that ships it, CCR_STOP_TASK_THROUGH_ANTHROPIC (the control lane's), is off for now;
 // this file turns it on so the button's behaviour stays pinned meanwhile. With it off the sheet
 // draws no Stop (MobileBackgroundTasksSheet.anthropic.test.tsx).
 

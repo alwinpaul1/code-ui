@@ -1,3 +1,4 @@
+import { CCR_CONTROL_LANE } from './ccr-control-request'
 import { acquireCcrLink } from './ccr-link-registry'
 import { ccrCseId, newCcrEventUuid, postCcrSessionEvents } from './ccr-send'
 
@@ -12,14 +13,13 @@ import { ccrCseId, newCcrEventUuid, postCcrSessionEvents } from './ccr-send'
  * lt2.java). Claude Code answers `stop_task` itself (2.1.300: `case"stop_task":{let a=
  * e.request.task_id;…`) and the task's own `task_notification` / `task_updated` ends the row.
  *
- * Kept small and apart from any other control request on purpose: another branch builds the
- * interrupt / model / mode lane, and the two are to be reconciled there.
+ * Kept small and apart from the interrupt / model / mode requests (ccr-control-request.ts), but
+ * shipped behind the same switch: none of these bodies is proven against the live service yet.
  */
 
-/** Off until the Anthropic control lane ships: no Stop is drawn on Anthropic's rows and no
- *  `stop_task` is sent. Moves under `CCR_CONTROL_LANE` (mobile/src/session/ccr-control-request.ts,
- *  branch worktree-agent-a496b9faf6d3e96d4) once that branch merges. */
-export const CCR_STOP_TASK_THROUGH_ANTHROPIC = false
+/** The control lane's switch: while it is off, no Stop is drawn on Anthropic's rows and no
+ *  `stop_task` is sent. */
+export const CCR_STOP_TASK_THROUGH_ANTHROPIC = CCR_CONTROL_LANE
 
 export function buildCcrStopTaskBody(args: { sessionId: string; uuid: string; requestId: string; taskId: string }): {
   session_id: string
