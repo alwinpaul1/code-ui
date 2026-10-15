@@ -3,6 +3,7 @@ import type { CcrEvent } from './ccr-session-api'
 import { decodeCcrEvent } from './ccr-transcript-decode'
 import type { BackgroundTask, BackgroundTaskKind, BackgroundTasks, BackgroundTaskStatus } from './mobile-background-tasks'
 import { captionOf, elapsedSince } from './mobile-background-task-captions'
+import { noteStreamRowWithoutUuid } from './subagent-stream-file-union'
 
 /**
  * A Claude tab's background tasks as the Claude app lists them, read from Anthropic's copy of the
@@ -266,7 +267,12 @@ export function ccrSubagentMessages(events: readonly CcrEvent[], toolUseId: stri
   for (const event of events) {
     const { parent_tool_use_id: parent, ...payload } = event.payload
     if (parent === toolUseId && (payload.type === 'user' || payload.type === 'assistant')) {
-      rows.push(...decodeCcrEvent({ ...event, payload }))
+      const decoded = decodeCcrEvent({ ...event, payload })
+      // Keyed by `eventId` (the decoder's fallback), which the agent's file never carries.
+      if (typeof payload.uuid !== 'string' || payload.uuid.length === 0) {
+        decoded.forEach(noteStreamRowWithoutUuid)
+      }
+      rows.push(...decoded)
     }
   }
   return rows

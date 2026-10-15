@@ -15,7 +15,7 @@ import {
   useSubagentFeedsWindowed,
   watchSubagentActivity
 } from './subagent-activity-store'
-import { unionSubagentMessages } from './subagent-stream-file-union'
+import { subagentStreamFileUnion } from './subagent-stream-file-union'
 import { openSubagentTranscript } from './subagent-transcript-store'
 
 /**
@@ -31,8 +31,11 @@ import { openSubagentTranscript } from './subagent-transcript-store'
  * file does not hold yet, as the Claude app keeps them with the call (G8; 1009
  * nq8.java:937-949), de-duplicated by row and tool_use id
  * (`subagent-stream-file-union.ts`). The stream alone is never the count: the
- * tab's store drops a subagent's older events. Until the file has answered,
- * the stream's calls show with the count as a floor ("Tool calls (1+)").
+ * tab's store drops a subagent's older events. The count is exact only when
+ * the file has answered, its read is not a window, and the stream added no
+ * call it lacked; otherwise it is a floor ("Tool calls (1+)"): a file behind
+ * the stream on calls may be behind by more than the stream still holds. A
+ * text or thinking row only the stream holds adds no call and keeps it exact.
  * Nothing is listed for an agent that made no call. The rows are the run
  * sheet's, inert: drilling in is what the transcript viewer is for.
  */
@@ -52,10 +55,12 @@ export function MobileNativeChatAgentToolCalls({ agentId, title, inSection, tool
   }, [owner, target])
   const feeds = useSubagentActivityFeeds()
   const messages = target ? feeds.get(target.agentId) : undefined
-  const rows = useMemo(() => toolCallRows(unionSubagentMessages(messages ?? [], streamed)), [messages, streamed])
+  const union = useMemo(() => subagentStreamFileUnion(messages ?? [], streamed), [messages, streamed])
+  const rows = useMemo(() => toolCallRows(union.messages), [union])
   // A floor, never an exact count: the feed reads the transcript's latest page only (earlier
-  // pages unread), or the file has not answered and the rows are the stream's alone.
-  const windowed = useSubagentFeedsWindowed().has(agentId) || messages === undefined
+  // pages unread), the file has not answered (or its read failed) and the rows are the stream's
+  // alone, or the stream holds calls the file lacks (the file is behind on calls).
+  const windowed = useSubagentFeedsWindowed().has(agentId) || messages === undefined || union.streamAddedCalls
   if (!target) {
     return null
   }

@@ -118,7 +118,7 @@ import {
   peekSubagentTranscript,
   resetSubagentTranscriptForTests
 } from './subagent-transcript-store'
-import { AGENT_CALL, T0, agentCallEvents, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
+import { AGENT_CALL, T0, agentCallEvents, ccrEvent, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
 
 const SUBAGENT =
   '/Users/me/.claude/projects/-Users-me-Desktop-Project/5d877e39-1867-424f-86b5-c080713c1563/subagents/agent-a68211cb9358e29c3.jsonl'
@@ -552,6 +552,27 @@ describe('the subagent transcript viewer', () => {
     await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events } })
     act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message(streamedId)], hasMore: false }))
     expect(rows()).toEqual([`row:${streamedId}:assistant`, 'row:u1:user'])
+  })
+
+  // Review 2026-10-15: the file feed reads the newest 40 messages only, and the union put the
+  // stream's older rows after the file's newer ones.
+  it('a streamed row older than the file’s window is drawn above it, not below', async () => {
+    const older = subagentText('Older.', T0 + 1_000)
+    const newer = subagentText('Newer.', T0 + 2_000)
+    const newerId = String(newer.payload.uuid)
+    await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events: [...agentCallEvents('Launched.', 'Fix it'), older, newer] } })
+    act(() => emit({ type: 'snapshot', messages: [{ ...message(newerId), timestamp: T0 + 2_000 }], hasMore: true, beforeOffset: 500 }))
+    // Newest first, as the list draws it.
+    expect(rows()).toEqual([`row:${newerId}:assistant`, `row:${String(older.payload.uuid)}:assistant`])
+  })
+
+  // Orca's decoder keys a thinking-only line by its uuid; ccr-transcript-decode.ts keys it `${uuid}:thinking`.
+  it('a thinking line in both the file and the stream is drawn once', async () => {
+    const thinking = ccrEvent({ type: 'assistant', parent_tool_use_id: AGENT_CALL, message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Weighing it.' }] } }, T0 + 1_000)
+    const uuid = String(thinking.payload.uuid)
+    await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events: [...agentCallEvents('Launched.', 'Fix it'), thinking] } })
+    act(() => emit({ type: 'snapshot', messages: [{ ...message(uuid, 'reasoning'), timestamp: T0 + 1_000 }], hasMore: false }))
+    expect(rows()).toEqual([`row:${uuid}:reasoning`])
   })
 
   it('an agent with nothing in the stream yet reads as not written, not as an error', async () => {
