@@ -116,8 +116,16 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   private val gestures = GestureClock()
   private var pendingSweep: Runnable? = null
 
+  // Where this document stood in its window when the finger went down, and the window-scroll
+  // watch that runs from then until the finger lifts ([scrollTookTouch]).
+  private val downInWindow = IntArray(2)
+  private val nowInWindow = IntArray(2)
+  private val scrollWatch = ViewTreeObserver.OnScrollChangedListener { scrollTookTouch() }
+  private var watchedTree: ViewTreeObserver? = null
+
   override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-    // Every touch passes here, whichever view ends up handling it, so the lift is always seen.
+    // Every touch passes here, whichever view below ends up handling it, until a gesture-handler
+    // scroll above takes it: from then on nothing more of it comes, lift included ([scrollTookTouch]).
     when (ev.actionMasked) {
       MotionEvent.ACTION_DOWN -> {
         // A new gesture: the last one's sweep is not this one's (a tap to stop a fling, then a
@@ -131,18 +139,28 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
         downAt = ev.eventTime
         holdCancelled = false
         selectedAtDown = unswept ?: selectionsBelow()
+        // The scroll that takes this finger may never be heard here (ScrollTakesHold.kt): watch
+        // the document's place in the window instead.
+        getLocationInWindow(downInWindow)
+        watchScroll()
       }
       MotionEvent.ACTION_MOVE -> {
         // A finger that moved before the long-press timeout is a drag, not a hold, as a Compose
         // long press is cancelled by moving. A Text's own long press ends only when the finger
-        // leaves its bounds or the scroll view takes the touch, and a sideways start never does.
-        if (!holdCancelled && ev.eventTime - downAt < ViewConfiguration.getLongPressTimeout() &&
-          movedPastSlop(downX, downY, ev.x, ev.y, ViewConfiguration.get(context).scaledTouchSlop.toFloat())) {
+        // leaves its bounds, and a sideways start never does. Only the MOVEs that reach this view:
+        // the one that starts the list's scroll does not ([scrollTookTouch] covers it).
+        if (!holdCancelled &&
+          dragCancelsHold(
+            ev.eventTime - downAt,
+            ViewConfiguration.getLongPressTimeout().toLong(),
+            movedPastSlop(downX, downY, ev.x, ev.y, ViewConfiguration.get(context).scaledTouchSlop.toFloat())
+          )) {
           holdCancelled = true
           cancelPendingHolds()
         }
       }
       MotionEvent.ACTION_UP -> {
+        unwatchScroll()
         lastUpAt = ev.eventTime
         lastUpX = ev.x
         lastUpY = ev.y
@@ -152,8 +170,10 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
         postDelayed(armSweep(gestures.gesture, "no menu opened $STRAY_GRACE_MS ms after the finger lifted"), STRAY_GRACE_MS)
       }
       MotionEvent.ACTION_CANCEL -> {
+        unwatchScroll()
         gestures.ended()
-        // The scroll took the touch: a word a hold lit before it did will never get its menu.
+        // A parent took the touch the plain Android way (under gesture-handler none comes; see
+        // scrollTookTouch): a word a hold lit before it did will never get its menu.
         post(armSweep(gestures.gesture, "the touch went to the scroll before a menu opened"))
       }
     }
@@ -194,7 +214,49 @@ class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
   override fun onDetachedFromWindow() {
     // A sweep left queued would walk a document no longer on screen.
     cancelPendingSweep()
+    unwatchScroll()
     super.onDetachedFromWindow()
+  }
+
+  /** Listens to the window's scrolls for the gesture under way, once. */
+  private fun watchScroll() {
+    unwatchScroll()
+    val tree = viewTreeObserver
+    if (tree.isAlive) {
+      tree.addOnScrollChangedListener(scrollWatch)
+      watchedTree = tree
+    }
+  }
+
+  private fun unwatchScroll() {
+    val tree = watchedTree ?: return
+    watchedTree = null
+    // The observer it was added to, if still alive; a re-attached view has a new one.
+    (tree.takeIf { it.isAlive } ?: viewTreeObserver).removeOnScrollChangedListener(scrollWatch)
+  }
+
+  /**
+   * Something in the window scrolled while a finger is down here. If it moved this document under
+   * the finger, the list has taken the touch, and gesture-handler will pass this view nothing more
+   * of it: no MOVE, no CANCEL, no lift (ScrollTakesHold.kt). So it is a scroll, not a hold: the
+   * Texts' pending long press is cancelled before it can buzz or select, the gesture ends here, and
+   * anything a hold lit before the scroll, which will never get its menu, is swept. Runs in the
+   * frame of the MOVE that scrolled, ahead of the long-press callback.
+   */
+  private fun scrollTookTouch() {
+    getLocationInWindow(nowInWindow)
+    if (!scrolledUnderFinger(downInWindow[0], downInWindow[1], nowInWindow[0], nowInWindow[1])) {
+      return
+    }
+    unwatchScroll()
+    val pending = !holdCancelled
+    holdCancelled = true
+    cancelPendingHolds()
+    gestures.ended()
+    post(armSweep(gestures.gesture, "the list scrolled under the finger before a menu opened"))
+    if (pending) {
+      Log.i("OrcaSelectionCopy", "The list scrolled under the finger: a hold there no longer selects")
+    }
   }
 
   /** What each Text below holds selected now; a Text with nothing selected is left out. */

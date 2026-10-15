@@ -12,12 +12,14 @@ import kotlin.math.min
  * lifts (Editor.selectCurrentWordAndStartDrag, then startSelectionActionModeAsync at ACTION_UP).
  * The chat's scroll view is a gesture-handler Gesture.Native(), which asks the ScrollView to
  * intercept directly (NativeViewGestureHandler.tryIntercept, react-native-gesture-handler 2.32.0)
- * whatever the Text asked with requestDisallowInterceptTouchEvent. So a finger that rested past the
- * long-press timeout and then dragged scrolls the list, the Text gets ACTION_CANCEL instead of a
- * lift, and the word stays lit with no menu: seen on the user's phone on 2026-10-15 (0.9.150) as
- * the highlight landing on "pictures" and on a table cell's "used" as the chat scrolled, with no
- * "Selection opened" line in the log for either. The document's root clears such a selection
- * (SelectionCopyRootView.sweepStrays).
+ * whatever the Text asked with requestDisallowInterceptTouchEvent, and from then on passes the views
+ * below nothing of the touch, not even an ACTION_CANCEL (ScrollTakesHold.kt). So a finger that
+ * lands on a Text and scrolls the list gets no lift, the long press armed at its down goes off
+ * mid-scroll unless the root cancels it first, and the word stays lit with no menu: seen on the
+ * user's phone on 2026-10-15 (0.9.150) as the highlight landing on "pictures" and on a table
+ * cell's "used" as the chat scrolled, with no "Selection opened" line in the log for either. The
+ * document's root clears such a selection (SelectionCopyRootView.sweepStrays), armed when the list
+ * moves the document under the finger (scrollTookTouch) or when a cancel or lift does arrive.
  */
 
 /** A selection's range, low end first; null for none. */

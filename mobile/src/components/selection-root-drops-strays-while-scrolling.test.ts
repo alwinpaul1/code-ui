@@ -14,9 +14,10 @@ import { describe, expect, it } from 'vitest'
 // startSelectionActionModeAsync at ACTION_UP). The chat's scroll view sits in a gesture-handler
 // Gesture.Native(), which asks the ScrollView to intercept directly (NativeViewGestureHandler
 // .tryIntercept, react-native-gesture-handler 2.32.0) whatever the Text asked with
-// requestDisallowInterceptTouchEvent, so a finger that rested and then dragged scrolls the list,
-// the Text gets ACTION_CANCEL, no lift comes, and the word stays lit with no menu. The same
-// report: "when scrolling, the hold to copy triggers too sometimes".
+// requestDisallowInterceptTouchEvent, so a finger on a Text that drags scrolls the list, the Text
+// hears nothing more (gesture-handler's root sends no ACTION_CANCEL either; see
+// selection-root-cancels-hold-when-list-scrolls.test.ts), no lift comes, and the word stays lit
+// with no menu. The same report: "when scrolling, the hold to copy triggers too sometimes".
 //
 // Three rules in the document's native root, which sees every touch before its Texts:
 // 1. A finger that moves past the touch slop before the long-press timeout is a drag, and its
