@@ -14,7 +14,8 @@ import { useCodexNativeChatOptions } from './use-codex-native-chat-options'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
 import { useClaudeModelDiscovery } from './use-claude-model-discovery'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
-import type { ClaudeModelFallback } from './claude-transcript-model'
+import { claudeModelPillPair, type ClaudeModelFallback, type ModelPillPair } from './claude-transcript-model'
+import { preferCcrModelPair, type CcrModelReading } from './ccr-session-model'
 
 export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
@@ -41,6 +42,11 @@ export function useMobileNativeChatSessionOptionController(args: {
    *  (use-claude-transcript-model.ts): the model its transcript last recorded,
    *  or nothing. */
   transcriptModel?: ClaudeModelFallback
+  /** The model and effort the session last reported to Anthropic (Remote Control on), while
+   *  fresh (ccr-session-model.ts): the pill's pair when nothing live states one. */
+  ccrModel?: CcrModelReading | null
+  /** When the beacon was last heard, or null: a beacon heard at all stands the reading down. */
+  beaconAt?: number | null
   /** The user opened the model sheet: the one moment the fallback may ask. */
   onModelSheetOpen?: () => void
   /** Bumped to open the model sheet imperatively. */
@@ -85,6 +91,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     terminalHandle,
     queuedMessages,
     transcriptModel,
+    ccrModel = null,
+    beaconAt = null,
     onModelSheetOpen,
     openRequest = 0,
     structured,
@@ -206,6 +214,12 @@ export function useMobileNativeChatSessionOptionController(args: {
       structured.optionPickerRequest
     ]
   )
+  // The pill's pair, as the header's: the live pair, else the session's report to Anthropic, else
+  // the transcript scan. On 2026-10-15 a matched work tab with no beacon read "Model" here while
+  // the phone had logged "model claude-opus-5-5, effort medium" for it: only the header's pair,
+  // which nothing draws, was ever handed the reading.
+  const reported: ModelPillPair = { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null }
+  const pillPair = claudeModelPillPair(agent === 'claude' ? preferCcrModelPair(reported, ccrModel, beaconAt) : reported, transcriptModel ?? { kind: 'none' })
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
     () =>
       activeChatStructured
@@ -226,10 +240,7 @@ export function useMobileNativeChatSessionOptionController(args: {
               scopeKey,
               openRequest,
               modelsPending: codex.modelsPending,
-              liveModel:
-                !reportedModel && transcriptModel?.kind === 'transcript'
-                  ? { model: transcriptModel.model.model, label: transcriptModel.model.label, effort: transcriptModel.effort ?? null }
-                  : { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null },
+              liveModel: pillPair,
               onOpen: onModelSheetOpen,
               claudeModelLayout: agent === 'claude'
             }
@@ -247,7 +258,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       scopeKey,
       sessionOptions,
       structuredController,
-      transcriptModel,
+      pillPair.model,
+      pillPair.label,
+      pillPair.effort,
       onModelSheetOpen
     ]
   )
