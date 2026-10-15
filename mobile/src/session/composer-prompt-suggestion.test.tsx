@@ -37,8 +37,8 @@ afterEach(() => {
   renderer = null
 })
 
-function live(events: readonly CcrEvent[] | null): ClaudeChatLive | null {
-  return events ? { footer: null, working: false, runningCount: 0, sessionConnection: null, linkLive: true, rateLimit: null, stream: { events, accountId: 'acct', sessionId: 'cse_x', tasks: [] } } : null
+function live(events: readonly CcrEvent[] | null, working = false): ClaudeChatLive | null {
+  return events ? { footer: null, working, runningCount: 0, sessionConnection: null, linkLive: true, rateLimit: null, stream: { events, accountId: 'acct', sessionId: 'cse_x', tasks: [] } } : null
 }
 
 function composer(chatLive: ClaudeChatLive | null, value: string, onChangeText: (text: string) => void, scheme: 'light' | 'dark') {
@@ -59,13 +59,16 @@ function composer(chatLive: ClaudeChatLive | null, value: string, onChangeText: 
   )
 }
 
-async function render(events: readonly CcrEvent[] | null, { value = '', onChangeText = vi.fn(), scheme = 'light' as 'light' | 'dark' } = {}) {
+async function render(events: readonly CcrEvent[] | null, { value = '', onChangeText = vi.fn(), scheme = 'light' as 'light' | 'dark', working = false } = {}) {
   await act(async () => {
-    renderer = create(composer(live(events), value, onChangeText, scheme))
+    renderer = create(composer(live(events, working), value, onChangeText, scheme))
   })
-  return { rerender: async (next: string) => act(async () => renderer!.update(composer(live(events), next, onChangeText, scheme))) }
+  return {
+    rerender: async (next: string, nextWorking = working) => act(async () => renderer!.update(composer(live(events, nextWorking), next, onChangeText, scheme)))
+  }
 }
 
+const pill = (): ReactTestInstance => renderer!.root.find((node) => node.props.testID === 'composer-prompt-suggestion-accept' && typeof node.type === 'string')
 const chips = (): ReactTestInstance[] => renderer!.root.findAll((node) => node.props.testID === 'composer-prompt-suggestion' && typeof node.type === 'string')
 const input = (): ReactTestInstance => renderer!.root.find((node) => (node.type as unknown) === 'TextInput')
 const words = (node: ReactTestInstance): string => node.children.map((child) => (typeof child === 'string' ? child : words(child))).join('')
@@ -80,7 +83,7 @@ describe('the composer’s next-prompt suggestion', () => {
   ] as const)('offers the suggestion in the empty field in the hint ink, with an accept pill, in place of the placeholder (%s)', async (scheme, colors) => {
     await render([...TURN, promptSuggestion('Run the tests again')], { scheme })
     const [chip] = chips()
-    expect(chip!.props.accessibilityLabel).toBe('Suggested next prompt: Run the tests again. Double tap to fill.')
+    expect(pill().props.accessibilityLabel).toBe('Suggested next prompt: Run the tests again. Double tap to fill.')
     const text = chip!.findByType('Text' as never)
     expect(words(text)).toBe('Run the tests again  ')
     expect(flat(text.props.style).color).toBe(colors.composerPlaceholder)
@@ -92,8 +95,53 @@ describe('the composer’s next-prompt suggestion', () => {
   it('a tap puts the suggestion in the field', async () => {
     const onChangeText = vi.fn()
     await render([...TURN, promptSuggestion('Run the tests again')], { onChangeText })
-    act(() => chips()[0]!.props.onPress())
+    act(() => pill().props.onPress())
     expect(onChangeText).toHaveBeenCalledWith('Run the tests again')
+  })
+
+  // Review 2026-10-15: the whole overlay was one Pressable over the field, so a tap anywhere on the
+  // empty field filled the suggestion and the user could not just start typing. Only the accept
+  // pill takes a tap now; the rest of the overlay lets it through to the TextInput below.
+  it('a tap on the hint words reaches the field: only the accept pill takes taps', async () => {
+    await render([...TURN, promptSuggestion('Run the tests again')])
+    const [chip] = chips()
+    expect(chip!.props.pointerEvents).toBe('box-none')
+    const text = chip!.findByType('Text' as never)
+    expect(text.props.pointerEvents).toBe('box-none')
+    const takers = chip!.findAll((node) => typeof node.type === 'string' && typeof node.props.onPress === 'function')
+    expect(takers.map((node) => node.props.testID)).toEqual(['composer-prompt-suggestion-accept'])
+  })
+
+  // Review 2026-10-15: a two-line suggestion hung below the one-line field and was cut mid-line.
+  it('while a two-line suggestion shows, the field is tall enough for both lines and the pill', async () => {
+    const { rerender } = await render([...TURN, promptSuggestion('Run the tests again, then open the parser and look at the failure')])
+    const style = () => flat(input().props.style)
+    const oneLine = style().minHeight as number
+    const lineHeight = style().lineHeight as number
+    act(() => chips()[0]!.findByType('Text' as never).props.onTextLayout({ nativeEvent: { lines: [{}, {}] } }))
+    expect(style().minHeight).toBe(oneLine + lineHeight)
+    // Gone (typed over): the field is back to its own one-line height.
+    await rerender('x')
+    expect(chips()).toHaveLength(0)
+    expect(style().minHeight).toBe(oneLine)
+  })
+
+  it('a one-line suggestion leaves the field its own height', async () => {
+    await render([...TURN, promptSuggestion('Run the tests again')])
+    const before = flat(input().props.style).minHeight
+    act(() => chips()[0]!.findByType('Text' as never).props.onTextLayout({ nativeEvent: { lines: [{}] } }))
+    expect(flat(input().props.style).minHeight).toBe(before)
+  })
+
+  // Review 2026-10-15: a suggestion that lands after the next prompt (late, from the turn before)
+  // was offered over a running turn. The app drops it when the user sends (r1n.d()).
+  it('offers no suggestion while a turn runs, even one that arrived after the next prompt', async () => {
+    const late = [...TURN, prompt('u-2', 'Next'), promptSuggestion('Run the tests again')]
+    const { rerender } = await render(late, { working: true })
+    expect(chips()).toHaveLength(0)
+    expect(input().props.placeholder).toBe('Type / for commands')
+    await rerender('', false)
+    expect(chips()).toHaveLength(1)
   })
 
   it('stays gone once the user typed over it, even when the field is emptied again', async () => {

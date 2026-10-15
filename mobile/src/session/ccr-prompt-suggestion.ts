@@ -41,11 +41,16 @@ export function ccrPromptSuggestion(events: readonly CcrEvent[]): CcrPromptSugge
   return null
 }
 
-/** The suggestion the composer offers while its field is empty; null on any tab without
- *  Anthropic's stream (a Codex tab, a Claude tab read from the desktop). */
+/** The suggestion the composer offers while its field is empty and no turn runs; null on any tab
+ *  without Anthropic's stream (a Codex tab, a Claude tab read from the desktop). Only a turn the
+ *  live state says has ended (`working === false`) offers one: a suggestion that lands late, after
+ *  the next prompt went, is never offered over that running turn (review 2026-10-15), as the app
+ *  drops its suggestion when the user sends (`r1n.d()`). */
 export function useCcrPromptSuggestion(value: string): CcrPromptSuggestion | null {
-  const events = useClaudeChatLive()?.stream?.events ?? null
-  const suggestion = useMemo(() => (events ? ccrPromptSuggestion(events) : null), [events])
+  const live = useClaudeChatLive()
+  const events = live?.stream?.events ?? null
+  const idle = live?.working === false
+  const suggestion = useMemo(() => (events && idle ? ccrPromptSuggestion(events) : null), [events, idle])
   const [typedOver, setTypedOver] = useState<string | null>(null)
   const typing = value.length > 0
   useEffect(() => {

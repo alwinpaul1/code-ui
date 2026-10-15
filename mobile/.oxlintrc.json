@@ -312,7 +312,10 @@
             // their results on existing lines. The API, matching, pictures and
             // model live in ccr-session-*.ts, use-ccr-session-*.ts and
             // ccr-image-overlay.ts.
-            "max": 514,
+            // 2026-10-15: +2 for the refusal card's Edit and retry host: its import and its call,
+            // which the branch had joined onto existing lines with semicolons to stay at 514.
+            // The retry lives in ccr-refusal-retry.ts.
+            "max": 516,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -599,7 +602,11 @@
             // again at the user's request: the + sheet's Permission row names the mode.
             // 2026-10-14 (scrim): +1, the chat-colour scrim behind the composer while recording
             // (MobileNativeChatDictationScrim in MobileNativeChatDictationCaption.tsx).
-            "max": 471,
+            // 2026-10-15: +3 for the next-prompt suggestion (its import, the hook call, the
+            // overlay under the field). The branch had joined these onto existing lines with
+            // semicolons to stay at 471; they are on their own lines now. The overlay, its lines
+            // and the gate live in MobileNativeChatPromptSuggestion.tsx.
+            "max": 474,
             "skipBlankLines": true,
             "skipComments": true
           }
