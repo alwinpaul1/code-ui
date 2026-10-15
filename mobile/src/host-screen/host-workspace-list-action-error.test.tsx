@@ -41,7 +41,6 @@ import { HostWorkspaceList } from './host-workspace-list'
 function listWith(fields: { actionError: string; setActionError: (value: string) => void }) {
   const controller = {
     actions: { openWorktreeSession: () => {}, openNewWorktreeModal: () => {} },
-    activeWorktreeScroll: { sectionListRef: { current: null }, onScrollToIndexFailed: () => {} },
     catalog: { refreshing: false, onRefresh: () => {} },
     connState: 'connected',
     contentMaxWidth: 600,

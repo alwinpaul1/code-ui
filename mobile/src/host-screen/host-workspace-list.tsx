@@ -8,7 +8,7 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { ClaudeSessionFilterChips } from '../components/ClaudeSessionFilterChips'
-import { useClaudeSessionFilter } from '../worktree/use-claude-session-filter'
+import { useFilteredWorkspaceList } from './use-filtered-workspace-list'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
@@ -21,7 +21,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
   const { colors, space } = useTheme()
   const {
     actions,
-    activeWorktreeScroll,
     catalog,
     connState,
     contentMaxWidth,
@@ -44,8 +43,9 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     state
   } = controller
   const { rawSections, uniqueRepoColors } = sectionsResult
-  // The Claude app's session filters, over Claude agents only (claude-session-list-filter.ts).
-  const sessionFilter = useClaudeSessionFilter(displayWorktrees, sectionsResult.sections, now)
+  // The Claude app's session filters, over Claude agents only (claude-session-list-filter.ts), and
+  // the scroll to the active workspace over the same filtered sections the SectionList draws.
+  const { sessionFilter, activeWorktreeScroll } = useFilteredWorkspaceList(displayWorktrees, sectionsResult.sections, now)
   const { sections } = sessionFilter
 
   return (
