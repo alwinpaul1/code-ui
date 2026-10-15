@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { ConnectionVerdict } from '../transport/connection-health'
 import type { ConnectionState } from '../transport/types'
+import type { CcrLinkPhase } from './ccr-session-link-types'
 
 /**
  * The Claude app's connection row (com.anthropic.claude 1.261009.20, `au8` case 0 and `nl7.b`).
@@ -22,9 +23,18 @@ import type { ConnectionState } from '../transport/types'
  */
 
 export type NativeChatConnectionNotice = {
-  kind: 'connecting' | 'lost'
+  kind: 'connecting' | 'lost' | 'offline'
   text: string
+  /** Said of a matched Claude tab's Anthropic stream: drawn while that turn is open even when the
+   *  relay calls the agent idle (MobileNativeChatStatusLine). */
+  anthropic?: true
+  /** Drawn with no working mark and no dots: a lost stream between turns, when the chat's rows
+   *  (which come from that stream) stop moving and nothing else would say so. */
+  quiet?: true
 }
+
+/** A matched Claude tab's Anthropic stream, for its status line (claude-chat-live.ts). */
+export type NativeChatAnthropicConnection = { phase: CcrLinkPhase | null; turnOpen: boolean }
 
 const CONNECTING = 'Connecting…'
 const LOST = 'Connection lost'
@@ -52,7 +62,19 @@ export function nativeChatConnectionNotice(input: {
   /** A Claude tab whose Anthropic stream is live: that stream is the chat's connection, as the
    *  app's backplane is its own, so the relay's state is not this row's to say (claude-chat-live.ts). */
   anthropicLive?: boolean
+  /** A Claude tab matched to its Anthropic session: the line follows that stream, not the relay. */
+  anthropic?: NativeChatAnthropicConnection | null
+  /** The phone itself has no network (use-phone-offline.ts); read only for a matched tab. */
+  phoneOffline?: boolean
 }): NativeChatConnectionNotice | null {
+  if (input.anthropic) {
+    // The turn Anthropic last saw open counts only while the relay is down: with it up, the
+    // desktop's idle wins, since `turnOpen` is the last word of a stream that may have dropped
+    // mid-turn and never heard the turn end (review 2026-10-15: "Connection lost..." with the
+    // working mark stayed under a finished reply).
+    const running = input.agentWorking || (input.anthropic.turnOpen && input.connState !== 'connected')
+    return anthropicNotice(input.anthropic, running, input.phoneOffline === true)
+  }
   if (input.connState === 'connected' || !input.agentWorking || input.anthropicLive === true) {
     return null
   }
@@ -61,5 +83,45 @@ export function nativeChatConnectionNotice(input: {
   return input.verdict === 'normal' ? CONNECTING_NOTICE : LOST_NOTICE
 }
 
+/** The app's line over its own stream: busy only (`z3`), offline first (zr8.java:1097-1099), then
+ *  the stream's phase (uq30.i: not yet live is connecting; failed is lost). One departure from the
+ *  app: a LOST stream with no turn running still says "Connection lost", quietly. The app has a
+ *  backplane of its own; here the chat's rows come from this stream, so between turns they would
+ *  freeze with nothing on screen saying why (review 2026-10-15, after the end-of-chat row went). */
+function anthropicNotice(stream: NativeChatAnthropicConnection, busy: boolean, offline: boolean): NativeChatConnectionNotice | null {
+  if (!busy) {
+    return stream.phase === 'lost' ? ANTHROPIC_QUIET_LOST_NOTICE : null
+  }
+  if (offline) {
+    return ANTHROPIC_OFFLINE_NOTICE
+  }
+  switch (stream.phase) {
+    case 'live':
+      return null
+    case null:
+    case 'idle':
+    case 'loading':
+    case 'reconnecting':
+      return ANTHROPIC_CONNECTING_NOTICE
+    case 'lost':
+    case 'error':
+      return ANTHROPIC_LOST_NOTICE
+    default: {
+      const unhandled: never = stream.phase
+      return unhandled
+    }
+  }
+}
+
 const CONNECTING_NOTICE: NativeChatConnectionNotice = Object.freeze({ kind: 'connecting', text: waitingText(CONNECTING) })
 const LOST_NOTICE: NativeChatConnectionNotice = Object.freeze({ kind: 'lost', text: waitingText(LOST) })
+const ANTHROPIC_CONNECTING_NOTICE: NativeChatConnectionNotice = Object.freeze({ ...CONNECTING_NOTICE, anthropic: true as const })
+const ANTHROPIC_LOST_NOTICE: NativeChatConnectionNotice = Object.freeze({ ...LOST_NOTICE, anthropic: true as const })
+// Not waiting on anything: the app's words without the dots `nl7.b` adds to a message state.
+const ANTHROPIC_QUIET_LOST_NOTICE: NativeChatConnectionNotice = Object.freeze({ kind: 'lost', text: LOST, anthropic: true as const, quiet: true as const })
+// `chat_footer_polling_offline`, drawn as the app's footer draws it: verbatim, no dots added.
+const ANTHROPIC_OFFLINE_NOTICE: NativeChatConnectionNotice = Object.freeze({
+  kind: 'offline',
+  text: 'You’re offline. The rest of Claude’s reply will appear when you reconnect.',
+  anthropic: true as const
+})

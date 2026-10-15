@@ -55,6 +55,7 @@ export function MobileNativeChatView({
   status,
   error,
   agent,
+  sendRing,
   agentWorking,
   canStop,
   structuredActivityUi = false,
@@ -451,7 +452,7 @@ export function MobileNativeChatView({
         onSend={handleSend}
         sendSurfaceId={sendSurfaceId}
         {...{ getSendCompletionGeneration, getComposerEditGeneration }}
-        agent={agent}
+        agent={agent} sendRing={sendRing}
         sessionOptions={sessionOptions}
         onCaptureImage={onCaptureImage}
         onAttachImage={onAttachImage} onPasteImage={onPasteImage}

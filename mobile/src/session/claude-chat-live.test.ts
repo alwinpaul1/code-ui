@@ -58,10 +58,26 @@ describe('the chat’s live source', () => {
     expect(live?.runningCount).toBeNull()
   })
 
-  it('the session’s own connection_status disconnected is the header’s word, as in the app', () => {
+  // pn30.java:3280-3460: a disconnected session's header reads "Disconnected" and the hint
+  // `ccr_session_reconnect_hint_generic`, joined by " · ".
+  it('the session’s own connection_status disconnected is the header’s word, with the app’s reconnect hint', () => {
     const live = claudeChatLive({ live: CCR_IDLE_LIVE_STATE, linkPhase: 'live', connectionStatus: 'disconnected', relayConnected: false })
     expect(live?.sessionConnection).toBe('disconnected')
-    expect(claudeChatHeaderConnection({ chatShown: true, live })).toEqual({ label: 'Disconnected', dot: 'disconnected' })
+    expect(claudeChatHeaderConnection({ chatShown: true, live })).toEqual({ label: 'Disconnected · Reconnect from your computer', dot: 'disconnected' })
+  })
+
+  // The relay up says only that the phone reaches the desktop; Anthropic saying the session's
+  // Claude Code has detached is what the Claude app's header says, relay or not.
+  it('a session Anthropic calls disconnected says so with the relay up too', () => {
+    const live = claudeChatLive({ live: CCR_IDLE_LIVE_STATE, linkPhase: 'live', connectionStatus: 'disconnected', relayConnected: true })
+    expect(claudeChatHeaderConnection({ chatShown: true, live })?.label).toBe('Disconnected · Reconnect from your computer')
+  })
+
+  it('hands the status line the stream’s phase and whether its last turn is open, live or not', () => {
+    const reconnecting = claudeChatLive({ live: working, linkPhase: 'reconnecting', connectionStatus: 'connected', relayConnected: true })
+    expect(reconnecting).toMatchObject({ streamPhase: 'reconnecting', turnOpen: true })
+    const idle = claudeChatLive({ live: CCR_IDLE_LIVE_STATE, linkPhase: 'live', connectionStatus: 'connected', relayConnected: true })
+    expect(idle).toMatchObject({ streamPhase: 'live', turnOpen: false })
   })
 
   it('no status and no turn: the header keeps the relay’s label rather than guess', () => {

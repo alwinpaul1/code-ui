@@ -2,7 +2,7 @@ import type { LevelSource } from '../dictation/pcm-level'
 import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
-import { clipboardHasImage } from './mobile-clipboard-image-reader'
+import { clipboardHasImage } from './mobile-clipboard-image-reader'; import { claudeSendRingShown } from './native-chat-send-ring'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
@@ -444,7 +444,7 @@ export function MobileNativeChatOverlay({
         folded={folded}
         status={session.status}
         error={session.error}
-        agent={controller.nativeChatAgent}
+        agent={controller.nativeChatAgent} sendRing={claudeSendRingShown(controller.nativeChatAgent, anthropicGate)}
         agentWorking={controller.nativeChatAgentWorking}
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
@@ -531,7 +531,7 @@ export function MobileNativeChatOverlay({
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         skills={controller.nativeChatSkills}
-        sessionCommands={controller.nativeChatCommandSurface?.sessionCommands}
+        sessionCommands={controller.nativeChatCommandSurface?.sessionCommands ?? controller.nativeChatSessionCommands}
         conversationCommands={controller.nativeChatCommandSurface?.conversationCommands}
         // Only the structured lane has a command surface, and only a host that
         // said it will rewind THIS session gets the affordance — and only when

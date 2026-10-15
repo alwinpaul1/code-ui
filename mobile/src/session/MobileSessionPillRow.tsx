@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Linking, Pressable, StyleSheet, View } from 'react-native'
 import { Copy, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -14,6 +14,9 @@ import {
 } from './session-pill-row-model'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useSessionPills } from './use-session-pills'
+import { useClaudeAppCommandSheet } from './claude-app-command-sheets'
+import { MobileClaudePlanSheet } from './MobileClaudePlanSheet'
+import { MobileClaudeAutoDefaultNotice, claudeAutoDefaultNoticeEligible } from './MobileClaudeAutoDefaultNotice'
 
 // The Claude Android app's session pills (1.261009.20). Every one is the generic chip `jc20.c`: a
 // 14 dp radius, 12 x 8 dp padding, a 16 dp icon, an 8 dp gap, the label at 13/550, on the app's
@@ -119,7 +122,8 @@ export function SessionPillRowView({
   pills,
   onOpenPullRequest,
   onOpenUrl,
-  onCopyPrNumber
+  onCopyPrNumber,
+  onOpenPlan
 }: {
   pills: readonly SessionPill[]
   /** The pull request pill and Create PR both land on the pull request panel. */
@@ -128,6 +132,8 @@ export function SessionPillRowView({
    *  Orca panel is for the worktree's own branch, which is not that one. */
   onOpenUrl?: (url: string) => void
   onCopyPrNumber: (number: number) => void
+  /** A matched Claude tab with a proposed plan: the app's "Plan" pill (claude-session-plan.ts). */
+  onOpenPlan?: (() => void) | null
 }): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [hintOpen, setHintOpen] = useState(false)
@@ -147,7 +153,7 @@ export function SessionPillRowView({
   if (copyingNumber !== null && !copyingStillDrawn) {
     setCopyingNumber(null)
   }
-  if (pills.length === 0) {
+  if (pills.length === 0 && !onOpenPlan) {
     return null
   }
   const hint = hintOpen && local?.kind === 'local-changes' ? local.hint : null
@@ -241,6 +247,14 @@ export function SessionPillRowView({
             }
           }
         })}
+        {/* The app's "Plan" pill (`session_pill_plan`, read `ccr_session_bar_open_plan`, ns30.java:610-651). */}
+        {onOpenPlan ? (
+          <Chip key="plan" testID="plan-pill" accessibilityLabel="Open plan" onPress={onOpenPlan}>
+            <Txt variant="label" weight="medium" style={{ color: colors.text }} numberOfLines={1}>
+              Plan
+            </Txt>
+          </Chip>
+        ) : null}
       </View>
       {hasPullRequest ? (
         <ActionSheetModal
@@ -289,13 +303,28 @@ export function MobileSessionPillRow({
   const { showToast, handlePanelTap } = controller
   const clipboard = useClipboardWriter()
   const pills = useSessionPills(controller)
+  const plan = controller.nativeChatController.nativeChatClaudePlan ?? null
+  const [planOpen, setPlanOpen] = useState(false)
+  // A plan that goes away (its successor's approval is asked) takes its open sheet with it.
+  if (planOpen && plan === null) {
+    setPlanOpen(false)
+  }
   const actions = sessionPillActions({ clipboard, showToast })
+  // A matched Claude tab's typed /diff opens the changes, as the Claude app's does
+  // (claude-app-command-sheets.ts). Published here because this row is mounted with the chat.
+  useClaudeAppCommandSheet('diff', useCallback(() => handlePanelTap('sourceControl'), [handlePanelTap]))
   return (
-    <SessionPillRowView
-      pills={pills}
-      onOpenPullRequest={() => handlePanelTap('pr')}
-      onOpenUrl={(url) => void openPullRequestUrl(url, showToast)}
-      onCopyPrNumber={(number) => void actions.copyPrNumber(number)}
-    />
+    <>
+      <SessionPillRowView
+        pills={pills}
+        onOpenPullRequest={() => handlePanelTap('pr')}
+        onOpenUrl={(url) => void openPullRequestUrl(url, showToast)}
+        onCopyPrNumber={(number) => void actions.copyPrNumber(number)}
+        onOpenPlan={plan === null ? null : () => setPlanOpen(true)}
+      />
+      {plan !== null ? <MobileClaudePlanSheet visible={planOpen} plan={plan} onClose={() => setPlanOpen(false)} /> : null}
+      {/* The app's one-time "Auto mode is now Claude Code’s default" notice (jv30.java:75). */}
+      <MobileClaudeAutoDefaultNotice eligible={claudeAutoDefaultNoticeEligible(controller.nativeChatController)} />
+    </>
   )
 }

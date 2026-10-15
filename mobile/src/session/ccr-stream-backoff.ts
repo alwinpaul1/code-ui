@@ -1,4 +1,4 @@
-import { CCR_STREAM_IDLE_STABLE_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS } from './ccr-session-link-types'
+import { CCR_STREAM_IDLE_STABLE_MS, CCR_STREAM_LOST_RETRY_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS } from './ccr-session-link-types'
 
 /**
  * A Claude session stream's reconnect back-off (ccr-session-link.ts): the waits before each redial,
@@ -7,6 +7,8 @@ import { CCR_STREAM_IDLE_STABLE_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_M
  */
 export class CcrStreamBackoff {
   private reconnects = 0
+  /** Retries of a lost stream since the back-off last started over (CCR_STREAM_LOST_RETRY_MS). */
+  private lostRetries = 0
 
   /** Redials made since the back-off last started over. */
   get count(): number {
@@ -15,6 +17,7 @@ export class CcrStreamBackoff {
 
   reset(): void {
     this.reconnects = 0
+    this.lostRetries = 0
   }
 
   /** A connection ended after `upMs` (null when it never opened). It starts the back-off over when
@@ -25,7 +28,7 @@ export class CcrStreamBackoff {
    *  2026-10-15). */
   settle(upMs: number | null, movedOn: boolean): void {
     if (upMs !== null && (upMs >= CCR_STREAM_IDLE_STABLE_MS || (movedOn && upMs >= CCR_STREAM_STABLE_MS))) {
-      this.reconnects = 0
+      this.reset()
     }
   }
 
@@ -36,6 +39,17 @@ export class CcrStreamBackoff {
       return null
     }
     this.reconnects += 1
+    return wait
+  }
+
+  /** Once every wait is spent: the wait before the next retry of the lost stream, counted; null
+   *  once those are spent too (it stays lost until a reset). */
+  nextLostRetry(): number | null {
+    const wait = CCR_STREAM_LOST_RETRY_MS[this.lostRetries]
+    if (wait === undefined) {
+      return null
+    }
+    this.lostRetries += 1
     return wait
   }
 }

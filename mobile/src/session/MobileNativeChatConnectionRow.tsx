@@ -9,6 +9,7 @@ import {
   type NativeChatConnectionNotice
 } from './native-chat-connection-notice'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { usePhoneOffline } from '../transport/use-phone-offline'
 
 // The Claude app's connection row (com.anthropic.claude 1.261009.20, `nl7.b` drawing `au8`'s message).
 // A row 16 dp above and below (`rrb.Q(.., 0, 16)`), the clay mark, an 8 dp gap (`ixv.u(8)`), the
@@ -53,13 +54,17 @@ export function ConnectionRowView({ notice }: { notice: NativeChatConnectionNoti
   )
 }
 
-/** The chat's connection notice from the session controller, or null. */
-export function connectionNoticeOf(controller: MobileSessionController): NativeChatConnectionNotice | null {
+/** The chat's connection notice from the session controller, or null. A Claude tab matched to its
+ *  Anthropic session says its stream's state and the phone's own network, not the relay's. */
+export function connectionNoticeOf(controller: MobileSessionController, phoneOffline = false): NativeChatConnectionNotice | null {
+  const live = controller.nativeChatController.nativeChatAnthropicLive
   return nativeChatConnectionNotice({
     connState: controller.connState,
     verdict: controller.connectionVerdict.kind,
     agentWorking: controller.nativeChatController.nativeChatAgentWorking === true,
-    anthropicLive: controller.nativeChatController.nativeChatAnthropicLive?.linkLive === true
+    anthropicLive: live?.linkLive === true,
+    anthropic: live ? { phase: live.streamPhase, turnOpen: live.turnOpen } : null,
+    phoneOffline
   })
 }
 
@@ -72,7 +77,7 @@ export function NativeChatConnectionNoticeProvider({
   controller: MobileSessionController
   children: ReactNode
 }): React.JSX.Element {
-  const notice = connectionNoticeOf(controller)
+  const notice = connectionNoticeOf(controller, usePhoneOffline(controller.nativeChatController.nativeChatAnthropicLive != null))
   return <NativeChatConnectionNoticeContext.Provider value={notice}>{children}</NativeChatConnectionNoticeContext.Provider>
 }
 

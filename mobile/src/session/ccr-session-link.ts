@@ -9,7 +9,7 @@ import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
 import { readCcrCatchUp } from './ccr-link-catch-up'
 import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'; import { CcrControlWaiters } from './ccr-context-usage'
 
-export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
+export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_LOST_RETRY_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
 /**
  * One Claude Code session on Anthropic, read with one account: its events, paged back from the
@@ -293,16 +293,16 @@ export class CcrSessionLink {
 
   private scheduleReconnect(why: string): void {
     const wait = this.backoff.next()
+    // Once lost, one more attempt per lost-retry step with the back-off still spent, so a failure
+    // comes straight back here: one stream request per step, then none (ccr-stream-backoff.ts).
+    const after = wait ?? this.backoff.nextLostRetry()
     if (wait === null) {
       this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.backoff.count} reconnects: ${why}`)
-      this.set({ phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' })
-      return
     }
-    this.set({ phase: 'reconnecting', streamThinking: null })
-    this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => {
-      this.cancelTimer = null
-      this.connect()
-    }, wait)
+    this.set(wait === null ? { phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' } : { phase: 'reconnecting', streamThinking: null })
+    if (after !== null) {
+      this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => void ((this.cancelTimer = null), this.connect()), after)
+    }
   }
 
   /** Older history (scroll to the start): the page before the oldest held. With no cursor kept (a

@@ -57,12 +57,14 @@ function emptySession(status: MobileNativeChatSession['status'], error?: string)
   return { messages: EMPTY, status, transcriptLoading: false, hasMore: false, loadingEarlier: false, loadEarlier: noop, ...(error ? { error } : {}) }
 }
 
-/** The link's state as the chat's session: rows decoded from its events, the link's trouble as a
- *  toned line at the end when there are rows to keep showing, as the empty state's words when not. */
+/** The link's state as the chat's session: rows decoded from its events, the link's trouble as the
+ *  empty state's words when there are no rows. With rows, a failed stream's reason is a toned line
+ *  at the end; a lost one is the status line's to say ("Connection lost...", as the Claude app
+ *  says it; native-chat-connection-notice.ts), so it draws no row. */
 export function ccrLinkSession(link: CcrSessionLink, state: CcrLinkState, rows: NativeChatMessage[]): MobileNativeChatSession {
   const trouble = state.phase === 'error' || state.phase === 'lost' ? state.error : null
   const messages: NativeChatMessage[] =
-    trouble && rows.length > 0
+    trouble && state.phase === 'error' && rows.length > 0
       ? [...rows, { id: `ccr-link-trouble:${link.sessionId}`, role: 'system', blocks: [{ type: 'text', text: trouble, tone: 'warning' }], timestamp: null, source: 'transcript' }]
       : rows
   const status: MobileNativeChatSession['status'] = rows.length === 0 && (state.phase === 'loading' || state.phase === 'idle') ? 'loading' : rows.length === 0 && trouble ? 'error' : 'ready'
