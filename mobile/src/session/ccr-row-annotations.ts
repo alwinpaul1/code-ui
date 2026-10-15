@@ -29,9 +29,14 @@ function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
 }
 
-/** Whether an event only changes rows already drawn: held and kept as a drawn one is. */
+/** Whether an event only changes rows already drawn: held and kept as a drawn one is. A subagent's
+ *  own (`parent_tool_use_id` set) annotates nothing in the lead's chat, so it falls under the
+ *  undrawn cap like any other event (review 2026-10-15: a flood of them was held for good). */
 export function ccrEventAnnotatesRows(event: CcrEvent): boolean {
   const payload = event.payload
+  if (payload.parent_tool_use_id) {
+    return false
+  }
   return payload.type === 'tool_use_summary' || (payload.type === 'system' && payload.subtype === 'file_attachments_missing')
 }
 

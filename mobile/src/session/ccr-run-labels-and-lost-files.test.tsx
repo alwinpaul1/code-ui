@@ -180,4 +180,18 @@ describe('a session link holds what changes a row', () => {
     expect(store.ordered).toContain(lost)
     expect(store.drawing()).toEqual([CALLS, SENT, summary, lost])
   })
+
+  // Review 2026-10-15: a subagent's own summaries and lost-files reports annotate nothing in the
+  // lead's chat, yet the keep rule held every one of them past the undrawn cap, for good.
+  it('a flood of a subagent’s summaries and lost-files reports stays within the undrawn cap', () => {
+    const store = new CcrEventStore(() => null)
+    const flood = Array.from({ length: CCR_HELD_UNDRAWN_EVENTS * 2 }, (_row, index) =>
+      index % 2 === 0
+        ? ccrEvent({ type: 'tool_use_summary', summary: `Step ${index}`, preceding_tool_use_ids: [`toolu_sub_${index}`], parent_tool_use_id: 'toolu_agent' })
+        : filesMissing(`u-sub-${index}`, [{ file_uuid: 'file_01A' }], { parent_tool_use_id: 'toolu_agent' })
+    )
+    store.add([SENT, CALLS, ...flood])
+    expect(store.ordered).toHaveLength(2 + CCR_HELD_UNDRAWN_EVENTS)
+    expect(store.drawing()).toEqual([CALLS, SENT])
+  })
 })
