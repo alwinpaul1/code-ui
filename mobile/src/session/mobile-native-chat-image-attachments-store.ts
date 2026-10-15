@@ -33,8 +33,9 @@ export const nativeChatAttachmentsResets = { current: 0 }
 /** Chips the user took out with the remove badge while their bytes were still
  *  going up. The Claude app draws its remove "x" on a chip in every state and
  *  cancels that chip's upload (`g330.b`, `j29.k`, 1.261009.20). An RPC already
- *  on the relay cannot be called back, so the upload is let finish and its
- *  result dropped: `uploads` (scope, selection and picture) keeps the landing
+ *  on the relay cannot be called back, so a desktop upload is let finish and
+ *  its result dropped (an upload to Anthropic is called back:
+ *  `nativeChatUploadAborts`): `uploads` (scope, selection and picture) keeps the landing
  *  from drawing the chip again, and `ids` (every chip removed, landed or not)
  *  tells a send waiting beside it that it was taken out, not lost to a failed
  *  upload. */

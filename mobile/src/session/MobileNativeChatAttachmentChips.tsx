@@ -12,15 +12,18 @@ import { splitAttachmentName } from './mobile-native-chat-file-mentions'
 
 /**
  * A chip as the Claude app draws one in the Code composer (com.anthropic.claude 1.261009.20,
- * decompiled): `l7s.a` lays the strip out as a LazyRow 12 dp apart, and each chip is `l7f.d` at
- * 96 dp (`cxe.c`, cxe.java:340/497), the same body as the card above a sent prompt
+ * decompiled): `l7s.a` lays the strip out as a LazyRow 12 dp apart, and each chip is `l7f.d`,
+ * 96 dp high (`cxe.c`, cxe.java:340/497), the same body as the card above a sent prompt
  * (mobile-native-chat-file-card-styles.ts): a photo fills a 96 dp square clipped to 16 dp, cropped;
- * a document is the bordered card with its extension badge at the top and its name at the bottom.
+ * a document is the bordered card, 116 dp wide here (that file says why), with its extension
+ * badge at the top and its name at the bottom.
  * While it uploads, an indeterminate ring (`yfi.f`, 32 dp, `pl7.e`) sits over the photo's centre, or
  * at the card's bottom end beside the name, with no scrim. A failed upload is a red disc there
  * instead (`l7f.a`: `pl7.A` at 0.8 alpha, 6 dp padding). Remove is an 18 dp disc in `pl7.O` at the
- * top end, 4 dp in, its cross in `pl7.p`, in every state. One addition: the red disc is a retry
- * here (the app has none on the chip), since this lane can send the file again.
+ * top end, 4 dp in, its cross in `pl7.p`, in every state; its touch target is 48 dp round it. One
+ * addition: the red disc is a retry here (the app has none on the chip), since this lane can send
+ * the file again. TalkBack reads the state in the chip's label ("report.pdf, upload failed"), and
+ * Retry and Remove are buttons of their own.
  */
 const CHIP = 96
 const STRIP_GAP = 12

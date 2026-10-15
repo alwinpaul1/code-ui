@@ -181,7 +181,7 @@ export function useMobileNativeChatImageUpload(args: {
           },
           onImageFailed: onImageFailed
             ? (image, error, retry) => {
-                // A file Anthropic would refuse (empty, over the cap) is not retried: its chip goes with the selection's sweep, the app's words say why.
+                // A file Anthropic would refuse or refused (empty, over the cap, HTTP 413) is not retried: its chip goes with the selection's sweep, the app's words say why.
                 if (error instanceof CcrFileUploadError && error.refusedBeforeUpload) { showToast(error.userMessage, 2500); return false }
                 const kept = onImageFailed(scope, { ...image, batch }, retry)
                 chipFailed ||= kept

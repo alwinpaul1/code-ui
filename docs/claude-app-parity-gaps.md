@@ -393,7 +393,11 @@ risk sending a message whose attachment silently does not arrive.
 - `ccr-file-upload.ts`: the switch `CCR_ATTACHMENTS_THROUGH_ANTHROPIC`
   (**false**), the request, the app's 30 MB cap and words ("File size exceeds
   30 MB limit", "Upload failed"), a 0-byte refusal, 401 → one fresh token,
-  413 → too large. Always the tab session's own account.
+  413 → too large with no retry (as past the cap). Always the tab session's
+  own account. Removing a chip, or leaving the chat, while it uploads cancels
+  the upload, as the app does (`g330.b`); a file that still landed for a
+  removed chip, or a landed chip that is removed, is deleted with the same
+  account (`DELETE /v1/files/{id}`, best effort, logged without a token).
 - `ccr-file-upload-device.ts`: multipart through expo-file-system from a cache
   file deleted afterwards.
 - `use-ccr-attachment-lane.ts`: with the switch on and a Claude tab on the
@@ -563,7 +567,7 @@ match the app's (none). The one self-starting motion above reads `useReducedMoti
 | Model sheet with an **Effort row** inside, "Update Claude Code…" for models too new for the CLI. Two pickers exist in 1.261009.20: the Code section's (`n330.a`) lists the older models inline under an "Other models" header (`ccr_model_overflow_header`); the chat picker (`pij`, destinations "Select model", "More models", "Effort") puts them behind a "More models" row. Which models are older is the server's `model_selector_config[key].models[].section` (MAIN, OVERFLOW, DEPRECATED; DEPRECATED rows are dropped). | `MobileNativeChatSessionOptionPickers.tsx`: the chat picker's tap-through ("More models" row naming the running older model, a page titled "More models"), by the user's request 2026-10-14. Claude Code's `list_models` carries no section, so `model-sheet-layout.ts` stands in: the newest row of each family is first-page, the rest are older. | **Match** (chat picker; the Code section's inline header is not used) |
 | Slash popup: CLI commands plus the app's own; "/name" mono 15 in link blue; description `jn7.H` muted; ≤240 dp, 12 dp radius, hairline, 3 dp shadow, 150 ms size animation | `MobileNativeChatComposerSuggestions.tsx` | **Differs** (G7) |
 | @ mention: members only; **no @file in Code** | @files supported | **Code UI is ahead**: keep it |
-| Attachment chips 96 dp (`l7f.d`, `cxe.c`): photo square cropped at radius 16, document card with extension badge and base name (no icon, no size); 32 dp ring in `pl7.e`, no scrim; red failed disc (`pl7.A`, 0.8); 18 dp remove disc 4 dp in; strip 12 apart (`l7s.a`); reorder | `MobileNativeChatAttachmentChips.tsx` | Match (2026-10-15), plus a retry on the failed disc; Code UI's own type sizes |
+| Attachment chips 96 dp high (`l7f.d`, `cxe.c`): photo square cropped at radius 16, document card 116 dp wide with extension badge (capped, ellipsized) and base name (no icon, no size); 32 dp ring in `pl7.e`, no scrim; red failed disc (`pl7.A`, 0.8); 18 dp remove disc 4 dp in, 48 dp touch target; state read in the chip label for TalkBack; strip 12 apart (`l7s.a`); reorder | `MobileNativeChatAttachmentChips.tsx` | Match (2026-10-15), plus a retry on the failed disc; Code UI's own type sizes |
 | Voice: mic, hold-to-talk behind a flag, waveform, "Transcribing…" | `src/dictation/*`, toggle or hold in `app/voice-settings.tsx` | Match-ish |
 | Key strip | none in the Claude app | Code UI extra (needed for a TUI) |
 

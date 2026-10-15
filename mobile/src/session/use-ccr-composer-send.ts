@@ -30,9 +30,15 @@ import { ccrSessionTail, sameCcrTarget, useCcrTabQueues, type CcrTo } from './us
  *    that failed after its echo was already seen is a success, as in the app.
  *  - Refused before anything is posted, with the words left in the composer: no target that
  *    belongs to this tab's own profile (ccr-session-cache.ts `ccrSendTargetForTab`), the Remote
- *    Control computer offline (the app's own words), a send already in flight. One POST at a
- *    time, in the order typed: the outbox's resend waits for one in flight, and a message a killed
- *    app left in the outbox goes before anything sent after it on its tab (ccr-send-order.ts).
+ *    Control computer offline (the app's own words), a send already in flight, attachments
+ *    uploaded under another account than the target's (`CCR_ATTACHMENT_OTHER_ACCOUNT`), and an
+ *    outbox resend whose tab now sends to another session (ccr-send-order.ts
+ *    `ccrSendTargetRefusal`). Words typed while the turn-end queue goes out wait behind it instead.
+ *    One POST at a time, in the order typed: the outbox's resend waits for one in flight, a
+ *    message a killed app left in the outbox goes before anything sent after it on its tab, and
+ *    words queued on the tab go just ahead of a send with files (ccr-send-order.ts).
+ *  - A send with files (ccr-attachment-send.ts) skips the phone's words-only queue and is not
+ *    written to the outbox: a resend without its files would drop them without a word.
  *  - Nothing here ever writes to the terminal: a refusal is a refusal, never a fallback.
  *
  * The queue belongs to the tab it was typed on, and to the session that tab sent to then. The
