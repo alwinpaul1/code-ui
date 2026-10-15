@@ -118,6 +118,7 @@ import {
   peekSubagentTranscript,
   resetSubagentTranscriptForTests
 } from './subagent-transcript-store'
+import { AGENT_CALL, T0, agentCallEvents, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
 
 const SUBAGENT =
   '/Users/me/.claude/projects/-Users-me-Desktop-Project/5d877e39-1867-424f-86b5-c080713c1563/subagents/agent-a68211cb9358e29c3.jsonl'
@@ -521,5 +522,22 @@ describe('the subagent transcript viewer', () => {
     expect(dark.colors).toContain(darkColors.text)
     expect(light.colors).not.toContain(darkColors.text)
     expect(dark.colors).not.toContain(lightColors.text)
+  })
+
+  // G8: opened from Anthropic's stream, the viewer draws the agent's own events and never asks the
+  // desktop for the file (Claude Code 2.1.300 shapes, fixtures/ccr-background-task-events-2.1.300.ts).
+  it('draws an agent opened from the stream from its streamed events, without subscribing to its file', async () => {
+    const events = [...agentCallEvents('Launched.', 'Fix it'), ...subagentBashCall('toolu_sub_1', 'pnpm test', 'Run the suite', T0 + 1_000), subagentText('Done.', T0 + 2_000)]
+    await mount('light', { ...request(), stream: { toolUseId: AGENT_CALL, events } })
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(rows().map((row) => row.split(':').at(-1))).toEqual(['assistant', 'assistant']) // the call's result folds into its row
+    expect(readTree(renderer!).texts).not.toContain('Nothing written yet')
+  })
+
+  it('an agent with nothing in the stream yet reads as not written, not as an error', async () => {
+    await mount('dark', { ...request(), stream: { toolUseId: AGENT_CALL, events: agentCallEvents('Launched.', 'Fix it') } })
+    expect(subscribe).not.toHaveBeenCalled()
+    expect(rows()).toEqual([])
+    expect(readTree(renderer!).texts.some((text) => /could not|failed|error/i.test(text))).toBe(false)
   })
 })

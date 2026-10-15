@@ -26,7 +26,7 @@ import {
   NativeChatTasksContext,
   type NativeChatRunSheetControl
 } from './native-chat-tasks-context'
-import { followSubagentTranscriptRunning, openSubagentTranscript } from './subagent-transcript-store'
+import { followSubagentTranscriptRunning, followSubagentTranscriptStream, openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
 import { useBridgeBackgroundTasksToHeader } from './session-header-tasks-bridge'
@@ -167,7 +167,11 @@ export function MobileNativeChatTasksProvider({
   }, [])
   // With Anthropic's stream live, the count is Anthropic's, counted from the same task records the
   // sheet lists (claude-chat-live.ts), as the Claude app's header and sheet are.
-  const runningCount = useClaudeChatLive()?.runningCount ?? running.length
+  const chatLive = useClaudeChatLive()
+  const runningCount = chatLive?.runningCount ?? running.length
+  // A subagent viewer opened from Anthropic's stream stays live on it (G8).
+  const streamEvents = chatLive?.stream?.events ?? null
+  useEffect(() => followSubagentTranscriptStream(streamEvents), [streamEvents])
   const tasks = useMemo(() => ({ runningCount, openSheet }), [openSheet, runningCount])
   // The header menu's Background tasks entry opens this same sheet (parity gap G35).
   useBridgeBackgroundTasksToHeader(runningCount, openSheet)
