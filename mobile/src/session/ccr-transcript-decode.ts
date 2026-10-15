@@ -1,7 +1,7 @@
 import type { NativeChatBlock, NativeChatMessage, NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import type { CcrEvent } from './ccr-session-api'
-import { joinAdjacentThoughts } from './ccr-thought-rows'
-import { decodeCcrRefusal, withRefusalPrompts } from './ccr-refusal-rows'
+import { ccrRowPasses } from './ccr-row-annotations'
+import { decodeCcrRefusal } from './ccr-refusal-rows'
 import { compactionCaption, readCompactionTokens } from './compaction-caption'
 import { ccrImageDataUri, type CcrImageSkip } from './ccr-session-images'
 import { AGENT_IMAGE_MAX_BYTES } from './host-image-size-cap'
@@ -395,7 +395,7 @@ export function decodeCcrEvents(events: readonly CcrEvent[], cache: WeakMap<CcrE
     }
     rows.push(...decoded)
   }
-  return withRefusalPrompts(joinAdjacentThoughts(rows))
+  return ccrRowPasses(rows, events)
 }
 
 const defaultCache = new WeakMap<CcrEvent, NativeChatMessage[]>()

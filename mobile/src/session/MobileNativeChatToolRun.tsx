@@ -15,6 +15,7 @@ import {
   type MobileTaskListPredecessors
 } from './mobile-native-chat-task-list-rows'
 import { toolRunSentenceShowsFailures, toolRunSentenceSpans } from './mobile-native-chat-tool-sentence'
+import { ccrRunLabel } from './ccr-row-annotations'
 import { ToolRunSentenceText } from './MobileNativeChatToolRunSentence'
 import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { useCreatedFileCounts } from './MobileNativeChatCreatedFileCounts'
@@ -282,7 +283,10 @@ function ToolRunView({
   // can count fewer failures than the run had (a folded Codex poll's error, a
   // call failed by its own state alone): "(1 failed)" beside "2 failed" was
   // two different counts for one run (review, 2026-09-30).
-  const sentenceSpans = focusView ? [] : toolRunSentenceSpans(blocks, failedCallCount)
+  // A matched Claude tab's run that Claude Code summarised (`tool_use_summary`) is named by the
+  // summary in place of the sentence, as the Claude app's group row is (ccr-row-annotations.ts).
+  const runLabel = focusView ? null : ccrRunLabel(blocks)
+  const sentenceSpans = focusView ? [] : runLabel ? [{ text: runLabel }] : toolRunSentenceSpans(blocks, failedCallCount)
   // The sentence says "(N failed)" itself, as the Claude app's row does; a
   // second "N failed" beside it said it twice and cut the sentence
   // (2026-09-26). The label stays wherever the row might not show every
@@ -291,7 +295,7 @@ function ToolRunView({
   // count sits past what a phone row shows before its ellipsis (a
   // SendMessage's preview, a command's description).
   const sentenceShowsFailures =
-    sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
+    sentenceSpans.length > 0 && !runLabel && toolRunSentenceShowsFailures(blocks, failedCallCount)
   const mayBeRunning = !focusView && toolRunMayBeRunning(allPairs)
   return (
     <View style={styles.toolRun}>

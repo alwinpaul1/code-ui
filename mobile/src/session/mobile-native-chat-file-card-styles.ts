@@ -102,6 +102,16 @@ export function makeFileCardStyles(theme: Theme) {
       lineHeight: 18.2,
       letterSpacing: 0,
       color: colors.attachmentCardText
+    },
+    /** "N files didn't reach Claude" under a prompt's cards, end-aligned with them, in the error
+     *  ink (gy30.java: the scheme's `u()`, a red, under the row). The name's size, not the app's. */
+    notArrived: {
+      alignSelf: 'flex-end',
+      marginBottom: 8,
+      fontFamily: fonts.regular,
+      fontSize: 13,
+      lineHeight: 18.2,
+      color: colors.danger
     }
   })
 }
