@@ -7,7 +7,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import type { CcrEvent } from './ccr-session-api'
 import { ClaudeChatLiveContext, type ClaudeChatLive } from './claude-chat-live'
 import { BACKGROUND_AGENT, BACKGROUND_AGENT_LAUNCH_TEXT } from './fixtures/claude-background-agent-launch-2.1.296'
-import { AGENT_CALL, SESSION, T0, agentCallEvents, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
+import { AGENT_CALL, SESSION, T0, agentCallEvents, ccrEvent, subagentBashCall, subagentText } from './fixtures/ccr-background-task-events-2.1.300'
 import { orcaTranscriptRows, probeARecords } from './fixtures/claude-subagent-transcripts-2.1.296'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ccrSubagentMessages } from './ccr-background-tasks'
@@ -17,7 +17,7 @@ import { MobileNativeChatAgentToolCalls } from './MobileNativeChatAgentToolCalls
 import { ToolDetailBody } from './MobileNativeChatToolDetailSheet'
 import { AgentToolCallsSlotProvider } from './native-chat-agent-tool-calls-slot'
 import { NativeChatAgentRunsContext, type NativeChatAgentRuns } from './native-chat-tasks-context'
-import { peekSubagentActivityRequest, publishSubagentFeed, resetSubagentActivityForTests } from './subagent-activity-store'
+import { peekSubagentActivityRequest, publishSubagentFeed, publishSubagentFeedWindowed, resetSubagentActivityForTests } from './subagent-activity-store'
 import { followSubagentTranscriptStream, peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 
 // G8. The Claude app keeps a subagent's own events (those whose `parent_tool_use_id` is its Agent
@@ -131,7 +131,8 @@ describe('the chat’s Agent sheet reads the agent’s calls from Anthropic’s 
     const tree = render(sheet(live([...agentCallEvents(BACKGROUND_AGENT_LAUNCH_TEXT, PROMPT), subagentText('Starting.', T0 + 1_000)])))
     expect(peekSubagentActivityRequest()?.targets.map((target) => target.agentId)).toEqual([BACKGROUND_AGENT.agentId])
     act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, orcaTranscriptRows(probeARecords())))
-    expect(labels(tree)).toContain('Tool calls (4)')
+    // A floor: the stream's "Starting." is not in this file, so the file is behind the stream.
+    expect(labels(tree)).toContain('Tool calls (4+)')
   })
 
   it('falls back to the file with no live stream at all', () => {
@@ -157,11 +158,12 @@ describe('the Agent sheet counts the agent’s calls from its file and the strea
     expect(callRows(tree)).toHaveLength(4)
   })
 
-  it('a call the stream holds and the file does not yet is added to the file’s', () => {
+  it('a call the stream holds and the file does not yet is added to the file’s, and the count is a floor', () => {
     const fifth = subagentBashCall('toolu_sub_union_5', 'step 5', 'Step 5', T0 + 5_000)
     const tree = render(sheet(withStream([...FOUR.slice(-2), ...fifth])))
     act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, FILE()))
-    expect(tail(tree)).toEqual(['Tool calls (5)'])
+    // The file is behind the stream, so it may be behind by more than the stream still holds.
+    expect(tail(tree)).toEqual(['Tool calls (5+)'])
   })
 
   it('with the file unread or failed, the stream’s calls show and the count is a floor', () => {
@@ -217,6 +219,114 @@ describe('unionSubagentMessages', () => {
 
   it('keeps a streamed result whose call the file holds without its result yet', () => {
     expect(unionSubagentMessages([call('a', 'c1')], [result('r', 'c1')]).map((m) => m.id)).toEqual(['a', 'r'])
+  })
+})
+
+// Review 2026-10-15 (probes against 98c7d13ab). The union returned `[...file, ...extra]`: the file
+// feed reads only the newest 40 messages (INITIAL_LIMIT, use-mobile-native-chat-session.ts), so a
+// stream holding older calls put them after the file's newer ones, a call whose result opened the
+// file's window was counted twice, a thinking line drawn by both decoders showed twice, an empty
+// file answer read as an exact count, and a stream row with no uuid was drawn beside the file's copy.
+describe('the Agent sheet orders and counts the file’s window and the stream together', () => {
+  const tail = (tree: ReactTestRenderer) => labels(tree).filter((label) => label.startsWith('Tool calls'))
+  const steps = (tree: ReactTestRenderer) => callRows(tree).map((row) => /step \d/i.exec(textOf(row))?.[0].toLowerCase() ?? '?')
+  const commands = (messages: readonly NativeChatMessage[]) =>
+    messages.flatMap((message) => message.blocks.flatMap((block) => (block.type === 'tool-call' ? [String((block.input as { command?: unknown }).command)] : [])))
+  const withStream = (events: readonly CcrEvent[]) => live([...agentCallEvents(BACKGROUND_AGENT_LAUNCH_TEXT, PROMPT), ...events])
+  const calls = (count: number) =>
+    Array.from({ length: count }, (_, index) => index + 1).flatMap((n) => subagentBashCall(`toolu_sub_order_${n}`, `step ${n}`, `Step ${n}`, T0 + n * 1_000))
+
+  it('a stream holding older calls than the file’s window lists them oldest first', () => {
+    const four = calls(4)
+    const file = ccrSubagentMessages(four, AGENT_CALL).slice(-4)
+    expect(commands(unionSubagentMessages(file, ccrSubagentMessages(four, AGENT_CALL)))).toEqual(['step 1', 'step 2', 'step 3', 'step 4'])
+    const tree = render(sheet(withStream(four)))
+    act(() => {
+      publishSubagentFeed(BACKGROUND_AGENT.agentId, file)
+      publishSubagentFeedWindowed(BACKGROUND_AGENT.agentId, true)
+    })
+    expect(steps(tree)).toEqual(['step 1', 'step 2', 'step 3', 'step 4'])
+    expect(tail(tree)).toEqual(['Tool calls (4+)'])
+  })
+
+  it('a call whose result opens the file’s window is counted once: three calls read (3+), not (4+)', () => {
+    const three = calls(3)
+    const file = ccrSubagentMessages(three, AGENT_CALL).slice(1)
+    expect(file[0]!.blocks[0]!.type).toBe('tool-result')
+    const tree = render(sheet(withStream(three)))
+    act(() => {
+      publishSubagentFeed(BACKGROUND_AGENT.agentId, file)
+      publishSubagentFeedWindowed(BACKGROUND_AGENT.agentId, true)
+    })
+    expect(tail(tree)).toEqual(['Tool calls (3+)'])
+    expect(steps(tree)).toEqual(['step 1', 'step 2', 'step 3'])
+  })
+
+  it('an empty file answer with streamed calls reads as a floor, (2+), not (2)', () => {
+    const tree = render(sheet(withStream(calls(2))))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, []))
+    expect(tail(tree)).toEqual(['Tool calls (2+)'])
+  })
+
+  it('with the file read failed, the stream’s calls are drawn in order and counted as a floor', () => {
+    const tree = render(sheet(withStream(calls(3))))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, ccrSubagentMessages(calls(1), AGENT_CALL)))
+    act(() => publishSubagentFeed(BACKGROUND_AGENT.agentId, null))
+    expect(steps(tree)).toEqual(['step 1', 'step 2', 'step 3'])
+    expect(tail(tree)).toEqual(['Tool calls (3+)'])
+  })
+})
+
+describe('unionSubagentMessages orders and de-duplicates the two sources', () => {
+  const row = (id: string, timestamp: number | null, blocks: NativeChatMessage['blocks'], role: NativeChatMessage['role'] = 'assistant'): NativeChatMessage => ({
+    id,
+    role,
+    blocks,
+    timestamp,
+    source: 'transcript'
+  })
+  const text = (id: string, timestamp: number | null) => row(id, timestamp, [{ type: 'text', text: id }])
+  const ids = (messages: readonly NativeChatMessage[]) => messages.map((message) => message.id)
+
+  it('puts one older streamed row before one file row', () => {
+    expect(ids(unionSubagentMessages([text('f', T0 + 2_000)], [text('s', T0 + 1_000)]))).toEqual(['s', 'f'])
+  })
+
+  it('keeps the file’s order on a timestamp tie', () => {
+    expect(ids(unionSubagentMessages([text('f1', T0), text('f2', T0)], [text('s', T0)]))).toEqual(['f1', 'f2', 's'])
+  })
+
+  it('keeps a row with no timestamp next to the row before it in its own source', () => {
+    expect(ids(unionSubagentMessages([text('a', null), text('b', T0 + 2_000)], [text('c', T0 + 1_000), text('d', null)]))).toEqual(['a', 'c', 'd', 'b'])
+  })
+
+  it('puts a streamed call before the file’s result for it, even when the stream’s clock reads later', () => {
+    const merged = unionSubagentMessages(
+      [row('r1', T0 + 2_000, [{ type: 'tool-result', callId: 'c1', output: 'ok' }], 'tool'), text('f', T0 + 2_500)],
+      [row('call1', T0 + 3_000, [{ type: 'tool-call', name: 'Bash', input: {}, callId: 'c1' }])]
+    )
+    expect(ids(merged)).toEqual(['call1', 'r1', 'f'])
+  })
+
+  it('draws a thinking line once when Orca keys it by uuid and the stream by uuid:thinking', () => {
+    const thinking = ccrEvent({ type: 'assistant', parent_tool_use_id: AGENT_CALL, message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Weighing the parser.' }] } }, T0 + 1_000)
+    const uuid = String(thinking.payload.uuid)
+    const streamed = ccrSubagentMessages([thinking], AGENT_CALL)
+    expect(ids(streamed)).toEqual([`${uuid}:thinking`])
+    const file = [row(uuid, T0 + 1_000, [{ type: 'text', text: 'Weighing the parser.' }], 'reasoning')]
+    expect(ids(unionSubagentMessages(file, streamed))).toEqual([uuid])
+  })
+
+  it('drops a streamed text row with no uuid that the file holds with the same text, role and time', () => {
+    const event = ccrEvent({ type: 'assistant', uuid: undefined, parent_tool_use_id: AGENT_CALL, message: { role: 'assistant', content: [{ type: 'text', text: 'Two failures.' }] } }, T0 + 1_000)
+    const streamed = ccrSubagentMessages([event], AGENT_CALL)
+    expect(ids(streamed)).toEqual([event.eventId])
+    const file = [row('line-uuid', T0 + 1_000, [{ type: 'text', text: 'Two failures.' }])]
+    expect(ids(unionSubagentMessages(file, streamed))).toEqual(['line-uuid'])
+    // Narrow: at another time, or a streamed row that carries its uuid, it is kept.
+    expect(ids(unionSubagentMessages([row('line-uuid', T0 + 9_000, [{ type: 'text', text: 'Two failures.' }])], streamed))).toEqual([event.eventId, 'line-uuid'])
+    const keyed = ccrSubagentMessages([subagentText('Two failures.', T0 + 1_000)], AGENT_CALL)
+    expect(unionSubagentMessages(file, keyed)).toHaveLength(2)
   })
 })
 
