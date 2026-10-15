@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 // Gesture.Native(), which asks the ScrollView to intercept directly (NativeViewGestureHandler
 // .tryIntercept, react-native-gesture-handler 2.32.0) whatever the Text asked with
 // requestDisallowInterceptTouchEvent, so a finger on a Text that drags scrolls the list, the Text
-// hears nothing more (gesture-handler's root sends no ACTION_CANCEL either; see
+// hears nothing more of the gesture (its ACTION_CANCEL comes only at the next finger down; see
 // selection-root-cancels-hold-when-list-scrolls.test.ts), no lift comes, and the word stays lit
 // with no menu. The same report: "when scrolling, the hold to copy triggers too sometimes".
 //
