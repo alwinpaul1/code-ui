@@ -72,7 +72,7 @@ describe('the chat list declares what its header depends on', () => {
     // 2026-10-14: the held selection's message ids ride along too, so a row's item type (its
     // own while it holds a selection, chat-held-selection.ts) is re-read when that flips.
     expect(source).toContain('extraData={listExtraData}')
-    expect(source).toContain('[headerExtraData, dockHeight, heldIds]')
+    expect(source).toContain('[headerExtraData, dockHeight, heldIds, agentWorking]')
     expect(source).toContain('useChatListRenderStability({')
   })
 
