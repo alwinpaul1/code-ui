@@ -328,11 +328,29 @@ account's sign-in (`ccrSendTargetForTab`, `use-ccr-composer-send.ts`).
   failed POST puts the words back with Retry and a `[ccr-send]` log line.
 - While Claude works the words wait in the phone's one-string queue, drawn as
   the app's `hb20.e` bubble, sent at the turn's end or moved back to the
-  composer when something blocks it.
+  composer when something blocks it. The queue belongs to the tab it was typed
+  on and to the session that tab sent to then (`use-ccr-tab-queues.ts`): drawn
+  only on that tab, sent only into that session, and only once the user is
+  back on that tab and it is idle (the phone cannot see another tab's turn end
+  while it shows this one). Leaving the chat posts it as `priority: "later"`
+  into its own session, or puts it back in that tab's stored draft.
+- **Typed slash commands are unverified over Remote Control.** Whether Claude
+  Code runs a `/command` that arrives as a Remote Control user event, or takes
+  it as prompt text, has not been observed. Until it is, a typed line-leading
+  `/token` on this lane goes the way it went before the lane: the terminal
+  path (`classifyMobileNativeChatSend`, `claude-composer-send-route.ts`), never
+  posted and never queued as text. To settle it, the user can run
+  `node p11-slash-command.cjs "<session title>" [/command]` from
+  `/private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Code-UI/211c47c2-7a42-4c86-9a59-eaa0905d39e6/scratchpad/probe/`.
+  **It posts one message** (default `/cost`) into the Remote Control session
+  the user names, and nothing without a name; it prints no tokens and no
+  message text, only event types and a verdict: `RAN` (a local-command record
+  followed), `TEXT` (Claude answered it as a prompt) or `UNKNOWN`. Not run yet.
 - **Still typed into the terminal:** photo and file sends (the app's upload,
   `{org}/upload` on claude.ai, needs the app's own login), slash commands
-  driven from pickers (model, effort, mode), Stop, permission and question
-  answers, and every non-Claude tab and Claude tab with nothing on Anthropic.
+  (typed, or driven from pickers: model, effort, mode), Stop, permission and
+  question answers, and every non-Claude tab and Claude tab with nothing on
+  Anthropic.
 
 ---
 
