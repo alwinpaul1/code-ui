@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { CcrLiveState, CcrRateLimitState } from './ccr-live-state'
+import { ccrRunningTaskCount, deriveCcrBackgroundTasks, type CcrBackgroundTask } from './ccr-background-tasks'
 import type { CcrEvent } from './ccr-session-api'
 import type { CcrLinkPhase } from './ccr-session-link-types'
 import type { ClaudeFooterLiveInput } from './claude-working-footer-stats'
@@ -23,7 +24,9 @@ export type ClaudeChatLive = {
   footer: ClaudeFooterLiveInput | null
   /** Working/idle in place of the relay's, or null to keep the relay's. */
   working: boolean | null
-  /** The running-task count in place of the relay's, or null to keep the relay's. */
+  /** The running-task count in place of the relay's, or null to keep the relay's: the stream's
+   *  running shells, agents and workflows (the sheet's Running list) while the session's stream is
+   *  on it, else `background_tasks_changed`'s count. */
   runningCount: number | null
   /** The chat header's word for the session while the relay is down: the app's "Connected" /
    *  "Disconnected" (`ccr_session_connected` / `ccr_session_disconnected`, na20.java:1003-1006);
@@ -33,12 +36,14 @@ export type ClaudeChatLive = {
   linkLive: boolean
   /** The newest `rate_limit_event`, for the limit banner; null when none was read. */
   rateLimit: CcrRateLimitState | null
-  /** While the stream is live: its events and the session they are in, for the Background tasks
-   *  sheet's list, its Stop and its agents' transcripts (ccr-background-tasks.ts); else null. */
+  /** While the stream is live: its events, the session they are in and the tasks they describe,
+   *  for the Background tasks sheet's list, its Stop and its agents' transcripts
+   *  (ccr-background-tasks.ts); else null. `runningCount` is counted from the same `tasks`. */
   stream: ClaudeChatLiveStream | null
 }
 
-export type ClaudeChatLiveStream = { events: readonly CcrEvent[]; accountId: string; sessionId: string }
+export type ClaudeChatLiveSession = { events: readonly CcrEvent[]; accountId: string; sessionId: string }
+export type ClaudeChatLiveStream = ClaudeChatLiveSession & { tasks: readonly CcrBackgroundTask[] }
 
 export function claudeChatLive(input: {
   live: CcrLiveState | null
@@ -46,13 +51,16 @@ export function claudeChatLive(input: {
   connectionStatus: string | null
   relayConnected: boolean
   /** The matched session and its events; absent or null leaves `stream` null. */
-  stream?: ClaudeChatLiveStream | null
+  stream?: ClaudeChatLiveSession | null
 }): ClaudeChatLive | null {
   const { live } = input
   if (!live) {
     return null
   }
   const linkLive = input.linkPhase === 'live'
+  // The header's count and the sheet's Running list are one derivation, as in the app (mt2.v and
+  // mt2.t over the same task records, ccr-background-tasks.ts), so the two never disagree.
+  const stream = linkLive && input.stream ? { ...input.stream, tasks: deriveCcrBackgroundTasks(input.stream.events) } : null
   const takeOver = linkLive && !input.relayConnected
   const footer = linkLive && live.working ? { turnStartedAt: live.turnStartedAt, thinking: live.thinking, thinkingTokens: live.thinkingTokens } : null
   // Unknown connection status with a turn streaming in: the turn is the evidence its Claude Code is attached.
@@ -66,11 +74,11 @@ export function claudeChatLive(input: {
   return {
     footer,
     working: linkLive ? live.working : null,
-    runningCount: linkLive ? live.runningTasks : null,
+    runningCount: stream ? ccrRunningTaskCount(stream.tasks) : linkLive ? live.runningTasks : null,
     sessionConnection,
     linkLive,
     rateLimit: live.rateLimit,
-    stream: linkLive ? (input.stream ?? null) : null
+    stream
   }
 }
 

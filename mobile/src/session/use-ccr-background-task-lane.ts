@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ccrBackgroundTaskRows, deriveCcrBackgroundTasks } from './ccr-background-tasks'
-import { stopCcrBackgroundTaskOnLink } from './ccr-background-task-stop'
+import { ccrBackgroundTaskRows } from './ccr-background-tasks'
+import { CCR_STOP_TASK_THROUGH_ANTHROPIC, stopCcrBackgroundTaskOnLink } from './ccr-background-task-stop'
 import type { ClaudeChatLiveStream } from './claude-chat-live'
 import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 
@@ -8,8 +8,7 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
  *  the one the header's running count comes from); null when it is not, and the desktop's lane
  *  stands in. */
 export function useCcrBackgroundTaskLane(stream: ClaudeChatLiveStream | null, now: number): BackgroundTasks | null {
-  const events = stream?.events ?? null
-  const tasks = useMemo(() => (events ? deriveCcrBackgroundTasks(events) : null), [events])
+  const tasks = stream?.tasks ?? null
   return useMemo(() => (tasks ? ccrBackgroundTaskRows(tasks, now) : null), [now, tasks])
 }
 
@@ -27,11 +26,21 @@ export const CCR_STOP_FAILED_LINE = 'Couldn’t stop the task. Try again.'
  * The sheet's Stop on Anthropic's lane, as the app's (`su8.stopBackgroundTask`, lt2.java): the row
  * reads "Stopping…" from the press; a POST Anthropic refused clears that and says
  * "Couldn’t stop the task. Try again." (`ccr_background_task_stop_failed`); a taken one holds it
- * until the row leaves Running or the hold runs out.
+ * until the row leaves Running or the hold runs out. The failure line goes once its task ends.
+ *
+ * Both are judged only while the stream is live: a brief drop (`stream` null, the desktop's rows
+ * on screen) keeps a row's "Stopping…" for when the stream comes back, rather than reading the
+ * desktop's list as the task having ended. No Stop is offered while the switch is off
+ * (`CCR_STOP_TASK_THROUGH_ANTHROPIC`, ccr-background-task-stop.ts).
  */
-export function useCcrTaskStops(stream: ClaudeChatLiveStream | null, running: readonly BackgroundTask[], stopTask: CcrStopTask = defaultCcrStopTask) {
+export function useCcrTaskStops(
+  stream: ClaudeChatLiveStream | null,
+  running: readonly BackgroundTask[],
+  stopTask: CcrStopTask = defaultCcrStopTask,
+  enabled: boolean = CCR_STOP_TASK_THROUGH_ANTHROPIC
+) {
   const [stopping, setStopping] = useState<ReadonlySet<string>>(() => new Set())
-  const [failed, setFailed] = useState<string | null>(null)
+  const [failure, setFailure] = useState<{ taskId: string } | null>(null)
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
   const release = useCallback((id: string) => {
     const timer = timers.current.get(id)
@@ -48,15 +57,22 @@ export function useCcrTaskStops(stream: ClaudeChatLiveStream | null, running: re
       return next
     })
   }, [])
-  // A row that left Running no longer needs its "Stopping…".
+  // A row that left Running no longer needs its "Stopping…", nor its failure line.
+  const live = stream !== null
   useEffect(() => {
-    const live = new Set(running.map((task) => task.id))
+    if (!live) {
+      return
+    }
+    const ids = new Set(running.map((task) => task.id))
     for (const id of stopping) {
-      if (!live.has(id)) {
+      if (!ids.has(id)) {
         release(id)
       }
     }
-  }, [release, running, stopping])
+    if (failure && !ids.has(failure.taskId)) {
+      setFailure(null)
+    }
+  }, [failure, live, release, running, stopping])
   useEffect(() => {
     const held = timers.current
     return () => {
@@ -71,12 +87,12 @@ export function useCcrTaskStops(stream: ClaudeChatLiveStream | null, running: re
       if (!stream || stopping.has(task.id)) {
         return
       }
-      setFailed(null)
+      setFailure(null)
       setStopping((held) => new Set(held).add(task.id))
       void stopTask(stream, task.id).catch(() => false).then((taken) => {
         if (!taken) {
           release(task.id)
-          setFailed(CCR_STOP_FAILED_LINE)
+          setFailure({ taskId: task.id })
           return
         }
         timers.current.set(
@@ -87,5 +103,5 @@ export function useCcrTaskStops(stream: ClaudeChatLiveStream | null, running: re
     },
     [release, stopTask, stopping, stream]
   )
-  return { stopping, failed, stop: stream ? stop : null }
+  return { stopping, failed: failure ? CCR_STOP_FAILED_LINE : null, stop: stream && enabled ? stop : null }
 }

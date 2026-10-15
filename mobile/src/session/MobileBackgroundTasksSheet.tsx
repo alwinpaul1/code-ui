@@ -209,7 +209,8 @@ export function MobileBackgroundTasksSheetBody({
   })
   const { running, finished } = anthropic ?? watched
   const stops = useCcrTaskStops(anthropic ? stream : null, running, stopTask)
-  const viewTranscript = onViewTranscript && canViewTranscript ? (task: BackgroundTask) => canViewTranscript(task) : () => false
+  // Only on Anthropic's lane: the desktop's rows have offered no link since 2026-10-10.
+  const viewTranscript = anthropic && onViewTranscript && canViewTranscript ? (task: BackgroundTask) => canViewTranscript(task) : () => false
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {

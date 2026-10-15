@@ -85,6 +85,31 @@ describe("the running tasks are the Claude app's, read from Anthropic's task eve
     expect(statusOf(back, SHELL_ID)).toBe('running')
   })
 
+  // Claude Code 2.1.300 drops a finished agent from the background list before its notification
+  // lands; the app's reducer lets the stated end override the list's guess (t5v.java `H`, 99-104).
+  it('reads a background agent that finished normally as Completed, not Stopped, when the list drops it first', () => {
+    const events = [
+      taskStarted({ taskId: AGENT, toolUseId: AGENT_CALL, taskType: 'local_agent', description: 'Agent', at: T0 }),
+      tasksChanged([{ taskId: AGENT, taskType: 'local_agent' }], T0 + 1),
+      tasksChanged([], NOW - 1),
+      taskNotification({ taskId: AGENT, toolUseId: AGENT_CALL, status: 'completed', at: NOW })
+    ]
+    expect(statusOf(events, AGENT)).toBe('completed')
+    expect(ccrBackgroundTaskRows(deriveCcrBackgroundTasks(events), NOW).finished.map((task) => task.status)).toEqual(['completed'])
+  })
+
+  it('reads a task the list dropped as Failed once a patch says it failed', () => {
+    const events = [...agentAndShellStarted(), tasksChanged([{ taskId: AGENT, taskType: 'local_agent' }], NOW - 1), taskUpdated(SHELL_ID, { status: 'failed' }, NOW)]
+    expect(statusOf(events, SHELL_ID)).toBe('failed')
+    // Settled by its own word now: a later notification no longer moves it.
+    expect(statusOf([...events, taskNotification({ taskId: SHELL_ID, toolUseId: SHELL_CALL, status: 'completed', at: NOW + 1 })], SHELL_ID)).toBe('failed')
+  })
+
+  it('keeps a task the list dropped Stopped when its notification states no end the app knows', () => {
+    const events = [...agentAndShellStarted(), tasksChanged([{ taskId: AGENT, taskType: 'local_agent' }], NOW - 1), taskNotification({ taskId: SHELL_ID, toolUseId: SHELL_CALL, status: 'mystery', at: NOW })]
+    expect(statusOf(events, SHELL_ID)).toBe('stopped')
+  })
+
   it('keeps a remote agent and a foreground one running when the background list leaves them out', () => {
     const events = [
       taskStarted({ taskId: 'remote', toolUseId: 'toolu_r', taskType: 'remote_agent', description: 'Cloud agent', at: T0 }),

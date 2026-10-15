@@ -128,3 +128,11 @@ export function subagentBashCall(id: string, command: string, description: strin
     )
   ]
 }
+
+/** A line of the subagent's own text, scoped to the lead's Agent call: no call in it. */
+export function subagentText(text: string, at: number): CcrEvent {
+  return ccrEvent(
+    { type: 'assistant', parent_tool_use_id: AGENT_CALL, message: { role: 'assistant', model: 'claude-opus-5-5', content: [{ type: 'text', text }] } },
+    at
+  )
+}

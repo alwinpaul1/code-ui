@@ -17,9 +17,11 @@ import { captionOf, elapsedSince } from './mobile-background-task-captions'
  *    `task_type` and `description` where the event states them.
  *  - `task_progress`: only a running record; a description fills one still named by its id.
  *  - `task_updated`: `patch.status` completed → Completed, failed → Failed, stopped / killed /
- *    cancelled → Stopped (only a running record moves); `patch.description` renames it.
+ *    cancelled → Stopped (a running record moves, and one only the list stopped); `patch.description`
+ *    renames it.
  *  - `task_notification`: a running record ends with `status` read the same way, an unknown status
- *    reading as Stopped; `summary` is kept.
+ *    reading as Stopped, and one only the list stopped takes the stated end (t5v.java `H`, 99-104);
+ *    `summary` is kept.
  *  - `background_tasks_changed`: a running record its `tasks` list no longer names is Stopped (not
  *    a `remote_agent`, not one stated foreground), and comes back running if a later list names it.
  *
@@ -178,18 +180,22 @@ export function deriveCcrBackgroundTasks(events: readonly CcrEvent[]): CcrBackgr
           break
         }
         const ended = endStatus(patch.status)
-        const status = task.status === 'running' && ended ? ended : task.status
+        const status = ended && (task.status === 'running' || task.settledByList) ? ended : task.status
         tasks.set(taskId, {
           ...task,
           status,
           description: text(patch.description) ?? task.description,
           endedAt: status === 'running' ? null : (task.endedAt ?? at),
-          settledByList: status === 'running' ? task.settledByList : false
+          // t5v.java 2992: a list-settled record stays so only while no end was stated.
+          settledByList: task.settledByList && ended === null
         })
         break
       }
       case 'task_notification': {
-        const status = task.status === 'running' ? (endStatus(payload.status) ?? 'stopped') : task.status
+        // A record the list settled takes the notification's own end (t5v.java `H`): the list
+        // stops naming a task before its notification lands, in that order, on Claude Code 2.1.300.
+        const stated = endStatus(payload.status)
+        const status = task.status === 'running' ? (stated ?? 'stopped') : task.settledByList && stated ? stated : task.status
         tasks.set(taskId, { ...task, toolUseId, status, endedAt: task.endedAt ?? at, summary: text(payload.summary) ?? task.summary, settledByList: false })
         break
       }
@@ -212,6 +218,14 @@ export function ccrTaskKind(taskType: string | null): BackgroundTaskKind | null 
 }
 
 const STATUS: Record<CcrTaskStatus, BackgroundTaskStatus> = { running: 'running', completed: 'completed', failed: 'failed', stopped: 'stopped' }
+
+/** How many tasks run, as the app's header counts them: `mt2.v` (mt2.java, default case) adds the
+ *  running workflows to the running shells and agents, the very rows its sheet lists (y07.java `c`
+ *  hands it to the "N running tasks" line, `ccr_workflow_running_tasks`). A monitor, a task the
+ *  background list names with no `task_started` loaded, are in neither; a remote agent is in both. */
+export function ccrRunningTaskCount(tasks: readonly CcrBackgroundTask[]): number {
+  return tasks.filter((task) => task.status === 'running' && ccrTaskKind(task.taskType) !== null).length
+}
 
 /** The sheet's rows from the session's tasks: running and finished, each newest first, as the
  *  app's sheet showed them (2026-10-15 screenshot: 3m 44s above 7m 45s above 9m 45s). The title is

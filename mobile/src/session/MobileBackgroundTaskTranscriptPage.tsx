@@ -10,7 +10,7 @@ import type { ClaudeChatLiveStream } from './claude-chat-live'
 import type { BackgroundTask } from './mobile-background-tasks'
 import type { BackgroundTaskTranscriptPage } from './mobile-background-task-agent-pairs'
 import { toolDetailTitle } from './mobile-native-chat-tool-detail'
-import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
+import { runSheetRows, type RunSheetRow } from './mobile-native-chat-run-sheet-rows'
 import { RunSheetRowView } from './MobileNativeChatRunSheet'
 import { ToolDetailBody } from './MobileNativeChatToolDetailSheet'
 import { AgentToolCallsSlotProvider, useAgentToolCallsSlot, type AgentToolCallsProps } from './native-chat-agent-tool-calls-slot'
@@ -91,12 +91,14 @@ export function MobileBackgroundTaskTranscriptBody({
   const { space } = useTheme()
   const outer = useAgentToolCallsSlot()
   const toolUseId = task.toolUseId ?? pair?.call?.callId ?? null
-  const streamed = useMemo(() => (stream && toolUseId ? ccrSubagentMessages(stream.events, toolUseId) : []), [stream, toolUseId])
+  const rows = useMemo(() => (stream && toolUseId ? streamedToolCallRows(ccrSubagentMessages(stream.events, toolUseId)) : []), [stream, toolUseId])
+  // The stream's calls once it has one; until then the agent's file, which also holds the calls
+  // made before the loaded window and keeps the full viewer's link. Text alone is not a call.
   const render = useMemo(
     () =>
       (props: AgentToolCallsProps): ReactNode =>
-        streamed.length > 0 ? <StreamedToolCalls messages={streamed} inSection={props.inSection} /> : (outer?.(props) ?? null),
-    [outer, streamed]
+        rows.length > 0 ? <StreamedToolCalls rows={rows} inSection={props.inSection} /> : (outer?.(props) ?? null),
+    [outer, rows]
   )
   if (!pair) {
     // The sheet offers the link only where the call is found; the call can still leave the
@@ -118,12 +120,13 @@ export function MobileBackgroundTaskTranscriptBody({
   )
 }
 
-function StreamedToolCalls({ messages, inSection }: { messages: readonly NativeChatMessage[]; inSection: AgentToolCallsProps['inSection'] }) {
+/** The agent's calls as the Agent sheet lists them: the run sheet's rows, inert. */
+function streamedToolCallRows(messages: readonly NativeChatMessage[]): RunSheetRow[] {
+  return runSheetRows(messages.flatMap((message) => message.blocks), []).map((row) => ({ ...row, opens: false }))
+}
+
+function StreamedToolCalls({ rows, inSection }: { rows: readonly RunSheetRow[]; inSection: AgentToolCallsProps['inSection'] }) {
   const { space } = useTheme()
-  const rows = useMemo(() => runSheetRows(messages.flatMap((message) => message.blocks), []).map((row) => ({ ...row, opens: false })), [messages])
-  if (rows.length === 0) {
-    return null
-  }
   return (
     <>
       {inSection(

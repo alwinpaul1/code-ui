@@ -1215,17 +1215,31 @@ live, the sheet lists what the app lists, from the same events; the desktop's la
   top-level `system` events `task_started`, `task_progress`, `task_updated`, `task_notification`
   and `background_tasks_changed`, shapes as Claude Code 2.1.300 emits them. Shells
   (`local_bash`), agents (`local_agent`, `remote_agent`) and workflows; Running and "Finished N",
-  each newest first; a finished row reads "Completed", "Failed" or "Stopped". The header's count
-  already came from `background_tasks_changed` (`claude-chat-live.ts`), so the two now agree.
-- **Stop** (`ccr-background-task-stop.ts`): the app's `stop_task` control request
+  each newest first; a finished row reads "Completed", "Failed" or "Stopped". A task the
+  background list stops naming reads Stopped until its own `task_notification` or `task_updated`
+  states an end, which then wins (t5v.java `H`, 99-104): Claude Code drops a finished agent from
+  the list before its notification lands, so without this a normal finish read "Stopped".
+- **The header's count** is the same derivation: `ccrRunningTaskCount` over the same task records
+  (`claude-chat-live.ts`), as the app's "N running tasks" is `mt2.v` over the records its sheet
+  lists (y07.java `c`). It is not `background_tasks_changed`'s own count, which an earlier note
+  (1.261009.20) took it to be: that count includes a monitor and a task listed with no
+  `task_started` loaded, and leaves out a remote agent, so the two disagreed. With the stream not
+  on the live state the header keeps `background_tasks_changed`'s count as before.
+- **Stop** (`ccr-background-task-stop.ts`), **off for now**: `CCR_STOP_TASK_THROUGH_ANTHROPIC` is
+  false, so no Stop is drawn on Anthropic's rows and nothing is posted (the log line says the lane
+  is off). It moves under `CCR_CONTROL_LANE` (`ccr-control-request.ts`) once that branch merges.
+  When on, it is the app's `stop_task` control request
   `{type: "control_request", uuid, request_id, request: {subtype: "stop_task", task_id}}` posted to
   `v1/code/sessions/{cse}/events`; the app does not wait for the `control_response`. The row reads
-  "Stopping…" until it ends (or 15 s, a guess: the app's own hold was not read); a refused POST
-  says "Couldn’t stop the task. Try again."
+  "Stopping…" until it ends (or 15 s, a guess: the app's own hold was not read), and keeps it
+  across a brief drop of the stream; a refused POST says "Couldn’t stop the task. Try again." until
+  that task ends. Each button's label names its task ("Stop task: <title>").
 - **View transcript** (`MobileBackgroundTaskTranscriptPage.tsx`): the app pushes the Agent call's
   `ToolCallDetail` onto the same sheet (mm8.java); here the chat's own Agent sheet body, under a
   back arrow, "Agent" and its status. Its "Tool calls (N)" come from the stream's events whose
-  `parent_tool_use_id` is the Agent call, live; with none there, from the agent's file as before.
+  `parent_tool_use_id` is the Agent call, live; while those hold no call (none yet, or only the
+  agent's text), from the agent's file as before. The link is drawn only on Anthropic's lane: a
+  desktop agent row with the stream down offers none.
 
 Not proven offline: no live session was driven, so the task events in the tests are built from
 Claude Code 2.1.300's emitters (`fixtures/ccr-background-task-events-2.1.300.ts`), not captured.

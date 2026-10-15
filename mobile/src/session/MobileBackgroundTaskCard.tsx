@@ -20,7 +20,8 @@ import {
  * row is (parity G27).
  *
  * Since 2026-10-15 ("same like Claude Mobile"), as the app's row (`dt2.b`, 1.261013.20): a running
- * row given `onStop` carries the round Stop at its right ("Stop task"), and reads "Stopping…" in
+ * row given `onStop` carries the round Stop at its right ("Stop task: <title>" to TalkBack, so each
+ * row's button says which task it stops), and reads "Stopping…" in
  * place of its time from the press until it ends; an agent given `onViewTranscript` has the
  * "View transcript" link under its meta line. The sheet passes them only on Anthropic's lane
  * (MobileBackgroundTasksSheet.tsx); the desktop's rows still carry neither (no-stop.test.tsx).
@@ -119,7 +120,7 @@ export function MobileBackgroundTaskCard({
       {stop ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Stop task"
+          accessibilityLabel={`Stop task: ${task.title}`}
           hitSlop={8}
           onPress={stop}
           style={({ pressed }) => ({ height: TITLE_LINE, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}

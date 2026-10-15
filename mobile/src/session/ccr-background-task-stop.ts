@@ -16,6 +16,11 @@ import { ccrCseId, newCcrEventUuid, postCcrSessionEvents } from './ccr-send'
  * interrupt / model / mode lane, and the two are to be reconciled there.
  */
 
+/** Off until the Anthropic control lane ships: no Stop is drawn on Anthropic's rows and no
+ *  `stop_task` is sent. Moves under `CCR_CONTROL_LANE` (mobile/src/session/ccr-control-request.ts,
+ *  branch worktree-agent-a496b9faf6d3e96d4) once that branch merges. */
+export const CCR_STOP_TASK_THROUGH_ANTHROPIC = false
+
 export function buildCcrStopTaskBody(args: { sessionId: string; uuid: string; requestId: string; taskId: string }): {
   session_id: string
   events: { payload: Record<string, unknown> }[]
@@ -33,7 +38,11 @@ export type CcrStopTaskDeps = {
 }
 
 /** Posts the stop. True when Anthropic took it; never throws. */
-export async function stopCcrBackgroundTask(deps: CcrStopTaskDeps, sessionId: string, taskId: string): Promise<boolean> {
+export async function stopCcrBackgroundTask(deps: CcrStopTaskDeps, sessionId: string, taskId: string, enabled: boolean = CCR_STOP_TASK_THROUGH_ANTHROPIC): Promise<boolean> {
+  if (!enabled) {
+    deps.log(`[ccr-stop-task] not sent — stop_task for ${taskId}: the Anthropic control lane is off`)
+    return false
+  }
   try {
     await deps.post(buildCcrStopTaskBody({ sessionId, uuid: deps.newUuid(), requestId: deps.newUuid(), taskId }))
     return true
