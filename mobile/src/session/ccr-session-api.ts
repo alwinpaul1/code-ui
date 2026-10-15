@@ -54,7 +54,7 @@ export type CcrFetchResponse = {
   json: () => Promise<unknown>
   text?: () => Promise<string>
 }
-export type CcrFetch = (url: string, init: { method: 'GET'; headers: Record<string, string> }) => Promise<CcrFetchResponse>
+export type CcrFetch = (url: string, init: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string }) => Promise<CcrFetchResponse>
 
 export type CcrFailureReason =
   | 'unauthorized'
@@ -65,7 +65,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'events'
+export type CcrRequestStage = 'org' | 'sessions' | 'events' | 'branches'
 
 export class CcrApiError extends Error {
   constructor(
@@ -107,10 +107,10 @@ export function ccrProfileHeaders(token: string): Record<string, string> {
 
 const UNTRUSTED_DEVICE = /trusted[\s_-]?device|device[\s_-]?(?:identity|trust)/i
 
-async function getJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>): Promise<unknown> {
+async function getJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>, post?: { body: string }): Promise<unknown> {
   let response: CcrFetchResponse
   try {
-    response = await fetchImpl(url, { method: 'GET', headers })
+    response = await fetchImpl(url, post ? { method: 'POST', headers, body: post.body } : { method: 'GET', headers })
   } catch {
     throw new CcrApiError(stage, 'network')
   }
@@ -173,12 +173,42 @@ export type CcrSessionRow = {
    *  absent or not a string. */
   model: string | null
   effortLevel: string | null
+  /** The repo and branch pairs the session works on, as the Claude app asks the branch status
+   *  about them (`vy20.i`, jadx): `external_metadata.current_branches` (repo to branch) first, then
+   *  each branch of `config.outcomes[].git_info` (`ojn`, `tjn`: `repo`, `branches`). Empty when the
+   *  row names none; a pair is kept only when both halves are non-empty strings. */
+  branches?: readonly CcrBranchRef[]
 }
+
+export type CcrBranchRef = { repo: string; branch: string }
 
 export type CcrSessionPage = { sessions: CcrSessionRow[]; nextCursor: string | null; malformedRows: number }
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null
+}
+
+/** The repo and branch pairs a session row names (see `CcrSessionRow.branches`). */
+export function branchesOfRow(row: Record<string, unknown>): CcrBranchRef[] {
+  const pairs: CcrBranchRef[] = []
+  const add = (repo: unknown, branch: unknown) => {
+    if (typeof repo === 'string' && repo && typeof branch === 'string' && branch && !pairs.some((pair) => pair.repo === repo && pair.branch === branch)) {
+      pairs.push({ repo, branch })
+    }
+  }
+  const current = record(record(row.external_metadata)?.current_branches)
+  for (const [repo, branch] of Object.entries(current ?? {})) {
+    add(repo, branch)
+  }
+  const outcomes = record(row.config)?.outcomes
+  for (const outcome of Array.isArray(outcomes) ? outcomes : []) {
+    const info = record(record(outcome)?.git_info)
+    const branches = info?.branches
+    for (const branch of Array.isArray(branches) ? branches : []) {
+      add(info?.repo, branch)
+    }
+  }
+  return pairs
 }
 
 function timeOf(row: Record<string, unknown>): number {
@@ -228,7 +258,8 @@ export async function listCcrSessions(
       connectionStatus: stringOrNull(row.connection_status),
       activeAt: timeOf(row),
       model: stringOrNull(record(row.external_metadata)?.model),
-      effortLevel: stringOrNull(record(row.external_metadata)?.effort_level)
+      effortLevel: stringOrNull(record(row.external_metadata)?.effort_level),
+      branches: branchesOfRow(row)
     })
   }
   return { sessions, nextCursor: cursorOf(body.next_cursor), malformedRows }
@@ -264,4 +295,9 @@ export async function listCcrSessionEvents(
     }
   }
   return { events, nextCursor: cursorOf(body.next_cursor) }
+}
+
+/** A POST with a JSON body to the code API, errors as the other stages' (`getJson`'s). */
+export function postCcrJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>, body: unknown): Promise<unknown> {
+  return getJson(fetchImpl, stage, url, { ...headers, 'Content-Type': 'application/json' }, { body: JSON.stringify(body) })
 }

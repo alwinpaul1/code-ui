@@ -7,6 +7,7 @@ import type { PrSidebarState } from './mobile-pr-sidebar-state'
 import {
   LOCAL_CHANGES_HINT,
   LOCAL_CHANGES_HINT_MAX_WIDTH,
+  buildClaudeSessionPills,
   buildSessionPills,
   sessionCiSpoken,
   sessionPillActions
@@ -16,8 +17,9 @@ import {
  * The session pills the Claude Android app draws above its composer (com.anthropic.claude
  * 1.261009.20): `jc20.q` is the pull request pill (number, with the CI status inside it, or the
  * state word for a merged PR), `bsu` case 0 is Create PR, `bsu` case 2 with `jc20.g` is Local
- * changes and its hint. The user removed the Diff pill on 2026-10-12, so there is none here.
- * Every pill is fed by what Orca answered; with no answer there is no pill.
+ * changes and its hint. The user removed the Diff pill Orca's numbers fed on 2026-10-12; the one
+ * that is here (`jc20.p`) is built only from Anthropic's pull request (buildClaudeSessionPills).
+ * Every other pill is fed by what Orca answered; with no answer there is no pill.
  */
 
 function pr(overrides: Partial<PRInfo> = {}): PRInfo {
@@ -261,5 +263,67 @@ describe('Copy PR number', () => {
     })
     await sessionPillActions(d).copyPrNumber(7701)
     expect(d.showToast).toHaveBeenCalledWith("Couldn't copy PR number", 1500)
+  })
+})
+
+describe('the pills of a session whose pull request Anthropic reported', () => {
+  const claude = (over: Partial<Parameters<typeof buildClaudeSessionPills>[0]> = {}) =>
+    buildClaudeSessionPills({
+      repo: 'nexdash/NexOS-Mobile',
+      branch: 'claude/tablet-cab-redesign',
+      sessionId: null,
+      number: 12,
+      state: 'open',
+      url: 'https://github.com/nexdash/NexOS-Mobile/pull/12',
+      ci: 'passed',
+      additions: 11542,
+      deletions: 3602,
+      ...over
+    })
+
+  it('lays the Diff pill before the pull request pill, as the app’s row does (i35.java:261-266)', () => {
+    expect(claude().map((pill) => pill.kind)).toEqual(['diff', 'pull-request'])
+    expect(claude()[0]).toEqual({
+      kind: 'diff',
+      label: 'Diff',
+      added: 11542,
+      removed: 3602,
+      url: 'https://github.com/nexdash/NexOS-Mobile/pull/12/files'
+    })
+  })
+
+  it('opens the files page of a PR URL that ends in a slash without doubling it', () => {
+    expect(claude({ url: 'https://github.com/o/r/pull/12/' })[0]).toMatchObject({ url: 'https://github.com/o/r/pull/12/files' })
+  })
+
+  it.each([
+    ['open', 'Open', 'success', 'failed'],
+    ['draft', 'Draft', 'muted', 'pending'],
+    ['closed', 'Closed', 'danger', 'unavailable'],
+    ['merged', 'Merged', 'merged', null],
+    ['queued', 'Queued', 'queued', null]
+  ] as const)('words a %s pull request as %s, tinted %s, with CI %s', (state, stateLabel, tint, ci) => {
+    expect(claude({ state, ci })[1]).toMatchObject({
+      kind: 'pull-request',
+      number: 12,
+      label: '#12',
+      state,
+      stateLabel,
+      tint,
+      ci,
+      spoken: 'Pull request #12',
+      source: 'claude'
+    })
+  })
+
+  it('draws no Diff pill for a pull request with no lines in it, and one for a single side', () => {
+    expect(claude({ additions: 0, deletions: 0 }).map((pill) => pill.kind)).toEqual(['pull-request'])
+    expect(claude({ additions: 12, deletions: 0 })[0]).toMatchObject({ kind: 'diff', added: 12, removed: 0 })
+    expect(claude({ additions: 0, deletions: 4 })[0]).toMatchObject({ kind: 'diff', added: 0, removed: 4 })
+  })
+
+  it('is never what Orca’s own builder makes: it draws no Diff pill however many lines it knows', () => {
+    const pills = buildSessionPills({ hosted: true, branch: 'b', pr: { kind: 'none' }, eligibility: { kind: 'idle' } })
+    expect(pills.some((pill) => pill.kind === 'diff')).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatTaskList } from '../../../src/shared/native-chat-task-list'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { darkColors, lightColors } from '../theme/tokens'
 
 // The Claude Android app's session bar and todo card (1.261009.20): a todo
@@ -261,7 +262,10 @@ describe('the diff pill', () => {
   ] as const)('colours the counts from the %s theme', (scheme, palette) => {
     mount({ list: null, diff: { files: 1, added: 2, removed: 1 }, onOpenDiff: () => {}, scheme })
     const counts = pill('diff-pill').findAll((node) => (node.type as unknown) === 'Text' && /^[+-]\d/.test(String(node.props.children)))
-    expect(counts.map(colourOf)).toEqual([palette.diffAddText, palette.diffDelText])
+    expect(counts.map(colourOf)).toEqual([
+      claudeSessionPillPalette(palette === lightColors ? 'light' : 'dark').countAddText,
+      claudeSessionPillPalette(palette === lightColors ? 'light' : 'dark').countDelText
+    ])
   })
 })
 

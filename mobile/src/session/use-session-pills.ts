@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useMobileHostedReviewEligibility } from '../source-control/use-mobile-hosted-review-eligibility'
 import { agentWorksInWorktree } from './agent-works-in-worktree'
 import { worktreePathFromId } from './mobile-native-chat-skill-browse'
-import { buildSessionPills, type SessionPill } from './session-pill-row-model'
+import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-agent'
+import { buildClaudeSessionPills, buildSessionPills, type SessionPill } from './session-pill-row-model'
+import { useCcrSessionPills } from './use-ccr-session-pills'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
 import { useSessionBranchStatus } from './use-session-branch-status'
@@ -31,6 +33,7 @@ export function useSessionPills(controller: MobileSessionController): SessionPil
     hostId,
     worktreeId,
     lastConnectedAt,
+    activeSessionTabId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     prIsGithubRepo,
@@ -41,8 +44,25 @@ export function useSessionPills(controller: MobileSessionController): SessionPil
   // worktree, so its PR or "Create PR" would be another branch's. No pill rather than a wrong one.
   const elsewhere =
     agentWorksInWorktree(nativeChatSessionIdentity?.transcriptPath, worktreePathFromId(worktreeId)) === 'elsewhere'
+  // Anthropic's own word for the tab's Remote Control session wins over Orca's read of the worktree
+  // (use-ccr-session-pills.ts): the pull request and the Diff pill the Claude app draws, for a
+  // session wherever it works. Nothing from it (not matched, not signed in, a refused call, no
+  // pull request) leaves the pills below exactly as they were.
+  const ccr = useCcrSessionPills({
+    enabled: showNativeChat && nativeChatAgentFromTranscriptPath(nativeChatSessionIdentity?.transcriptPath) === 'claude',
+    tabId: activeSessionTabId ?? null,
+    agentSessionId: nativeChatSessionIdentity?.sessionId ?? null,
+    epoch: lastConnectedAt ?? null
+  })
+  const claudePr = ccr?.pr ?? null
+  // With Anthropic's answer on screen Orca is not asked: its reads would only feed pills that lose.
   const hosted =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && prRepoContextLoaded && prIsGithubRepo && !elsewhere
+    !isFolderWorkspaceRoute &&
+    !isFloatingWorkspaceRoute &&
+    prRepoContextLoaded &&
+    prIsGithubRepo &&
+    !elsewhere &&
+    claudePr === null
 
   const { status, turnsEnded } = useSessionBranchStatus({
     client,
@@ -101,7 +121,7 @@ export function useSessionPills(controller: MobileSessionController): SessionPil
   })
 
   return useMemo(
-    () => buildSessionPills({ hosted, branch, pr: prSidebarState, eligibility }),
-    [hosted, branch, prSidebarState, eligibility]
+    () => (claudePr ? buildClaudeSessionPills(claudePr) : buildSessionPills({ hosted, branch, pr: prSidebarState, eligibility })),
+    [claudePr, hosted, branch, prSidebarState, eligibility]
   )
 }
