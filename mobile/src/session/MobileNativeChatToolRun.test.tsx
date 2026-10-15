@@ -3,6 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -447,9 +448,9 @@ describe('a batch of tool calls in one run header', () => {
       expect(texts).toContain('−0')
       const added = renderer!.root.findByProps({ testID: 'tool-run-diff-added' })
       const removed = renderer!.root.findByProps({ testID: 'tool-run-diff-removed' })
-      const palette = scheme === 'dark' ? darkColors : lightColors
-      expect(flattenColor(added.props.style)).toBe(palette.diffAddText)
-      expect(flattenColor(removed.props.style)).toBe(palette.diffDelText)
+      const palette = claudeSessionPillPalette(scheme)
+      expect(flattenColor(added.props.style)).toBe(palette.chipAddText)
+      expect(flattenColor(removed.props.style)).toBe(palette.chipDelText)
     }
   )
 
@@ -550,7 +551,7 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
     added: string,
     removed: string
   ): void {
-    const palette = scheme === 'dark' ? darkColors : lightColors
+    const palette = claudeSessionPillPalette(scheme)
     const sentence = flat(tree.root.findByProps({ testID: 'tool-run-sentence' }).props.style)
     const pill = tree.root.findAll(
       (node) => node.props?.testID === 'tool-run-diff-chip' && typeof node.type === 'string'
@@ -563,10 +564,10 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
     const segments = pill.findAllByType('Text' as never)
     expect(segments.map((segment) => segment.props.children)).toEqual([added, removed])
     const [plus, minus] = segments.map((segment) => flat(segment.props.style))
-    expect(plus!.color).toBe(palette.diffAddText)
-    expect(plus!.backgroundColor).toBe(palette.diffAddBg)
-    expect(minus!.color).toBe(palette.diffDelText)
-    expect(minus!.backgroundColor).toBe(palette.diffDelBg)
+    expect(plus!.color).toBe(palette.chipAddText)
+    expect(plus!.backgroundColor).toBe(palette.chipAddFill)
+    expect(minus!.color).toBe(palette.chipDelText)
+    expect(minus!.backgroundColor).toBe(palette.chipDelFill)
     for (const segment of [plus!, minus!]) {
       // 2026-09-28, the user: "reduce the size of lines written and number of lines removed pill".
       // Smaller than the sentence it follows, and tighter than an inline code pill, so it reads

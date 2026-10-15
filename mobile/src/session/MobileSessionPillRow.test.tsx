@@ -1,5 +1,6 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { darkColors, lightColors } from '../theme/tokens'
 
 // The Claude Android app's session pills (1.261009.20). Each is the generic chip `jc20.c`: a
@@ -17,6 +18,7 @@ const sheets = vi.hoisted(() => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Linking: { openURL: vi.fn(async () => {}) },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1, flatten: (s: unknown) => s },
   Text: 'Text',
@@ -66,17 +68,22 @@ function pr(over: Partial<Extract<SessionPill, { kind: 'pull-request' }>> = {}):
 const CREATE: SessionPill = { kind: 'create-pr', label: 'Create PR' }
 const LOCAL: SessionPill = { kind: 'local-changes', label: 'Local changes', hint: LOCAL_CHANGES_HINT }
 
-function mount(scheme: Scheme, pills: SessionPill[], over: { open?: () => void; copy?: (n: number) => void } = {}) {
+function mount(
+  scheme: Scheme,
+  pills: SessionPill[],
+  over: { open?: () => void; copy?: (n: number) => void; openUrl?: (url: string) => void } = {}
+) {
   const open = over.open ?? vi.fn()
   const copy = over.copy ?? vi.fn()
+  const openUrl = over.openUrl ?? vi.fn()
   act(() => {
     renderer = create(
       <ThemeProvider initialPreference={scheme}>
-        <SessionPillRowView pills={pills} onOpenPullRequest={open} onCopyPrNumber={copy} />
+        <SessionPillRowView pills={pills} onOpenPullRequest={open} onOpenUrl={openUrl} onCopyPrNumber={copy} />
       </ThemeProvider>
     )
   })
-  return { open, copy }
+  return { open, copy, openUrl }
 }
 
 const palette = (scheme: Scheme) => (scheme === 'light' ? lightColors : darkColors)
@@ -109,6 +116,7 @@ function textNode(node: ReactTestInstance, text: string): ReactTestInstance {
 
 describe.each(['light', 'dark'] as const)('the session pills in %s mode', (scheme) => {
   const colors = palette(scheme)
+  const claude = claudeSessionPillPalette(scheme)
 
   describe('the chip', () => {
     it("is the app's generic chip: 14 dp radius, 12 x 8 padding, an 8 dp gap, a hairline on its surface", () => {
@@ -121,8 +129,8 @@ describe.each(['light', 'dark'] as const)('the session pills in %s mode', (schem
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderWidth: 1,
-        backgroundColor: colors.composerFill,
-        borderColor: colors.composerBorderFocused
+        backgroundColor: claude.surface,
+        borderColor: claude.border
       })
     })
 
@@ -141,34 +149,35 @@ describe.each(['light', 'dark'] as const)('the session pills in %s mode', (schem
 
   describe('the pull request pill', () => {
     it.each([
-      ['open', 'GitPullRequest', 'success', 'success'],
-      ['draft', 'GitPullRequestDraft', 'muted', 'textMuted'],
-      ['closed', 'GitPullRequestClosed', 'danger', 'danger'],
-      ['merged', 'GitMerge', 'merged', 'mergedPurple']
-    ] as const)('draws a %s PR with its own icon in the theme’s colour', (state, iconName, tint, token) => {
+      ['open', 'GitPullRequest', 'success', 'prOpen'],
+      ['draft', 'GitPullRequestDraft', 'muted', 'prDraft'],
+      ['closed', 'GitPullRequestClosed', 'danger', 'prClosed'],
+      ['merged', 'GitMerge', 'merged', 'mergedText'],
+      ['queued', 'Clock', 'queued', 'queuedText']
+    ] as const)('draws a %s PR with its own icon in the Claude app’s colour for that state', (state, iconName, tint, token) => {
       mount(scheme, [pr({ state, tint, ci: null, stateLabel: 'x' })])
       const pill = chip('pull-request-pill')
-      expect(icon(pill, iconName).props.color).toBe(colors[token])
+      expect(icon(pill, iconName).props.color).toBe(claude[token])
       expect(icon(pill, iconName).props.size).toBe(16)
     })
 
-    it('shows the number in muted text, with the CI dot and "CI" for a PR whose checks fail', () => {
+    it('shows the number in the pill grey, with the CI dot and "CI" for a PR whose checks fail', () => {
       mount(scheme, [pr()])
       const pill = chip('pull-request-pill')
       expect(texts(pill)).toEqual(['#7701', 'CI'])
-      expect(flat(textNode(pill, '#7701').props.style).color).toBe(colors.textMuted)
-      expect(flat(textNode(pill, 'CI').props.style).color).toBe(colors.textMuted)
-      expect(flat(pill.findByProps({ testID: 'ci-dot' }).props.style).backgroundColor).toBe(colors.danger)
+      expect(flat(textNode(pill, '#7701').props.style).color).toBe(claude.pillText)
+      expect(flat(textNode(pill, 'CI').props.style).color).toBe(claude.pillText)
+      expect(flat(pill.findByProps({ testID: 'ci-dot' }).props.style).backgroundColor).toBe(claude.ciFailed)
     })
 
     it.each([
-      ['passed', 'success', 'CI: all checks passed'],
-      ['unavailable', 'textMuted', 'CI: status unavailable'],
-      ['failed', 'danger', 'CI: checks failing']
-    ] as const)('colours a %s CI dot from the theme and says why to a screen reader', (ci, token, spoken) => {
+      ['passed', 'ciPassed', 'CI: all checks passed'],
+      ['unavailable', 'ciUnavailable', 'CI: status unavailable'],
+      ['failed', 'ciFailed', 'CI: checks failing']
+    ] as const)('colours a %s CI dot as the Claude app does and says why to a screen reader', (ci, token, spoken) => {
       mount(scheme, [pr({ ci })])
       const pill = chip('pull-request-pill')
-      expect(flat(pill.findByProps({ testID: 'ci-dot' }).props.style).backgroundColor).toBe(colors[token])
+      expect(flat(pill.findByProps({ testID: 'ci-dot' }).props.style).backgroundColor).toBe(claude[token])
       expect(pill.props.accessibilityLabel).toBe(`Pull request #7701, Open, ${spoken}`)
     })
 
@@ -177,6 +186,8 @@ describe.each(['light', 'dark'] as const)('the session pills in %s mode', (schem
       const pill = chip('pull-request-pill')
       expect(pill.findAll((node) => (node.type as unknown) === 'ActivityIndicator')).toHaveLength(1)
       expect(pill.findAll((node) => node.props.testID === 'ci-dot')).toHaveLength(0)
+      // The spinner takes the pill's own text colour (`jc20.l`: b4i.c with the zko text colour).
+      expect(pill.findByType('ActivityIndicator' as never).props.color).toBe(claude.pillText)
       expect(pill.props.accessibilityLabel).toBe('Pull request #7701, Open, CI: checks in progress')
     })
 
@@ -188,15 +199,39 @@ describe.each(['light', 'dark'] as const)('the session pills in %s mode', (schem
       mount(scheme, [pr({ state: 'merged', stateLabel: 'Merged', tint: 'merged', ci: null })])
       const merged = chip('pull-request-pill')
       expect(texts(merged)).toEqual(['#7701', 'Merged'])
-      expect(flat(textNode(merged, 'Merged').props.style).color).toBe(colors.mergedPurple)
+      expect(flat(textNode(merged, 'Merged').props.style).color).toBe(claude.mergedText)
+      expect(flat(textNode(merged, '#7701').props.style).color).toBe(claude.mergedText)
       expect(merged.props.accessibilityLabel).toBe('Pull request #7701, Merged')
     })
 
-    it('fills a merged PR’s chip with the purple, not the plain surface', () => {
+    it('fills a merged PR’s chip with the app’s violet, not the plain surface', () => {
       mount(scheme, [pr({ state: 'merged', stateLabel: 'Merged', tint: 'merged', ci: null })])
       const style = chipStyle(chip('pull-request-pill'))
-      expect(style.backgroundColor).not.toBe(colors.composerFill)
-      expect(style.borderColor).not.toBe(colors.composerBorderFocused)
+      expect(style.backgroundColor).toBe(claude.mergedFill)
+      expect(style.borderColor).toBe(claude.mergedBorder)
+      expect(style.backgroundColor).not.toBe(claude.surface)
+    })
+
+    it('fills a queued PR’s chip amber and says Queued where CI would be', () => {
+      mount(scheme, [pr({ state: 'queued', stateLabel: 'Queued', tint: 'queued', ci: null })])
+      const style = chipStyle(chip('pull-request-pill'))
+      expect(style.backgroundColor).toBe(claude.queuedFill)
+      expect(style.borderColor).toBe(claude.queuedBorder)
+      expect(texts(chip('pull-request-pill'))).toEqual(['#7701', 'Queued'])
+    })
+
+    it('opens the page of a pull request Anthropic reported, not Orca’s panel for another branch', () => {
+      const { open, openUrl } = mount(scheme, [pr({ source: 'claude', url: 'https://example.test/o/r/pull/12' })])
+      act(() => chip('pull-request-pill').props.onPress())
+      expect(openUrl).toHaveBeenCalledWith('https://example.test/o/r/pull/12')
+      expect(open).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the panel for a claude pull request with no URL to open', () => {
+      const { open, openUrl } = mount(scheme, [pr({ source: 'claude', url: null })])
+      act(() => chip('pull-request-pill').props.onPress())
+      expect(open).toHaveBeenCalledTimes(1)
+      expect(openUrl).not.toHaveBeenCalled()
     })
 
     it('does not bring the copy menu back for another pull request after its own pill went away', () => {
@@ -239,6 +274,52 @@ describe.each(['light', 'dark'] as const)('the session pills in %s mode', (schem
       expect(copy).toHaveBeenCalledWith(7701)
       act(() => sheets.props.at(-1)!.onClose())
       expect(sheets.props.at(-1)?.visible).toBe(false)
+    })
+  })
+
+  describe('the Diff pill', () => {
+    const diff = (added: number, removed: number): SessionPill => ({
+      kind: 'diff',
+      label: 'Diff',
+      added,
+      removed,
+      url: 'https://example.test/o/r/pull/12/files'
+    })
+
+    it('says Diff, then the added total green and the removed total red, with the app’s colours', () => {
+      mount(scheme, [diff(11542, 3602)])
+      const pill = chip('diff-pill')
+      expect(pill.findByProps({ testID: 'diff-pill-added' }).props.children).toBe('+11542')
+      expect(pill.findByProps({ testID: 'diff-pill-removed' }).props.children).toBe(' -3602')
+      expect(flat(pill.findByProps({ testID: 'diff-pill-added' }).props.style).color).toBe(claude.countAddText)
+      expect(flat(pill.findByProps({ testID: 'diff-pill-removed' }).props.style).color).toBe(claude.countDelText)
+      expect(textNode(pill, 'Diff')).toBeDefined()
+      expect(chipStyle(pill)).toMatchObject({ backgroundColor: claude.surface, borderColor: claude.border, borderRadius: 14 })
+      expect(pill.props.accessibilityLabel).toBe('Diff, 11542 lines added, 3602 lines removed')
+    })
+
+    it('draws a count of nothing as nothing: only additions, then only removals', () => {
+      mount(scheme, [diff(12, 0)])
+      expect(chip('diff-pill').findAll((node) => node.props.testID === 'diff-pill-removed')).toHaveLength(0)
+      act(() => renderer?.unmount())
+      mount(scheme, [diff(0, 7)])
+      expect(chip('diff-pill').findAll((node) => node.props.testID === 'diff-pill-added')).toHaveLength(0)
+      expect(chip('diff-pill').findByProps({ testID: 'diff-pill-removed' }).props.children).toBe('-7')
+    })
+
+    it('lays the Diff pill before the pull request pill, as the app’s row does', () => {
+      mount(scheme, [diff(1, 1), pr({ source: 'claude' })])
+      const row = renderer!.root.findByProps({ testID: 'session-pill-row' })
+      const order = row
+        .findAll((node) => typeof node.type === 'string' && (node.props.testID === 'diff-pill' || node.props.testID === 'pull-request-pill'))
+        .map((node) => node.props.testID)
+      expect(order).toEqual(['diff-pill', 'pull-request-pill'])
+    })
+
+    it('opens the pull request’s changed files on a tap', () => {
+      const { openUrl } = mount(scheme, [diff(3, 4)])
+      act(() => chip('diff-pill').props.onPress())
+      expect(openUrl).toHaveBeenCalledWith('https://example.test/o/r/pull/12/files')
     })
   })
 
@@ -338,8 +419,8 @@ describe('both schemes read their own palette', () => {
     act(() => renderer?.unmount())
     mount('dark', [CREATE])
     const dark = chipStyle(chip('create-pr-pill')).backgroundColor
-    expect(light).toBe(lightColors.composerFill)
-    expect(dark).toBe(darkColors.composerFill)
+    expect(light).toBe(claudeSessionPillPalette('light').surface)
+    expect(dark).toBe(claudeSessionPillPalette('dark').surface)
     expect(light).not.toBe(dark)
   })
 })

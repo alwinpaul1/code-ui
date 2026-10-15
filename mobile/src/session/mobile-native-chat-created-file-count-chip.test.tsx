@@ -12,7 +12,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import type { RpcResponse } from '../transport/types'
-import { darkColors, lightColors } from '../theme/tokens'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
@@ -267,12 +267,12 @@ describe('a created file the wire cut, in the chat', () => {
       connect(host.client, 1)
       render(CLAUDE_EDIT_RUN_ROWS, scheme)
       await settle()
-      const palette = scheme === 'dark' ? darkColors : lightColors
+      const claude = claudeSessionPillPalette(scheme)
       for (const [id, text, colour] of [
-        ['tool-run-diff-added', '+93', palette.diffAddText],
-        ['tool-run-diff-removed', '−0', palette.diffDelText],
-        ['diff-card-added', '+93', palette.diffAddText],
-        ['diff-card-removed', '−0', palette.diffDelText]
+        ['tool-run-diff-added', '+93', claude.chipAddText],
+        ['tool-run-diff-removed', '−0', claude.chipDelText],
+        ['diff-card-added', '+93', claude.countAddText],
+        ['diff-card-removed', '−0', claude.countDelText]
       ] as const) {
         expect(byId(id).map((node) => node.props.children)).toEqual([text])
         expect(colourOf(id)).toBe(colour)

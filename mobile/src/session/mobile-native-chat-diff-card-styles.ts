@@ -4,11 +4,13 @@
 
 import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
+import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { MONO_SIZE } from './mobile-native-chat-message-styles'
 
 export function makeDiffCardStyles(theme: Theme) {
-  const { colors, fonts, radius, space } = theme
+  const { colors, fonts, radius, space, scheme } = theme
+  const claude = claudeSessionPillPalette(scheme)
   return StyleSheet.create({
     card: {
       borderWidth: 1,
@@ -51,13 +53,14 @@ export function makeDiffCardStyles(theme: Theme) {
       color: colors.accentText,
       textDecorationLine: 'underline'
     },
+    // The header's "+N" and "−M" are `jlc.b`'s `ad5.K()` and `ad5.u()`, as in the Claude app.
     added: {
-      color: colors.diffAddText,
+      color: claude.countAddText,
       fontFamily: fonts.mono,
       fontSize: MONO_SIZE
     },
     removed: {
-      color: colors.diffDelText,
+      color: claude.countDelText,
       fontFamily: fonts.mono,
       fontSize: MONO_SIZE
     },
