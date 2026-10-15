@@ -270,3 +270,50 @@ describe('when the pull request is read again', () => {
     expect(fake.refetch).not.toHaveBeenCalled()
   })
 })
+
+// Reported 2026-10-15 on 0.9.148: a hand-started `claude --resume` in an Orca tab of the NexOS
+// worktree (branch fix/demo-adr-422, repo parth2600/nexdash) worked in another checkout,
+// /Users/alwinpaul/Desktop/NexOS-Mobile-wt/tablet-cab-redesign (branch feat/tablet-cab-redesign,
+// NexOS-Mobile, PR #12 open). The pills read git.status and the PR for the ORCA worktree, so the
+// chat showed "Create PR" over a session the Claude app showed with "#12 • CI". The ids and paths
+// are the real ones (the tab from `orca terminal list`, the transcript path the hook reported).
+describe('a chat whose agent works outside the Orca worktree', () => {
+  const NEXOS_WORKTREE = '6abb2731-479f-4ffd-ab34-200a1daa7eb4::/Users/alwinpaul/Desktop/NexDash/NexOS'
+  const ELSEWHERE_TRANSCRIPT =
+    '/Users/alwinpaul/.claude-work/projects/-Users-alwinpaul-Desktop-NexOS-Mobile-wt-tablet-cab-redesign/e50745d9-3b6f-4381-9e9c-48cfb838fa5f.jsonl'
+  const HERE_TRANSCRIPT =
+    '/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-NexDash-NexOS/e50745d9-3b6f-4381-9e9c-48cfb838fa5f.jsonl'
+  const identity = (transcriptPath: string | null) => ({
+    nativeChatSessionIdentity: { sessionId: 'e50745d9-3b6f-4381-9e9c-48cfb838fa5f', transcriptPath, nestedSessionId: null }
+  })
+
+  beforeEach(() => {
+    fake.status = { ...BRANCH, branch: 'fix/demo-adr-422' }
+    fake.prState = { kind: 'none' }
+    fake.eligibility = { kind: 'ready', eligibility: reply({ canCreate: true }) }
+  })
+
+  it('shows no Create PR for the worktree’s branch when the session works in another checkout, and reads nothing for it', async () => {
+    await render(controllerFor({ worktreeId: NEXOS_WORKTREE }, identity(ELSEWHERE_TRANSCRIPT)))
+    expect(shown).toEqual([])
+    expect(lastOf(fake.branchArgs).enabled).toBe(false)
+    expect(lastOf(fake.prInputs).client).toBeNull()
+    expect(fake.refetch).not.toHaveBeenCalled()
+  })
+
+  it('shows no pull request pill of the worktree’s branch either', async () => {
+    fake.prState = READY
+    await render(controllerFor({ worktreeId: NEXOS_WORKTREE }, identity(ELSEWHERE_TRANSCRIPT)))
+    expect(shown).toEqual([])
+  })
+
+  it('still shows the pills when the session works in the worktree itself', async () => {
+    await render(controllerFor({ worktreeId: NEXOS_WORKTREE }, identity(HERE_TRANSCRIPT)))
+    expect(shown).toEqual([{ kind: 'create-pr', label: 'Create PR' }])
+  })
+
+  it('keeps today’s pills while no transcript has been reported (nothing says where the agent is)', async () => {
+    await render(controllerFor({ worktreeId: NEXOS_WORKTREE }, identity(null)))
+    expect(shown).toEqual([{ kind: 'create-pr', label: 'Create PR' }])
+  })
+})

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useMobileHostedReviewEligibility } from '../source-control/use-mobile-hosted-review-eligibility'
+import { agentWorksInWorktree } from './agent-works-in-worktree'
+import { worktreePathFromId } from './mobile-native-chat-skill-browse'
 import { buildSessionPills, type SessionPill } from './session-pill-row-model'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobilePrSidebarController } from './use-mobile-pr-sidebar-controller'
@@ -12,8 +14,9 @@ import { useSessionBranchStatus } from './use-session-branch-status'
  * review-creation eligibility, asked only for a branch the PR read said has no PR.
  *
  * Nothing is read where no pill can show: a repo with no hosted-review remote, a folder or
- * floating workspace, a terminal or file tab (the pills live in the chat), and before git.status
- * has named a branch. The pull request is read again when the agent finishes a turn, the moment
+ * floating workspace, a terminal or file tab (the pills live in the chat), a session whose
+ * transcript says it works in another directory than the worktree (agent-works-in-worktree.ts),
+ * and before git.status has named a branch. The pull request is read again when the agent finishes a turn, the moment
  * it may have pushed or opened one; a read that failed is read again on the next connection by
  * the PR controller itself.
  *
@@ -33,9 +36,13 @@ export function useSessionPills(controller: MobileSessionController): SessionPil
     prIsGithubRepo,
     prRepoContextLoaded
   } = controller
-  const { showNativeChat, nativeChatAgentWorking } = controller.nativeChatController
+  const { showNativeChat, nativeChatAgentWorking, nativeChatSessionIdentity } = controller.nativeChatController
+  // A session working in another checkout than the tab's worktree: every read below is about the
+  // worktree, so its PR or "Create PR" would be another branch's. No pill rather than a wrong one.
+  const elsewhere =
+    agentWorksInWorktree(nativeChatSessionIdentity?.transcriptPath, worktreePathFromId(worktreeId)) === 'elsewhere'
   const hosted =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && prRepoContextLoaded && prIsGithubRepo
+    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && prRepoContextLoaded && prIsGithubRepo && !elsewhere
 
   const { status, turnsEnded } = useSessionBranchStatus({
     client,
