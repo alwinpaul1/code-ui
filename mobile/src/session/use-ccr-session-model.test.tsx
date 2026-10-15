@@ -230,7 +230,9 @@ describe('the composer pill', () => {
     expect(code).toContain(
       'nativeChatLiveModel: claudeModelPillPair(preferCcrModelPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, ccrModel, hudLiveBeacon?.receivedAt ?? null), transcriptModel.fallback)'
     )
-    expect(code).toContain("const ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', ccrModel = useCcrSessionModel({ enabled: ccrEnabled,")
+    // ccrEnabled is set beside the Anthropic transcript, ahead of the drafts that read its rows.
+    expect(code).toContain("ccrEnabled = showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', claudeApi = useClaudeAnthropicTranscript({ enabled: ccrEnabled,")
+    expect(code).toContain('const ccrModel = useCcrSessionModel({ enabled: ccrEnabled,')
   })
 })
 
