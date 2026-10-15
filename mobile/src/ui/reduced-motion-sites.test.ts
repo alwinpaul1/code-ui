@@ -38,7 +38,9 @@ const MOTION_SITES = [
   'session/MobileNativeChatDictationCaption.tsx',
   // The Claude app's motion in the transcript (claude-motion-spec.ts): a running workflow's dot
   // pulses on its own.
-  'session/use-agent-pulse-style.ts'
+  'session/use-agent-pulse-style.ts',
+  // Clawd dancing while a Claude tab's transcript loads (claude-transcript-loading-spec.ts).
+  'session/ClaudeTranscriptLoading.tsx'
 ]
 
 const HOOK_IMPORT = /import \{[^}]*\buseReducedMotion\b[^}]*\} from '[^']*use-reduced-motion'/
