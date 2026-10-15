@@ -76,6 +76,11 @@ export type NativeChatOutboxEntry = {
    *  it, into that session under that uuid (the server keys an event by it, so a copy that did
    *  arrive is not posted twice), and it never carries a route: nothing types it into a terminal. */
   ccr?: NativeChatOutboxCcr
+  /** It was written with a `ccr` record that did not read back: the session and uuid it was posted
+   *  under are lost, and only that session may have it. It is never resent, through the terminal
+   *  or under a new uuid; its chat's recovery gives its words back to the composer
+   *  (native-chat-outbox-recovery-plan.ts). */
+  ccrUnreadable?: true
 }
 
 export type NativeChatOutboxCcr = { sessionId: string; accountId: string; uuid: string }
@@ -152,8 +157,10 @@ function isAttachmentList(value: unknown): value is NativeChatOutboxAttachment[]
 function withReadableExtras(entry: NativeChatOutboxEntry): NativeChatOutboxEntry {
   const { route, attachments, ccr, ...rest } = entry
   if (ccr !== undefined && !isCcr(ccr)) {
-    // Its session cannot be read back, and only that session may have it: it never resends.
-    return { ...rest, failed: true }
+    // Its session cannot be read back, and only that session may have it. Marked, so nothing reads
+    // it as a terminal entry (its route is dropped too, so the drainer leaves it): it can only go
+    // back to the composer, never be resent through the terminal or under a new uuid.
+    return { ...rest, failed: true, ccrUnreadable: true }
   }
   return {
     ...rest,

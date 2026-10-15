@@ -76,7 +76,8 @@ export const OUTBOX_GIVE_BACK = {
   undelivered: 'it could not be delivered to your desktop. Attach the files again and send it',
   tooOld: 'the app closed before it reached your desktop, more than a day ago. Send it again',
   busy: 'the agent on your desktop stayed busy for 10 minutes after the app came back. Send it again',
-  session: 'the session on this tab changed before it reached your desktop. Send it again'
+  session: 'the session on this tab changed before it reached your desktop. Send it again',
+  ccrUnreadable: 'the phone could not read back which Anthropic session it was for. Send it again'
 } as const
 
 export type OutboxGiveBack = keyof typeof OUTBOX_GIVE_BACK
@@ -106,6 +107,8 @@ export type OutboxStep =
  *   its own operation id, up to OUTBOX_SESSION_AUTO_ATTEMPTS times.
  * - Otherwise it goes when it is safe: the link up, and for a terminal the agent safe to type
  *   into for OUTBOX_IDLE_SETTLE_MS; a terminal that waits OUTBOX_SAFE_WAIT_MS gives it back.
+ * - An entry posted through Anthropic whose `ccr` record did not read back goes back into the
+ *   composer: it may only be resent into the session it was posted to, which is lost.
  * - An entry posted through Anthropic (`ccr`) is only ever resent by that lane, so it waits while
  *   its tab is on any other. On that lane it goes, like a structured one, under its own uuid
  *   (the server keys events by it), but only once Claude has been idle for OUTBOX_IDLE_SETTLE_MS,
@@ -136,6 +139,11 @@ export function planOutboxEntry(input: {
   }
   if (landing === 'landed') {
     return { kind: 'retire' }
+  }
+  // Posted through Anthropic, with the session and uuid it went under lost on disk: never resent,
+  // on any lane and on no Retry, so its words go back.
+  if (entry.ccrUnreadable) {
+    return { kind: 'give-back', reason: 'ccrUnreadable' }
   }
   if (now - entry.createdAt > OUTBOX_MAX_RESEND_AGE_MS) {
     return { kind: 'give-back', reason: 'tooOld' }
