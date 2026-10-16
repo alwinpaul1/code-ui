@@ -60,7 +60,7 @@ export function ImageMarkupBar({
 }: Props): React.JSX.Element {
   const fade = useAnimatedStyle(() => ({
     opacity: withTiming(hidden ? 0 : 1, { duration: BAR_FADE_MS })
-  }))
+  }), [hidden])
   const reason = saving ? 'Saving…' : undefined
   const undoOn = !saving && canUndo
   const redoOn = !saving && canRedo
