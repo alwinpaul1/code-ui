@@ -32,9 +32,22 @@ import type { MobileNativeChatSessionOptionsController } from './use-mobile-nati
 import type { PickFailureReport } from './session-option-pick-failure'
 import { useSheetFailure } from './use-sheet-failure'
 import { modelSheetLayout } from './model-sheet-layout'
+import type { SheetRowBadgeSpec } from './SheetRowBadge'
+import { claudePickerPalette } from '../theme/claude-picker-palette'
 
 /** Descriptor id of the per-model effort option in every agent catalog. */
 const EFFORT_OPTION_ID = 'effort'
+
+/**
+ * The Claude app's Effort page pills and caption (1.261013.20). They are Anthropic's server data
+ * (`thinking.effort_options[].badge`, `thinking.description`; yyy.java:19-23, azy.java:19-21),
+ * which the phone does not read, so they are the words the user's app showed on 2026-10-16.
+ */
+const CLAUDE_EFFORT_BADGES: Readonly<Record<string, SheetRowBadgeSpec>> = {
+  medium: { text: 'Recommended', tone: 'neutral' },
+  max: { text: '4× or more usage', tone: 'warning' }
+}
+const CLAUDE_EFFORT_CAPTION = 'Higher effort means more thorough responses, but takes longer and uses your limits faster.'
 
 export type MobileNativeChatSessionOptionPickersProps = {
   controller: MobileNativeChatSessionOptionsController
@@ -170,7 +183,7 @@ export function MobileNativeChatSessionOptionPickers({
   onOpen,
   claudeModelLayout = false
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
-  const { colors, space, isDark } = useTheme()
+  const { colors, space, isDark, scheme } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
   // The model view's second page: the older models behind the "More models" row.
   const [morePage, setMorePage] = useState(false)
@@ -229,6 +242,7 @@ export function MobileNativeChatSessionOptionPickers({
         : `Changing to ${pendingLabel}…`
       : null
   const modelView = activeDescriptor?.id === model.id
+  const claudeEffortPage = claudeModelLayout && activeDescriptor?.id === EFFORT_OPTION_ID
   // What is RUNNING outranks what was picked, for the label. The snapshot's
   // current value is the tracked record, and the pill read "Fable Medium" from
   // it on a session whose status line painted Opus xhigh (2026-09-18).
@@ -401,11 +415,17 @@ export function MobileNativeChatSessionOptionPickers({
                   }
                   disabled={disabled}
                   grouped
+                  badges={claudeEffortPage ? CLAUDE_EFFORT_BADGES : undefined}
                   onSetOption={(value) => applyOption(activeDescriptor, value)}
                   onInvokeAction={() => invokeAction(activeDescriptor)}
                 />
               )}
             </RowGroup>
+            {claudeEffortPage ? (
+              <Txt variant="body" style={{ color: claudePickerPalette(scheme).caption, paddingHorizontal: space.md, paddingTop: space.sm }}>
+                {CLAUDE_EFFORT_CAPTION}
+              </Txt>
+            ) : null}
             {modelView && !onMorePage && options.length > 0 ? (
               <RowGroup style={{ marginTop: space.md }}>
                 {options.map((descriptor) => (

@@ -3,6 +3,8 @@
 
 import { Pressable, Switch, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
+import { claudePickerPalette } from '../theme/claude-picker-palette'
+import { SheetRowBadge, type SheetRowBadgeSpec } from './SheetRowBadge'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -187,6 +189,7 @@ export function RowGroup({
 function ChoiceRow({
   label,
   description,
+  badge,
   selected,
   disabled,
   grouped,
@@ -195,13 +198,14 @@ function ChoiceRow({
 }: {
   label: string
   description?: string
+  badge?: SheetRowBadgeSpec
   selected: boolean
   disabled: boolean
   grouped: boolean
   divided: boolean
   onPress: () => void
 }): React.JSX.Element {
-  const { colors } = useTheme()
+  const { space, scheme } = useTheme()
   return (
     <RowBase
       selected={selected}
@@ -212,16 +216,19 @@ function ChoiceRow({
       onPress={onPress}
     >
       <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="heading" weight="regular" numberOfLines={1}>
-          {label}
-        </Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <Txt variant="heading" weight="regular" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {label}
+          </Txt>
+          {badge ? <SheetRowBadge badge={badge} /> : null}
+        </View>
         {description ? (
           <Txt variant="body" tone="secondary" numberOfLines={2}>
             {description}
           </Txt>
         ) : null}
       </View>
-      {selected ? <Check size={22} color={colors.accent} strokeWidth={2.2} /> : null}
+      {selected ? <Check size={22} color={claudePickerPalette(scheme).check} strokeWidth={2.2} /> : null}
     </RowBase>
   )
 }
@@ -365,12 +372,15 @@ export function DescriptorRows({
   descriptor,
   disabled,
   grouped = false,
+  badges,
   onSetOption,
   onInvokeAction
 }: {
   descriptor: SessionOptionDescriptor
   disabled: boolean
   grouped?: boolean
+  /** Pills by choice value (the Claude Effort page's "Recommended" and "4× or more usage"). */
+  badges?: Readonly<Record<string, SheetRowBadgeSpec>>
   onSetOption: (value: SessionOptionValue) => void
   onInvokeAction: () => void
 }): React.JSX.Element {
@@ -420,6 +430,7 @@ export function DescriptorRows({
           key={choice.value}
           label={choice.label}
           description={choice.description}
+          badge={badges?.[String(choice.value)]}
           selected={choice.value === currentValue}
           disabled={locked}
           grouped={grouped}

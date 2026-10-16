@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseClaudeModelList } from '../../../src/shared/claude-model-list-probe'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import { darkColors, lightColors } from '../theme/tokens'
+import { claudePickerPalette } from '../theme/claude-picker-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
@@ -397,7 +398,7 @@ describe('the model sheet laid out as the Claude app picker', () => {
       pressed: false
     })
     expect(style.backgroundColor).toBe(tile)
-    expect(opus.findByType('Check' as never).props.color).toBe(palette.accent)
+    expect(opus.findByType('Check' as never).props.color).toBe(claudePickerPalette(scheme).check)
     let group = opus.parent
     while (group && (group.type as unknown) !== 'View') {
       group = group.parent
@@ -427,6 +428,6 @@ describe('the model sheet laid out as the Claude app picker', () => {
       older.props.style as (state: { pressed: boolean }) => Record<string, unknown>
     )({ pressed: false })
     expect(olderStyle.backgroundColor).toBe(tile)
-    expect(older.findByType('Check' as never).props.color).toBe(palette.accent)
+    expect(older.findByType('Check' as never).props.color).toBe(claudePickerPalette(scheme).check)
   })
 })
