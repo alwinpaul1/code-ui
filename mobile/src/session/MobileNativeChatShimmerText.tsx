@@ -53,6 +53,7 @@ export function ShimmerText({
   color,
   style,
   numberOfLines,
+  ellipsizeMode,
   testID
 }: {
   text: string
@@ -62,6 +63,8 @@ export function ShimmerText({
   color: string
   style?: StyleProp<TextStyle>
   numberOfLines?: number
+  /** Where a cut line loses its text; the platform's end by default. */
+  ellipsizeMode?: 'head' | 'middle' | 'tail' | 'clip'
   testID?: string
 }) {
   const { colors } = useTheme()
@@ -87,7 +90,7 @@ export function ShimmerText({
 
   if (!sweeping) {
     return (
-      <Text style={[style, { color }]} numberOfLines={numberOfLines} testID={testID}>
+      <Text style={[style, { color }]} numberOfLines={numberOfLines} ellipsizeMode={ellipsizeMode} testID={testID}>
         {text}
       </Text>
     )
@@ -96,7 +99,7 @@ export function ShimmerText({
   const band = shimmerBandColor(color, colors.chatBg)
   const face = namedFace(style)
   return (
-    <Text style={[style, { color }]} numberOfLines={numberOfLines} testID={testID}>
+    <Text style={[style, { color }]} numberOfLines={numberOfLines} ellipsizeMode={ellipsizeMode} testID={testID}>
       {glyphs.map((glyph, index) => (
         <ShimmerGlyph
           key={index}

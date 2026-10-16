@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { claudeStatusFooterPalette } from '../theme/claude-status-footer-palette'
 import { useTheme } from '../theme/theme-context'
@@ -19,6 +20,29 @@ import { useClaudeChatLive } from './claude-chat-live'
 import type { ClaudeFooterLiveInput } from './claude-working-footer-stats'
 import { useClaudeFooterStats } from './use-claude-footer-stats'
 import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
+import { ShimmerText } from './MobileNativeChatShimmerText'
+import {
+  CLAUDE_TOOL_ROW_CHEVRON_GAP,
+  CLAUDE_TOOL_ROW_CHEVRON_SIZE,
+  CLAUDE_TOOL_ROW_CLOCK_GAP,
+  CLAUDE_TOOL_ROW_RADIUS
+} from './claude-live-tool-row'
+
+/** The live tool row's content (`r0x`, claude-live-tool-row.ts), as MobileNativeChatWorkingFooter
+ *  builds it. */
+export type ClaudeLiveToolRowView = {
+  callId: string
+  /** "Running pnpm test", "Reading file.ts". */
+  label: string
+  /** "12s", or null under 2 s or while the call awaits approval. */
+  clock: string | null
+  /** The label shimmers (`isLoading`: the header is Working, not AwaitingApproval). */
+  loading: boolean
+  /** A path-like tool's label is cut in the middle, keeping the file name's end. */
+  middleEllipsis: boolean
+  /** Opens the call's detail sheet; the row is a button with a chevron when set. */
+  onPress: (() => void) | null
+}
 
 /**
  * The working line at the foot of the transcript, as the Claude app draws it (com.anthropic.claude
@@ -42,6 +66,10 @@ import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
  *                                           working with the connection dialling or lost: the
  *                                           notice in place of verb and stats, in the clay (au8
  *                                           case 0, nl7.java:232-235); not a second row.
+ *   [mark] Running ls  12s ›                the live tool row (claude-live-tool-row.ts), behind
+ *                                           CLAUDE_LIVE_TOOL_ROW_ENABLED (off): the running
+ *                                           tool's label, the turn's clock from 2 s, a chevron
+ *                                           that opens its details; no count meanwhile
  *   Connection lost · 2 running tasks       a matched tab whose Anthropic stream is lost between
  *                                           turns: muted, no mark (native-chat-connection-notice.ts
  *                                           `quiet`; the chat's rows come from that stream).
@@ -58,7 +86,8 @@ import { useNativeChatConnectionNotice } from './native-chat-connection-notice'
  */
 export function MobileNativeChatStatusLine({
   working,
-  markKind = 'think'
+  markKind = 'think',
+  toolRow = null
 }: {
   /** Whether this line should say the agent is working. False on the structured lane, whose
    *  per-turn row already says it. */
@@ -67,6 +96,9 @@ export function MobileNativeChatStatusLine({
   spinner?: ClaudeSpinner | null
   /** Which working mark the turn draws (claude-working-mark-kind.ts). */
   markKind?: WorkingMarkKind
+  /** The live tool row, or null for the verb and stats (claude-live-tool-row.ts). Its presence
+   *  makes the line a working one, as the app's `ToolGroupMark` does (y07.java:947). */
+  toolRow?: ClaudeLiveToolRowView | null
 }) {
   const { scheme, fonts, type } = useTheme()
   const { runningCount, openSheet } = useNativeChatTasks()
@@ -76,7 +108,7 @@ export function MobileNativeChatStatusLine({
   const notice = useNativeChatConnectionNotice()
   // A matched Claude tab's notice is busy on the turn Anthropic last saw open, whatever the relay
   // says (native-chat-connection-notice.ts), so it draws the line by itself.
-  const busy = working || (notice?.anthropic === true && notice.quiet !== true)
+  const busy = working || toolRow !== null || (notice?.anthropic === true && notice.quiet !== true)
   // A stream lost between turns: its words, muted, with no working mark (nothing is running).
   const quiet = !busy && notice?.quiet === true ? notice.text : null
   if (!busy && quiet === null && runningCount <= 0) {
@@ -85,6 +117,8 @@ export function MobileNativeChatStatusLine({
   // au8.java:73-91: a connection message stands in for the stats and the verb alike.
   const message = busy ? notice?.text ?? null : null
   const stats = working && message === null ? footerStats : null
+  // su8.java:7019-7027: a connection message means no `Working` header, so no tool row.
+  const tool = message === null ? toolRow : null
   const palette = claudeStatusFooterPalette(scheme)
   const text = { fontFamily: fonts.regular, fontSize: type.body.size, lineHeight: type.body.lineHeight }
   const count = formatRunningTaskCount(runningCount)
@@ -103,6 +137,9 @@ export function MobileNativeChatStatusLine({
       {countText}
     </Pressable>
   )
+  if (tool !== null) {
+    return <LiveToolRow tool={tool} markKind={markKind} />
+  }
   return (
     <View
       style={{
@@ -161,6 +198,83 @@ export function MobileNativeChatStatusLine({
         </>
       ) : (
         countButton
+      )}
+    </View>
+  )
+}
+
+/**
+ * The live tool row (`wm7.c`'s `r0x` branch, wm7.java:241-275, inside `wm7.a`'s row): the mark, 8 dp,
+ * the label (one line, shrinking, never pushing the rest off), the clock after 8 dp, the chevron
+ * after 4 dp. The whole line is the button, its 16 dp above and below included, clipped to 12 dp
+ * corners for the press highlight (wm7.java:80). No running-tasks count is drawn (y07.java:968).
+ */
+function LiveToolRow({ tool, markKind }: { tool: ClaudeLiveToolRowView; markKind: WorkingMarkKind }) {
+  const { scheme, fonts, type } = useTheme()
+  const palette = claudeStatusFooterPalette(scheme)
+  const text = { fontFamily: fonts.regular, fontSize: type.body.size, lineHeight: type.body.lineHeight }
+  const spoken = tool.clock === null ? tool.label : `${tool.label}, ${tool.clock}`
+  const content = (
+    <>
+      <ClaudeWorkingMark color={palette.clay} kind={markKind} />
+      <View style={{ width: CLAUDE_FOOTER_MARK_GAP }} />
+      {/* A path keeps its file name's end: the cut goes in the middle (TextOverflow 5). */}
+      <View style={{ flexShrink: 1 }}>
+        <ShimmerText
+          testID="native-chat-tool-row-label"
+          text={tool.label}
+          active={tool.loading}
+          color={palette.toolLabel}
+          style={text}
+          numberOfLines={1}
+          ellipsizeMode={tool.middleEllipsis ? 'middle' : 'tail'}
+        />
+      </View>
+      {tool.clock !== null ? (
+        <>
+          <View style={{ width: CLAUDE_TOOL_ROW_CLOCK_GAP }} />
+          <ClaudeRollingText testID="native-chat-tool-row-clock" text={tool.clock} style={[text, { color: palette.toolClock }]} />
+        </>
+      ) : null}
+      {tool.onPress !== null ? (
+        <>
+          <View style={{ width: CLAUDE_TOOL_ROW_CHEVRON_GAP }} />
+          <ChevronRight testID="native-chat-tool-row-chevron" size={CLAUDE_TOOL_ROW_CHEVRON_SIZE} color={palette.body} strokeWidth={2} />
+        </>
+      ) : null}
+    </>
+  )
+  const row = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: CLAUDE_FOOTER_PADDING_VERTICAL
+  }
+  return (
+    <View
+      style={{ paddingHorizontal: CLAUDE_FOOTER_PADDING_HORIZONTAL }}
+      accessibilityLiveRegion="polite"
+      testID="native-chat-status-line"
+    >
+      {tool.onPress !== null ? (
+        <Pressable
+          testID="native-chat-tool-row"
+          accessibilityRole="button"
+          accessibilityLabel={spoken}
+          // `generic_show_details`, the app's click label for the row.
+          accessibilityHint="Show details"
+          onPress={tool.onPress}
+          style={({ pressed }) => [
+            row,
+            { borderRadius: CLAUDE_TOOL_ROW_RADIUS, overflow: 'hidden' as const },
+            pressed ? { opacity: 0.6 } : null
+          ]}
+        >
+          {content}
+        </Pressable>
+      ) : (
+        <View testID="native-chat-tool-row" accessible accessibilityLabel={spoken} style={row}>
+          {content}
+        </View>
       )}
     </View>
   )
