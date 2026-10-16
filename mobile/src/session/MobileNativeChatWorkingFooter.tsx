@@ -28,8 +28,9 @@ function useSecondTick(enabled: boolean): number {
  * The working line as the transcript's last row, as the Claude app's "thinking_spark" item is
  * (`y07` case 15, com.anthropic.claude 1.261013.20): it scrolls with the messages. Pinned in the
  * see-through dock it lay over them once the list scrolled ("4 running tasks" drawn across a
- * paragraph on the user's phone, 0.9.154). MobileNativeChatView puts it first in the inverted
- * list's header, so it sits under the newest message and above a queued one, as in the app.
+ * paragraph on the user's phone, 0.9.154). MobileNativeChatView puts it last in the inverted
+ * list's header after the queue, so it sits directly above the composer and below a queued
+ * message, as in the app (the user, 2026-10-16).
  *
  * The mark follows the turn's running tool (claude-working-mark-kind.ts); Anthropic's stream says
  * whether the turn is thinking when it is live, the bridge lane's own flag otherwise.

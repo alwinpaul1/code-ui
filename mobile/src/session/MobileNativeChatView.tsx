@@ -384,9 +384,6 @@ export function MobileNativeChatView({
             // the running-tasks row sits directly under the last bubble.
             ListHeaderComponent={
               <>
-                {/* The working line, the transcript's last row (MobileNativeChatWorkingFooter). The
-                    structured lane says "Working for N" per turn, so there only the count shows. */}
-                <MobileNativeChatWorkingFooter messages={messages} working={agentWorking === true && !structuredActivityUi} thinking={turnThinking === true} agent={agent} awaitingApproval={!structuredActivityUi && (permission != null || ask != null)} />
                 <MobileNativeChatListHeader
                   agent={agent}
                   queuedMessages={queuedMessages}
@@ -396,6 +393,10 @@ export function MobileNativeChatView({
                   unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                   turnActivity={turnActivity}
                 />
+                {/* The working line, the transcript's last row (MobileNativeChatWorkingFooter),
+                    after the queue so it sits directly above the composer, as in the Claude app. The
+                    structured lane says "Working for N" per turn, so there only the count shows. */}
+                <MobileNativeChatWorkingFooter messages={messages} working={agentWorking === true && !structuredActivityUi} thinking={turnThinking === true} agent={agent} awaitingApproval={!structuredActivityUi && (permission != null || ask != null)} />
                 {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
                 <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
               </>

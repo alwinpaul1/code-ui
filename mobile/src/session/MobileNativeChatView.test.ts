@@ -947,7 +947,8 @@ it('keeps the confirmed queue inside the inverted list so it does not resize the
   await act(async () => {
     instance = create(chatViewElement({ queuedMessages: ['first', 'second'] }))
   })
-  const queue = headerChild(instance, 'messages')
+  // By `agentWorking`, which the header and its queue row carry and the working line after them does not.
+  const queue = headerChild(instance, 'agentWorking')
   expect(queue.props.messages).toEqual(['first', 'second'])
   expect(instance.root.findAllByType('ScrollView')).toHaveLength(0)
   await act(async () => instance.unmount())
@@ -976,3 +977,25 @@ function headerChild(
   act(() => rendered.unmount())
   return { props }
 }
+
+// 2026-10-16, from the device: with a message queued, "Clauding… · 1 running task" sat above the
+// queued card, away from the composer. The Claude app keeps its working line directly above the
+// composer, with the queue above it. The list is inverted, so the header's LAST child is drawn
+// nearest the composer: the working line must come after the queue, before only the dock spacer.
+it('keeps the working line directly above the composer, below a queued message', async () => {
+  let instance!: ReturnType<typeof create>
+  await act(async () => {
+    instance = create(chatViewElement({ queuedMessages: ['queued while working'] }))
+  })
+  const header = instance.root.findByType('FlashList').props.ListHeaderComponent as ReactElement<{ children: ReactNode }>
+  const order = Children.toArray(header.props.children)
+    .filter((child): child is ReactElement => isValidElement(child))
+    .map((child) =>
+      child.type === MobileNativeChatWorkingFooter
+        ? 'footer'
+        : (child.props as { testID?: string }).testID === 'native-chat-dock-spacer'
+          ? 'spacer'
+          : 'queue'
+    )
+  expect(order).toEqual(['queue', 'footer', 'spacer'])
+})
