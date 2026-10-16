@@ -18,6 +18,7 @@ import {
 } from './claude-working-mark'
 import { WORKING_MARK_STRIPS } from './claude-working-mark-data'
 import { workingMarkKindFromTranscript } from './claude-working-mark-kind'
+import { BETWEEN, LEAD, ROWS_RUN, SHEET_RUN } from './fixtures/claude-read-sheet-rows-2.1.296'
 
 /**
  * The dots beside the working footer, as the Claude app 1.261013.20 plays them (`zq20`, `tr20`,
@@ -175,5 +176,60 @@ describe('which mark the turn draws', () => {
     expect(workingMarkKindFromTranscript([prompt('p0'), call('a', 'Bash'), prompt('p1')], false)).toBe('think')
     // Pairing by position when no ids are given.
     expect(workingMarkKindFromTranscript([prompt('p'), call('a', 'Read'), result('b'), call('c', 'WebFetch')], true)).toBe('search')
+  })
+})
+
+// Orca's transcript rows give a CALL its `callId` but the RESULT none (Orca 1.4.224's reader; the
+// Claude Code 2.1.296 run in fixtures/claude-read-sheet-rows-2.1.296.ts is that shape). Pairing by
+// id whenever the call had one left every Orca call unanswered, so the mark stayed on the turn's
+// last tool's form after its result landed, while the agent was thinking again.
+describe('the working mark on an Orca-read chat', () => {
+  const prompt: NativeChatMessage = { id: 'p', role: 'user', blocks: [{ type: 'text', text: 'go' }], timestamp: 0, source: 'transcript' }
+  const turn = [prompt, LEAD, ...SHEET_RUN, BETWEEN, ...ROWS_RUN]
+  const row = (id: string, role: NativeChatMessage['role'], block: NativeChatMessage['blocks'][number]): NativeChatMessage => ({
+    id,
+    role,
+    blocks: [block],
+    timestamp: 0,
+    source: 'transcript'
+  })
+
+  it('the working mark leaves a finished tool\'s form once its result lands, on an Orca-read chat', () => {
+    expect(workingMarkKindFromTranscript(turn, true)).toBe('think')
+    // With nothing running and no thinking, the turn's last tool still names the mark.
+    expect(workingMarkKindFromTranscript(turn, false)).toBe('read')
+  })
+
+  it('keeps an Orca call with no result yet as the running tool', () => {
+    // The second run's Read, before its own result row lands.
+    expect(workingMarkKindFromTranscript(turn.slice(0, -1), true)).toBe('read')
+    // The second run's Bash, before anything after it.
+    expect(workingMarkKindFromTranscript([prompt, LEAD, ...SHEET_RUN, BETWEEN, ROWS_RUN[0]!], true)).toBe('code')
+  })
+
+  it('leaves a single answered Orca call\'s form, and thinks on a turn with no tools', () => {
+    const read = row('c', 'assistant', { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, callId: 'toolu_1' })
+    const answer = row('r', 'tool', { type: 'tool-result', output: 'x' })
+    expect(workingMarkKindFromTranscript([prompt, read, answer], true)).toBe('think')
+    expect(workingMarkKindFromTranscript([prompt, read, answer], false)).toBe('read')
+    expect(workingMarkKindFromTranscript([prompt, read], true)).toBe('read')
+    expect(workingMarkKindFromTranscript([prompt, LEAD], true)).toBe('think')
+    expect(workingMarkKindFromTranscript([], true)).toBe('think')
+  })
+
+  it('the working mark leaves a finished Codex command\'s form once its result lands, on an Orca-read chat', () => {
+    const exec = row('c', 'assistant', { type: 'tool-call', name: 'exec_command', input: { cmd: 'npm test' }, callId: 'call_1' })
+    const answer = row('r', 'tool', { type: 'tool-result', output: '' })
+    expect(workingMarkKindFromTranscript([prompt, exec, answer], true)).toBe('think')
+    expect(workingMarkKindFromTranscript([prompt, exec], true)).toBe('generic')
+  })
+
+  it('still pairs Anthropic\'s results by callId when they land out of order', () => {
+    const bash = row('a', 'assistant', { type: 'tool-call', name: 'Bash', input: { command: 'sleep 9' }, callId: 'a' })
+    const read = row('b', 'assistant', { type: 'tool-call', name: 'Read', input: { file_path: 'x.ts' }, callId: 'b' })
+    const readDone = row('rb', 'user', { type: 'tool-result', output: 'x', callId: 'b' })
+    const bashDone = row('ra', 'user', { type: 'tool-result', output: '', callId: 'a' })
+    expect(workingMarkKindFromTranscript([prompt, bash, read, readDone], true)).toBe('code')
+    expect(workingMarkKindFromTranscript([prompt, bash, read, readDone, bashDone], true)).toBe('think')
   })
 })

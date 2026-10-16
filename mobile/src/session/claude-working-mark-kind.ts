@@ -1,4 +1,5 @@
 import type { NativeChatMessage, NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { workingMarkKindForTool, type WorkingMarkKind } from './claude-working-mark'
 
 /** A user message the person typed (text), not a tool result fed back to the agent. */
@@ -9,8 +10,10 @@ function isPrompt(message: NativeChatMessage): boolean {
 /**
  * The working mark's kind for the live turn, as the Claude app picks it (`zr8` case 18, 1.261013.20):
  * the newest tool call of this turn still running; with none running and no thinking under way,
- * the turn's last tool call; otherwise Think. A call is running until a result answers it, by
- * `callId` when both carry one, else by position.
+ * the turn's last tool call; otherwise Think. A call is running until a result answers it, paired
+ * as the chat's tool rows pair them (`pairToolBlocks`): by `callId` when the result carries one,
+ * else in order. Orca's rows give the call a `callId` and its result none, so pairing by the
+ * call's id alone left every Orca call running and the mark on a finished tool's form.
  */
 export function workingMarkKindFromTranscript(messages: readonly NativeChatMessage[], thinking: boolean): WorkingMarkKind {
   let start = 0
@@ -20,32 +23,17 @@ export function workingMarkKindFromTranscript(messages: readonly NativeChatMessa
       break
     }
   }
+  const answered = new Set<NativeChatToolCallBlock>()
   const calls: NativeChatToolCallBlock[] = []
-  const answeredIds = new Set<string>()
-  let positionalResults = 0
-  for (const message of messages.slice(start)) {
-    for (const block of message.blocks) {
-      if (block.type === 'tool-call') {
-        calls.push(block)
-      } else if (block.type === 'tool-result') {
-        if (block.callId) {
-          answeredIds.add(block.callId)
-        } else {
-          positionalResults++
-        }
+  for (const pair of pairToolBlocks(messages.slice(start).flatMap((message) => message.blocks))) {
+    if (pair.call) {
+      calls.push(pair.call)
+      if (pair.result) {
+        answered.add(pair.call)
       }
     }
   }
-  const unpaired = calls.filter((call) => !call.callId)
-  const running = calls.filter((call) => {
-    if (call.state) {
-      return call.state === 'running'
-    }
-    if (call.callId) {
-      return !answeredIds.has(call.callId)
-    }
-    return unpaired.indexOf(call) >= positionalResults
-  })
+  const running = calls.filter((call) => (call.state ? call.state === 'running' : !answered.has(call)))
   const live = running.at(-1)
   if (live) {
     return workingMarkKindForTool(live.name)
