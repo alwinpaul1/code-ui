@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { chatTranscriptFonts, useChatReadingSettings, type ChatFontFaces } from '../settings/chat-reading-settings'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
 /** The Claude app's 96 dp chat tile (MobileNativeChatImageStrip.tsx). */
@@ -21,7 +23,7 @@ export function makeChatMessageStyles(
    *  transcript and not the chat's own chrome. */
   transcriptFonts: ChatFontFaces = theme.fonts
 ) {
-  const { colors, fonts, radius, space } = theme
+  const { colors, fonts, radius, space, type } = theme
   return StyleSheet.create({
     row: {
       paddingHorizontal: space.lg,
@@ -82,12 +84,13 @@ export function makeChatMessageStyles(
       alignItems: 'center',
       gap: space.sm
     },
+    // The Claude app's step row: icon, words and chevron 4 apart (claude-tool-run-row-spec.ts).
     toolRunToggle: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: space.sm,
-      paddingVertical: 4
+      gap: TOOL_RUN_ROW.gap,
+      paddingVertical: TOOL_RUN_ROW.paddingVertical
     },
     controlsRow: {
       flexDirection: 'row',
@@ -101,12 +104,19 @@ export function makeChatMessageStyles(
       marginTop: space.xs,
       marginLeft: -space.xs
     },
+    // The app's `xo7.C` (15 on 21), SemiBold: its 400 reads heavier than Instrument Sans's.
     toolRunLabel: {
       flex: 1,
-      fontFamily: fonts.medium,
-      color: colors.textSecondary,
-      fontSize: 13
+      fontFamily: fonts.semibold,
+      color: claudeToolRunPalette(theme.scheme).text,
+      fontSize: type.body.size,
+      lineHeight: type.body.lineHeight,
+      letterSpacing: type.body.letterSpacing
     },
+    // A SendMessage's addressee in the sentence: the member-name tone at the sentence's type.
+    toolRunSentenceName: { color: colors.text },
+    // The diff stat sits 8 after the sentence in the app, 4 more than the row's gap.
+    toolRunDiffStat: { marginLeft: TOOL_RUN_ROW.diffStatGap - TOOL_RUN_ROW.gap },
     // A batch of calls reads as a list only if something marks where one member
     // ends. The tone step from name to argument is that mark: punctuation
     // cannot be, because tool names carry it too (`browser.open`, `tools/read`).

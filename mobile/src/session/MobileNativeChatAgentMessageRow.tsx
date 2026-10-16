@@ -4,10 +4,12 @@ import { ChevronRight } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 import { receivedMessageHeading, receivedMessageSender, receivedMessageTitle } from './mobile-received-message-sender'
 
 /** What the opened sheet says when only the TUI's row reached the phone: the
@@ -47,7 +49,8 @@ export function MobileNativeChatAgentMessageRow({
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
 }) {
-  const { colors, space } = useTheme()
+  const { colors, space, scheme } = useTheme()
+  const toolRun = claudeToolRunPalette(scheme)
   const [open, setOpen] = useState(false)
   const name = receivedMessageSender(sender)
   const title = receivedMessageTitle(name)
@@ -73,7 +76,7 @@ export function MobileNativeChatAgentMessageRow({
                 </Text>
               ]}
         </Text>
-        <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+        <ChevronRight size={TOOL_RUN_ROW.chevronSize} color={toolRun.text} strokeWidth={2} />
       </Pressable>
       <BottomDrawer
         visible={open}

@@ -3,7 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
-import { darkColors, lightColors } from '../theme/tokens'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
@@ -296,14 +296,11 @@ describe('a mixed run whose background agent is still running', () => {
     expect(headerText(tree)).toBe('5 tool calls')
   })
 
-  it.each([
-    ['light', lightColors],
-    ['dark', darkColors]
-  ] as const)('keeps the label and glyph on the theme, in %s', (scheme, palette) => {
+  it.each(['light', 'dark'] as const)('keeps the label and glyph on the theme, in %s', (scheme) => {
     const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: LIVE }, scheme)
-    expect(flattenColor(agentLabel(tree).props.style)).toBe(palette.textSecondary)
+    expect(flattenColor(agentLabel(tree).props.style)).toBe(claudeToolRunPalette(scheme).text)
     expect(tree.root.findByProps({ testID: 'agent-run-glyph-agent' }).props.children.props.fill).toBe(
-      palette.textMuted
+      claudeToolRunPalette(scheme).icon
     )
   })
 })

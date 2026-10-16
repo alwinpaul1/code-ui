@@ -1,6 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 
@@ -222,11 +223,11 @@ describe("a subagent's message in the chat", () => {
   ] as const)('paints its sentence, the name, the chevron and the sheet from the %s theme', (scheme, palette) => {
     const root = render('', scheme)
     const title = root.find((node) => (node.type as unknown) === 'Text' && textOf(node) === TITLE)
-    expect(colorOf(title.props.style)).toBe(palette.textSecondary)
+    expect(colorOf(title.props.style)).toBe(claudeToolRunPalette(scheme).text)
     // The name in the strong ink, as the Claude app sets it apart (`ad5.u0`).
     const name = title.find((node) => (node.type as unknown) === 'Text' && node !== title)
     expect(colorOf(name.props.style)).toBe(palette.text)
-    expect(root.find((node) => (node.type as unknown) === 'ChevronRight').props.color).toBe(palette.textMuted)
+    expect(root.find((node) => (node.type as unknown) === 'ChevronRight').props.color).toBe(claudeToolRunPalette(scheme).text)
     act(() => opener(root).props.onPress())
     const note = root.find((node) => (node.type as unknown) === 'Text' && textOf(node) === AGENT_MESSAGE_UNREAD_NOTE)
     expect(colorOf(note.props.style)).toBe(palette.textMuted)

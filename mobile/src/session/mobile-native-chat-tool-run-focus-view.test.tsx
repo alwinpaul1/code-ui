@@ -11,7 +11,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
-import { darkColors, lightColors } from '../theme/tokens'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
@@ -214,8 +214,8 @@ describe('Focus view on a run of tool calls', () => {
     act(() => renderer?.unmount())
     renderer = null
     const dark = colourOf(render({ blocks: THREE_CALLS, focusView: true }, 'dark').root)
-    expect(light).toBe(lightColors.textSecondary)
-    expect(dark).toBe(darkColors.textSecondary)
+    expect(light).toBe(claudeToolRunPalette('light').text)
+    expect(dark).toBe(claudeToolRunPalette('dark').text)
     expect(light).not.toBe(dark)
   })
 

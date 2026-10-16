@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { darkColors, lightColors } from '../theme/tokens'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
@@ -303,8 +303,8 @@ describe('the conversation row for five agents launched at once', () => {
     const light = colorsOf(await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, scheme: 'light' }))
     act(() => renderer?.unmount())
     const dark = colorsOf(await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, scheme: 'dark' }))
-    expect(light).toContain(lightColors.textMuted)
-    expect(dark).toContain(darkColors.textMuted)
-    expect(dark).not.toContain(lightColors.textMuted)
+    expect(light).toContain(claudeToolRunPalette('light').text)
+    expect(dark).toContain(claudeToolRunPalette('dark').text)
+    expect(dark).not.toContain(claudeToolRunPalette('light').text)
   })
 })

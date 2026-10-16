@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -340,7 +341,7 @@ describe('a batch of tool calls in one run header', () => {
       )
       expect(recipient).toHaveLength(1)
       expect(flattenColor(recipient[0]!.props.style)).toBe(palette.text)
-      expect(flattenColor(sentence.props.style)).toBe(palette.textSecondary)
+      expect(flattenColor(sentence.props.style)).toBe(claudeToolRunPalette(scheme).text)
     }
   )
 
@@ -783,8 +784,8 @@ describe('a tool run while the turn is still working', () => {
     const darkColor = activeLabelColor(
       render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true }, 'dark')
     )
-    expect(lightColor).toBe(lightColors.textSecondary)
-    expect(darkColor).toBe(darkColors.textSecondary)
+    expect(lightColor).toBe(claudeToolRunPalette('light').text)
+    expect(darkColor).toBe(claudeToolRunPalette('dark').text)
     expect(darkColor).not.toBe(lightColor)
   })
 
@@ -949,10 +950,10 @@ describe('the running row lays out like the settled one', () => {
           .children.filter((child): child is ReactTestInstance => typeof child !== 'string')
           .filter((child) => String(child.type).startsWith('Chevron'))
       expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronDown'])
-      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(chevrons()[0]!.props.color).toBe(claudeToolRunPalette(scheme).text)
       act(() => toggle().props.onPress())
       expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronRight'])
-      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(chevrons()[0]!.props.color).toBe(claudeToolRunPalette(scheme).text)
     }
   )
 })

@@ -1,5 +1,6 @@
 import Svg, { Path } from 'react-native-svg'
 import type { AgentRunIcon } from './mobile-native-chat-agent-run'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 
 // The Claude app's own outlines, from its icon font (com.anthropic.claude 1.261013.20,
 // assets/cds_icon_symbols.ttf, 1000 units to the em, read with fontTools 2026-10-16). Both are
@@ -13,11 +14,19 @@ const OUTLINES: Record<AgentRunIcon, string> = {
     'M380 795Q388 803 400 803Q412 803 420 795L695 520Q703 512 703 500Q703 488 695 480L420 205Q412 197 400 197Q388 197 380 205L105 480Q97 488 97 500Q97 512 105 520ZM420 755 145 480Q153 488 153 500Q153 512 145 520L420 245Q412 253 400 253Q388 253 380 245L655 520Q647 512 647 500Q647 488 655 480L380 755Q388 747 400 747Q412 747 420 755ZM480 305 520 345 600 265 835 500 600 735 520 655 480 695 580 795Q588 803 600 803Q612 803 620 795L895 520Q903 512 903 500Q903 488 895 480L620 205Q612 197 600 197Q588 197 580 205Z'
 }
 
-/** The leading icon of a running agent row: one diamond for one agent, two for several. Drawn
- *  20 wide over the em, as the earlier two-diamond mark was, and 14 tall around the outline. */
+/** The leading icon of a running agent row: one diamond for one agent, two for several. The
+ *  whole em in the app's 24 dp icon box, moved 2 left without moving the words, as i430.c draws
+ *  it (claude-tool-run-row-spec.ts). */
 export function AgentRunGlyph({ icon, color }: { icon: AgentRunIcon; color: string }) {
+  const size = TOOL_RUN_ROW.leadingIconSize
   return (
-    <Svg width={20} height={14} viewBox="0 150 1000 700" testID={`agent-run-glyph-${icon}`}>
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 1000 1000"
+      style={{ transform: [{ translateX: TOOL_RUN_ROW.leadingIconNudge }] }}
+      testID={`agent-run-glyph-${icon}`}
+    >
       <Path d={OUTLINES[icon]} fill={color} />
     </Svg>
   )

@@ -1,7 +1,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { darkColors, lightColors } from '../theme/tokens'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
@@ -204,8 +204,6 @@ describe('a tool row still running', () => {
   }
 
   for (const scheme of ['light', 'dark'] as const) {
-    const colors = scheme === 'light' ? lightColors : darkColors
-    const other = scheme === 'light' ? darkColors : lightColors
 
     it(`keeps an earlier reply's unanswered call still while a later turn works (${scheme})`, () => {
       // An interrupted turn leaves its call with no answer for good.
@@ -223,11 +221,9 @@ describe('a tool row still running', () => {
         const tree = render(blocks, runs, scheme)
         expect(shimmer(tree)).toBeDefined()
         const drawn = colorsOf(tree)
-        expect(drawn).toContain(colors.textSecondary)
-        expect(drawn).toContain(colors.textMuted)
-        if (other.textSecondary !== colors.textSecondary) {
-          expect(drawn).not.toContain(other.textSecondary)
-        }
+        // The words and the chevron in the Claude app's muted ink (claude-tool-run-row-spec.ts).
+        expect(drawn).toContain(claudeToolRunPalette(scheme).text)
+        expect(drawn).not.toContain(claudeToolRunPalette(scheme === 'light' ? 'dark' : 'light').text)
       }
     })
   }

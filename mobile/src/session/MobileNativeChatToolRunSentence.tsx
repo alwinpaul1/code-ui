@@ -26,7 +26,7 @@ export function ToolRunSentenceText({
           ? spans.map((span) => span.text).join('')
           : spans.map((span, index) =>
               span.recipient ? (
-                <Text key={index} style={styles.toolRunMemberName}>
+                <Text key={index} style={styles.toolRunSentenceName}>
                   {span.text}
                 </Text>
               ) : (

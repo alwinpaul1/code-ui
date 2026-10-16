@@ -49,11 +49,11 @@ vi.mock('../components/BottomDrawer', async () => {
 })
 
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { ThemeProvider } from '../theme/theme-context'
 
 /** The provider as these tests mount it: createElement passes its child as the third argument. */
 const Themed = ThemeProvider as unknown as ComponentType<{ initialPreference: 'light' | 'dark'; children?: ReactNode }>
-import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 
 // The Claude app 1.261009.20 never draws thinking inline: a turn's thinking
@@ -153,18 +153,15 @@ describe("a thought in the chat", () => {
     expect(root.findAll((node) => node.props.accessibilityLabel === 'Thought process')).toHaveLength(0)
   })
 
-  it.each([
-    ['light', lightColors],
-    ['dark', darkColors]
-  ] as const)('paints the row from the %s theme: words like a finished run, glyph and chevron muted', (scheme, palette) => {
+  it.each(['light', 'dark'] as const)('paints the row from the %s theme: words like a finished run, glyph and chevron muted', (scheme) => {
     const root = render(thought(THINKING_2_1_296), scheme)
     const label = root.find((node) => (node.type as unknown) === 'Text' && [node.props.children].flat().join('') === 'Thought process')
-    expect(colorOf(label.props.style)).toBe(palette.textSecondary)
+    expect(colorOf(label.props.style)).toBe(claudeToolRunPalette(scheme).text)
     expect(label.props.numberOfLines).toBe(1)
     const glyphs = row(root).findAll((node) => typeof node.props.color === 'string' && node.props.size !== undefined)
     expect(glyphs.length).toBe(2)
     for (const glyph of glyphs) {
-      expect(glyph.props.color).toBe(palette.textMuted)
+      expect(glyph.props.color).toBe(claudeToolRunPalette(scheme).text)
     }
   })
 })

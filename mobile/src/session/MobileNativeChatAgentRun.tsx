@@ -2,9 +2,11 @@ import { useMemo } from 'react'
 import { Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { useTheme } from '../theme/theme-context'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState, runningAgentText } from './mobile-native-chat-agent-run'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
@@ -30,7 +32,8 @@ export function MobileNativeChatAgentRun({
   revertScope?: string
   styles: ChatMessageStyles
 }) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const toolRun = claudeToolRunPalette(scheme)
   const runs = useNativeChatAgentRuns()
   const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const { running, entries, subject, icon } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
@@ -48,16 +51,16 @@ export function MobileNativeChatAgentRun({
           accessibilityLabel={`${label}. Show the agents`}
           accessibilityLiveRegion="polite"
         >
-          {running && icon ? <AgentRunGlyph icon={icon} color={colors.textMuted} /> : null}
+          {running && icon ? <AgentRunGlyph icon={icon} color={toolRun.icon} /> : null}
           <ShimmerText
             text={label}
             active={running}
-            color={colors.textSecondary}
+            color={toolRun.text}
             style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
             numberOfLines={1}
             testID="agent-run-label"
           />
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={TOOL_RUN_ROW.chevronSize} color={toolRun.text} strokeWidth={2} />
         </Pressable>
       </View>
     </View>
