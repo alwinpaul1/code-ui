@@ -1,5 +1,6 @@
 import { resolveMobileNativeChat } from './mobile-native-chat-eligibility'
 import { pickCachedActiveSessionTab, readCachedSessionTabs, sessionTabsCacheKey } from './mobile-session-tabs-cache'
+import type { SessionRouteAgentHint } from './session-route-agent-hint'
 
 /**
  * Whether the route being opened is a session that will open on a Claude chat, read from the
@@ -31,4 +32,27 @@ export function sessionRouteWorktreeId(pathname: string, hostId: string): string
   } catch {
     return null
   }
+}
+
+/**
+ * Whether the session route being opened draws Clawd while it loads: the phone's tab cache decides
+ * when it holds this workspace's tabs (it saw them itself), and only with nothing cached does the
+ * tapped row's hint speak.
+ */
+export function sessionRouteOpensClaude(
+  pathname: string,
+  hostId: string | undefined,
+  agentHint: SessionRouteAgentHint
+): boolean {
+  if (!hostId) {
+    return false
+  }
+  const worktreeId = sessionRouteWorktreeId(pathname, hostId)
+  if (worktreeId === null) {
+    return false
+  }
+  if (readCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId)).length > 0) {
+    return cachedSessionRouteOpensClaude(pathname, hostId)
+  }
+  return agentHint === 'claude'
 }

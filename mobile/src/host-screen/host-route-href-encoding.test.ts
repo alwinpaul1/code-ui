@@ -21,6 +21,7 @@ const HOST_PAGE_SOURCES = [
   'src/host-screen/host-screen-header.tsx',
   'src/host-screen/host-screen-overlays.tsx',
   'src/host-screen/use-host-worktree-actions.ts',
+  'src/host-screen/worktree-session-path.ts',
   'src/agent-history/worktree-navigation-actions.ts'
 ]
 

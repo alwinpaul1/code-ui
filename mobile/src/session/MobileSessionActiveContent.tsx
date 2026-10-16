@@ -28,6 +28,8 @@ import { createMarkdownImageResolver } from '../files/markdown-image-resolver'
 import { useMobileNativeChatCreatedFileCounts } from './use-mobile-native-chat-created-file-counts'
 import { NativeChatFileReadProvider } from './native-chat-file-read-context'
 import { useNativeChatFileReaderFor } from './use-native-chat-file-reader'
+import { LoadingConnectionTroubleContext } from './loading-connection-trouble'
+import { MobileSessionLoadingState } from './MobileSessionLoadingState'
 
 export function MobileSessionActiveContent({
   controller
@@ -118,7 +120,8 @@ export function MobileSessionActiveContent({
     activePendingTerminalTab,
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
-    showLoadingState,
+    sessionLoadingScreen,
+    loadingConnectionTroubleState,
     showEmptyState,
     keyboardLift,
     activeTerminalKeyboardLift,
@@ -194,10 +197,10 @@ export function MobileSessionActiveContent({
       }
     })
 
-  return showLoadingState ? (
-    <View style={centered}>
-      <ActivityIndicator size="small" color={colors.textSecondary} />
-    </View>
+  const content = sessionLoadingScreen ? (
+    // Before the first tabs: Clawd when the tapped row said Claude, else the spinner; either gives
+    // way to the connection's trouble (MobileSessionLoadingState.tsx).
+    <MobileSessionLoadingState screen={sessionLoadingScreen} trouble={loadingConnectionTroubleState ?? null} />
   ) : showEmptyState ? (
     <View style={centered}>
       <Txt variant="heading" weight="semibold" align="center">
@@ -409,5 +412,12 @@ export function MobileSessionActiveContent({
         </Animated.View>
       )}
     </View>
+  )
+  // The connection's trouble, for the loading screens in it (Clawd, the chat's spinner) to say in
+  // place of loading forever; absent from a test's partial controller, which means none.
+  return (
+    <LoadingConnectionTroubleContext.Provider value={loadingConnectionTroubleState ?? null}>
+      {content}
+    </LoadingConnectionTroubleContext.Provider>
   )
 }

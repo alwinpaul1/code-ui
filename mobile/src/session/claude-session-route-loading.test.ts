@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { resetSessionTabsCacheForTests, sessionTabsCacheKey, writeCachedSessionTabs } from './mobile-session-tabs-cache'
-import { cachedSessionRouteOpensClaude, sessionRouteWorktreeId } from './claude-session-route-loading'
+import { cachedSessionRouteOpensClaude, sessionRouteOpensClaude, sessionRouteWorktreeId } from './claude-session-route-loading'
 
 // 2026-10-16, from the device: a Claude session opening drew a bare spinner on an empty screen
 // (the host compatibility check, HostProtocolGate, holding the whole host route back while the
@@ -44,5 +44,27 @@ describe('the worktree a session route names', () => {
     expect(sessionRouteWorktreeId('/h/host-1', 'host-1')).toBeNull()
     expect(sessionRouteWorktreeId('/h/host-2/session/wt-1', 'host-1')).toBeNull()
     expect(sessionRouteWorktreeId('/h/host-1/session/%E0%A4%A', 'host-1')).toBeNull()
+  })
+})
+
+// 2026-10-16: a workspace never opened on this phone has no cache, so the host check drew a bare
+// spinner for a Claude session; the tapped row's hint (`?agent=claude`) speaks when nothing is cached.
+describe('a session route with the tapped row\'s hint', () => {
+  it('draws Clawd on the hint when nothing is cached for the workspace', () => {
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-new', 'host-1', 'claude')).toBe(true)
+  })
+
+  it('keeps the spinner with no hint, or on another route or host', () => {
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-new', 'host-1', null)).toBe(false)
+    expect(sessionRouteOpensClaude('/h/host-1/files/wt-new', 'host-1', 'claude')).toBe(false)
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-new', 'host-2', 'claude')).toBe(false)
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-new', undefined, 'claude')).toBe(false)
+  })
+
+  it('lets the cached tabs, which the phone saw itself, outrank the hint either way', () => {
+    writeCachedSessionTabs(sessionTabsCacheKey('host-1', 'wt-1'), [shellTab])
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-1', 'host-1', 'claude')).toBe(false)
+    writeCachedSessionTabs(sessionTabsCacheKey('host-1', 'wt-2'), [claudeTab])
+    expect(sessionRouteOpensClaude('/h/host-1/session/wt-2', 'host-1', null)).toBe(true)
   })
 })

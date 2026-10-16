@@ -12,7 +12,8 @@ import {
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
 import { ClaudeTranscriptLoading } from '../../src/session/ClaudeTranscriptLoading'
-import { cachedSessionRouteOpensClaude } from '../../src/session/claude-session-route-loading'
+import { sessionRouteOpensClaude } from '../../src/session/claude-session-route-loading'
+import { readSessionRouteAgentHint } from '../../src/session/session-route-agent-hint'
 import { HostScreen } from '../../src/host-screen/HostScreen'
 import { HostStack } from '../../src/navigation/host-stack'
 
@@ -34,7 +35,7 @@ export default function HostGroupLayout() {
   const styles = useThemedStyles(hostGroupLayoutStyles)
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
-  const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
+  const { hostId, action, agent } = useGlobalSearchParams<{ hostId?: string; action?: string; agent?: string }>()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(HOST_SIDEBAR_DEFAULT_WIDTH)
@@ -114,7 +115,13 @@ export default function HostGroupLayout() {
   return (
     <HostProtocolGate
       hostId={hostId}
-      pendingView={cachedSessionRouteOpensClaude(pathname, hostId) ? <ClaudeTranscriptLoading /> : undefined}
+      // The tab cache, or for a workspace never cached here the tapped row's `agent` hint, says
+      // the session opens on Claude (claude-session-route-loading.ts).
+      pendingView={
+        sessionRouteOpensClaude(pathname, hostId, readSessionRouteAgentHint(agent)) ? (
+          <ClaudeTranscriptLoading />
+        ) : undefined
+      }
     >
       <View style={styles.row}>
         {showSidebar && sidebarOpen ? (
