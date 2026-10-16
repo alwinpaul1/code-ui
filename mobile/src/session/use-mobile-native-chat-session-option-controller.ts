@@ -149,14 +149,25 @@ export function useMobileNativeChatSessionOptionController(args: {
     lastConnectedAt
   })
   const scopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
+  // The pill's pair, as the header's: the live pair, else the session's report to Anthropic, else
+  // the transcript scan. On 2026-10-15 a matched work tab with no beacon read "Model" here while
+  // the phone had logged "model claude-opus-5-5, effort medium" for it: only the header's pair,
+  // which nothing draws, was ever handed the reading.
+  const reported: ModelPillPair = { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null }
+  const pillPair = claudeModelPillPair(agent === 'claude' ? preferCcrModelPair(reported, ccrModel, beaconAt) : reported, transcriptModel ?? { kind: 'none' })
+  // The sheet runs on the pill's pair too. Handed only the beacon's, a tab with no beacon gave
+  // the options hook no running model, so the sheet drew no Effort row under a pill reading
+  // "Opus 5.5 Medium" (2026-10-16). The fallbacks are what the session was last seen running,
+  // not a repaint of it, so they seed as a launch report: a pick is not undone by an older read.
+  const fallbackPair = !reportedModel && pillPair.model !== null
   const sessionOptions = useMobileNativeChatSessionOptions({
     modelSwitchCommand: args.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey,
-    reportedModel,
-    reportedEffort,
-    reportedModelLabel,
-    reportedModelSource,
+    reportedModel: pillPair.model,
+    reportedEffort: pillPair.effort,
+    reportedModelLabel: pillPair.label,
+    reportedModelSource: fallbackPair ? 'launch' : reportedModelSource,
     terminalHandle,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
@@ -176,10 +187,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     applyOverride: codex.applyOverride,
     queuedMessages,
     // Confirmed against the pair the pill reads (`liveModel` below).
-    stated:
-      !reportedModel && transcriptModel?.kind === 'transcript'
-        ? { model: transcriptModel.model.model, effort: transcriptModel.effort ?? null }
-        : { model: reportedModel, effort: reportedEffort ?? null },
+    stated: { model: pillPair.model, effort: pillPair.effort },
     // An effort pick is confirmed by the agent's own statement; the screen is
     // read at once and then every second until it is, not at the next poll.
     readBack: refreshHud
@@ -214,12 +222,6 @@ export function useMobileNativeChatSessionOptionController(args: {
       structured.optionPickerRequest
     ]
   )
-  // The pill's pair, as the header's: the live pair, else the session's report to Anthropic, else
-  // the transcript scan. On 2026-10-15 a matched work tab with no beacon read "Model" here while
-  // the phone had logged "model claude-opus-5-5, effort medium" for it: only the header's pair,
-  // which nothing draws, was ever handed the reading.
-  const reported: ModelPillPair = { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null }
-  const pillPair = claudeModelPillPair(agent === 'claude' ? preferCcrModelPair(reported, ccrModel, beaconAt) : reported, transcriptModel ?? { kind: 'none' })
   const nativeChatSessionOptions = useMemo<MobileNativeChatSessionOptionPickersProps | null>(
     () =>
       activeChatStructured
