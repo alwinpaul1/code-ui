@@ -19,6 +19,8 @@ import type { ClaudeModelFallback } from './claude-transcript-model'
 import { MobileNativeChatSessionOptionPickers } from './MobileNativeChatSessionOptionPickers'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { resetMobileNativeChatSessionOptionRecordsForTests } from './use-mobile-native-chat-session-options'
+import { EFFORT_PICK_CONFIRM_MS } from './native-chat-effort-pick'
+import { setSheetFailureClockForTests } from './use-sheet-failure'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -76,6 +78,8 @@ const structured = {
 }
 
 let ccrModel: CcrModelReading | null = READING
+let dispatchOutcome: 'accepted' | 'rejected' = 'rejected'
+const failures: string[] = []
 let beaconAt: number | null = null
 let transcriptModel: ClaudeModelFallback = { kind: 'none' }
 let live: { model: string | null; label: string | null; effort: string | null } = { model: null, label: null, effort: null }
@@ -85,7 +89,7 @@ function Chat(): ReactElement | null {
     activeChatStructured: false,
     activeSessionTabId: 'tab-work',
     agent: 'claude',
-    dispatchCommand: async () => 'rejected',
+    dispatchCommand: async () => dispatchOutcome,
     hostId: 'host-mac',
     isTabChatView: () => true,
     isWorking: false,
@@ -105,7 +109,7 @@ function Chat(): ReactElement | null {
     handleRef: { current: null },
     deviceTokenRef: { current: 'device' },
     refreshHud: async () => undefined,
-    onFailure: noop
+    onFailure: (message: string) => failures.push(message)
   })
   return nativeChatSessionOptions
     ? createElement(MobileNativeChatSessionOptionPickers, nativeChatSessionOptions)
@@ -192,5 +196,53 @@ describe('the model sheet of a Claude tab with no beacon', () => {
   it('draws no Effort row with no reading at all, rather than inventing a model', async () => {
     await mount()
     expect(await openSheet()).not.toContain('Effort')
+  })
+})
+
+// Review of the change above, 2026-10-16: Anthropic's copy of the session is read once a minute and
+// the read-back after a pick re-reads only the screen, so judging a pick against it called an effort
+// Claude took "not taken" after 10 s ("Effort is still Medium: the agent did not take High"). The
+// sheet runs on that reading; a pick is judged only against what the agent itself says.
+describe('an effort pick on a Claude tab with no beacon', () => {
+  beforeEach(() => {
+    let clock = 0
+    setSheetFailureClockForTests(() => (clock += 2_000))
+    resetMobileNativeChatSessionOptionRecordsForTests()
+    resetClaudeDiscoveryForTests()
+    ccrModel = READING
+    beaconAt = null
+    transcriptModel = { kind: 'none' }
+    live = { model: null, label: null, effort: null }
+    dispatchOutcome = 'accepted'
+    failures.length = 0
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    setSheetFailureClockForTests(null)
+    vi.useRealTimers()
+    dispatchOutcome = 'rejected'
+  })
+
+  it('is not called refused while Anthropic’s minute-old reading still says Medium', async () => {
+    await mount()
+    vi.useFakeTimers()
+    await openSheet()
+    const press = async (node: ReactTestInstance): Promise<void> => {
+      await act(async () => {
+        node.props.onPress()
+        await Promise.resolve()
+      })
+    }
+    await press(renderer!.root.find((n) => (n.type as unknown) === 'Pressable' && String(n.props.accessibilityLabel).startsWith('Effort')))
+    const high = renderer!.root
+      .findAll((n) => (n.type as unknown) === 'Pressable' && n.props.accessibilityRole === 'radio')
+      .find((row) => words(row).includes('High'))!
+    await press(high)
+    await act(async () => {
+      vi.advanceTimersByTime(EFFORT_PICK_CONFIRM_MS * 2)
+      await Promise.resolve()
+    })
+    expect(failures.filter((message) => message.includes('did not take'))).toEqual([])
   })
 })

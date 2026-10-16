@@ -187,7 +187,13 @@ export function useMobileNativeChatSessionOptionController(args: {
     applyOverride: codex.applyOverride,
     queuedMessages,
     // Confirmed against the pair the pill reads (`liveModel` below).
-    stated: { model: pillPair.model, effort: pillPair.effort },
+    // Not the pill's whole pair: Anthropic's copy of the session is read once a minute and the
+    // read-back below re-reads only the screen, so a pick judged against it was called refused
+    // 10 s after Claude took it (review, 2026-10-16). The transcript stands in only with no live pair.
+    stated:
+      !reportedModel && transcriptModel?.kind === 'transcript'
+        ? { model: transcriptModel.model.model, effort: transcriptModel.effort ?? null }
+        : { model: reportedModel, effort: reportedEffort ?? null },
     // An effort pick is confirmed by the agent's own statement; the screen is
     // read at once and then every second until it is, not at the next poll.
     readBack: refreshHud
