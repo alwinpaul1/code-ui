@@ -6,6 +6,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import { LoadingConnectionTroubleContext, type LoadingConnectionTroubleState } from './loading-connection-trouble'
 
 vi.mock('@shopify/flash-list', async () => {
   const React = await import('react')
@@ -157,11 +158,13 @@ describe('a Claude tab opening its transcript', () => {
 
   async function draw(
     scheme: 'light' | 'dark',
-    props: { agent: string; status: 'loading' | 'ready' | 'idle'; messages: NativeChatMessage[]; hasMore?: boolean; loadingEarlier?: boolean }
+    props: { agent: string; status: 'loading' | 'ready' | 'idle'; messages: NativeChatMessage[]; hasMore?: boolean; loadingEarlier?: boolean },
+    trouble: LoadingConnectionTroubleState | null = null
   ): Promise<void> {
     await act(async () => {
       const screen = (
         <ThemeProvider initialPreference={scheme}>
+          <LoadingConnectionTroubleContext.Provider value={trouble}>
           <MobileNativeChatView
             agent={props.agent}
             messages={props.messages}
@@ -179,6 +182,7 @@ describe('a Claude tab opening its transcript', () => {
             composerText=""
             onComposerTextChange={vi.fn()}
           />
+          </LoadingConnectionTroubleContext.Provider>
         </ThemeProvider>
       )
       if (renderer) {
@@ -249,5 +253,64 @@ describe('a Claude tab opening its transcript', () => {
     await draw(scheme, { agent: 'codex', status: 'loading', messages: [] })
     expect(clawd()).toHaveLength(0)
     expect(spinners()).toHaveLength(1)
+  })
+
+  // 2026-10-16, from the user: with the desktop out of reach, Clawd danced over "Loading session…"
+  // for as long as the phone kept dialling, so an asleep Mac looked like a slow load. Once the
+  // connection is known to be in trouble the screen says so, where to look, and offers a Retry.
+  const UNREACHABLE: LoadingConnectionTroubleState['trouble'] = {
+    label: "Can't reach desktop",
+    detail: 'Studio isn’t reachable right now. Check it’s awake and Orca is running; this screen reconnects on its own.',
+    retryable: true
+  }
+  const texts = () => renderer!.root.findAll((node) => node.type === ('Text' as never)).map((node) => node.props.children)
+  const retryButtons = () =>
+    renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Reconnect to desktop' && typeof node.props.onPress === 'function')
+
+  it.each(SCHEMES)(
+    'says the desktop cannot be reached, where to look, and offers Retry instead of loading forever, in %s',
+    async (scheme, colors) => {
+      const onRetry = vi.fn()
+      await draw(scheme, { agent: 'claude', status: 'idle', messages: [] }, { trouble: UNREACHABLE, onRetry })
+      expect(clawd()).toHaveLength(1)
+      expect(loadingLabel()).toHaveLength(0)
+      expect(texts()).toContain("Can't reach desktop")
+      expect(texts()).toContain(UNREACHABLE.detail)
+      const label = renderer!.root.findAll((node) => node.type === ('Text' as never) && node.props.children === "Can't reach desktop")
+      expect(flatStyle(label[0]!).color).toBe(colors.text)
+      const detail = renderer!.root.findAll((node) => node.type === ('Text' as never) && node.props.children === UNREACHABLE.detail)
+      expect(flatStyle(detail[0]!).color).toBe(colors.textSecondary)
+      expect(retryButtons().length).toBeGreaterThan(0)
+      act(() => retryButtons()[0]!.props.onPress())
+      expect(onRetry).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it.each(SCHEMES)('comes back to "Loading session…" by itself, then to the chat, once the desktop answers, in %s', async (scheme) => {
+    await draw(scheme, { agent: 'claude', status: 'idle', messages: [] }, { trouble: UNREACHABLE, onRetry: vi.fn() })
+    expect(loadingLabel()).toHaveLength(0)
+    await draw(scheme, { agent: 'claude', status: 'loading', messages: [] }, null)
+    expect(texts()).not.toContain("Can't reach desktop")
+    expect(loadingLabel()).toHaveLength(1)
+    await draw(scheme, { agent: 'claude', status: 'ready', messages: [user('u1'), prose('a1', 'Hello.')] }, null)
+    expect(clawd()).toHaveLength(0)
+    expect(texts()).not.toContain("Can't reach desktop")
+  })
+
+  it.each(SCHEMES)("replaces a Codex tab's endless spinner with the same trouble, without Clawd, in %s", async (scheme) => {
+    await draw(scheme, { agent: 'codex', status: 'idle', messages: [] }, { trouble: UNREACHABLE, onRetry: vi.fn() })
+    expect(clawd()).toHaveLength(0)
+    expect(spinners()).toHaveLength(0)
+    expect(texts()).toContain("Can't reach desktop")
+  })
+
+  it.each(SCHEMES)('offers no Retry where dialling again cannot help (a refused pairing, or the web page), in %s', async (scheme) => {
+    await draw(
+      scheme,
+      { agent: 'claude', status: 'idle', messages: [] },
+      { trouble: { label: 'Pairing invalid — re-pair with your desktop', detail: null, retryable: false }, onRetry: null }
+    )
+    expect(texts()).toContain('Pairing invalid — re-pair with your desktop')
+    expect(retryButtons()).toHaveLength(0)
   })
 })

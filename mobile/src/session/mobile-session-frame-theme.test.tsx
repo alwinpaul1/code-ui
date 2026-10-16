@@ -167,7 +167,7 @@ describe.each([
   it('paints the session screen canvas from the theme', () => {
     const root = render(
       mode,
-      createElement(MobileSessionSurface, { controller: controllerFor({ showLoadingState: true }) })
+      createElement(MobileSessionSurface, { controller: controllerFor({ sessionLoadingScreen: 'plain' }) })
     )
     expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.chatBg)
   })

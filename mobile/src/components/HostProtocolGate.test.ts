@@ -300,4 +300,15 @@ describe('HostProtocolGate', () => {
     renderer = await renderGate()
     expect(renderedText(renderer)).toContain('HostContent')
   })
+
+  // Pins what the session screen's own connection trouble relies on (2026-10-16): the check holds
+  // the routes only while it waits on a CONNECTED host's status.get (bounded by the request
+  // timeout), so a host that never connects never leaves this spinner, or Clawd, up; the routes
+  // mount and the session screen says the host cannot be reached (loading-connection-trouble.ts).
+  it('does not hold the routes back while the host cannot be reached', async () => {
+    hostClient.current = { client: null, state: 'reconnecting' }
+    renderer = await renderGate()
+    expect(renderedText(renderer)).toContain('HostContent')
+    expect(renderer.root.findAllByType('ActivityIndicator' as never)).toHaveLength(0)
+  })
 })

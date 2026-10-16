@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
+import { worktreeSessionPath } from './worktree-session-path'
 import { savePinToggle } from '../storage/pinned-worktree-toggle'
 import type { useForgetHostClient } from '../transport/client-context'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
@@ -260,11 +261,7 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
-      // `?? ''` and not a cast: the hook takes `hostId` optional and every other member guards it,
-      // so an absent one builds `/h//session/...` — a pathname the shell's segment rule refuses —
-      // rather than the string "undefined", which it would accept as a host named undefined.
-      const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
-      navigateFromHostList(target)
+      navigateFromHostList(worktreeSessionPath(hostId, item))
     },
     [client, connState, hostId, markUnread, navigateFromHostList]
   )

@@ -129,7 +129,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
 // 2026-10-15 (982ed4371, dictated words stay in the caption): the dictation hook's chatTakeRef.
 // 2026-10-15 (auto permission): the send actions' autoPermissionLaunchLine useCallback.
-const HEAD_MAIN_HOOK_SHA256 = '4210614ca345e00a25aa8cf28461a771903b58bcfe5eaa78f7398997b2d5a5d9'
+const HEAD_MAIN_HOOK_SHA256 = '5bdca899213d16fb70be1e02439f68e2fcaab17b0e0198412b8d0584cbe18131'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -158,7 +158,7 @@ const HEAD_MAIN_HOOK_SHA256 = '4210614ca345e00a25aa8cf28461a771903b58bcfe5eaa78f
 // 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on. The
 // live input hook also hands out markLiveInputLineEmpty and takeLiveInputLineEmpty: a typed
 // `claude` is rewritten only on an input line the phone knows is empty.
-const HEAD_HOOK_BINDING_SHA256 = '1a668cbcaa493343ba41184bd1d6d7c1c75ac24b45f06a9599639153cafc9a4d'
+const HEAD_HOOK_BINDING_SHA256 = '42d70f11d24bba9233cf0fb318488bb5f2c83ac253ebd7dc1aa4c204f569aa52'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -175,7 +175,7 @@ const HEAD_HOOK_BINDING_SHA256 = '1a668cbcaa493343ba41184bd1d6d7c1c75ac24b45f06a
 // session that named it). Same callback count.
 // 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on.
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '081f67059e31fc97a304abb95291ca370ad0e7f0dafd22d973ddeab179980a0d'
+  '80c39b567562512e0e1d23b1605d4279b87964876ecd2e50b9e06e004080cb23'
 // 2026-09-09: the terminal subscription strips the agents' HUD beacon out of
 // each output chunk before anything else looks at it, and the create action
 // asks for the launch flags that make the agents send one.
@@ -285,7 +285,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // (nativeChatContexts) for an absolute path only, and its outside_worktree note says a terminal
 // or chat vouches.
 // 2026-10-15 (auto permission): autoPermissionLaunchLine, and submitLiveInput passing it on.
-const HEAD_CALLBACK_BODY_SHA256 = 'e49f8fdee95788d2216d762338b3ee9f398e61a1f2d81b760e8e1791c809b47b'
+const HEAD_CALLBACK_BODY_SHA256 = 'e9fcbc546c356dabf07d7072c7cc6c03837f2beb76eac0789a69dd479819ba7a'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -510,7 +510,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 2026-10-15 (the Anthropic session title): the header's 'Terminal' fallback left for
 // claudeSessionHeaderTitle (ccr-session-facts.ts). 690.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '957e9f7d3fb3e738cd7aa6791e6ee5be993e8834e9eca65f2896848bfa01c890'
+  'd4eb0144325790aa46a6737034f6ba4698a90248523a841cb32dc84104662c92'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -561,7 +561,7 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 2026-10-14 (later, 0.9.141 report): the dock's two TextInputs take their refs through
 // bindLiveField / bindBufferedField (each arms the keyboard claim on the field's native
 // mount), and the buffered field gains onFocus / onBlur. Only the dock's host JSX moved.
-const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96eac241a8c495bf84'
+const HEAD_HOST_JSX_SHA256 = '926da479bd1dbd508a1267401dd2114d6a4244c2a56e0204ea2a4c4b94a0cb67'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -679,7 +679,7 @@ const HEAD_HOST_JSX_SHA256 = '97275e3676bc835e865b3c8f449cba465154a8e528db2b96ea
 // microphone level for the waveform. Same records; only the overlay's moved.
 // 2026-10-14 (caption): the dictation hook keeps the take's words for the live caption above the
 // recording row (`dictationCaption`, reset per take), and the overlay is handed them.
-const HEAD_LEAF_JSX_SHA256 = '16d4745186706677ade1061ed4ac70bf28b4517473ea51ceaee9205f9495fd34'
+const HEAD_LEAF_JSX_SHA256 = '50a9e7794d32b7c9e407c006c50f2dc0ebf619600733277cb6b2efcdd67bc0d8'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1134,7 +1134,10 @@ describe('mobile session route extraction parity', () => {
     // with it.
     // 315 since 2026-10-15: the send actions' autoPermissionLaunchLine useCallback, which starts a
     // typed `claude` line in auto permission mode (claude-auto-permission-mode.ts).
-    expect(main.hooks).toHaveLength(315)
+    // 319 since 2026-10-16 (loading screens): the presentation's useCallback that clears the
+    // tapped row's `agent` hint, useSessionRouteAgentHint, useSessionHostName and
+    // useLoadingConnectionTroubleState (session-route-agent-hint.ts, loading-connection-trouble.ts).
+    expect(main.hooks).toHaveLength(319)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1144,7 +1147,8 @@ describe('mobile session route extraction parity', () => {
     // useDictationHoldMode.
     // 80 since 2026-10-14 (later): requireAnthropicSignIn.
     // 81 since 2026-10-15: autoPermissionLaunchLine, which submitLiveInput now passes on.
-    expect(main.callbacks).toHaveLength(81)
+    // 82 since 2026-10-16: clearRouteAgentHint, the agent hint's route clear.
+    expect(main.callbacks).toHaveLength(82)
     // Bodies re-pinned 2026-10-14 (resume from Home): subscribeToTerminal's server-resize reveal
     // names its reason by mode (serverResizeRevealReason). Count and identities unchanged.
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
@@ -1296,7 +1300,9 @@ describe('mobile session route extraction parity', () => {
     // to use-mobile-native-chat-input-lock.ts, out of these files; their two imports came in.
     // 690 since 2026-10-15 (the Anthropic session title): the header's 'Terminal' fallback moved to
     // claudeSessionHeaderTitle (ccr-session-facts.ts), which now chooses the header's title.
-    expect(strings).toHaveLength(690)
+    // 689 since 2026-10-16 (loading screens): the session's own loading spinner moved to
+    // MobileSessionLoadingState.tsx, outside this family, taking its literal with it.
+    expect(strings).toHaveLength(689)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
@@ -1304,7 +1310,9 @@ describe('mobile session route extraction parity', () => {
     // the two pressables it maps, and the preview's own scroller.
     // 97 since 2026-09-26: the old reader's View and FlatList moved out with it.
     // 96 later on 2026-10-11: the header's model pill <View> is gone (model shows in the composer only).
-    expect(jsx.host).toHaveLength(96)
+    // 94 since 2026-10-16: the loading state's <View> and <ActivityIndicator> moved to
+    // MobileSessionLoadingState.tsx.
+    expect(jsx.host).toHaveLength(94)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     // 69 since 2026-09-15: the markdown preview's own leaf element.
     // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
@@ -1341,7 +1349,9 @@ describe('mobile session route extraction parity', () => {
     // 79 since 2026-10-15 (later still): the chat overlay sits in a
     // <NativeChatConnectionNoticeProvider controller />, so the status line draws "Connecting..." on its
     // own line as the Claude app's one line does, not in a second row.
-    expect(jsx.leaf).toHaveLength(79)
+    // 81 since 2026-10-16: <MobileSessionLoadingState> in their place, and the trouble's
+    // <LoadingConnectionTroubleContext.Provider> around the content.
+    expect(jsx.leaf).toHaveLength(81)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.
