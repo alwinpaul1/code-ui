@@ -1,14 +1,16 @@
-import { readNativeChatDraft, writeNativeChatDraft } from '../storage/native-chat-drafts'
 import { acquireCcrLink } from './ccr-link-registry'
-import { returnCcrQueueToComposer } from './ccr-local-queue'
+import { giveWordsToTabDraft } from './mobile-native-chat-live-drafts'
+import { reapplyCcrQueueToComposer, returnCcrQueueToComposer } from './ccr-local-queue'
 import { newCcrEventUuid, postCcrSessionEvents, readCcrConnectionStatus, type buildCcrUserEventBody } from './ccr-send'
 
 /** What the Anthropic composer send (use-ccr-composer-send.ts) reaches outside itself. */
 
 /** The default `restoreDraft`: the queue ahead of whatever the tab's stored draft holds. */
 export async function restoreCcrQueueToStoredDraft(draftKey: string, text: string): Promise<void> {
-  const stored = await readNativeChatDraft(draftKey)
-  await writeNativeChatDraft(draftKey, returnCcrQueueToComposer(text, stored ?? ''))
+  // One step on the draft's write chain, so a refused send's words given back to the same closed
+  // tab cannot be dropped by it, nor it by them, and into any mounted copy of the tab's draft
+  // (mobile-native-chat-live-drafts.ts `giveWordsToTabDraft`).
+  await giveWordsToTabDraft(draftKey, (stored) => returnCcrQueueToComposer(text, stored), null, (stored) => reapplyCcrQueueToComposer(text, stored))
 }
 
 export type CcrComposerSendDeps = {

@@ -24,7 +24,10 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
 vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: () => Promise.resolve(null) }))
 vi.mock('../storage/native-chat-drafts', () => ({
   readNativeChatDraft: vi.fn(async () => null),
-  writeNativeChatDraft: vi.fn(async () => undefined)
+  writeNativeChatDraft: vi.fn(async () => undefined),
+  appendNativeChatDraft: vi.fn(async (_key: string, next: (stored: string) => string) => next('')),
+  openNativeChatDraftRead: vi.fn(async () => ({ current: () => null, close: () => undefined })),
+  nativeChatDraftEpoch: () => 0
 }))
 
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'

@@ -55,6 +55,8 @@ import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-r
 import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
 import type { NativeChatAnthropicAttachments } from './use-native-chat-anthropic-send'
+import type { SessionArtifact } from './session-artifacts'
+import type { ClaudeTabAccountScope } from './use-claude-tab-account'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -133,6 +135,9 @@ export type MobileNativeChatController = {
    *  goes (use-ccr-session-header.ts). Null for every other tab, and for every tab while
    *  CCR_SESSION_WRITES is off. */
   nativeChatAnthropicSession?: CcrSessionHeader | null
+  /** The Anthropic account a Claude tab's chat belongs to, for artifact titles from the account's
+   *  list (claude-artifact-account-context.ts); null where none is known. */
+  nativeChatArtifactAccountId?: string | null
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
@@ -230,7 +235,7 @@ export type MobileNativeChatController = {
   nativeChatQueueEditor?: InlineQueueEditor | null
   /** A Claude tab that sends through Anthropic: its phone-kept queue (use-ccr-composer-send.ts),
    *  drawn in place of the screen-read queue box. Absent on every other tab. */
-  nativeChatLocalQueue?: { text: string | null; onEdit: () => void } | null
+  nativeChatLocalQueue?: { entries: readonly string[]; onEdit: (index: number) => void } | null
   /** A Claude tab that sends through Anthropic: the composer's text-only send (a POST into its
    *  Remote Control session, never the terminal). Absent on every other tab. */
   nativeChatAnthropicSend?: (text: string) => Promise<boolean>
@@ -270,6 +275,9 @@ export type MobileNativeChatController = {
   /** The same tab: the plan Claude proposed, for the session bar's "Plan" pill, null while its
    *  approval is asked or when none was (claude-session-plan.ts); undefined on every other tab. */
   nativeChatClaudePlan?: string | null
+  /** The same tab: the pages its Artifact calls published (session-artifacts.ts) and what names its
+   *  account, for the session bar's artifacts button and sheet; undefined on every other tab. */
+  nativeChatClaudeArtifacts?: { artifacts: readonly SessionArtifact[]; account: ClaudeTabAccountScope }
   loadNativeChatSkills: () => void
   handleNativeChatQuestionAnswer: (text: string) => Promise<boolean>
   handleNativeChatSend: (text: string, images?: string[]) => Promise<boolean>

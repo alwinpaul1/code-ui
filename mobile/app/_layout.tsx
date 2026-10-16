@@ -362,6 +362,16 @@ function ThemedRoot() {
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
           <Stack.Screen name="connection-log" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />
+          {/* A claude.ai artifact in the app (open-claude-artifact.ts), over whichever screen opened it.
+              A transparent modal, so on a large window the screen under its side sheet stays drawn
+              behind the dim; below that the viewer paints its own background over all of it
+              (app/artifact.tsx). */}
+          <Stack.Screen
+            name="artifact"
+            options={{ headerShown: false, presentation: 'transparentModal', contentStyle: { backgroundColor: 'transparent' } }}
+          />
+          {/* The account's Artifacts gallery, from Home's Artifacts card. */}
+          <Stack.Screen name="artifacts" options={{ headerShown: false }} />
           <Stack.Screen name="h" options={{ headerShown: false }} />
         </Stack>
         {/* Mounted once, above every route: the battery prompt is raised from a

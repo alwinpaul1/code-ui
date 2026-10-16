@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcaartifactshortcuts'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcaartifactshortcuts'
+}
+
+// No dependencies block: ShortcutManagerCompat and IconCompat are androidx.core, which
+// expo-modules-core already exposes as an `api` dependency (core-ktx 1.17.0 in its
+// android/build.gradle), so useCoreDependencies() puts it on this module's classpath at the
+// version the rest of the app resolves.

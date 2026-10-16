@@ -3,6 +3,7 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { FlashListRef } from '@shopify/flash-list'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
+import { logChatScroll, scrollOffsetLabel } from './chat-scroll-log'
 
 /** Inside this many px of the live edge the list counts as at the tail.
  *
@@ -139,8 +140,8 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     scrollingRef,
     holdingRef,
     draggingRef,
-    touchStart,
-    touchEnd,
+    touchStart: followingTouchStart,
+    touchEnd: followingTouchEnd,
     followGate,
     textSelectable,
     holdSelects,
@@ -154,6 +155,25 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     scrollSample
   } = useMobileChatFollowing()
   followGate.noteData(rows)
+  // Whether the finger now down started a drag: a touch that ends without one is the line the
+  // stuck-scroll report needs (chat-scroll-log.ts).
+  const draggedThisTouchRef = useRef(false)
+  const touchStart = useCallback(() => {
+    draggedThisTouchRef.current = false
+    logChatScroll(`touch down${followingRef.current ? ', following' : ''}${scrollingRef.current ? ', list moving' : ''}`)
+    followingTouchStart()
+  }, [followingRef, followingTouchStart, scrollingRef])
+  const touchEnd = useCallback(() => {
+    logChatScroll(draggedThisTouchRef.current ? 'touch up' : 'touch up with no drag')
+    followingTouchEnd()
+  }, [followingTouchEnd])
+  const loggedDetachedRef = useRef(detached)
+  useEffect(() => {
+    if (loggedDetachedRef.current !== detached) {
+      loggedDetachedRef.current = detached
+      logChatScroll(detached ? 'the reader has the list' : 'following the newest message')
+    }
+  }, [detached])
 
   // Single writer for geometry, as `setFollowing` is for intent.
   const setAtTail = useCallback((next: boolean) => {
@@ -184,8 +204,11 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     if (!followingRef.current || !hasItems || holdingRef.current) {
       return
     }
+    if (!atTailRef.current) {
+      logChatScroll(`pinned to the newest message from away${draggingRef.current ? ' under a drag' : ''}`)
+    }
     listRef.current?.scrollToOffset({ offset: 0, animated: false })
-  }, [followingRef, hasItems, holdingRef])
+  }, [draggingRef, followingRef, hasItems, holdingRef])
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, _height: number) => {
@@ -304,8 +327,10 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const onScrollBeginDrag = useCallback(() => {
     cancelSettle()
     jumpingRef.current = false
+    draggedThisTouchRef.current = true
+    logChatScroll(`drag start${followingRef.current ? ', was following' : ''}`)
     beginScroll()
-  }, [beginScroll, cancelSettle])
+  }, [beginScroll, cancelSettle, followingRef])
 
   const settle = useCallback(
     (metrics: NativeScrollEvent) => {
@@ -327,6 +352,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       cancelSettle()
       endDrag()
       const metrics = event.nativeEvent
+      logChatScroll(`drag end ${scrollOffsetLabel(metrics.contentOffset.y)}`)
       settleFrameRef.current = requestAnimationFrame(() => {
         settleFrameRef.current = null
         settle(metrics)
@@ -339,6 +365,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // during that animation interrupts it before the end.
   const onMomentumScrollBegin = useCallback(() => {
     cancelSettle()
+    logChatScroll(jumpingRef.current ? 'jump animation start' : 'fling start')
     if (!jumpingRef.current) {
       beginFling()
     }
@@ -355,6 +382,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       cancelSettle()
       jumpingRef.current = false
+      logChatScroll(`fling end ${scrollOffsetLabel(event.nativeEvent.contentOffset.y)}${draggingRef.current ? ', a finger drags' : ''}`)
       if (draggingRef.current) {
         return
       }

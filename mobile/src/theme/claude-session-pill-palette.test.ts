@@ -60,4 +60,12 @@ describe('the Claude app session pill palette', () => {
     expect(light.pillText).toBe('#898781')
     expect(dark.pillText).toBe('#898781')
   })
+
+  // 1.261013.20: the session bar's outputs pill (artifacts, pull requests, plan) rests on ad5.n0()
+  // with no hairline and draws its glyph and count in ad5.x0() (u8z.t, u8z.java:4781; r3z case 1).
+  // n0 is z79.c / z79.u, x0 is z79.q / z79.j (w55 light, v55 dark).
+  it('draws the outputs pill on ad5.n0() and its glyph and count in ad5.x0() (u8z.t, r3z)', () => {
+    expect([light.outputsFill, light.outputsInk]).toEqual(['#FFFFFF', '#52514E'])
+    expect([dark.outputsFill, dark.outputsInk]).toEqual(['#20201F', '#C3C2B7'])
+  })
 })

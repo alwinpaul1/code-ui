@@ -30,7 +30,7 @@ describe('a turn that ended while the chat lane was off', () => {
     render()
     await settle()
     expect(postedTexts()).toEqual([{ sessionId: CSE_A, text: 'waiting', priority: undefined }])
-    expect(hook.api.queue).toBeNull()
+    expect(hook.api.queue).toEqual([])
   })
 
   it('moves the queue back to the composer when the lane is back with a prompt waiting', async () => {
@@ -67,6 +67,17 @@ describe('a turn that ended while the chat lane was off', () => {
       reads[0]!('connected')
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
+    await settle()
+    // Since 2026-10-16 a queued message goes one turn each: the second waits for the turn the first
+    // started to end.
+    expect(postedTexts().map((post) => post.text)).toEqual(['first'])
+    expect(hook.api.queue).toEqual(['second'])
+    state.working = true
+    render()
+    await settle()
+    state.working = false
+    render()
+    await settle()
     await settle()
     expect(postedTexts().map((post) => post.text)).toEqual(['first', 'second'])
   })

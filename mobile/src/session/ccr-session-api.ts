@@ -70,7 +70,7 @@ export type CcrFailureReason =
   | 'network'
   | 'malformed'
 
-export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage' | 'files'
+export type CcrRequestStage = 'org' | 'sessions' | 'session' | 'events' | 'stream' | 'branches' | 'usage' | 'files' | 'artifacts'
 
 export class CcrApiError extends Error {
   constructor(
@@ -264,6 +264,12 @@ export async function listCcrSessionEvents(
     }
   }
   return { events, nextCursor: cursorOf(body.next_cursor) }
+}
+
+/** A GET with the same failure words as every other call here (claude-artifacts.ts reads the
+ *  account's artifact list through it). */
+export function getCcrJson(fetchImpl: CcrFetch, stage: CcrRequestStage, url: string, headers: Record<string, string>): Promise<unknown> {
+  return getJson(fetchImpl, stage, url, headers)
 }
 
 /** A POST with a JSON body to the code API, errors as the other stages' (`getJson`'s). */

@@ -89,10 +89,10 @@ describe('a Claude tab send with files keeps the order the user typed', () => {
       renderer = create(createElement(Harness))
     })
     expect(await send('first, typed while Claude worked')).toBe('accepted')
-    expect(api.queue).toBe('first, typed while Claude worked')
+    expect(api.queue).toEqual(['first, typed while Claude worked'])
     expect(await send('second, with a photo', PHOTO)).toBe('accepted')
     expect(sentInOrder()).toEqual(['first, typed while Claude worked', 'second, with a photo'])
-    expect(api.queue).toBeNull()
+    expect(api.queue).toEqual([])
   })
 
   it('a queued message that fails to post holds the photo send back, so the photo never goes ahead of it', async () => {
@@ -167,6 +167,17 @@ describe('a Claude tab send with files keeps the order the user typed', () => {
     })
     expect(outcome).toBe('accepted')
     expect(calls.error).not.toHaveBeenCalled()
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    // Since 2026-10-16 the queue goes one message per turn: the words wait for the turn the
+    // first one started to end, still behind it.
+    expect(sentInOrder()).toEqual(['first'])
+    expect(api.queue).toEqual(['second, words only'])
+    working = true
+    act(() => renderer!.update(createElement(Harness)))
+    working = false
+    act(() => renderer!.update(createElement(Harness)))
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })

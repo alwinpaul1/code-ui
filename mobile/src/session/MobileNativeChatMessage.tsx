@@ -31,6 +31,8 @@ import { errorRowOf } from './mobile-native-chat-error-rows'
 import { MobileNativeChatTurnEditsCard } from './MobileNativeChatTurnEditsCard'
 import { TURN_EDITS_CARD_SHOWN, type TurnEditedFile } from './mobile-native-chat-turn-edits'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
+import { artifactSegmentView } from './mobile-native-chat-artifact-segment'
+import { ClaudeArtifactLinks } from './ClaudeArtifactLinks'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -118,11 +120,19 @@ function MobileNativeChatMessageImpl(props: ComponentProps<typeof MobileNativeCh
  * document's native root stops a hold starting a selection while the list moves
  * (ChatTextHoldSelectsContext).
  */
-function ProseRun({ reply, children }: { reply: boolean; children: ReactNode }) {
+/** A published page's card stays in a settled turn; a failure, or a publish the turn never
+ *  answered, folds with the rest of the work. */
+function artifactCardStaysShown(blocks: readonly NativeChatBlock[]): boolean {
+  return artifactSegmentView(blocks)?.kind === 'published'
+}
+
+function ProseRun({ reply, artifactText, children }: { reply: boolean; artifactText?: string; children: ReactNode }) {
+  // An agent's words draw claude.ai artifact links as the Claude app does (ClaudeArtifactLinks.tsx).
+  const words = artifactText === undefined ? children : <ClaudeArtifactLinks text={artifactText}>{children}</ClaudeArtifactLinks>
   return reply ? (
-    <ChatTextInPlaceSelectionContext.Provider value>{children}</ChatTextInPlaceSelectionContext.Provider>
+    <ChatTextInPlaceSelectionContext.Provider value>{words}</ChatTextInPlaceSelectionContext.Provider>
   ) : (
-    <>{children}</>
+    <>{words}</>
   )
 }
 
@@ -415,7 +425,7 @@ function MobileNativeChatMessageRow({
               // No line beside the agent's own words, interim or final
               // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
-                <ProseRun reply={isAgent}>
+                <ProseRun reply={isAgent} artifactText={message.role === 'assistant' ? nativeChatMessageText(segment.blocks) : undefined}>
                 {groupProseBlocks(segment.blocks).map((group, index, groups) => (
                   // Air between a picture and the caption under it, and
                   // between pictures that follow each other.
@@ -446,7 +456,10 @@ function MobileNativeChatMessageRow({
                 {/* Under the turn's last words, above the work still running after them. */}
                 {segmentIndex === lastWordsSegment ? placeAt('words') : null}
               </View>
-            ) : showToolRun ? (
+            ) : showToolRun || artifactCardStaysShown(segment.blocks) ? (
+              // A settled turn folds its work behind the caret, but not a page
+              // it published: the Artifact card is what the turn made, and the
+              // Claude app never hides it in a group (a18.java).
               <MobileNativeChatToolSegment
                 // Why: a global toggle intentionally resets all per-run/per-line
                 // overrides in one remount, avoiding an effect-driven second render.

@@ -15,7 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const seen = vi.hoisted(() => ({
   terminalOpens: 0,
-  phone: null as null | { accessToken: string; refreshToken: string; expiresAt: number }
+  phone: null as null | { accessToken: string; refreshToken: string; expiresAt: number },
+  organizationUuid: null as string | null
 }))
 
 vi.mock('../host-controls/throwaway-terminal', () => ({
@@ -25,7 +26,8 @@ vi.mock('../host-controls/throwaway-terminal', () => ({
   }
 }))
 vi.mock('./anthropic-auth-store', () => ({
-  readPrimaryAccount: async () => (seen.phone ? { credential: seen.phone, refreshRefused: false } : null),
+  readPrimaryAccount: async () =>
+    seen.phone ? { credential: seen.phone, refreshRefused: false, organizationUuid: seen.organizationUuid } : null,
   refreshAccessToken: async () => {
     throw new Error('no refresh in this test')
   }
@@ -57,6 +59,7 @@ class FakeSocket {
 beforeEach(() => {
   seen.terminalOpens = 0
   seen.phone = null
+  seen.organizationUuid = null
   FakeSocket.opened = []
   FakeSocket.last = null
   vi.stubGlobal('WebSocket', FakeSocket)
@@ -79,6 +82,12 @@ describe('reading the Anthropic credential', () => {
   it("returns the phone's own sign-in", async () => {
     seen.phone = { accessToken: 'phone-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 }
     await expect(fetchAnthropicCredential()).resolves.toMatchObject({ accessToken: 'phone-token' })
+  })
+
+  it("carries the signed-in account's organization, for voice_stream's organization_uuid", async () => {
+    seen.phone = { accessToken: 'phone-token', refreshToken: 'r', expiresAt: Date.now() + 3_600_000 }
+    seen.organizationUuid = 'org-1'
+    await expect(fetchAnthropicCredential()).resolves.toMatchObject({ organizationUuid: 'org-1' })
   })
 })
 

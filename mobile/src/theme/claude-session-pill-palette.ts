@@ -17,7 +17,9 @@ import type { ThemeScheme } from './tokens'
  *   (w130.java:2443): `ad5.y()` draft, `ad5.K()` open, `ad5.u()` closed, `ad5.T()` merged,
  *   `ad5.m()` queued;
  * - the CI dot (`jc20.l`, jc20.java:7069): `ad5.e0()` passed, `ad5.G()` failed, `ad5.y()` status
- *   unavailable; pending is a spinner in the pill's own text colour.
+ *   unavailable; pending is a spinner in the pill's own text colour;
+ * - the outputs pill of the 1.261013.20 session bar (the artifacts button): fill `ad5.n0()`, no
+ *   hairline (`u8z.t`, u8z.java:4778-4786), glyph and label `ad5.x0()` (r3z case 1).
  *
  * Why a module of its own and not `tokens.ts`: that file is shared by every screen and moves one
  * batch at a time (the same reason as `mobile-diff-claude-palette.ts`). A component reads
@@ -48,6 +50,11 @@ export type ClaudeSessionPillPalette = {
   ciPassed: string
   ciFailed: string
   ciUnavailable: string
+  /** `ad5.n0()` (1.261013.20): the session bar's outputs pill (`u8z.t`, u8z.java:4781),
+   *  drawn with no hairline. */
+  outputsFill: string
+  /** `ad5.x0()` (1.261013.20): that pill's glyph and its "%d artifact(s)" (r3z case 1). */
+  outputsInk: string
 }
 
 const light: ClaudeSessionPillPalette = {
@@ -71,7 +78,9 @@ const light: ClaudeSessionPillPalette = {
   queuedText: '#734500',
   ciPassed: '#009300',
   ciFailed: '#D03B3B',
-  ciUnavailable: '#898781'
+  ciUnavailable: '#898781',
+  outputsFill: '#FFFFFF',
+  outputsInk: '#52514E'
 }
 
 const dark: ClaudeSessionPillPalette = {
@@ -95,7 +104,9 @@ const dark: ClaudeSessionPillPalette = {
   queuedText: '#DB9300',
   ciPassed: '#009300',
   ciFailed: '#D03B3B',
-  ciUnavailable: '#898781'
+  ciUnavailable: '#898781',
+  outputsFill: '#20201F',
+  outputsInk: '#C3C2B7'
 }
 
 export function claudeSessionPillPalette(scheme: ThemeScheme): ClaudeSessionPillPalette {

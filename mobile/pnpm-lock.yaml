@@ -24,7 +24,7 @@ patchedDependencies:
   '@expo/plist@0.8.1': 642ebd3066c236b91ad0bb74496e9fe10d47d7443d29f5be3b6239114eda7603
   expo-notifications@57.0.17: c58a6bde56d38d0399f4cad3ca094f8f7195761f60d3483d4c0ca9562e3cd45c
   query-string@9.5.1: 8624f1beedd0705bfdaf287519ed6363662a0c96f01fd594508b34583bf30d8b
-  react-native-webview@13.16.2: 55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06
+  react-native-webview@13.16.2: 7478528ec06f873bd0500aea4922142bab8173b8c89d6ea8d80f97e1c79d9896
   react-native@0.86.3: f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559
 
 importers:
@@ -204,7 +204,7 @@ importers:
         version: 0.21.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react-native-webview:
         specifier: 13.16.2
-        version: 13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+        version: 13.16.2(patch_hash=7478528ec06f873bd0500aea4922142bab8173b8c89d6ea8d80f97e1c79d9896)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       react-native-worklets:
         specifier: ^0.10.1
         version: 0.10.1(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)
@@ -12363,7 +12363,7 @@ snapshots:
       '@expo/metro-runtime': 57.0.15(@expo/log-box@57.0.4)(expo@57.0.20)(react-dom@19.2.8(react@19.2.8))(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       react-dom: 19.2.8(react@19.2.8)
       react-native-web: 0.21.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      react-native-webview: 13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+      react-native-webview: 13.16.2(patch_hash=7478528ec06f873bd0500aea4922142bab8173b8c89d6ea8d80f97e1c79d9896)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
     transitivePeerDependencies:
       - '@babel/core'
       - bufferutil
@@ -14287,7 +14287,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  react-native-webview@13.16.2(patch_hash=55b7bce35c78ee1a50c4b99ad65b52982f3cfa73da6f61d0853c4d03219eec06)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+  react-native-webview@13.16.2(patch_hash=7478528ec06f873bd0500aea4922142bab8173b8c89d6ea8d80f97e1c79d9896)(react-native@0.86.3(patch_hash=f240c5b25c2dced5e294d2112932293927808e83991ce216818cd9a2a3dbe559)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
     dependencies:
       '@typescript/native-preview': 7.0.0-dev.20260707.2
       escape-string-regexp: 4.0.0

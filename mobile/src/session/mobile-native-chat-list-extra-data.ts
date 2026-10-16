@@ -28,11 +28,13 @@ export function chatListDrawDistanceDp(windowHeightDp: number): number {
   )
 }
 
-/** The item type of every row that holds no selection: they recycle among themselves. */
+/** The item type of a row that holds no selection, before its kind: rows of one kind recycle
+ *  among themselves (chatRowItemType). */
 export const CHAT_ROW_ITEM_TYPE = 'message'
 
 /**
- * FlashList's item type for a chat row: one shared type, except for the row holding a selection.
+ * FlashList's item type for a chat row: one type per kind of message, except for the row holding
+ * a selection.
  *
  * In FlashList 2.3.2's RenderStackManager.sync a row leaving the window goes into its type's pool
  * and a message entering the window in the same sync takes it. With one type for every message, a
@@ -41,10 +43,17 @@ export const CHAT_ROW_ITEM_TYPE = 'message'
  * keeps a selection on its words). 8827567bf gave every message its own type, which stopped all
  * recycling. Now only the row holding a selection has its own type: no other message can take it,
  * and (with no pool cap on the list) it stays drawn when it leaves the window, so the selection
- * is still there when the reader comes back. Every other row recycles as FlashList means it to.
+ * is still there when the reader comes back. Every other row recycles among rows of its kind.
  */
-export function chatRowItemType(row: { id: string }, held: ReadonlySet<string>): string {
-  return held.has(row.id) ? `held:${row.id}` : CHAT_ROW_ITEM_TYPE
+export function chatRowItemType(row: { id: string; role?: string }, held: ReadonlySet<string>): string {
+  if (held.has(row.id)) {
+    return `held:${row.id}`
+  }
+  // One pool per kind of message, as the Claude app 1.261013.20 gives each transcript item the
+  // content type of its kind (sp7.java:61-71, d5v.getType()): a reply's row, its Markdown and
+  // native prose mounted, is never handed to a prompt or a tool call, which would tear it down and
+  // build the other from nothing in the middle of a scroll (chat-scroll-keeps-rows-still.test.ts).
+  return row.role ? `${CHAT_ROW_ITEM_TYPE}:${row.role}` : CHAT_ROW_ITEM_TYPE
 }
 
 /**

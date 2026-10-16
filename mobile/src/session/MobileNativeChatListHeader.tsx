@@ -27,7 +27,7 @@ export function MobileNativeChatListHeader({
   agentWorking?: boolean
   /** A tab that sends through Anthropic keeps its queue on the phone (use-ccr-composer-send.ts)
    *  and draws it as the Claude app does, in place of the agent's screen-read queue box. */
-  localQueue?: { text: string | null; onEdit: () => void } | null
+  localQueue?: { entries: readonly string[]; onEdit: (index: number) => void } | null
   /** Set only while the live turn has no user message to hang its status under. */
   unanchoredTurnStatus?: NativeChatTurnStatus | null
   turnActivity?: NativeChatTurnActivity | null
@@ -43,7 +43,7 @@ export function MobileNativeChatListHeader({
         />
       ) : null}
       {localQueue ? (
-        <MobileNativeChatLocalQueue text={localQueue.text} onEdit={localQueue.onEdit} />
+        <MobileNativeChatLocalQueue entries={localQueue.entries} onEdit={localQueue.onEdit} />
       ) : (
         <MobileNativeChatQueue
           messages={queuedMessages}

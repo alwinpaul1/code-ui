@@ -7,6 +7,7 @@ import { SectionLabel } from '../ui/SectionLabel'
 import type { HomeResumeCard } from '../worktree/home-resume-card'
 import type { HomeTaskSources } from './home-task-sources'
 import { MobileHomeAccountUsageCards } from './MobileHomeAccountUsageCards'
+import { MobileHomeArtifactsCard } from './MobileHomeArtifactsCard'
 import { MobileHomeResumeCard } from './MobileHomeResumeCard'
 import { MobileHomeTasksCard } from './MobileHomeTasksCard'
 
@@ -19,6 +20,7 @@ export function MobileHomeListFooter(props: {
   resumeCard: HomeResumeCard | null
   onCreateWorkspace: (hostId: string) => void
   onOpenAccounts: (hostId: string) => void
+  onOpenArtifacts: () => void
   onOpenResume: (card: HomeResumeCard) => void
   onOpenTasks: (provider?: TaskProvider) => void
   onPairDesktop: () => void
@@ -37,6 +39,7 @@ export function MobileHomeListFooter(props: {
         providers={props.primaryTaskProviders}
         onOpen={props.onOpenTasks}
       />
+      <MobileHomeArtifactsCard onOpen={props.onOpenArtifacts} />
       <MobileHomeQuickActions
         connectedHosts={props.connectedHosts}
         onPairDesktop={props.onPairDesktop}

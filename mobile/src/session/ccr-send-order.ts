@@ -2,7 +2,7 @@ import { hydrateNativeChatOutbox, nativeChatOutboxEntries } from '../storage/nat
 import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
 import type { Dispatch, SetStateAction } from 'react'
 import type { CcrComposerSendDeps } from './ccr-composer-send-deps'
-import { returnCcrQueueToComposer } from './ccr-local-queue'
+import { joinCcrQueue, returnCcrQueueToComposer, type CcrQueue } from './ccr-local-queue'
 import { ccrEchoSeen, ccrSessionOffline } from './ccr-send'
 import { reasonOf } from './ccr-session-shared'
 import type { CcrEvent } from './ccr-session-api'
@@ -203,12 +203,13 @@ export async function ccrTargetOffline(streamed: string | null, to: CcrTo, deps:
  * order typed (merge review of d79b81a2b, 2026-10-15: the files send skipped the queue and landed
  * first). The phone's queue holds words only, and the Claude app's local queue goes out as an
  * ordinary send before anything sent after it; here it goes as soon as a send with files is made
- * behind it. A queue held for another target is left alone. Resolves false when the words were
- * not accepted: that failure is already reported and the words are back in the composer, so the
- * files send must not go ahead of them.
+ * behind it, each entry its own ordinary send, oldest first, as the files send itself is (no
+ * priority). A queue held for another target is left alone. Resolves false when an entry was not
+ * accepted: that failure is already reported and its words are back in the composer, the entries
+ * behind it stay queued, and the files send must not go ahead of them.
  */
 export async function sendCcrQueueAhead(args: {
-  held: { readonly text: string; readonly target: CcrTo } | undefined
+  held: { readonly entries: CcrQueue; readonly target: CcrTo } | undefined
   to: CcrTo
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   takeFromQueue: (taken: string) => boolean
@@ -219,12 +220,17 @@ export async function sendCcrQueueAhead(args: {
   if (!held || !sameCcrTarget(held.target, to)) {
     return true
   }
-  const origin = args.captureSendOrigin(held.text)
-  if (!origin || !args.takeFromQueue(held.text)) {
-    return origin !== null
+  for (const text of held.entries) {
+    const origin = args.captureSendOrigin(text)
+    if (!origin || !args.takeFromQueue(text)) {
+      return origin !== null
+    }
+    args.log(`[ccr-send] queued words sent ahead of a send with files, to session ${ccrSessionTail(to.sessionId)}`)
+    if ((await args.sendNow(text, origin, to)) !== 'accepted') {
+      return false
+    }
   }
-  args.log(`[ccr-send] queued words sent ahead of a send with files, to session ${ccrSessionTail(to.sessionId)}`)
-  return (await args.sendNow(held.text, origin, to)) === 'accepted'
+  return true
 }
 
 /**
@@ -239,18 +245,31 @@ export async function sendCcrQueueAhead(args: {
  */
 export function ccrQueueGiveBack(
   latest: { readonly current: { tabId: string | null; setComposerText: Dispatch<SetStateAction<string>>; restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void; returnQueueToDraft: (draftKey: string, text: string) => void } },
-  queued: (tab: string) => { readonly text: string; readonly draftKey: string | null } | undefined,
-  takeFromQueue: (tab: string, taken: string) => boolean
+  queued: (tab: string) => { readonly entries: CcrQueue; readonly draftKey: string | null } | undefined,
+  takeFromQueue: (tab: string, taken: string) => boolean,
+  /** Once the chat is gone (`gone`), words go to the tab's STORED draft through `store`: the
+   *  screen's draft setters keep nothing after it unmounted (second review, 2026-10-16: a queued
+   *  POST that failed after the chat closed lost its words). */
+  leaving?: { gone: () => boolean; store: (draftKey: string | null, text: string) => void }
 ): { giveBack: (tab: string, text: string, draftKey?: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
   const giveBack = (tab: string, text: string, draftKey?: string): void => {
     const held = queued(tab)
-    const rest = held?.text
-    const all = rest && takeFromQueue(tab, rest) ? (text ? `${text}\n\n${rest}` : rest) : text
+    // Every entry still queued comes back with it, in order: the composer is one text.
+    const rest: string[] = []
+    for (const entry of held?.entries ?? []) {
+      if (!takeFromQueue(tab, entry)) {
+        break
+      }
+      rest.push(entry)
+    }
+    const all = joinCcrQueue([text, ...rest].filter((words) => words.length > 0))
     const key = draftKey ?? held?.draftKey ?? null
     if (!all) {
       return
     }
-    if ((latest.current.tabId ?? '') !== tab && key !== null) {
+    if (leaving?.gone()) {
+      leaving.store(key, all)
+    } else if ((latest.current.tabId ?? '') !== tab && key !== null) {
       latest.current.returnQueueToDraft(key, all)
     } else {
       latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))

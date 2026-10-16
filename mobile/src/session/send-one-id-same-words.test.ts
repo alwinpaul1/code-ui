@@ -28,7 +28,10 @@ import type { BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confir
 
 vi.mock('../storage/native-chat-drafts', () => ({
   readNativeChatDraft: vi.fn(async () => null),
-  writeNativeChatDraft: vi.fn(async () => undefined)
+  writeNativeChatDraft: vi.fn(async () => undefined),
+  appendNativeChatDraft: vi.fn(async (_key: string, next: (stored: string) => string) => next('')),
+  openNativeChatDraftRead: vi.fn(async () => ({ current: () => null, close: () => undefined })),
+  nativeChatDraftEpoch: () => 0
 }))
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>

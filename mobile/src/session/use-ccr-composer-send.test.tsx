@@ -241,25 +241,27 @@ describe('the queue while Claude works', () => {
 
   it('keeps one queued message, posts nothing, and empties the composer', async () => {
     expect(await send('add a test')).toBe('accepted')
-    expect(api.queue).toBe('add a test')
+    expect(api.queue).toEqual(['add a test'])
     expect(posts).toEqual([])
     expect(calls.clear).toHaveBeenCalledTimes(1)
   })
 
-  it('joins further messages after a blank line', async () => {
+  // Until 2026-10-16 a further send was joined to the queued one after a blank line (the app's
+  // one-string queue); the user reported it as two messages turned into one.
+  it('keeps a further message as its own queue entry', async () => {
     await send('add a test')
     await send('then run it')
-    expect(api.queue).toBe('add a test\n\nthen run it')
+    expect(api.queue).toEqual(['add a test', 'then run it'])
   })
 
-  it('sends the queue as one message when the turn ends', async () => {
+  it('sends only the first queued message, as an ordinary message, when the turn ends', async () => {
     await send('add a test')
     await send('then run it')
     state.working = false
     render()
     await settle()
-    expect(posts.map((post) => post.body.events[0]!.payload)).toEqual([{ type: 'user', uuid: 'uuid-1', message: { role: 'user', content: 'add a test\n\nthen run it' } }])
-    expect(api.queue).toBeNull()
+    expect(posts.map((post) => post.body.events[0]!.payload)).toEqual([{ type: 'user', uuid: 'uuid-1', message: { role: 'user', content: 'add a test' } }])
+    expect(api.queue).toEqual(['then run it'])
   })
 
   it('moves the queue back to the composer, before the draft, when a draft blocks it at the turn end', async () => {
@@ -271,7 +273,7 @@ describe('the queue while Claude works', () => {
     await settle()
     expect(posts).toEqual([])
     expect(composer).toBe('add a test\n\nhalf typed')
-    expect(api.queue).toBeNull()
+    expect(api.queue).toEqual([])
     expect(logs).toContain('[ccr-send] queued message moved back to the composer: the composer has a draft')
   })
 
@@ -295,10 +297,10 @@ describe('the queue while Claude works', () => {
 
   it('a tap on the queued message moves it back to the composer and empties the queue', async () => {
     await send('add a test')
-    act(() => api.editQueue())
+    act(() => api.editQueue(0))
     expect(composer).toBe('add a test')
-    expect(api.queue).toBeNull()
-    act(() => api.editQueue())
+    expect(api.queue).toEqual([])
+    act(() => api.editQueue(0))
     expect(composer).toBe('add a test')
   })
 

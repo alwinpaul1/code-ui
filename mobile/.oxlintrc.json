@@ -134,7 +134,12 @@
             // 2026-10-14: +2 for `typed`, the prop that draws a prompt as it was
             // typed (use-mobile-markdown-blocks.ts holds the parse), and the
             // emphasis a nested span keeps (mobile-markdown-emphasis.ts).
-            "max": 457,
+            // 2026-10-16: +5 for claude.ai artifact links in Claude's replies
+            // (the Claude app's ht1.java chip): the context read and its
+            // hand-off to the inline pass and the native model, and the branch
+            // for a link and for a bare address. The drawing and the routing
+            // are MobileMarkdownArtifactLink.tsx.
+            "max": 462,
             "skipBlankLines": true,
             "skipComments": true
           }

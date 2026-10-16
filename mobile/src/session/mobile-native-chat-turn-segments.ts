@@ -4,6 +4,7 @@ import {
   type NativeChatBlock,
   type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
+import { artifactCallViewBeside } from './mobile-native-chat-artifact-segment'
 
 export type NativeChatTurnSegment = {
   kind: 'prose' | 'tools'
@@ -27,7 +28,10 @@ export type NativeChatTurnSegment = {
  *
  * A plan proposal (ExitPlanMode) and a question (AskUserQuestion) are each a
  * run of their own, with their answer, as the Claude app keeps them out of
- * tool groups: "Proposed plan" and "Asked <header>" rows (2026-10-15).
+ * tool groups: "Proposed plan" and "Asked <header>" rows (2026-10-15). So is
+ * an Artifact call that puts a page up or opens one: the app draws it as a
+ * card of its own (a18.java:56-190, kv30.a), never inside a group. Its other
+ * actions (quickstart, list, read) are ordinary calls and stay in the run.
  *
  * Nothing is dropped and nothing is reordered; concatenating the segments gives
  * the input back unchanged, which its test pins.
@@ -43,7 +47,7 @@ export function splitTurnIntoSegments(
     const kind: NativeChatTurnSegment['kind'] =
       isToolCallBlock(block) || isToolResultBlock(block) ? 'tools' : 'prose'
     const open = segments.at(-1)
-    if (isToolCallBlock(block) && standsAlone(block.name) && isolated(open, alone, block, blocks[index + 1])) {
+    if (isToolCallBlock(block) && standsAlone(block, blocks[index + 1]) && isolated(open, alone, block, blocks[index + 1])) {
       const next = blocks[index + 1]
       const answer = next && isToolResultBlock(next) ? next : null
       const segment: NativeChatTurnSegment = { kind, blocks: answer ? [block, answer] : [block] }
@@ -93,8 +97,9 @@ function unanswered(blocks: readonly NativeChatBlock[]): number {
   return open
 }
 
-/** Tools the Claude app keeps out of tool groups, each a row of its own
- *  ("Proposed plan", "Asked <header>"; 1.261013.20, the reducer `t5v`). */
-function standsAlone(name: string): boolean {
-  return /^(exitplanmode|askuserquestion)$/i.test(name.trim())
+/** Calls the Claude app keeps out of tool groups, each a row of its own
+ *  ("Proposed plan", "Asked <header>"; 1.261013.20, the reducer `t5v`), and an
+ *  Artifact call its card draws (anything artifactCallView does not call a `row`). */
+function standsAlone(call: NativeChatToolCallBlock, next: NativeChatBlock | undefined): boolean {
+  return /^(exitplanmode|askuserquestion)$/i.test(call.name.trim()) || artifactCallViewBeside(call, next).kind !== 'row'
 }

@@ -3,7 +3,9 @@
  * back to the draft of the tab they were queued on, ahead of what it holds (typed after them), and
  * never into the composer on screen. Second-pass review of ed40d4552, 2026-10-15: they were written
  * through the composer of whichever tab was on screen ("queued on A\n\nB's draft"), switch on or
- * off, on the turn-end send and on the queue sent ahead of a photo.
+ * off, on the turn-end send and on the queue sent ahead of a photo. Since 2026-10-16 a failed
+ * turn-end send keeps its message queued on its own tab instead (ccr-queue-each-send-its-own-
+ * entry.test.tsx); the queue sent ahead of a photo still goes back to its tab's draft.
  */
 import { act } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -37,7 +39,7 @@ async function switchToTabBWithItsDraft(): Promise<void> {
 }
 
 describe("queued words whose POST fails while another tab is on screen", () => {
-  it("go back to their own tab's draft ahead of its later words when the turn-end send fails, and B's composer keeps only B's draft", async () => {
+  it("stay queued on their own tab when the turn-end send fails, and B's composer keeps only B's draft", async () => {
     const post = await queueOnTabAWithPostHeld('queued on A')
     state.working = false
     render()
@@ -47,7 +49,13 @@ describe("queued words whose POST fails while another tab is on screen", () => {
     await act(async () => { post.fail() })
     await settle()
     expect(composer.text).toBe("B's draft")
-    expect(drafts['draft:tab-a']).toBe("queued on A\n\nA's later words")
+    // Since 2026-10-16 a queued message whose turn-end send fails stays queued on its own tab, in
+    // its place, instead of going back to that tab's draft.
+    expect(drafts['draft:tab-a']).toBe("A's later words")
+    state.tabId = 'tab-a'
+    state.working = true
+    render()
+    expect(hook.api.queue).toEqual(['queued on A'])
   })
 
   it("go back to their own tab's draft when the queue sent ahead of a photo fails, and B's composer keeps only B's draft", async () => {

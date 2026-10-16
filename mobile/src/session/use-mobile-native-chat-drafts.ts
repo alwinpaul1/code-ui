@@ -5,7 +5,6 @@ import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-dr
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
 import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-pending-persistence'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
 import { landedHeldSends, parkUnconfirmedSend, sendAlreadyOnRecord } from './mobile-native-chat-unconfirmed-hold'
 import {
@@ -32,7 +31,7 @@ import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-lau
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
-import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'; import { returnCcrQueueToComposer } from './ccr-local-queue'
+import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, returnRejectedDraftWords, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'; import { returnCcrQueueToComposer } from './ccr-local-queue'
 import { keepRefusedSendInOutbox, originOutboxFields, outboxEchoId, showOutboxEchoIn, showSendingEchoWith, type NativeChatOutboxEntry } from './mobile-native-chat-outbox-drafts'; import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
@@ -223,13 +222,10 @@ export function useMobileNativeChatDrafts(args: {
 
   const returnQueueToDraft = useCallback((key: string, text: string) => { draftEditGenerationsRef.current.advance(key); liveNativeChatDrafts(key, own).setDrafts((previous) => ({ ...previous, [key]: returnCcrQueueToComposer(text, previous[key] ?? '') })) }, [own])
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    if (keepRefusedSendInOutbox(origin)) { return } else if (origin.echoDrawn && origin.outboxId) { dropNativeChatPendingEverywhere(own, outboxEchoId(origin.outboxId)) } // a recovery resend's bubble says "Not sent" instead
-    // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
-    liveNativeChatDrafts(origin.draftKey, own).setDrafts((previous) => {
-      const current = previous[origin.draftKey] ?? ''
-      const next = appendReturnedDraftText(current, stripMobileNativeChatAttachmentNotes(text))
-      return next === current ? previous : { ...previous, [origin.draftKey]: next }
-    })
+    if (origin.outboxRecovery && origin.outboxId) { keepRefusedSendInOutbox(origin); return } else if (origin.echoDrawn && origin.outboxId) { dropNativeChatPendingEverywhere(own, outboxEchoId(origin.outboxId)) } // a recovery resend's bubble says "Not sent" instead
+    // Appended, so typing done while the send was in flight stays; on screen at once and into the
+    // stored draft at once, open chat or closed, and the outbox entry goes only after that lands.
+    returnRejectedDraftWords(origin.draftKey, own, stripMobileNativeChatAttachmentNotes(text), () => void retireOutboxSend(origin.outboxId))
   }, [own])
 
   const acceptSend = useCallback(

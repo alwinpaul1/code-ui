@@ -1,8 +1,50 @@
 diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java b/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
-index 80c68034b193a47bedb56ca527352de9548e8ac6..977c068a74c88c0322fca2a4bbffab8bc1ba719d 100644
+index 80c68034b193a47bedb56ca527352de9548e8ac6..b537a59b8c9edb50b499a6dd9971c857597250d3 100644
 --- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
 +++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
-@@ -253,6 +253,12 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
+@@ -18,6 +18,7 @@ import android.webkit.WebViewClient;
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+ import androidx.webkit.JavaScriptReplyProxy;
++import androidx.webkit.ScriptHandler;
+ import androidx.webkit.WebMessageCompat;
+ import androidx.webkit.WebViewCompat;
+ import androidx.webkit.WebViewFeature;
+@@ -44,9 +45,12 @@ import com.reactnativecommunity.webview.events.TopMessageEvent;
+ import org.json.JSONException;
+ import org.json.JSONObject;
+ 
++import java.util.HashSet;
+ import java.util.List;
+ import java.util.Map;
++import java.util.Objects;
+ import java.util.Set;
++import java.util.TreeSet;
+ 
+ public class RNCWebView extends WebView implements LifecycleEventListener {
+     protected @Nullable
+@@ -66,6 +70,20 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
+     protected boolean injectedJavaScriptForMainFrameOnly = true;
+     protected boolean injectedJavaScriptBeforeContentLoadedForMainFrameOnly = true;
+ 
++    /**
++     * Orca: the origin rules under which injectedJSBeforeContentLoaded runs as a true document-start
++     * script (androidx.webkit WebViewCompat.addDocumentStartJavaScript, feature DOCUMENT_START_SCRIPT,
++     * androidx.webkit 1.14.0 here), before any script of the page's own. Without them, or without the
++     * feature, it is evaluated from onPageStarted as upstream does, which can land after the page's
++     * first scripts have already run.
++     */
++    protected @Nullable
++    List<String> injectedJSBeforeContentLoadedOrigins = null;
++    private @Nullable
++    ScriptHandler documentStartScript = null;
++    private @Nullable
++    String documentStartScriptKey = null;
++
+     protected boolean messagingEnabled = false;
+     protected @Nullable
+     String messagingModuleName;
+@@ -253,6 +271,12 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
              this.bridgeListener = new WebViewCompat.WebMessageListener() {
                @Override
                public void onPostMessage(@NonNull WebView view, @NonNull WebMessageCompat message, @NonNull Uri sourceOrigin, boolean isMainFrame, @NonNull JavaScriptReplyProxy replyProxy) {
@@ -15,6 +57,121 @@ index 80c68034b193a47bedb56ca527352de9548e8ac6..977c068a74c88c0322fca2a4bbffab8b
                  RNCWebView.this.onMessage(message.getData(), sourceOrigin.toString());
                }
              };
+@@ -308,7 +332,56 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
+         }
+     }
+ 
++    public void setInjectedJavaScriptBeforeContentLoadedOrigins(@Nullable List<String> origins) {
++        this.injectedJSBeforeContentLoadedOrigins = origins;
++    }
++
++    /**
++     * Orca: registers injectedJSBeforeContentLoaded as a document-start script for the origin rules,
++     * or takes it back out. Called after every props transaction and before a pending source loads,
++     * so the first document already gets it. It re-registers only when the script, the rules or the
++     * main-frame flag changed; a document-start script applies from the next document load on.
++     */
++    public void syncDocumentStartScript() {
++        String script = null;
++        Set<String> rules = null;
++        if (injectedJSBeforeContentLoadedOrigins != null &&
++                !injectedJSBeforeContentLoadedOrigins.isEmpty() &&
++                !TextUtils.isEmpty(injectedJSBeforeContentLoaded) &&
++                WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
++            String body = "(function() {\n" + injectedJSBeforeContentLoaded + ";\n})();";
++            script = injectedJavaScriptBeforeContentLoadedForMainFrameOnly ? "if (window.top === window) " + body : body;
++            rules = new HashSet<>(injectedJSBeforeContentLoadedOrigins);
++        }
++        String key = script == null ? null : new TreeSet<>(rules) + "\n" + script;
++        if (Objects.equals(key, documentStartScriptKey)) {
++            return;
++        }
++        if (documentStartScript != null) {
++            documentStartScript.remove();
++            documentStartScript = null;
++        }
++        documentStartScriptKey = null;
++        if (script == null) {
++            return;
++        }
++        try {
++            documentStartScript = WebViewCompat.addDocumentStartJavaScript(this, script, rules);
++            documentStartScriptKey = key;
++        } catch (RuntimeException e) {
++            // A malformed origin rule throws IllegalArgumentException; the script then runs from
++            // onPageStarted instead.
++            FLog.w("RNCWebView", "Could not register the document-start script; it runs from onPageStarted", e);
++        }
++    }
++
+     public void callInjectedJavaScriptBeforeContentLoaded() {
++        if (documentStartScript != null) {
++            // Orca: it already ran as this document started; evaluating it again here would run it a
++            // second time, late.
++            injectJavascriptObject();
++            return;
++        }
+         if (getSettings().getJavaScriptEnabled() &&
+                 injectedJSBeforeContentLoaded != null &&
+                 !TextUtils.isEmpty(injectedJSBeforeContentLoaded)) {
+diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+index f83033b3597a425da159555233bacce250ccfce0..b4d391caacbba6ab50fd47ab4868887294f570b7 100644
+--- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
++++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+@@ -269,6 +269,8 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+     }
+ 
+     fun onAfterUpdateTransaction(viewWrapper: RNCWebViewWrapper) {
++        // Orca: before the pending source loads, so its first document gets the script.
++        viewWrapper.webView.syncDocumentStartScript()
+         mPendingSource?.let { source ->
+             loadSource(viewWrapper, source)
+         }
+@@ -497,6 +499,11 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+         view.injectedJSBeforeContentLoaded = value
+     }
+ 
++    fun setInjectedJavaScriptBeforeContentLoadedOrigins(viewWrapper: RNCWebViewWrapper, value: ReadableArray?) {
++        val origins = value?.toArrayList()?.filterIsInstance<String>()
++        viewWrapper.webView.setInjectedJavaScriptBeforeContentLoadedOrigins(origins)
++    }
++
+     fun setInjectedJavaScriptForMainFrameOnly(viewWrapper: RNCWebViewWrapper, value: Boolean) {
+         val view = viewWrapper.webView
+         view.injectedJavaScriptForMainFrameOnly = value
+diff --git a/android/src/newarch/com/reactnativecommunity/webview/RNCWebViewManager.java b/android/src/newarch/com/reactnativecommunity/webview/RNCWebViewManager.java
+index 4709e2822499067cef3a4ce571991b96f844e085..dbca32b8cc6a3dd5b60f94584eb9eb6ff5f1df45 100644
+--- a/android/src/newarch/com/reactnativecommunity/webview/RNCWebViewManager.java
++++ b/android/src/newarch/com/reactnativecommunity/webview/RNCWebViewManager.java
+@@ -172,6 +172,12 @@ public class RNCWebViewManager extends ViewGroupManager<RNCWebViewWrapper>
+         mRNCWebViewManagerImpl.setInjectedJavaScriptBeforeContentLoaded(view, value);
+     }
+ 
++    @Override
++    @ReactProp(name = "injectedJavaScriptBeforeContentLoadedOrigins")
++    public void setInjectedJavaScriptBeforeContentLoadedOrigins(RNCWebViewWrapper view, @Nullable ReadableArray value) {
++        mRNCWebViewManagerImpl.setInjectedJavaScriptBeforeContentLoadedOrigins(view, value);
++    }
++
+     @Override
+     @ReactProp(name = "injectedJavaScriptForMainFrameOnly")
+     public void setInjectedJavaScriptForMainFrameOnly(RNCWebViewWrapper view, boolean value) {
+diff --git a/android/src/oldarch/com/reactnativecommunity/webview/RNCWebViewManager.java b/android/src/oldarch/com/reactnativecommunity/webview/RNCWebViewManager.java
+index 974337f41ce01a5102eeafa6e54fbb3b949c48d7..521a5a99e4f3c03bc664d88d5f66e71bf54a2e20 100644
+--- a/android/src/oldarch/com/reactnativecommunity/webview/RNCWebViewManager.java
++++ b/android/src/oldarch/com/reactnativecommunity/webview/RNCWebViewManager.java
+@@ -137,6 +137,11 @@ public class RNCWebViewManager extends ViewGroupManager<RNCWebViewWrapper> {
+         mRNCWebViewManagerImpl.setInjectedJavaScriptBeforeContentLoaded(view, value);
+     }
+ 
++    @ReactProp(name = "injectedJavaScriptBeforeContentLoadedOrigins")
++    public void setInjectedJavaScriptBeforeContentLoadedOrigins(RNCWebViewWrapper view, @Nullable ReadableArray value) {
++        mRNCWebViewManagerImpl.setInjectedJavaScriptBeforeContentLoadedOrigins(view, value);
++    }
++
+     @ReactProp(name = "injectedJavaScriptForMainFrameOnly")
+     public void setInjectedJavaScriptForMainFrameOnly(RNCWebViewWrapper view, boolean value) {
+         mRNCWebViewManagerImpl.setInjectedJavaScriptForMainFrameOnly(view, value);
 diff --git a/apple/RNCWebViewImpl.m b/apple/RNCWebViewImpl.m
 index 7f5c24d6e2cfb26eddbc513bf17a81c24a7273e2..d70cb58a3c81cb22bd549a2c37340ba53853cfcf 100644
 --- a/apple/RNCWebViewImpl.m
@@ -54,3 +211,60 @@ index 10b9c145b920a6a2ba1fb09bd72150328fafe211..626a67a3d6aca587ee9e74a52b799a2c
    /**
     * Go back one page in the webview's history.
     */
+diff --git a/lib/WebViewTypes.d.ts b/lib/WebViewTypes.d.ts
+index d67464ea275b55e4ba3aa537bd181b99a4c67cbd..1f46d8bddb2851a8ee9df61f944b6883bfe856ae 100644
+--- a/lib/WebViewTypes.d.ts
++++ b/lib/WebViewTypes.d.ts
+@@ -764,6 +764,17 @@ export interface MacOSWebViewProps extends WebViewSharedProps {
+     onContentProcessDidTerminate?: (event: WebViewTerminatedEvent) => void;
+ }
+ export interface AndroidWebViewProps extends WebViewSharedProps {
++    /**
++     * Orca: the origin rules (`https://example.com`, `https://*.example.com`) under which
++     * `injectedJavaScriptBeforeContentLoaded` is registered as a true document-start script with
++     * androidx.webkit `WebViewCompat.addDocumentStartJavaScript`, so it runs before any of the page's
++     * own scripts, on every document load whose origin matches, and on no other. While it is
++     * registered the script is not also evaluated from `onPageStarted`. When the WebView lacks the
++     * `DOCUMENT_START_SCRIPT` feature, or this is unset or empty, or a rule is malformed, the script
++     * runs from `onPageStarted` as before (on every origin).
++     * @platform android
++     */
++    injectedJavaScriptBeforeContentLoadedOrigins?: readonly string[];
+     onNavigationStateChange?: (event: WebViewNavigation) => void;
+     onContentSizeChange?: (event: WebViewEvent) => void;
+     /**
+diff --git a/src/RNCWebViewNativeComponent.ts b/src/RNCWebViewNativeComponent.ts
+index 71c97ffe5c3abe639b5f1d2b4c26e0cc9902764e..15cc050f55d23119ab7af0cf106c8754564a6a99 100644
+--- a/src/RNCWebViewNativeComponent.ts
++++ b/src/RNCWebViewNativeComponent.ts
+@@ -239,6 +239,8 @@ export interface NativeProps extends ViewProps {
+   injectedJavaScriptBeforeContentLoaded?: string;
+   injectedJavaScriptForMainFrameOnly?: WithDefault<boolean, true>;
+   injectedJavaScriptBeforeContentLoadedForMainFrameOnly?: WithDefault<boolean, true>;
++  // Orca: Android only. See AndroidWebViewProps.injectedJavaScriptBeforeContentLoadedOrigins.
++  injectedJavaScriptBeforeContentLoadedOrigins?: ReadonlyArray<string>;
+   javaScriptCanOpenWindowsAutomatically?: boolean;
+   javaScriptEnabled?: WithDefault<boolean, true>;
+   webviewDebuggingEnabled?: boolean;
+diff --git a/src/WebViewTypes.ts b/src/WebViewTypes.ts
+index 8989cd7af62d926a2e2979f7b4ccc29d488c1bfd..14a684067e239e775e602ceb97b3ba7edb10ee04 100644
+--- a/src/WebViewTypes.ts
++++ b/src/WebViewTypes.ts
+@@ -934,6 +934,17 @@ export interface MacOSWebViewProps extends WebViewSharedProps {
+ }
+ 
+ export interface AndroidWebViewProps extends WebViewSharedProps {
++  /**
++   * Orca: the origin rules (`https://example.com`, `https://*.example.com`) under which
++   * `injectedJavaScriptBeforeContentLoaded` is registered as a true document-start script with
++   * androidx.webkit `WebViewCompat.addDocumentStartJavaScript`, so it runs before any of the page's
++   * own scripts, on every document load whose origin matches, and on no other. While it is
++   * registered the script is not also evaluated from `onPageStarted`. When the WebView lacks the
++   * `DOCUMENT_START_SCRIPT` feature, or this is unset or empty, or a rule is malformed, the script
++   * runs from `onPageStarted` as before (on every origin).
++   * @platform android
++   */
++  injectedJavaScriptBeforeContentLoadedOrigins?: readonly string[];
+   onNavigationStateChange?: (event: WebViewNavigation) => void;
+   onContentSizeChange?: (event: WebViewEvent) => void;
+ 

@@ -102,7 +102,7 @@ describe('a Claude tab send with attachments at Anthropic', () => {
     render()
     expect(await send('and this', PHOTO)).toBe('accepted')
     expect(posts).toHaveLength(1)
-    expect(api.queue).toBeNull()
+    expect(api.queue).toEqual([])
   })
 
   it('a failed POST gives the words back and reports rejected, so the chips come back too', async () => {

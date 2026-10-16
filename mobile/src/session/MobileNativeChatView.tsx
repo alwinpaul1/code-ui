@@ -250,6 +250,7 @@ export function MobileNativeChatView({
   const { held, heldIds, getItemType } = useChatHeldSelectionList()
   const listExtraData = useMemo(() => [headerExtraData, dockHeight, heldIds, agentWorking], [headerExtraData, dockHeight, heldIds, agentWorking])
 
+  const { onToggleTurn, resolveRow: resolveTurnRow } = turns // stable, unlike `turns` (chat-scroll-keeps-rows-still.test.ts)
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <ChatRowOnScreenScope visibility={rowVisibility} index={index}>
@@ -272,11 +273,11 @@ export function MobileNativeChatView({
         onRewindToHere={rewindable.has(item.id) ? requestRewind : undefined}
         structuredActivityUi={structuredActivityUi}
         turnActivity={turnActivity}
-        onToggleTurn={turns.onToggleTurn}
+        onToggleTurn={onToggleTurn}
         // The list is inverted, so `index` counts from the newest row while the
         // disclosure walks the transcript in order. Flip it, or every row reads
         // another turn's status.
-        {...turns.resolveRow(data.length - 1 - index, item)}
+        {...resolveTurnRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
         /></MobileNativeChatPendingDim> : null}{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
       </ChatRowOnScreenScope>
@@ -294,8 +295,7 @@ export function MobileNativeChatView({
       rewindable,
       requestRewind,
       structuredActivityUi,
-      turnActivity,
-      turns,
+      turnActivity, onToggleTurn, resolveTurnRow,
       data.length,
       taskListPredecessors,
       rowVisibility

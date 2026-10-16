@@ -29,6 +29,19 @@ export function shellCommandOfSend(
   return text.slice(1).trim()
 }
 
+/** Said when a message that starts with `!` carries a picture or a file, and nothing was sent.
+ *  The terminal send pastes attachments BEFORE the words, so the `!` would land in a box that is
+ *  no longer empty and go to the model as an ordinary prompt ("[Image #100]! node …",
+ *  2026-10-16): Claude Code's bash mode takes text only. Refused rather than split into the
+ *  command and then the picture: a split is two sends, and the second failing (or the first
+ *  landing in Claude's queue behind the second) leaves the picture apart from the words it was
+ *  attached to, or the command run with nobody asked about what came after it. A refusal sends
+ *  nothing, keeps the words, the chips and the draft exactly where they are, and loses nothing. A
+ *  leading space is no switch (shellCommandOfSend), so it is the way to send the words as a
+ *  message. */
+export const SHELL_COMMAND_ATTACHMENTS_REFUSAL =
+  "Shell commands can't carry attachments, so nothing was sent. Remove the picture or file to run the command, or send it separately. To send this as an ordinary message, start it with a space."
+
 /** Said where text is typed into the agent's input with no room to ask first (the
  *  queue editor): nothing was written. */
 export const SHELL_COMMAND_QUEUE_REFUSAL =

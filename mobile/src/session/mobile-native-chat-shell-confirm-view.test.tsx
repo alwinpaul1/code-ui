@@ -37,6 +37,7 @@ vi.mock('./MobileNativeChatView', () => ({
 
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatShellConfirmView } from './MobileNativeChatShellConfirmView'
+import { SHELL_COMMAND_ATTACHMENTS_REFUSAL } from './mobile-native-chat-shell-command'
 
 const code = (file: string): string =>
   readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
@@ -221,8 +222,7 @@ describe('the chat view as the overlay mounts it', () => {
   })
 
   // The question belongs where `!` actually reaches an EMPTY agent input. A structured session's
-  // sends go to the API, not a PTY; a send with a photo pastes the picture first, so the input
-  // is not empty when the text arrives and the `!` is no switch.
+  // sends go to the API, not a PTY.
   it('does not ask on a structured session, whose sends are not typed into a terminal', async () => {
     const onSend = vi.fn(async () => true)
     mount('claude', onSend, vi.fn(), undefined, { structuredActivityUi: true })
@@ -232,16 +232,99 @@ describe('the chat view as the overlay mounts it', () => {
     expect(onSend).toHaveBeenCalledExactlyOnceWith('!ls')
   })
 
+  // 2026-10-16: a `!` message with a screenshot reached Claude Code as "[Image #100]! node …", an
+  // ordinary prompt, because the picture is pasted first and the `!` then lands in a box that is
+  // not empty. Claude Code's bash mode takes only text, so the send is refused whole: the command,
+  // the picture and the draft stay, and the line says how to run it. Codex pastes first too.
   it.each([
-    ['a photo', [{ id: 'p', uri: 'file:///a.jpg' }]],
-    ['a pending file', [{ id: 'f', uri: 'file:///a.pdf', kind: 'file' }]]
-  ])('does not ask when the send carries %s: the input is not empty when the text arrives', async (_name, attachments) => {
+    ['claude', 'a photo', [{ id: 'p', uri: 'file:///a.jpg' }]],
+    ['claude', 'a pending file', [{ id: 'f', uri: 'file:///a.pdf', kind: 'file' }]],
+    ['codex', 'a photo', [{ id: 'p', uri: 'file:///a.jpg' }]]
+  ])('%s: refuses a ! message that carries %s instead of sending the command to the model as text', async (agent, _name, attachments) => {
     const onSend = vi.fn(async () => true)
-    mount('claude', onSend, vi.fn(), undefined, { attachments })
+    const report = mount(agent, onSend, vi.fn(), undefined, { attachments })
+    let outcome: boolean | null = null
     await act(async () => {
-      void sendFromView('!look at this')
+      void sendFromView('! node "/private/tmp/x/p19-dictation-cleanup.cjs"').then((accepted) => (outcome = accepted))
     })
-    expect(onSend).toHaveBeenCalledExactlyOnceWith('!look at this')
+    expect(onSend).not.toHaveBeenCalled()
+    // false: the composer keeps the words, and the chips were never taken.
+    expect(outcome).toBe(false)
+    expect(report).toHaveBeenCalledExactlyOnceWith(SHELL_COMMAND_ATTACHMENTS_REFUSAL)
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('Run on the desktop?')
+  })
+
+  it('still sends a message with a picture whose words only start with a space before the !', async () => {
+    const onSend = vi.fn(async () => true)
+    mount('claude', onSend, vi.fn(), undefined, { attachments: [{ id: 'p', uri: 'file:///a.jpg' }] })
+    await act(async () => {
+      void sendFromView(' !look at this')
+    })
+    expect(onSend).toHaveBeenCalledExactlyOnceWith(' !look at this')
+  })
+
+  // The question was asked with no chip, and a pasted screenshot's chip landed while it was open:
+  // Run then pasted the picture ahead of the command. Run reads the chips as they are when tapped.
+  it('does not run the command when a picture is attached while the question is open', async () => {
+    const onSend = vi.fn(async () => true)
+    const report = vi.fn()
+    const element = (attachments: unknown[]) => (
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatShellConfirmView
+          {...(asProps({ agent: 'claude', onSend, reportBackgroundTaskFailure: report, attachments }))}
+        />
+      </ThemeProvider>
+    )
+    act(() => {
+      renderer = create(element([]))
+    })
+    let outcome: boolean | null = null
+    await act(async () => {
+      void sendFromView('! node x.cjs').then((accepted) => (outcome = accepted))
+    })
+    await flushLazy()
+    act(() => renderer!.update(element([{ id: 'p', uri: 'file:///shot.png' }])))
+
+    const run = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === 'Run' && typeof node.props.onPress === 'function'
+    )
+    await act(async () => {
+      run.props.onPress()
+    })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(outcome).toBe(false)
+    expect(report).toHaveBeenCalledExactlyOnceWith(SHELL_COMMAND_ATTACHMENTS_REFUSAL)
+  })
+
+  it('keeps the command when the confirmed send itself fails', async () => {
+    const onSend = vi.fn(async () => false)
+    mount('claude', onSend, vi.fn(), undefined, { attachments: [] })
+    let outcome: boolean | null = null
+    await act(async () => {
+      void sendFromView('!ls').then((accepted) => (outcome = accepted))
+    })
+    await flushLazy()
+    const run = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === 'Run' && typeof node.props.onPress === 'function'
+    )
+    await act(async () => {
+      run.props.onPress()
+    })
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('!ls')
+    expect(outcome).toBe(false)
+  })
+
+  // An answer is typed alone (answerQuestion pastes no chips), so the composer's pictures do not
+  // make its `!` any less a shell command: it is asked about.
+  it('asks before a ! answer while the composer holds a picture: the answer carries none', async () => {
+    const onAnswerQuestion = vi.fn(async () => true)
+    mount('claude', vi.fn(async () => true), vi.fn(), onAnswerQuestion, { attachments: [{ id: 'p', uri: 'file:///a.jpg' }] })
+    await act(async () => {
+      void (view.props!.onAnswerQuestion as (text: string) => Promise<boolean>)('!ls')
+    })
+    await flushLazy()
+    expect(onAnswerQuestion).not.toHaveBeenCalled()
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Run on the desktop?')
   })
 
   it('asks again once the attachments are gone, and with none attached at all', async () => {

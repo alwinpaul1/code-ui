@@ -85,6 +85,33 @@
       ],
       "package": "com.alwinpaul.codeui",
       "versionCode": 318,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "claude.ai",
+              "pathPrefix": "/artifact/"
+            },
+            {
+              "scheme": "https",
+              "host": "claude.ai",
+              "pathPrefix": "/code/artifact/"
+            },
+            {
+              "scheme": "https",
+              "host": "claude.ai",
+              "pathPrefix": "/code/frame/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"

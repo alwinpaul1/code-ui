@@ -178,6 +178,25 @@ The send then confirms in two steps:
   message with a fresh uuid.
 - **Look.** 80% width, 12 dp radius, 15 sp italic muted text, and an "x" ("Edit
   queued message"). A tap anywhere moves the text back to the composer.
+- **What Code UI does instead (2026-10-16).** The app's local queue joins every
+  send into one string (`kre.m(W1(), "\n\n", string)`, ay8.java:8738 in
+  1.261013.20). The user sees each send kept separate in the app, which is the
+  post-later (or steering) path, and reported the phone's join as a bug ("message
+  one and message two are in the same queue as a single message"). The phone
+  cannot read either flag, and how the server holds a `"later"` message mid-turn
+  is not determined (§7). So it keeps a **list**, one entry per send, drawn as
+  one card each with its own "x". At a turn's end only the **first** entry goes,
+  as an ordinary send. The next goes when the turn that one started has ended:
+  the tab was seen working and is idle again, or the stream carries that entry's
+  echo followed by a `result`. A tap on a card moves only that entry back to the
+  composer, ahead of any draft. A failed send keeps its entry queued in its
+  place. The banner and a `[ccr-send]` line say why, and the queue waits for the
+  user's next send on the tab or the tab's next turn end; it is never retried
+  in a loop. A blocker at turn end still moves every entry back to the composer,
+  in order, joined by blank lines. Leaving the chat still posts a tab's entries
+  as **one** `"later"` message, joined in order: posting each as its own
+  `"later"` message is the unobserved server path, and the phone is gone by then
+  (`use-ccr-tab-queues.ts`, `use-ccr-queue-delivery.ts`).
 
 **6. Offline and background**
 
@@ -326,14 +345,16 @@ account's sign-in (`ccrSendTargetForTab`, `use-ccr-composer-send.ts`).
   in flight.
 - The bubble dims until the 2xx and goes when the stream echoes its uuid. A
   failed POST puts the words back with Retry and a `[ccr-send]` log line.
-- While Claude works the words wait in the phone's one-string queue, drawn as
-  the app's `hb20.e` bubble, sent at the turn's end or moved back to the
-  composer when something blocks it. The queue belongs to the tab it was typed
+- While Claude works the words wait in the phone's queue, one entry per send,
+  each drawn as the app's `hb20.e` bubble. The first entry is sent at the
+  turn's end and each later one a turn after it, or all of them are moved back
+  to the composer when something blocks it (§5, "What Code UI does instead"). The queue belongs to the tab it was typed
   on and to the session that tab sent to then (`use-ccr-tab-queues.ts`): drawn
   only on that tab, sent only into that session, and only once the user is
   back on that tab and it is idle (the phone cannot see another tab's turn end
-  while it shows this one). Leaving the chat posts it as `priority: "later"`
-  into its own session, or puts it back in that tab's stored draft.
+  while it shows this one). Leaving the chat posts its entries as one
+  `priority: "later"` message into its own session, or puts them back in that
+  tab's stored draft.
 - **Typed slash commands are unverified over Remote Control.** Whether Claude
   Code runs a `/command` that arrives as a Remote Control user event, or takes
   it as prompt text, has not been observed. Until it is, a typed line-leading
@@ -539,7 +560,7 @@ File paths are under `mobile/` unless shown in full. Claude app values come from
 | Next-prompt suggestion | ghost text in the empty composer plus a caret pill; a tap fills | none | **Missing** (G28). Readable only if Claude Code paints it in the TUI input |
 | Code block | 12 dp clip; header at least 40 sp in `pl7.s`, label (fence language, first letter capital, else "Code") in mono, Copy then Expand (36 sp buttons, 20 sp glyphs, 40 dp targets); body `pl7.r`, 16 dp, one line per source line, no numbers; Expand opens a sheet (close cross, "Code" / "Python code", Copy; the code full width); wrap per setting (default off) | `MobileMarkdownCodeBlock.tsx`, `MobileMarkdownCodeHeader.tsx`, `MobileMarkdownCodeSheet.tsx`, numbers in `code-block-spec.ts` | **Match** (2026-10-14), except wrap has no setting yet (G8) |
 | Inline file links | file-path code becomes a link; long-press: path header over Open / Copy file name / Copy relative path (`xt20`, `dqh`); a tap on a file Claude sent asks "Open %1$s?", on a file not on the device says "%1$s isn't on this device. Ask Claude to send the file to open it here." (`g94`, `yv8`) | tap opens the file from the desktop (links existed already). The menu is built (`MobileNativeChatFileLinkSheet.tsx`) and reachable from the chip that names a picture the phone cannot show. **Not reachable from a reply's own links:** the chat draws a reply's prose in one native TextView (`modules/orca-native-prose`) whose only link event is a tap, and a hold on a link in a selectable Text starts Android's own selection, so a JS hold handler there needs a Kotlin `onLinkLongPress` and a phone check. The app's "Open?" dialog and "isn't on this device" line are for a cloud session's files and are not adopted: a path that will not open already says why (`mobile-file-tap-failure.ts`) | **Partly** (G20) |
-| Artifacts | cards and chips | n/a | **Impossible** (claude.ai artifacts) |
+| Artifacts | a card per published artifact in the reply (`MobileNativeChatArtifactCard`), artifact links drawn as chips, a viewer with Close, title, Undo, Redo, Comments, Add to home screen and Share or Open in browser, an Artifacts gallery (All / Pinned / Yours / Shared with you, type filter, search, thumbnails, pin badge), a side sheet at 840×480 dp and up, and a confirm before a link from another app opens | card and chips from the session's own `Artifact` tool calls (Claude Code 2.1.301), titles and the account list from `GET /api/frame/frames` with the phone's Claude token (`claude-artifacts.ts`, `claude-artifact-list-store.ts`); the session's artifacts sheet from its pill (`MobileSessionArtifactsSheet.tsx`); the viewer (`MobileArtifactViewer.tsx`, `app/artifact.tsx`) loads claude.ai's own artifact page in a WebView after a one-time claude.ai sign-in there, and drives its bar through the page's own bridge; the gallery from Home (`ClaudeArtifactGallery.tsx`, `app/artifacts.tsx`); Add to home screen (`modules/orca-artifact-shortcuts`); claude.ai artifact links from other apps (`app/+native-intent.tsx`) | **Built 2026-10-16, not yet checked on a device.** Still to see on the phone: whether the shell now always reads the bridge in time: on Android it is a true document-start script under `https://claude.ai` (androidx.webkit 1.14.0 `WebViewCompat.addDocumentStartJavaScript`, through the `injectedJavaScriptBeforeContentLoadedOrigins` prop that `patches/react-native-webview@13.16.2.patch` adds, as the Claude app's fb/m22.java registers it) where the WebView reports `WebViewFeature.DOCUMENT_START_SCRIPT`, and still the old `onPageStarted` injection where it does not, the side sheet, the shortcut and the link filter. The gallery sits on Home, not on a fourth tab, because Code UI has no tab bar. No Print, as the Claude app's Code viewer has none |
 | Pending row | 50% alpha + "Sending" until the ack | full opacity, no label | **Differs** (S2) |
 | Queued row | 80% width, italic, tap moves it back | queue box from the screen (`MobileNativeChatQueue.tsx`) | **In progress** |
 
@@ -787,7 +808,6 @@ Each batch carries the project's bar:
 | Server "post later" (`priority: "later"`) | No terminal key holds a message until the turn ends. Claude Code's own queue delivers between tool calls instead |
 | Cloud sessions: init card, environments, Continue in cloud, runners | Anthropic's cloud |
 | Share, Feedback to Anthropic, session presence, mark read across devices | Anthropic's servers |
-| Artifacts and the artifact viewer | claude.ai artifacts |
 | Usage card **cost** across devices / extra-usage credits | account data from Anthropic. A per-session cost from the beacon is possible, if a field is added (D) |
 | Thinking rows on terminal Claude tabs | Orca's `claudeMessageRole()` returns `assistant` for thinking-only messages (`claude-app-parity.md` item 1). This is an upstream Orca fix, not a phone one |
 | Read aloud with Anthropic's voice | the Claude app streams server TTS. Only on-device TTS is possible (G31) |

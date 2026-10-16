@@ -27,7 +27,7 @@ describe('words queued while the turn-end send is checking the session', () => {
     render()
     io.readStatus = async () => 'connected'
     await send('second')
-    expect(hook.api.queue).toBe('first\n\nsecond')
+    expect(hook.api.queue).toEqual(['first', 'second'])
     await act(async () => {
       reads[0]!('connected')
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -57,14 +57,25 @@ describe('words queued while the turn-end send is checking the session', () => {
     })
     expect(outcome).toBe('accepted')
     expect(reads).toHaveLength(1)
-    expect(hook.api.queue).toBe('first\n\nsecond')
+    expect(hook.api.queue).toEqual(['first', 'second'])
     await act(async () => {
       reads[0]!('connected')
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
     await settle()
+    // Since 2026-10-16 a queued message goes one turn each: the second waits for the turn the first
+    // started to end.
+    expect(postedTexts().map((post) => post.text)).toEqual(['first'])
+    expect(hook.api.queue).toEqual(['second'])
+    state.working = true
+    render()
+    await settle()
+    state.working = false
+    render()
+    await settle()
+    await settle()
     expect(postedTexts().map((post) => post.text)).toEqual(['first', 'second'])
-    expect(hook.api.queue).toBeNull()
+    expect(hook.api.queue).toEqual([])
   })
 
   it('sends a queue once however many renders happen while its send is out', async () => {

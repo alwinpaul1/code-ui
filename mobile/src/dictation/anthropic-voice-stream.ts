@@ -27,10 +27,59 @@ export type VoiceStreamCallbacks = {
   readonly onReady?: () => void
 }
 
+/**
+ * Which client's voice_stream contract the stream speaks.
+ *
+ * - `claude-code`: Claude Code CLI 2.1.296's parameters (`use_conversation_engine=true`, endpointing
+ *   and utterance-end timings). Every TranscriptInterim and TranscriptText carries the whole
+ *   transcript so far, and TranscriptEndpoint ends the take.
+ * - `claude-app`: the Claude Android app 1.261013.20's (r4u.java:1018-1020): `encoding,
+ *   sample_rate, channels, language, forward_interims=typed, organization_uuid`. TranscriptText is
+ *   a committed segment, appended; TranscriptInterim replaces the live tail; what is shown is the
+ *   two joined (j3i.java:846-851, a3x.q). The committed text is the server's corrected version of
+ *   the words the interim showed, so it takes their place. TranscriptEndpoint is not one of the
+ *   app's messages (nkt.java) and does not end a take the mic still holds.
+ */
+export type VoiceStreamProtocol = 'claude-code' | 'claude-app'
+
 export type VoiceStreamOptions = {
   readonly accessToken: string
   readonly language?: string
   readonly sampleRate?: number
+  /** Defaults to `claude-code`. */
+  readonly protocol?: VoiceStreamProtocol
+  /** The signed-in account's organization, sent as `organization_uuid` under `claude-app`. */
+  readonly organizationUuid?: string | null
+}
+
+/** The query voice_stream is opened with. The Claude app encodes Opus in process; the phone
+ *  streams the 16 kHz PCM it captures, so `encoding=linear16` under either protocol. */
+export function voiceStreamQuery(options: VoiceStreamOptions): string {
+  const { language = 'en', sampleRate = 16000, protocol = 'claude-code', organizationUuid } = options
+  const audio = [`encoding=linear16`, `sample_rate=${sampleRate}`, `channels=1`]
+  const lang = `language=${encodeURIComponent(language)}`
+  switch (protocol) {
+    case 'claude-code':
+      return [
+        ...audio,
+        `endpointing_ms=300`,
+        `utterance_end_ms=1000`,
+        lang,
+        `use_conversation_engine=true`,
+        `forward_interims=typed`
+      ].join('&')
+    case 'claude-app':
+      return [
+        ...audio,
+        lang,
+        `forward_interims=typed`,
+        ...(organizationUuid ? [`organization_uuid=${encodeURIComponent(organizationUuid)}`] : [])
+      ].join('&')
+    default: {
+      const unhandled: never = protocol
+      throw new Error(`Unknown voice_stream protocol: ${String(unhandled)}`)
+    }
+  }
 }
 
 const BASE_URL = 'wss://api.anthropic.com'
@@ -72,8 +121,11 @@ export class AnthropicVoiceStream {
   private ws: VoiceSocket | null = null
   private callbacks: VoiceStreamCallbacks | null
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null
-  /** The last text from any Interim or Text message. */
+  /** What the take reads as now, not yet delivered as final: under `claude-code` the last Interim
+   *  or Text, under `claude-app` the committed segments then the live interim. */
   private latestText = ''
+  /** `claude-app` only: the TranscriptText segments so far, joined as the app joins them. */
+  private committedText = ''
   /** True once CloseStream was sent. */
   private closeStreamSent = false
   /** True once finalize or close ran — no more callbacks after this. */
@@ -98,19 +150,10 @@ export class AnthropicVoiceStream {
     this.closeStreamSent = false
     this.done = false
     this.latestText = ''
+    this.committedText = ''
 
-    const { accessToken, language = 'en', sampleRate = 16000 } = this.options
-    const params = [
-      `encoding=linear16`,
-      `sample_rate=${sampleRate}`,
-      `channels=1`,
-      `endpointing_ms=300`,
-      `utterance_end_ms=1000`,
-      `language=${encodeURIComponent(language)}`,
-      `use_conversation_engine=true`,
-      `forward_interims=typed`
-    ].join('&')
-    const url = `${BASE_URL}${PATH}?${params}`
+    const { accessToken } = this.options
+    const url = `${BASE_URL}${PATH}?${voiceStreamQuery(this.options)}`
 
     const headers = { Authorization: `Bearer ${accessToken}`, ...CLIENT_HEADERS }
     this.ws = openVoiceSocket(url, headers, {
@@ -209,6 +252,9 @@ export class AnthropicVoiceStream {
     const type = (msg.type as string) ?? ''
     const data = (msg.data as string) ?? ''
 
+    if (this.options.protocol === 'claude-app' && this.handleClaudeAppTranscript(type, data)) {
+      return
+    }
     switch (type) {
       // Claude Code CLI: Interim and Text are handled identically.
       // Both carry the full transcript so far. Neither is "final".
@@ -262,6 +308,44 @@ export class AnthropicVoiceStream {
   }
 
   /**
+   * The Claude app's transcript model (j3i.java:846-851): a TranscriptText is appended to the
+   * committed text and clears the interim; a TranscriptInterim replaces the interim; the take reads
+   * as the two joined. A TranscriptEndpoint ends the take only once the mic is released. True when
+   * the message was one of these; the errors fall through to the shared handling.
+   */
+  private handleClaudeAppTranscript(type: string, data: string): boolean {
+    switch (type) {
+      case 'TranscriptText':
+      case 'TranscriptInterim': {
+        if (this.closeStreamSent) {
+          this.resetNoDataTimer()
+        }
+        const before = this.latestText
+        if (type === 'TranscriptText') {
+          this.committedText += data
+          this.latestText = this.committedText
+        } else {
+          this.latestText = this.committedText + data
+        }
+        // An empty committed segment takes the interim's words away, as in the app; say so, or
+        // the caption would keep words the take no longer holds.
+        if (this.latestText !== before) {
+          this.callbacks?.onTranscript?.(this.latestText, false)
+        }
+        return true
+      }
+      case 'TranscriptEndpoint': {
+        if (this.closeStreamSent) {
+          this.resolveFinalize('post_closestream_endpoint')
+        }
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
+  /**
    * Interim promotion: if unreported text exists, deliver it as final.
    * This fires on any abnormal end (ws close, error, timeout).
    */
@@ -271,6 +355,7 @@ export class AnthropicVoiceStream {
     }
     const text = this.latestText
     this.latestText = ''
+    this.committedText = ''
     this.callbacks?.onTranscript?.(text, true)
   }
 

@@ -10,7 +10,7 @@ import { placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-p
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'; import { ClaudeChatLiveContext } from './claude-chat-live'
-import { StyleSheet } from 'react-native'; import { AgentImageShareView } from './AgentImageShareView' // the overlay's box; a refused picture's ask (agent-image-share-ask.ts)
+import { StyleSheet } from 'react-native'; import { AgentImageShareView } from './AgentImageShareView'; import { ClaudeArtifactAccountContext } from './claude-artifact-account-context' // the overlay's box; a refused picture's ask (agent-image-share-ask.ts); the tab's account for artifact titles
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'; import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
@@ -565,9 +565,9 @@ export function MobileNativeChatOverlay({
   }
   return (
     <CreatedFileCountProvider store={createdFileCounts} messages={shown.messages} live={shown.wholeSession}>
-      <ClaudeChatLiveContext.Provider value={controller.nativeChatAnthropicLive ?? null}>{/* Anthropic's live state, for the footer and the count (claude-chat-live.ts) */}<AgentImageShareView share={controller.nativeChatImageShare ?? null} style={styles.overlay}>
+      <ClaudeChatLiveContext.Provider value={controller.nativeChatAnthropicLive ?? null}>{/* Anthropic's live state, for the footer and the count (claude-chat-live.ts) */}<AgentImageShareView share={controller.nativeChatImageShare ?? null} style={styles.overlay}><ClaudeArtifactAccountContext.Provider value={controller.nativeChatArtifactAccountId ?? null}>
         {shown === live ? chat : cloneElement(chat, shown.chat)}
-      </AgentImageShareView></ClaudeChatLiveContext.Provider>
+      </ClaudeArtifactAccountContext.Provider></AgentImageShareView></ClaudeChatLiveContext.Provider>
     </CreatedFileCountProvider>
   )
 }

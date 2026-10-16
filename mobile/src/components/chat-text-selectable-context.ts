@@ -102,3 +102,31 @@ export function useChatDocumentSelection(rootGuardsHolds: boolean): { selectable
     holdSelects: inPlace && selectableNow && holdsSelect
   }
 }
+
+/** `selectable` of useChatDocumentSelection where the native root guards holds: in-place selection
+ *  alone. It reads neither scroll flag, so a document that only asks this is not re-rendered when
+ *  a drag starts or the list settles. */
+function useRootGuardedDocumentSelectable(): boolean {
+  return useChatTextInPlaceSelection()
+}
+
+/** `selectable` of useChatDocumentSelection where nothing but the Texts can stop a hold. */
+function useScrollGatedDocumentSelectable(): boolean {
+  return useChatDocumentSelection(false).selectable
+}
+
+/**
+ * The hook a Markdown document reads its Texts' `selectable` through, picked once per platform.
+ *
+ * With a root that guards holds (Android), the scroll's flags reach the root alone
+ * (useChatDocumentSelection(true).holdSelects, read by a component around the document), and the
+ * document itself never re-renders for a scroll. It used to read both flags at its top, so every
+ * reply mounted in the chat list rebuilt its whole document on the JS thread when a drag started
+ * and again when the list settled, the moment FlashList needs that thread to mount the rows the
+ * drag exposes (the user's "stuttering while scrolling", 2026-10-16). The Claude app 1.261013.20
+ * recomposes no transcript item for a scroll: Compose cancels the selection long press once the
+ * LazyColumn's drag passes the touch slop.
+ */
+export function chatDocumentSelectableHook(rootGuardsHolds: boolean): () => boolean {
+  return rootGuardsHolds ? useRootGuardedDocumentSelectable : useScrollGatedDocumentSelectable
+}

@@ -10,10 +10,10 @@ import { chatRowItemType } from './mobile-native-chat-list-extra-data'
 export function useChatHeldSelectionList(): {
   held: ChatHeldSelections
   heldIds: ReadonlySet<string>
-  getItemType: (row: { id: string }) => string
+  getItemType: (row: { id: string; role?: string }) => string
 } {
   const [held] = useState(createChatHeldSelections)
   const heldIds = useHeldMessageIds(held)
-  const getItemType = useCallback((row: { id: string }) => chatRowItemType(row, heldIds), [heldIds])
+  const getItemType = useCallback((row: { id: string; role?: string }) => chatRowItemType(row, heldIds), [heldIds])
   return { held, heldIds, getItemType }
 }

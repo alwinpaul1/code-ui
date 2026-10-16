@@ -17,26 +17,43 @@ const WORDS_END_PADDING = 22
 export const QUEUED_MESSAGE_EDIT_LABEL = 'Edit queued message'
 
 /**
- * The message queued while Claude works, on a Claude tab that sends through Anthropic
- * (use-ccr-composer-send.ts), drawn as the Claude Android app 1.261009.20 draws it (`hb20.e`):
- * 20 dp above, 80% of the width, aligned like a user message, a 12 dp radius on fill `pl7.s`,
- * 12 dp padding, the words at 15 sp italic in the muted `pl7.Q`, and a 14 dp "x" at the top end
- * ("Edit queued message"). A tap anywhere moves the words back into the composer and empties the
- * queue; there is no separate delete.
+ * The messages queued while Claude works, on a Claude tab that sends through Anthropic
+ * (use-ccr-composer-send.ts): ONE card per queued message, oldest first, each drawn as the Claude
+ * Android app 1.261009.20 draws its queued card (`hb20.e`): 80% of the width, aligned like a user
+ * message, a 12 dp radius on fill `pl7.s`, 12 dp padding, the words at 15 sp italic in the muted
+ * `pl7.Q`, and a 14 dp "x" at the top end ("Edit queued message"). A tap anywhere on a card moves
+ * THAT message back into the composer (ahead of any draft) and leaves the others queued; there is
+ * no separate delete. The first card sits 20 dp below what is above it, as the app's one card
+ * does; each card keeps the app's 8 dp under it, which is the gap between two.
  *
- * Built as the app builds it (1.261013.20 `ti30`): a box, the words with a 22 dp end padding, and
- * the "x" laid over them at TopEnd, so it sits 12 dp from the card's top and end edges however the
- * words wrap.
+ * The app's own local queue is one string drawn as one card; a card per message is what the user
+ * sees in the app when each send is kept separate (ccr-local-queue.ts says why the phone does
+ * that). Reported 2026-10-16: two sends drew as one card here.
+ *
+ * Built as the app builds its card (1.261013.20 `ti30`): a box, the words with a 22 dp end
+ * padding, and the "x" laid over them at TopEnd, so it sits 12 dp from the card's top and end
+ * edges however the words wrap.
  *
  * `pl7.s` (#F0EFEC light, #0D0D0D dark) is the theme's `codeBlockHeader` and `pl7.Q` (#7B7974,
  * #97958D) its `composerPlaceholder`: the same app tokens, read from the theme so Light, Dark and
  * System all follow it. No literal colour here.
  */
-export function MobileNativeChatLocalQueue({ text, onEdit }: { text: string | null; onEdit: () => void }): React.JSX.Element | null {
-  const { colors } = useTheme()
-  if (!text) {
+export function MobileNativeChatLocalQueue({ entries, onEdit }: { entries: readonly string[]; onEdit: (index: number) => void }): React.JSX.Element | null {
+  if (entries.length === 0) {
     return null
   }
+  return (
+    <>
+      {entries.map((text, index) => (
+        // Two identical messages are two entries: the position is the identity.
+        <QueuedCard key={index} text={text} first={index === 0} onEdit={() => onEdit(index)} />
+      ))}
+    </>
+  )
+}
+
+function QueuedCard({ text, first, onEdit }: { text: string; first: boolean; onEdit: () => void }): React.JSX.Element {
+  const { colors } = useTheme()
   return (
     <Pressable
       accessibilityRole="button"
@@ -47,7 +64,7 @@ export function MobileNativeChatLocalQueue({ text, onEdit }: { text: string | nu
       style={{
         alignSelf: 'flex-end',
         width: '80%',
-        marginTop: 20,
+        marginTop: first ? 20 : 0,
         marginHorizontal: 16,
         marginBottom: 8,
         padding: PADDING,

@@ -116,7 +116,7 @@ export type MobileNativeChatViewProps = {
   onEditQueue?: (index: number, tapped: string) => Promise<void>
   onSendQueueNow?: () => Promise<boolean>
   /** The phone-kept queue of a tab that sends through Anthropic (MobileNativeChatListHeader). */
-  localQueue?: { text: string | null; onEdit: () => void } | null
+  localQueue?: { entries: readonly string[]; onEdit: (index: number) => void } | null
   queueEditor?: InlineQueueEditor | null
   pending: MobileNativeChatPendingItem[]
   /** Local photo URIs retained when the authoritative transcript replaces an

@@ -6,6 +6,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { OutputsPill, openPullRequestPill } from './MobileSessionOutputsPill'
 import {
   LOCAL_CHANGES_HINT_MAX_WIDTH,
   sessionCiSpoken,
@@ -17,6 +18,11 @@ import { useSessionPills } from './use-session-pills'
 import { useClaudeAppCommandSheet } from './claude-app-command-sheets'
 import { MobileClaudePlanSheet } from './MobileClaudePlanSheet'
 import { MobileClaudeAutoDefaultNotice, claudeAutoDefaultNoticeEligible } from './MobileClaudeAutoDefaultNotice'
+import { MobileSessionArtifactsSheet } from './MobileSessionArtifactsSheet'
+import { sessionArtifactsPillLabel } from './session-artifacts'
+import { sessionOutputsControl } from './session-outputs'
+import { MobileSessionOutputsSheet } from './MobileSessionOutputsSheet'
+import { useClaudeTabAccount } from './use-claude-tab-account'
 
 // The Claude Android app's session pills (1.261009.20). Every one is the generic chip `jc20.c`: a
 // 14 dp radius, 12 x 8 dp padding, a 16 dp icon, an 8 dp gap, the label at 13/550, on the app's
@@ -30,7 +36,11 @@ import { MobileClaudeAutoDefaultNotice, claudeAutoDefaultNoticeEligible } from '
 // dot by `jc20.l`). The Diff pill (`jc20.p`, `ju8`) is the same chip: "Diff" at 13/550, an 8 dp gap,
 // then "+N" green and " -M" red at 13 regular (`jlc.b`), a count of nothing not drawn. The blue of
 // Create PR's icon is `info`, and 550 weight is the medium face the app ships.
+//
+// The artifacts button is not that chip: it is the 1.261013.20 session bar's outputs pill
+// (MobileSessionOutputsPill.tsx), full-round on `ad5.n0()` with the artifacts glyph.
 
+export { OUTPUTS_PILL_HEIGHT } from './MobileSessionOutputsPill'
 import { Chip, CHIP_PADDING_X, CHIP_RADIUS, CiPart, ICON_SIZE, PrStateIcon, stateChip, stateColor } from './MobileSessionPillChip'
 
 function PullRequestChip({
@@ -123,7 +133,9 @@ export function SessionPillRowView({
   onOpenPullRequest,
   onOpenUrl,
   onCopyPrNumber,
-  onOpenPlan
+  onOpenPlan,
+  artifacts,
+  onOpenOutputs
 }: {
   pills: readonly SessionPill[]
   /** The pull request pill and Create PR both land on the pull request panel. */
@@ -134,6 +146,13 @@ export function SessionPillRowView({
   onCopyPrNumber: (number: number) => void
   /** A matched Claude tab with a proposed plan: the app's "Plan" pill (claude-session-plan.ts). */
   onOpenPlan?: (() => void) | null
+  /** A Claude tab whose session published a page: the app's "Open artifacts" button
+   *  (ns30.java:610-660), counting them (session-artifacts.ts). */
+  artifacts?: { sessionCount: number; onOpen: () => void } | null
+  /** Opens the Outputs sheet. With it, two or more of a pull request, artifacts and a plan fold
+   *  into one "N outputs" pill (session-outputs.ts); without it (a caller with no sheet to open)
+   *  each keeps its own pill rather than drawing a pill that cannot open anything. */
+  onOpenOutputs?: (() => void) | null
 }): React.JSX.Element | null {
   const { colors, space } = useTheme()
   const [hintOpen, setHintOpen] = useState(false)
@@ -153,11 +172,20 @@ export function SessionPillRowView({
   if (copyingNumber !== null && !copyingStillDrawn) {
     setCopyingNumber(null)
   }
-  if (pills.length === 0 && !onOpenPlan) {
+  if (pills.length === 0 && !onOpenPlan && !artifacts) {
     return null
   }
   const hint = hintOpen && local?.kind === 'local-changes' ? local.hint : null
   const hasPullRequest = pills.some((pill) => pill.kind === 'pull-request')
+  // The app's rule (session-outputs.ts). Its pull request count is the session's own PR list; Code
+  // UI's one honest input is the branch's PR pill, so a pull request counts 1 when that pill would
+  // show and 0 otherwise.
+  const outputs = sessionOutputsControl({
+    pullRequests: hasPullRequest ? 1 : 0,
+    artifacts: artifacts?.sessionCount ?? 0,
+    plan: Boolean(onOpenPlan)
+  })
+  const mixed = outputs?.kind === 'mixed' && onOpenOutputs ? outputs : null
   return (
     <View
       testID="session-pill-row"
@@ -188,7 +216,7 @@ export function SessionPillRowView({
           </Txt>
         </Pressable>
       ) : null}
-      <View style={{ flexDirection: 'row', gap: space.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         {pills.map((pill) => {
           switch (pill.kind) {
             case 'diff':
@@ -200,13 +228,12 @@ export function SessionPillRowView({
                 />
               )
             case 'pull-request':
-              return (
+              // Folded into "N outputs" with the artifacts or the plan (os30.q).
+              return mixed ? null : (
                 <PullRequestChip
                   key={`pr-${pill.number}`}
                   pill={pill}
-                  onPress={() =>
-                    pill.source === 'claude' && pill.url && onOpenUrl ? onOpenUrl(pill.url) : onOpenPullRequest()
-                  }
+                  onPress={() => openPullRequestPill(pill, onOpenUrl, onOpenPullRequest)}
                   onLongPress={() => setCopyingNumber(pill.number)}
                 />
               )
@@ -247,14 +274,37 @@ export function SessionPillRowView({
             }
           }
         })}
-        {/* The app's "Plan" pill (`session_pill_plan`, read `ccr_session_bar_open_plan`, ns30.java:610-651). */}
-        {onOpenPlan ? (
-          <Chip key="plan" testID="plan-pill" accessibilityLabel="Open plan" onPress={onOpenPlan}>
-            <Txt variant="label" weight="medium" style={{ color: colors.text }} numberOfLines={1}>
-              Plan
-            </Txt>
-          </Chip>
-        ) : null}
+        {/* The app's outputs control, last in its session bar above the composer (`u8z.e`,
+            u8z.java:643-690, after Diff, Local changes and Create PR): "N outputs" for two kinds or
+            more, else the one kind's own control. A lone pull request keeps its own pill above. */}
+        {mixed ? (
+          <OutputsPill
+            key="outputs"
+            testID="outputs-pill"
+            accessibilityLabel={mixed.accessibilityLabel}
+            label={mixed.label}
+            glyph="files"
+            onPress={onOpenOutputs!}
+          />
+        ) : (
+          <>
+            {/* "Plan" (`session_pill_plan`), read "Open plan" (`ccr_session_bar_open_plan`). */}
+            {onOpenPlan ? (
+              <OutputsPill key="plan" testID="plan-pill" accessibilityLabel="Open plan" label="Plan" glyph="scroll" onPress={onOpenPlan} />
+            ) : null}
+            {/* "%d artifact(s)", read "Open artifacts" (`ccr_thread_header_open_artifacts`). */}
+            {artifacts ? (
+              <OutputsPill
+                key="artifacts"
+                testID="artifacts-pill"
+                accessibilityLabel="Open artifacts"
+                label={sessionArtifactsPillLabel(artifacts.sessionCount)}
+                glyph="artifacts"
+                onPress={artifacts.onOpen}
+              />
+            ) : null}
+          </>
+        )}
       </View>
       {hasPullRequest ? (
         <ActionSheetModal
@@ -305,10 +355,36 @@ export function MobileSessionPillRow({
   const pills = useSessionPills(controller)
   const plan = controller.nativeChatController.nativeChatClaudePlan ?? null
   const [planOpen, setPlanOpen] = useState(false)
+  // A Claude tab's artifacts: the pages its own conversation published, and nothing else. The button
+  // shows only when there is one, as the Claude app draws no outputs control for a session with no
+  // pull request, artifact or plan (`ThreadOutputsTally`, ds8.java:257-268; os30.q,
+  // os30.java:687-711); the account's other pages are the gallery's (reported 2026-10-16).
+  // Codex and shell tabs have no `nativeChatClaudeArtifacts`.
+  const claudeArtifacts = controller.nativeChatController.nativeChatClaudeArtifacts
+  const artifactAccount = useClaudeTabAccount(claudeArtifacts?.account ?? null)
+  const [artifactsOpen, setArtifactsOpen] = useState(false)
+  const showArtifacts = claudeArtifacts !== undefined && claudeArtifacts.artifacts.length > 0
+  // The tab stops being a Claude tab (or loses every page) with the sheet open: it goes with it.
+  if (artifactsOpen && !showArtifacts) {
+    setArtifactsOpen(false)
+  }
   // A plan that goes away (its successor's approval is asked) takes its open sheet with it.
   if (planOpen && plan === null) {
     setPlanOpen(false)
   }
+  // The "N outputs" pill's sheet: open only while the bar still folds two kinds or more.
+  const pullRequest = pills.find((pill): pill is Extract<SessionPill, { kind: 'pull-request' }> => pill.kind === 'pull-request') ?? null
+  const outputsMixed =
+    sessionOutputsControl({
+      pullRequests: pullRequest ? 1 : 0,
+      artifacts: showArtifacts ? claudeArtifacts.artifacts.length : 0,
+      plan: plan !== null
+    })?.kind === 'mixed'
+  const [outputsOpen, setOutputsOpen] = useState(false)
+  if (outputsOpen && !outputsMixed) {
+    setOutputsOpen(false)
+  }
+  const openUrl = (url: string) => void openPullRequestUrl(url, showToast)
   const actions = sessionPillActions({ clipboard, showToast })
   // A matched Claude tab's typed /diff opens the changes, as the Claude app's does
   // (claude-app-command-sheets.ts). Published here because this row is mounted with the chat.
@@ -318,10 +394,32 @@ export function MobileSessionPillRow({
       <SessionPillRowView
         pills={pills}
         onOpenPullRequest={() => handlePanelTap('pr')}
-        onOpenUrl={(url) => void openPullRequestUrl(url, showToast)}
+        onOpenUrl={openUrl}
         onCopyPrNumber={(number) => void actions.copyPrNumber(number)}
         onOpenPlan={plan === null ? null : () => setPlanOpen(true)}
+        artifacts={showArtifacts ? { sessionCount: claudeArtifacts.artifacts.length, onOpen: () => setArtifactsOpen(true) } : null}
+        onOpenOutputs={() => setOutputsOpen(true)}
       />
+      {outputsMixed ? (
+        <MobileSessionOutputsSheet
+          visible={outputsOpen}
+          onClose={() => setOutputsOpen(false)}
+          pullRequest={pullRequest}
+          onOpenPullRequest={(pill) => openPullRequestPill(pill, openUrl, () => handlePanelTap('pr'))}
+          hasPlan={plan !== null}
+          onOpenPlan={() => setPlanOpen(true)}
+          artifacts={showArtifacts ? claudeArtifacts.artifacts : []}
+          accountId={artifactAccount}
+        />
+      ) : null}
+      {showArtifacts ? (
+        <MobileSessionArtifactsSheet
+          visible={artifactsOpen}
+          onClose={() => setArtifactsOpen(false)}
+          artifacts={claudeArtifacts.artifacts}
+          accountId={artifactAccount}
+        />
+      ) : null}
       {plan !== null ? <MobileClaudePlanSheet visible={planOpen} plan={plan} onClose={() => setPlanOpen(false)} /> : null}
       {/* The app's one-time "Auto mode is now Claude Code’s default" notice (jv30.java:75). */}
       <MobileClaudeAutoDefaultNotice eligible={claudeAutoDefaultNoticeEligible(controller.nativeChatController)} />

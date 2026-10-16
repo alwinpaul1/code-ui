@@ -57,8 +57,17 @@ Otherwise the app uses Anthropic's server.
   - `forward_interims=typed`
   - `organization_uuid`, plus an optional `conversation_uuid`
 - **Live text:** the server sends `TranscriptInterim` and
-  `TranscriptText` while the user speaks, and the caption shows the
-  latest one (it replaces the last, it is not appended).  `TranscriptEmpty` means nothing was heard.
+  `TranscriptText` while the user speaks. They are not the same kind of message (1.261013.20,
+  `j3i.java:846-851`): a `TranscriptText` is a committed segment, APPENDED to a buffer, and it
+  clears the live interim; a `TranscriptInterim` REPLACES the live interim. The caption shows the
+  committed text followed by the interim, one string (`a3x.q`, `wc00.a`, plain `a + b`). So the
+  server's committed version of a phrase takes the place of the words it was first heard as: that
+  is the correction the user sees (2026-10-16). There is no second request and no filler regex on
+  the phone; the only local step is the word-gap join at the caret (`at30.i`). The app knows no
+  other transcript message (`nkt.java`: TranscriptText, TranscriptInterim, AudioCaptureStarted
+  with a `voice_session_uuid`); `TranscriptEmpty` belongs to Bell (voice mode), not dictation.
+  The app sends no `use_conversation_engine`, `endpointing_ms` or `utterance_end_ms`; those are
+  Claude Code's (`r4u.java:1018`).
 - **Release:** the app sends `CloseStream`, the server returns the
   final text, and it lands in the composer.
 - **Auth:** `Authorization: Bearer <OAuth-access-token>` header on the
@@ -143,6 +152,16 @@ mic is on, and then only it moves to composer." The decompile agrees (1.261009.2
 - Send dictation waits for the take to end (`use-composer-dictation-row.ts`). It sends the draft
   the final transcript was written into in the same callback.
 - Tests: `mobile/src/session/native-chat-dictation-words-move-in-on-stop.test.tsx`.
+- The app's committed-plus-interim model is in `anthropic-voice-stream.ts` as the `claude-app`
+  protocol, with its parameter set (linear16, since the phone has no Opus encoder) and the
+  account's `organization_uuid`. The phone dictates with it (`DICTATION_VOICE_PROTOCOL` in
+  `use-anthropic-dictation.ts`) since 2026-10-16. Probe p20 that day: three sentences with 1.8 s
+  pauses. With the app's set the live text corrected words while the speech went on ("if it
+  it's" at 9.1 s); with Claude Code's set they stayed uncorrected until the final text at 19 s.
+  voice_stream took linear16, the OAuth token and the org. Neither set sends a committed text per
+  sentence, and neither drops fillers ("um", "uh"). Tests:
+  `mobile/src/dictation/voice-stream-claude-app-cleanup.test.ts`,
+  `mobile/src/hooks/anthropic-dictation-organization.test.tsx`.
 - Not matched yet: Code UI sends even if the draft changed during the take, though the field is
   folded away so it cannot be typed into. Code UI also shows no "didn't catch that" error for an
   empty take: the composer simply stays as it was.

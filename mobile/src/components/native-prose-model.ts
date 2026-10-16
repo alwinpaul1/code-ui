@@ -9,6 +9,7 @@ import { afterRefusedUnderscoreOpener, autolinkParts, isIntrawordUnderscoreToken
 import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { detectFilePathSegments, isFilePathCodeSpan, normalizeFilePath } from './markdown-file-path-detection'
 import { markdownInlinePlainText } from './markdown-plain-text'
+import { linkWordsAreAddress, type MarkdownArtifactLinks } from './markdown-artifact-links'
 import { listMarker } from './mobile-markdown-list-marker'
 import type { ProseBlock } from './mobile-markdown-prose-runs'
 import type { MarkdownTypography } from './mobile-markdown-prose-scale'
@@ -97,6 +98,8 @@ type Options = {
   typography: MarkdownTypography
   /** The surface opens files: paths in prose and in code are links. */
   opensFiles: boolean
+  /** Artifact links, drawn by their label where their own words are only their address. */
+  artifactLinks?: MarkdownArtifactLinks | null
 }
 
 class ModelBuilder {
@@ -104,6 +107,8 @@ class ModelBuilder {
   readonly paragraphs: NativeProseParagraph[] = []
   readonly spans: NativeProseSpan[] = []
   readonly links: NativeProseLink[] = []
+
+  constructor(readonly artifactLinks: MarkdownArtifactLinks | null = null) {}
 
   append(words: string): void {
     this.text += words
@@ -201,15 +206,18 @@ function inline(builder: ModelBuilder, text: string, opensFiles: boolean): void 
     const start = builder.text.length
     const link = match.link
     if (link) {
+      const artifact = link.image ? null : (builder.artifactLinks?.resolve(link.href) ?? null)
       if (link.image) {
         builder.append(markdownInlinePlainText(link.label) || 'image')
+      } else if (artifact && linkWordsAreAddress(link.label, link.href)) {
+        builder.append(artifact.label)
       } else {
         linkLabel(builder, link.label)
       }
       builder.span(start, 'link', { kind: 'href', href: link.href })
     } else if (match.group === ADDRESS_TOKEN_GROUP) {
       const { url, words, trailing } = autolinkParts(token)
-      builder.append(words)
+      builder.append(builder.artifactLinks?.resolve(url)?.label ?? words)
       builder.span(start, 'link', { kind: 'href', href: url })
       builder.append(trailing)
     } else if (token.startsWith('`')) {
@@ -278,7 +286,7 @@ export function buildNativeProseModel(members: readonly ProseBlock[], options: O
   }
   const { typography, opensFiles } = options
   const { prose } = typography
-  const builder = new ModelBuilder()
+  const builder = new ModelBuilder(options.artifactLinks ?? null)
   const body = { fontSize: prose.fontSize, lineHeight: prose.lineHeight, spaceAfter: 0, indent: 0, hang: 0 }
   members.forEach((member, memberIndex) => {
     if (memberIndex > 0) {

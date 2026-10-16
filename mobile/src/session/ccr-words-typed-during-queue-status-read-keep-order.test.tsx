@@ -96,7 +96,16 @@ describe('words typed while the turn-end queue reads the session status', () => 
 
   it('go after the queue when it sends', async () => {
     await typeDuringTheRead('connected')
-    expect(posts.map((body) => (body as { events: { payload: { message: { content: string } } }[] }).events[0]!.payload.message.content)).toEqual(['first', 'second'])
+    const sent = (): string[] => posts.map((body) => (body as { events: { payload: { message: { content: string } } }[] }).events[0]!.payload.message.content)
+    // Since 2026-10-16 the queue goes one message per turn: 'second' waits for the turn 'first'
+    // started to end, still behind it.
+    expect(sent()).toEqual(['first'])
+    working = true
+    act(() => renderer!.update(createElement(Harness)))
+    working = false
+    act(() => renderer!.update(createElement(Harness)))
+    await settle()
+    expect(sent()).toEqual(['first', 'second'])
     expect(composer).toBe('')
   })
 

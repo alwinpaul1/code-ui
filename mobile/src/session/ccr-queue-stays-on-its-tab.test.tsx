@@ -35,11 +35,11 @@ describe("a message queued on one Claude tab", () => {
 
   it('is drawn only on the tab it was queued on', async () => {
     await queueOnWorkingTabA('only for tab A')
-    expect(hook.api.queue).toBe('only for tab A')
+    expect(hook.api.queue).toEqual(['only for tab A'])
     await switchTo('tab-b', false)
-    expect(hook.api.queue).toBeNull()
+    expect(hook.api.queue).toEqual([])
     await switchTo('tab-a', true)
-    expect(hook.api.queue).toBe('only for tab A')
+    expect(hook.api.queue).toEqual(['only for tab A'])
   })
 
   it("is sent into its own tab's session when the user is back on that tab and its turn has ended", async () => {
@@ -47,7 +47,7 @@ describe("a message queued on one Claude tab", () => {
     await switchTo('tab-b', false)
     await switchTo('tab-a', false)
     expect(postedTexts()).toEqual([{ sessionId: CSE_A, text: 'only for tab A', priority: undefined }])
-    expect(hook.api.queue).toBeNull()
+    expect(hook.api.queue).toEqual([])
   })
 
   it("does not join a message sent on the other tab, which goes to that tab's session at once", async () => {

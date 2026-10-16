@@ -153,6 +153,7 @@ export function MobileHomeScreen() {
                 resumeCard={data.resumeCard}
                 onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
                 onOpenAccounts={openMobileAccounts}
+                onOpenArtifacts={() => data.router.push('/artifacts')}
                 onOpenResume={openResume}
                 onOpenTasks={openTasks}
                 onPairDesktop={() => data.router.push('/pair-scan')}

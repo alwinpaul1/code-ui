@@ -11,6 +11,9 @@ export type AnthropicCredential = {
   readonly accessToken: string
   readonly refreshToken: string
   readonly expiresAt: number
+  /** The account's organization, null until /api/oauth/profile has named it. voice_stream takes it
+   *  as `organization_uuid`, as the Claude app sends it (1.261013.20, r4u.java:1018). */
+  readonly organizationUuid?: string | null
 }
 
 /** Token must have at least this much life left. */
@@ -28,7 +31,11 @@ const TOKEN_MARGIN_MS = 60_000
  */
 export async function fetchAnthropicCredential(): Promise<AnthropicCredential | null> {
   const primary = await readPrimaryAccount()
-  return primary ? liveCredential(primary) : null
+  if (!primary) {
+    return null
+  }
+  const live = await liveCredential(primary)
+  return live ? { ...live, organizationUuid: primary.organizationUuid ?? null } : null
 }
 
 /** The account's token, refreshed when near expiry, or whenever `force` (a server refused it with

@@ -225,7 +225,15 @@ export function hydrateNativeChatOutbox(): Promise<void> {
       readRefused = true
       console.warn('[storage] could not read the chat outbox; nothing is written over it this run', error)
     }
-    notify()
+    // A listener that throws here must not reject the read: every write waits on it, and a
+    // rejected read rejected them all, so one failing listener cost the session its outbox
+    // (outbox-keeps-saving-after-a-listener-fails.test.ts). A change's own notify, in the
+    // caller's stack, still throws to the caller.
+    try {
+      notify()
+    } catch (error) {
+      console.warn('[storage] a chat outbox listener failed when the stored list was read; the outbox keeps saving', error)
+    }
   })()
   return hydration
 }

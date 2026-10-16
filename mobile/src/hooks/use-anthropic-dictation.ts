@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
 import { fetchAnthropicCredential } from '../dictation/anthropic-credential-reader'
-import { AnthropicVoiceStream } from '../dictation/anthropic-voice-stream'
+import { AnthropicVoiceStream, type VoiceStreamProtocol } from '../dictation/anthropic-voice-stream'
 import type {
   DictationStatus,
   UseMobileDictationResult
 } from './mobile-dictation-session-state'
 import type { DictationCaptureSubscription } from '../platform/dictation-capture-contract'
 import { createLevelSource, pcm16Level, type LevelSource } from '../dictation/pcm-level'
+
+/**
+ * The voice_stream contract the phone dictates with (see VoiceStreamProtocol): the Claude Android
+ * app's. Its live text corrects the words while the user is still speaking, which Claude Code's set
+ * only does once they stop (reported 2026-10-16). Probe p20 (2026-10-16): three sentences with
+ * 1.8 s pauses; with the app's set the live text read "if it it's" at 9.1 s, with Claude Code's it
+ * read "if it is" until the final text at 19 s. voice_stream took linear16 audio, the OAuth token
+ * and the org with the app's set. Neither set drops fillers ("um", "uh"): the server keeps them.
+ */
+export const DICTATION_VOICE_PROTOCOL: VoiceStreamProtocol = 'claude-app'
 
 export type UseAnthropicDictationOptions = {
   enabled: boolean
@@ -132,7 +142,12 @@ export function useAnthropicDictation(
     // socket→transcript, supervisor. Here the capture subscription is
     // mic→socket and the stream callbacks are socket→transcript.
     const stream = new AnthropicVoiceStream(
-      { accessToken: cred.accessToken, language: lang },
+      {
+        accessToken: cred.accessToken,
+        language: lang,
+        protocol: DICTATION_VOICE_PROTOCOL,
+        organizationUuid: cred.organizationUuid ?? null
+      },
       {
         onTranscript: (text, isFinal) => {
           if (!activeRef.current) {

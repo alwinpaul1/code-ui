@@ -168,7 +168,7 @@ describe('the composer send of a Claude tab matched to its Remote Control sessio
 
   it('draws the phone-kept queue in place of the screen-read queue box', () => {
     render()
-    expect(controller!.nativeChatLocalQueue).toEqual({ text: null, onEdit: expect.any(Function) })
+    expect(controller!.nativeChatLocalQueue).toEqual({ entries: [], onEdit: expect.any(Function) })
     expect(controller!.nativeChatQueuedMessages).toEqual([])
   })
 

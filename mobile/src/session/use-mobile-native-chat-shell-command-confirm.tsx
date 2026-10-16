@@ -36,13 +36,19 @@ type Pending = { text: string; command: string; resolve: (accepted: boolean | Pr
  * bare `!` is refused with a notice instead of asked about. Any other message
  * goes straight to `send`.
  *
+ * `refusal`, when given, is read for a shell command before the question opens AND again
+ * on Run: what it returns is said and nothing is sent. Read again on Run because the
+ * question stays open while the rest of the composer moves (a pasted screenshot's chip
+ * lands after the user tapped Send), and Run sends what is there when it is tapped.
+ *
  * `confirm` is the sheet, to be rendered once beside the composer.
  */
 export function useMobileNativeChatShellCommandConfirm(
   agent: string | null | undefined,
   send: (text: string) => Promise<boolean>,
   /** Where a refusal is said (the chat's send-error line); none says nothing. */
-  report?: (message: string) => void
+  report?: (message: string) => void,
+  refusal?: () => string | null
 ): { send: (text: string) => Promise<boolean>; confirm: ReactNode } {
   const [pending, setPending] = useState<Pending | null>(null)
   // The sheet stays mounted once it has been asked, so it can draw its exit.
@@ -76,6 +82,11 @@ export function useMobileNativeChatShellCommandConfirm(
         report?.(SHELL_COMMAND_EMPTY_NOTICE)
         return Promise.resolve(false)
       }
+      const refused = refusal?.() ?? null
+      if (refused !== null) {
+        report?.(refused)
+        return Promise.resolve(false)
+      }
       // A second send while one is being asked about replaces nothing: the first stays.
       if (pendingRef.current || loadingRef.current) {
         return Promise.resolve(false)
@@ -98,7 +109,7 @@ export function useMobileNativeChatShellCommandConfirm(
         }
       )
     },
-    [agent, report, send]
+    [agent, refusal, report, send]
   )
 
   const confirm =
@@ -107,9 +118,16 @@ export function useMobileNativeChatShellCommandConfirm(
         visible={pending !== null}
         command={lastCommand}
         onRun={() => {
-          if (pendingRef.current) {
-            settle(send(pendingRef.current.text))
+          if (!pendingRef.current) {
+            return
           }
+          const refused = refusal?.() ?? null
+          if (refused !== null) {
+            report?.(refused)
+            settle(false)
+            return
+          }
+          settle(send(pendingRef.current.text))
         }}
         onCancel={() => settle(false)}
       />

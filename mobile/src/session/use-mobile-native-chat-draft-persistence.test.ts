@@ -12,7 +12,16 @@ vi.mock('../storage/native-chat-drafts', () => ({
     } else {
       draftStore.delete(key)
     }
-  })
+  }),
+  appendNativeChatDraft: vi.fn(async (key: string, next: (stored: string) => string) => {
+    const text = next(draftStore.get(key) ?? '')
+    if (text) {
+      draftStore.set(key, text)
+    }
+    return text
+  }),
+  openNativeChatDraftRead: vi.fn(async (key: string) => ({ current: () => draftStore.get(key) ?? null, close: () => undefined })),
+  nativeChatDraftEpoch: () => 0
 }))
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>

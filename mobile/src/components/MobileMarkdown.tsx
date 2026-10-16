@@ -6,7 +6,7 @@ import {
   markdownInlineTokenPattern,
   type MarkdownInlineMatch
 } from './markdown-inline-matcher'
-import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, memo, useContext, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
@@ -26,13 +26,12 @@ import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
 import { EMPHASIS_NONE, emphasisStyle, nestedEmphasis, type EmphasisAround } from './mobile-markdown-emphasis'
 import { listMarker } from './mobile-markdown-list-marker'
-import { useChatDocumentSelection } from './chat-text-selectable-context'
+import { ChatDocumentSelectionRoot, useChatDocumentSelectable } from './chat-document-selection-root'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { MARKDOWN_ROOT_GUARDS_HOLDS, MarkdownSelectionRoot } from './markdown-selection-copy'
 import {
   DEFAULT_MARKDOWN_TYPOGRAPHY,
   markdownProseScale,
@@ -47,6 +46,7 @@ import {
   type CodePillRun
 } from './use-markdown-code-pill-runs'
 import { buildNativeProseModel, type NativeProseLink } from './native-prose-model'
+import { MarkdownArtifactLinksContext, openArtifactOr, renderArtifactLink, type MarkdownArtifactLinks } from './MobileMarkdownArtifactLink'
 import { NATIVE_PROSE_AVAILABLE, NativeProseText } from './native-prose-text'
 import { lastNativeProseWidth, rememberNativeProseWidth } from './native-prose-width'
 
@@ -168,7 +168,9 @@ function renderInline(
    *  measured lines (use-markdown-code-pill-runs.ts). */
   pills: CodePillRun,
   /** The emphasis this text is already inside, so a nested span keeps it. */
-  around: EmphasisAround = EMPHASIS_NONE
+  around: EmphasisAround = EMPHASIS_NONE,
+  /** Links that open in the app and draw as their artifact (markdown-artifact-links.ts). */
+  artifacts: MarkdownArtifactLinks | null = null
 ): ReactNode[] {
   const parts: ReactNode[] = []
   pills.noteSource(text)
@@ -196,7 +198,10 @@ function renderInline(
     pendingStart = pattern.lastIndex
     const key = `${match.index}:${token}`
     const link = match.link
-    if (link) {
+    const artifact = link && !link.image ? (artifacts?.resolve(link.href) ?? null) : null
+    if (link && artifact) {
+      parts.push(renderArtifactLink(styles, key, artifact, link.href, link.label))
+    } else if (link) {
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link.href, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {link.image ? markdownInlinePlainText(link.label) || 'image' : renderLinkLabel(styles, link.label)}
@@ -204,11 +209,13 @@ function renderInline(
       )
     } else if (match.group === ADDRESS_TOKEN_GROUP) {
       const { url, words, trailing } = autolinkParts(token)
+      const bare = artifacts?.resolve(url) ?? null
       parts.push(
+        bare ? renderArtifactLink(styles, key, bare, url, null) : (
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {words}
         </Text>
-      )
+      ))
       if (trailing) {
         parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
       }
@@ -263,7 +270,7 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={around ? [emphasisStyle(styles, around), styles.strike] : styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, around)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, around, artifacts)}
         </Text>
       )
     } else {
@@ -271,7 +278,7 @@ function renderInline(
       const inside = nestedEmphasis(around, mark === 2)
       parts.push(
         <Text key={key} style={emphasisStyle(styles, inside)}>
-          {renderInline(styles, token.slice(mark, -mark), onOpenFile, pills, inside)}
+          {renderInline(styles, token.slice(mark, -mark), onOpenFile, pills, inside, artifacts)}
         </Text>
       )
     }
@@ -296,10 +303,11 @@ function MobileMarkdownInner({
   renderVisual,
   typed
 }: Props) {
-  // Whether its Texts select, and whether its native root lets a hold start a selection: off
-  // through a scroll, and off altogether on a chat message row (useChatDocumentSelection).
-  const { selectable, holdSelects } = useChatDocumentSelection(MARKDOWN_ROOT_GUARDS_HOLDS)
+  // Whether its Texts select; whether a hold may start a selection is the root's alone, so a scroll
+  // redraws none of this (chat-document-selection-root.tsx).
+  const selectable = useChatDocumentSelectable()
   const styles = useMarkdownStyles(typography)
+  const artifactLinks = useContext(MarkdownArtifactLinksContext)
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
   const [contentWidth, setContentWidth] = useState(0)
@@ -373,7 +381,7 @@ function MobileMarkdownInner({
             {memberIndex === 0 ? null : blockGapLine ? <Text style={blockGapLine}>{'\n'}</Text> : '\n'}
             {member.type === 'heading' ? (
               <Text style={headingStyle(styles, member.level, textScale)}>
-                {renderInline(styles, member.text, onOpenFile, pills)}
+                {renderInline(styles, member.text, onOpenFile, pills, EMPHASIS_NONE, artifactLinks)}
                 {end}
               </Text>
             ) : member.type === 'rule' ? (
@@ -388,7 +396,7 @@ function MobileMarkdownInner({
                     {marker ? (
                       <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
                     ) : null}
-                    {renderInline(styles, item.text, onOpenFile, pills)}
+                    {renderInline(styles, item.text, onOpenFile, pills, EMPHASIS_NONE, artifactLinks)}
                   </Fragment>
                 )
               })
@@ -407,7 +415,7 @@ function MobileMarkdownInner({
               // next as literal asterisks on the phone (reported from the
               // device); the parser has already reflowed soft wraps, so
               // any newline left here is a deliberate hard break.
-              renderInline(styles, member.text, onOpenFile, pills)
+              renderInline(styles, member.text, onOpenFile, pills, EMPHASIS_NONE, artifactLinks)
             )}
             {member.type === 'heading' ? null : end}
           </Fragment>
@@ -430,7 +438,7 @@ function MobileMarkdownInner({
         </Text>
       )
     }
-    const model = nativeProse ? buildNativeProseModel(prose, { typography, opensFiles: !!onOpenFile }) : null
+    const model = nativeProse ? buildNativeProseModel(prose, { typography, opensFiles: !!onOpenFile, artifactLinks }) : null
     if (model && nativeProseWidth > 0) {
       return (
         <NativeProseText
@@ -441,7 +449,7 @@ function MobileMarkdownInner({
           width={nativeProseWidth}
           selectable={selectable}
           onLink={(link: NativeProseLink) =>
-            link.kind === 'href' ? openMarkdownHref(link.href, onOpenFile) : onOpenFile?.(link.path)
+            link.kind === 'href' ? openArtifactOr(artifactLinks, link.href, () => openMarkdownHref(link.href, onOpenFile)) : onOpenFile?.(link.path)
           }
           onRefused={refuseNative}
         />
@@ -546,7 +554,7 @@ function MobileMarkdownInner({
             const width = columnWidths[cellIndex] ?? 0
             const inner = width - 2 * styles.tableCell.paddingHorizontal - styles.tableCell.borderRightWidth
             const pills = pillRuns(`table:${index}:${rowKey}:${cellIndex}`, inner, true)
-            const children = renderInline(styles, source, onOpenFile, pills)
+            const children = renderInline(styles, source, onOpenFile, pills, EMPHASIS_NONE, artifactLinks)
             return (
               // No width in a cell's key: its width moves only with the zoom,
               // which changes its pills' style too, so Fabric lays it out
@@ -598,7 +606,7 @@ function MobileMarkdownInner({
       })}
     </View>
   )
-  return <MarkdownSelectionRoot holdSelects={holdSelects} document={identity}>{drawn}</MarkdownSelectionRoot>
+  return <ChatDocumentSelectionRoot document={identity}>{drawn}</ChatDocumentSelectionRoot>
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)

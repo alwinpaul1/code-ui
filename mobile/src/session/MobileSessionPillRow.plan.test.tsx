@@ -2,11 +2,10 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { createElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
-import { darkColors, lightColors } from '../theme/tokens'
 
-// The Claude app's "Plan" pill in its session bar (1.261013.20: `session_pill_plan` "Plan", read
-// "Open plan" `ccr_session_bar_open_plan`, ns30.java:610-651, u8z.java:3806), the same generic chip
-// as the other pills, opening the plan under the title "Plan" (`ccr_plan_view_title`).
+// The Claude app's "Plan" control in its session bar (1.261013.20: `session_pill_plan` "Plan", read
+// "Open plan" `ccr_session_bar_open_plan`, ns30.java:610-660, u8z.java:3806), opening the plan
+// under the title "Plan" (`ccr_plan_view_title`).
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -20,6 +19,7 @@ vi.mock('react-native', () => ({
 vi.mock('lucide-react-native', () =>
   new Proxy({}, { get: (_t, name) => (typeof name === 'string' ? name : undefined), has: () => true })
 )
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetModal: () => null }))
 vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: (props: { visible: boolean; header: unknown; children: unknown }) =>
@@ -31,7 +31,8 @@ vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText
 vi.mock('./use-session-pills', () => ({ useSessionPills: () => [] }))
 
 import { ThemeProvider } from '../theme/theme-context'
-import { MobileSessionPillRow, SessionPillRowView } from './MobileSessionPillRow'
+import { CDS_OUTPUT_OUTLINES } from './ClaudeOutputsGlyph'
+import { MobileSessionPillRow, OUTPUTS_PILL_HEIGHT, SessionPillRowView } from './MobileSessionPillRow'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 let renderer: ReactTestRenderer | null = null
@@ -48,11 +49,13 @@ const host = (id: string): ReactTestInstance | undefined =>
 const texts = (node: ReactTestInstance): string[] =>
   node.findAll((child) => (child.type as unknown) === 'Text').map((child) => [child.props.children].flat().join(''))
 
+// 1.261013.20 draws a lone plan as its session bar's outputs control (`u8z.h`, kind Plan): the
+// `scroll` glyph (U+E0D2, wu0.java:220) and "Plan" (`session_pill_plan`, ns30.java:653), read
+// "Open plan" (ns30.java:620-622), on the outputs pill (fill `ad5.n0()`, no hairline, 16 x 10).
 describe.each(['light', 'dark'] as const)('the Plan pill in %s mode', (scheme) => {
-  const colors = scheme === 'light' ? lightColors : darkColors
   const claude = claudeSessionPillPalette(scheme)
 
-  it('draws "Plan" on the app’s chip, alone in the row, read "Open plan"', () => {
+  it('draws a lone plan as the app’s outputs pill with the scroll glyph, read "Open plan"', () => {
     const open = vi.fn()
     act(() => {
       renderer = create(
@@ -67,12 +70,14 @@ describe.each(['light', 'dark'] as const)('the Plan pill in %s mode', (scheme) =
     expect(texts(pill)).toEqual(['Plan'])
     const style = pill.props.style
     expect(flat(typeof style === 'function' ? style({ pressed: false }) : style)).toMatchObject({
-      backgroundColor: claude.surface,
-      borderColor: claude.border,
-      borderRadius: 14
+      backgroundColor: claude.outputsFill,
+      borderRadius: OUTPUTS_PILL_HEIGHT / 2,
+      paddingHorizontal: 16
     })
+    const glyph = pill.find((child) => child.props.testID === 'plan-pill-glyph' && typeof child.type === 'string')
+    expect(glyph.findByType('Path' as never).props).toMatchObject({ fill: claude.outputsInk, d: CDS_OUTPUT_OUTLINES.scroll })
     const label = pill.find((child) => (child.type as unknown) === 'Text')
-    expect(flat(label.props.style).color).toBe(colors.text)
+    expect(flat(label.props.style).color).toBe(claude.outputsInk)
     act(() => pill.props.onPress())
     expect(open).toHaveBeenCalledTimes(1)
   })
