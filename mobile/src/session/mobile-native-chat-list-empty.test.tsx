@@ -160,7 +160,7 @@ describe('the empty chat of a Claude tab read from Anthropic', () => {
   // empty session; the list's load-older spinner stands instead of the title.
   it('shows no title while the link has older history and nothing is drawn; a reconnecting empty link keeps it', () => {
     const link = { sessionId: 'cse_x', loadOlder: async () => undefined } as unknown as CcrSessionLink
-    const state = (phase: CcrLinkState['phase'], hasOlder: boolean): CcrLinkState => ({ events: [], phase, error: null, hasOlder, loadingOlder: false, connectionStatus: null, liveFrom: 0, streamThinking: null, version: 1 })
+    const state = (phase: CcrLinkState['phase'], hasOlder: boolean): CcrLinkState => ({ events: [], phase, error: null, hasOlder, loadingOlder: false, connectionStatus: null, liveFrom: 0, version: 1 })
     const emptyFor = (session: ReturnType<typeof ccrLinkSession>) =>
       mobileNativeChatEmptyState(session.status, 'claude', session.error, { anthropicTab: true, hasOlder: session.hasMore === true, transcriptMessageCount: session.messages.length })
     expect(emptyFor(ccrLinkSession(link, state('live', true), []))).toBeNull()

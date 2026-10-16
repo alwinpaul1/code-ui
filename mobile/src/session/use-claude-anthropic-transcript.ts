@@ -151,7 +151,7 @@ export function useClaudeAnthropicTranscript(args: {
   const rows = useMemo(() => (state ? decodeCcrEvents(state.events) : EMPTY), [state])
   // The tab's live state from the same events (ccr-live-state.ts), for when the relay is down.
   const live = useMemo(
-    () => (state ? deriveCcrLiveState(state.events, { liveFrom: state.liveFrom, streamThinking: state.streamThinking, connectionStatus: state.connectionStatus }) : null),
+    () => (state ? deriveCcrLiveState(state.events, { liveFrom: state.liveFrom, connectionStatus: state.connectionStatus }) : null),
     [state]
   )
 

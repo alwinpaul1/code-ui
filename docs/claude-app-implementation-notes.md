@@ -327,6 +327,14 @@ footer". What follows is the 1.261009.20 reading.
     thinking…" (15 s), "thinking more…" (30 s), "thinking some more…" (45 s),
     "almost done thinking…" (60 s). When thinking ends, "thought for Ns"
     stays for **2 s**.
+  - What "thinking" is (1.261013.20, read 2026-10-16): `su8.f7`, a thinking
+    start held in `gzy.o`, set only by a `system` `thinking_tokens` that moved
+    the count (`ThinkingTokensChanged`, t5v.java:1058-1061) and cleared by the
+    next top-level assistant message (`ThinkingBlockClosed`, t5v.java:846-848)
+    or the resets at a typed prompt, the result and an interrupt. The prompt, a
+    thinking-only message and the stream's content blocks do not set it. The
+    token figure (`gzy.m`) outlives the block: it is cleared only by those
+    resets. The port is `mobile/src/session/ccr-live-state.ts`.
 - **Working, without timing data**: a random verb plus "..." in clay, chosen
   from 20 (Clauding, Cogitating, Computing, Contemplating, Cooking,
   Deliberating, Generating, Imagining, Musing, Noodling, Pondering,

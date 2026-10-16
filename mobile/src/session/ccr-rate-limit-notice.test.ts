@@ -9,7 +9,7 @@ import { RESETS_AT_FIVE_HOUR, RESETS_AT_SEVEN_DAY, allowedFiveHour, rejectedFive
 // The limit banner from the session's newest `rate_limit_event` (the shapes captured live on
 // 2026-10-15, fixtures/ccr-rate-limit-events-2026-10-15.ts), the server's own call.
 
-const LIVE = { liveFrom: 0, streamThinking: null, connectionStatus: 'connected' }
+const LIVE = { liveFrom: 0, connectionStatus: 'connected' }
 const BEFORE = (RESETS_AT_FIVE_HOUR - 3600) * 1000
 const limitOf = (...payloads: Record<string, unknown>[]) => deriveCcrLiveState(payloads.map((payload) => parseCcrEvent(event(payload))!), LIVE).rateLimit
 

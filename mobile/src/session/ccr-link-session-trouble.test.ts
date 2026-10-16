@@ -19,7 +19,6 @@ const state = (over: Partial<CcrLinkState>): CcrLinkState => ({
   loadingOlder: false,
   connectionStatus: null,
   liveFrom: 0,
-  streamThinking: null,
   version: 1,
   ...over
 })
