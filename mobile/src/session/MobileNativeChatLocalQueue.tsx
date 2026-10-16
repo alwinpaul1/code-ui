@@ -1,7 +1,17 @@
 import { Pressable, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import Svg, { Path } from 'react-native-svg'
 import { Txt } from '../ui/Txt'
 import { useTheme } from '../theme/theme-context'
+
+// The app's own "x": U+E10F of its icon font (com.anthropic.claude 1.261013.20,
+// assets/cds_icon_symbols.ttf, 1000 units to the em, read with fontTools 2026-10-16). Symmetric
+// about y = 500, so the font's y-up outline draws the same in SVG's y-down box.
+const X_OUTLINE =
+  'M705 745Q713 753 725 753Q737 753 745 745Q753 737 753 725Q753 713 745 705L295 255Q287 247 275 247Q263 247 255 255Q247 263 247 275Q247 287 255 295ZM745 295Q753 287 753 275Q753 263 745 255Q737 247 725 247Q713 247 705 255L255 705Q247 713 247 725Q247 737 255 745Q263 753 275 753Q287 753 295 745Z'
+const PADDING = 12
+const X_SIZE = 14
+/** The words' end padding in the app: the 14 dp "x" and 8 dp of air. */
+const WORDS_END_PADDING = 22
 
 /** The app's `ccr_queued_message_dismiss`. */
 export const QUEUED_MESSAGE_EDIT_LABEL = 'Edit queued message'
@@ -13,6 +23,10 @@ export const QUEUED_MESSAGE_EDIT_LABEL = 'Edit queued message'
  * 12 dp padding, the words at 15 sp italic in the muted `pl7.Q`, and a 14 dp "x" at the top end
  * ("Edit queued message"). A tap anywhere moves the words back into the composer and empties the
  * queue; there is no separate delete.
+ *
+ * Built as the app builds it (1.261013.20 `ti30`): a box, the words with a 22 dp end padding, and
+ * the "x" laid over them at TopEnd, so it sits 12 dp from the card's top and end edges however the
+ * words wrap.
  *
  * `pl7.s` (#F0EFEC light, #0D0D0D dark) is the theme's `codeBlockHeader` and `pl7.Q` (#7B7974,
  * #97958D) its `composerPlaceholder`: the same app tokens, read from the theme so Light, Dark and
@@ -36,19 +50,27 @@ export function MobileNativeChatLocalQueue({ text, onEdit }: { text: string | nu
         marginTop: 20,
         marginHorizontal: 16,
         marginBottom: 8,
-        padding: 12,
+        padding: PADDING,
         borderRadius: 12,
-        backgroundColor: colors.codeBlockHeader,
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 8
+        backgroundColor: colors.codeBlockHeader
       }}
     >
-      <Txt variant="body" style={{ flex: 1, fontStyle: 'italic', color: colors.composerPlaceholder }}>
+      <Txt
+        variant="body"
+        style={{ fontStyle: 'italic', color: colors.composerPlaceholder, paddingRight: WORDS_END_PADDING }}
+      >
         {text}
       </Txt>
-      <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <X size={14} color={colors.composerPlaceholder} />
+      <View
+        testID="ccr-queued-message-x"
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ position: 'absolute', top: PADDING, right: PADDING, width: X_SIZE, height: X_SIZE }}
+      >
+        <Svg width={X_SIZE} height={X_SIZE} viewBox="0 0 1000 1000">
+          <Path d={X_OUTLINE} fill={colors.composerPlaceholder} />
+        </Svg>
       </View>
     </Pressable>
   )
