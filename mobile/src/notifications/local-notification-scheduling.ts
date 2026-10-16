@@ -11,12 +11,6 @@ import { decorateWithPrompt } from './permission-notification-decorate'
 import { lookupPendingPrompt } from './permission-lookup'
 import { ensurePermissionCategory } from './permission-notification-category'
 import { decorateWithReply, isSessionReplyCategory } from './session-reply-notification'
-import {
-  allCategoriesOff,
-  categoryLetsThrough,
-  notificationCategoriesForBanner,
-  warmNotificationCategories
-} from './notification-categories'
 
 export type NotificationEvent = {
   type: 'notification'
@@ -115,7 +109,6 @@ export function notificationTrigger(): { channelId: string } | null {
 let channelReady: Promise<void> | null = null
 
 export function configureNotificationChannel(): void {
-  warmNotificationCategories()
   void ensureNotificationChannel()
 }
 
@@ -255,15 +248,8 @@ export async function showLocalNotification(
       return
     }
 
-    const categories = await notificationCategoriesForBanner()
-    if (allCategoriesOff(event.source, categories)) {
-      return
-    }
     await ensureNotificationChannel()
     const content = await presentedNotificationContent(event, hostId, link)
-    if (!categoryLetsThrough(event.source, content, categories)) {
-      return
-    }
     if (link.quietUnlessActionable && !isActionable(content)) {
       return
     }
@@ -295,11 +281,6 @@ export async function showLocalNotification(
       return null
     }
 
-    const categories = await notificationCategoriesForBanner()
-    if (allCategoriesOff(event.source, categories)) {
-      return null
-    }
-
     if (notificationState.identifier) {
       await Notifications.dismissNotificationAsync(notificationState.identifier).catch(() => {})
       notificationState.identifier = undefined
@@ -307,9 +288,6 @@ export async function showLocalNotification(
 
     await ensureNotificationChannel()
     const content = await presentedNotificationContent(event, hostId, link)
-    if (!categoryLetsThrough(event.source, content, categories)) {
-      return null
-    }
     if (link.quietUnlessActionable && !isActionable(content)) {
       return null
     }

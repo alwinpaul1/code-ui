@@ -639,7 +639,7 @@ padding on all sides and Send's colours.
 | Transcript text size Small 0.85 / Medium 1.0 / Large 1.15 | Done 2026-10-14: the three sizes, persisted, where the transcript's pinch (0.8-1.8) starts (G8) | Match |
 | Transcript font Anthropic Sans / System; code font JetBrains Mono / System | Done 2026-10-14: Instrument Sans / System, and System / JetBrains Mono, each option drawn in its own face (G8) | Match (Instrument Sans for Anthropic Sans) |
 | "Wrap long lines" (default off) | Done 2026-10-14 (G8) | Match |
-| Notification toggles "Code updates" / "Code permission requests" | Done 2026-10-14: both, under the one "Agent notifications" switch (G22) | Match |
+| Notification toggles "Code updates" / "Code permission requests" | Added 2026-10-14 (G22), removed 2026-10-16 at the user's request: Code notifications are always on, under the one "Agent notifications" switch | Intentional difference |
 | Auto mode opt-in dialog | none | **Missing** (P3, G33) |
 
 ### 3.7 Notifications
