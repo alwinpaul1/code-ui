@@ -386,7 +386,7 @@ export function MobileNativeChatView({
               <>
                 {/* The working line, the transcript's last row (MobileNativeChatWorkingFooter). The
                     structured lane says "Working for N" per turn, so there only the count shows. */}
-                <MobileNativeChatWorkingFooter messages={messages} working={agentWorking === true && !structuredActivityUi} thinking={turnThinking === true} />
+                <MobileNativeChatWorkingFooter messages={messages} working={agentWorking === true && !structuredActivityUi} thinking={turnThinking === true} agent={agent} awaitingApproval={!structuredActivityUi && (permission != null || ask != null)} />
                 <MobileNativeChatListHeader
                   agent={agent}
                   queuedMessages={queuedMessages}
