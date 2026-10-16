@@ -114,10 +114,11 @@ const byTestId = (root: ReactTestInstance, testID: string) =>
 const label = (root: ReactTestInstance) => byTestId(root, 'native-chat-tool-row-label')[0]
 const clock = (root: ReactTestInstance) =>
   byTestId(root, 'native-chat-tool-row-clock').find((node) => (node.type as unknown) === 'View')
+// Each square separator (ClaudeFooterSeparator) reads as the " · " it draws.
 const strings = (root: ReactTestInstance) =>
   root
-    .findAll((node) => (node.type as unknown) === 'Text')
-    .map((node) => node.props.children)
+    .findAll((node) => (node.type as unknown) === 'Text' || (node.props.testID === 'claude-footer-separator' && (node.type as unknown) === 'View'))
+    .map((node) => (node.props.testID === 'claude-footer-separator' ? ' · ' : node.props.children))
     .filter((child): child is string => typeof child === 'string')
 const colorOf = (node: ReactTestInstance) =>
   (([] as unknown[]).concat(node.props.style).flat(3) as Array<{ color?: string } | undefined>).reduce<string>(
