@@ -28,6 +28,7 @@ import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-r
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
@@ -37,6 +38,7 @@ import { runningCallVerb } from './mobile-native-chat-running-verb'
 import { toolRunMayBeRunning, toolRunProgress, type ToolRunProgress } from './mobile-native-chat-tool-run-progress'
 import { runningCallAccessibilityLabel } from './mobile-native-chat-running-call-label'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
@@ -140,7 +142,8 @@ function ToolRunView({
   inNewestReply = false,
   styles
 }: ToolRunProps) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const toolRun = claudeToolRunPalette(scheme)
   // The turn's live call is handed to every run of the turn; only the run that
   // holds it draws the "Running" row. Taken as given, an earlier settled run
   // drew a second one over its own "Ran 2 commands".
@@ -256,16 +259,23 @@ function ToolRunView({
           accessibilityLabel={focusView ? undefined : runningCallAccessibilityLabel(call)}
           accessibilityLiveRegion="polite"
         >
-          {ActiveToolIcon ? <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} /> : null}
+          {ActiveToolIcon ? (
+            <ActiveToolIcon
+              size={TOOL_RUN_ROW.leadingIconSize}
+              color={toolRun.icon}
+              strokeWidth={2}
+              style={{ transform: [{ translateX: TOOL_RUN_ROW.leadingIconNudge }] }}
+            />
+          ) : null}
           <ShimmerText
             text={focusView ? countLabel : runningCallVerb(call)}
             active
-            color={colors.textSecondary}
+            color={toolRun.text}
             style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
             numberOfLines={1}
             testID="tool-run-active-label"
           />
-          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+          <Chevron size={TOOL_RUN_ROW.chevronSize} color={toolRun.text} strokeWidth={2} />
         </Pressable>
       </View>
     )
@@ -345,11 +355,11 @@ function ToolRunView({
         >
           {runningAgent ? (
             <>
-              {progress.icon ? <AgentRunGlyph icon={progress.icon} color={colors.textMuted} /> : null}
+              {progress.icon ? <AgentRunGlyph icon={progress.icon} color={toolRun.icon} /> : null}
               <ShimmerText
                 text={runningAgentText(agentSubject)}
                 active
-                color={colors.textSecondary}
+                color={toolRun.text}
                 style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
                 numberOfLines={1}
                 testID="tool-run-agent-label"
@@ -379,7 +389,7 @@ function ToolRunView({
             </Text>
           ) : null}
           {diffStat && !runningAgent ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
-          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+          <Chevron size={TOOL_RUN_ROW.chevronSize} color={toolRun.text} strokeWidth={2} />
         </Pressable>
       </View>
           )

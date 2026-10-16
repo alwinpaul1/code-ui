@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Brain, ChevronRight } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { TOOL_RUN_ROW } from './claude-tool-run-row-spec'
 import { MobileNativeChatThinkingSheet, THOUGHT_PROCESS_LABEL } from './MobileNativeChatThinkingSheet'
 
 /**
@@ -29,7 +31,8 @@ export function MobileNativeChatReasoningNote({
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
 }) {
-  const { colors } = useTheme()
+  const { scheme } = useTheme()
+  const toolRun = claudeToolRunPalette(scheme)
   const [open, setOpen] = useState(false)
   const text = nativeChatMessageText(message.blocks).trim()
   if (!text) {
@@ -45,11 +48,11 @@ export function MobileNativeChatReasoningNote({
         accessibilityLabel={THOUGHT_PROCESS_LABEL}
         accessibilityHint="Opens the thinking"
       >
-        <Brain size={14} color={colors.textMuted} strokeWidth={2} />
+        <Brain size={TOOL_RUN_ROW.thoughtIconSize} color={toolRun.text} strokeWidth={2} />
         <Text style={[styles.toolRunLabel, styles.toolRunSentence]} numberOfLines={1}>
           {THOUGHT_PROCESS_LABEL}
         </Text>
-        <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+        <ChevronRight size={TOOL_RUN_ROW.chevronSize} color={toolRun.text} strokeWidth={2} />
       </Pressable>
       <MobileNativeChatThinkingSheet
         visible={open}

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import { claudeSessionPillPalette } from '../theme/claude-session-pill-palette'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -42,6 +42,7 @@ export function ToolRunDiffChip({
       stat={stat}
       fontFamily={styles.toolRunLabel.fontFamily}
       fontSize={Math.round(sentenceSize * DIFF_PILL_TYPE_SCALE)}
+      style={styles.toolRunDiffStat}
     />
   )
 }
@@ -51,17 +52,20 @@ export function ToolRunDiffChip({
 export function DiffPill({
   stat,
   fontFamily,
-  fontSize
+  fontSize,
+  style
 }: {
   stat: NativeChatToolRunDiffStat
   fontFamily: string | undefined
   fontSize: number
+  /** Its place in the caller's row (the run header's 8 dp after the sentence). */
+  style?: StyleProp<ViewStyle>
 }): React.JSX.Element {
   const { scheme } = useTheme()
   const claude = claudeSessionPillPalette(scheme)
   const type = { fontFamily, fontSize }
   return (
-    <View testID="tool-run-diff-chip" style={pill.pill}>
+    <View testID="tool-run-diff-chip" style={[pill.pill, style]}>
       <Text
         testID="tool-run-diff-added"
         style={[pill.segment, type, { color: claude.chipAddText, backgroundColor: claude.chipAddFill }]}

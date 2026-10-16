@@ -7,7 +7,8 @@ import {
   type NativeChatBlock,
   type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
-import { darkColors, fontFamily, lightColors } from '../theme/tokens'
+import { claudeToolRunPalette } from '../theme/claude-tool-run-palette'
+import { fontFamily } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
@@ -178,16 +179,13 @@ describe('the collapsed row of a command that is still running', () => {
     expect(texts(tree)).toContain('Ran 2 commands')
   })
 
-  it.each([
-    ['light', lightColors],
-    ['dark', darkColors]
-  ] as const)('is worded like the running-agent row, in %s', (scheme, palette) => {
+  it.each(['light', 'dark'] as const)('is worded like the running-agent row, in %s', (scheme) => {
     const style = flat(label(render(RUNNING_BASH, scheme)).props.style)
-    // The agent row's face and size (toolRunLabel: Medium 13), not a lighter
-    // one that makes the word change weight when the row settles into "Ran …".
-    expect(style.fontFamily).toBe(fontFamily.medium)
-    expect(style.fontSize).toBe(13)
-    expect(style.color).toBe(palette.textSecondary)
+    // The agent row's face and size (toolRunLabel: SemiBold 15, the Claude app's `xo7.C`), not a
+    // lighter one that makes the word change weight when the row settles into "Ran …".
+    expect(style.fontFamily).toBe(fontFamily.semibold)
+    expect(style.fontSize).toBe(15)
+    expect(style.color).toBe(claudeToolRunPalette(scheme).text)
   })
 
   it.each([

@@ -127,26 +127,26 @@ describe('the face a running label keeps while it shimmers', () => {
   }
 
   // Code review of c03f5328: the swept "Running agent" drew in Regular where
-  // the plain label is Medium. Each glyph span named no face, so the patched
+  // the plain label is Medium (SemiBold since 2026-10-16, claude-tool-run-row-spec.ts). Each glyph span named no face, so the patched
   // Text gave it Regular, and the narrower word pulled the chevron sideways
   // when the sweep started and stopped.
-  it('keeps "Running agent" in Medium while it sweeps, in light and dark', () => {
+  it('keeps "Running agent" in its SemiBold while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(AgentRow, scheme, 'agent-run-label')
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running agent')
-      expect(faceOf(label)).toBe(fontFamily.medium)
-      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
+      expect(faceOf(label)).toBe(fontFamily.semibold)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.semibold]))
     }
   })
 
-  // The tool row's "Running" is the agent row's Medium (2026-10-09, matching the
-  // Claude app's row for a running command), not the Regular it first had.
-  it('keeps the running tool row\'s "Running" in Medium while it sweeps, in light and dark', () => {
+  // The tool row's "Running" is the agent row's face (2026-10-09, matching the
+  // Claude app's row for a running command; SemiBold since 2026-10-16), not the Regular it first had.
+  it('keeps the running tool row\'s "Running" in its SemiBold while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(ToolRow, scheme, 'tool-run-active-label')
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running')
-      expect(faceOf(label)).toBe(fontFamily.medium)
-      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
+      expect(faceOf(label)).toBe(fontFamily.semibold)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.semibold]))
     }
   })
 
