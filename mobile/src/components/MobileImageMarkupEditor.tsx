@@ -2,15 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Modal,
-  Pressable,
   StatusBar,
   useWindowDimensions,
   View
 } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { runOnJS } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Image as SvgImage, Path } from 'react-native-svg'
-import { Check, Redo2, Undo2, X } from 'lucide-react-native'
 import { closeImageMarkup, peekImageMarkup, useImageMarkup } from '../session/image-markup-store'
 import { closeImagePreview } from '../session/image-preview-store'
 import { loadMarkupImageSize } from './markup-image-size'
@@ -37,13 +36,15 @@ import {
 } from '../session/image-markup-geometry'
 import { containedSize } from './zoomable-image-math'
 import { useTheme } from '../theme/theme-context'
+import { imageMarkupPalette } from '../theme/image-markup-palette'
 import { Txt } from '../ui/Txt'
 import { ConfirmModal } from './ConfirmModal'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
+import { ImageMarkupBar, MARKUP_BAR_RETURN_MS, useScreenReaderRef } from './ImageMarkupBar'
 
 // The pen (MARKUP_PEN_COLOR) is deliberately theme-invariant: the Claude
-// app's red on a light or a dark canvas alike. Every other colour in this
-// screen comes from `useTheme()`.
+// app's red on its black canvas in either scheme. Every other colour in this
+// screen comes from `useTheme()` (imageMarkupPalette).
 
 type NaturalSize = { width: number; height: number }
 
@@ -68,14 +69,23 @@ function describeError(error: unknown): string {
  *  asking that view for a bitmap at the photo's own resolution already
  *  contains both layers composited — no extra native dependency needed.
  *
- *  Copied from the Claude app (1.261009.20, `jgh`/`fl`): the bar is titled
- *  "Mark up image"; while Done writes the picture it adds "Saving…" and the
- *  screen can be neither closed nor drawn on; an opaque source is written as
- *  JPEG at 85, one with alpha as PNG (image-markup-format.ts). The bar keeps
- *  Code UI's own colours and sizes. */
+ *  Laid out as the Claude app's (com.anthropic.claude 1.261013.20, `brh.c`,
+ *  `zqh`, `vqh`, decompiled 2026-10-16): the photo fills a black screen, and
+ *  a bar floats over its top inside the status-bar inset, 16/5 dp padding and
+ *  8 dp gaps (zqh.java:110-116, `j7w.k`): a round Close, an Undo | Redo pill
+ *  with a 20 dp hairline between (vqh.b), and, pushed to the end, a round
+ *  Done whose check is clay and which stays disabled until something is drawn
+ *  (zqh.java:145-167). The bar fades out while a stroke is drawn and comes
+ *  back 400 ms after it ends, unless a screen reader is on (`mki.R`/m7d).
+ *  "Mark up image" names the screen for a screen reader only (xqh.java:85-93);
+ *  while Done writes the picture, Close and Done are disabled with "Saving…"
+ *  as their reason (brh.java:207, d040.v) and the screen cannot be drawn on.
+ *  An opaque source is written as JPEG at 85, one with alpha as PNG
+ *  (image-markup-format.ts). */
 export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const session = useImageMarkup()
-  const { colors, space, isDark } = useTheme()
+  const { scheme, space } = useTheme()
+  const palette = imageMarkupPalette(scheme)
   const { width, height } = useWindowDimensions()
   const svgRef = useRef<Svg>(null)
   const [natural, setNatural] = useState<NaturalSize | null>(null)
@@ -84,6 +94,11 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const [draftPoints, setDraftPoints] = useState<readonly MarkupPoint[]>([])
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
   const [saving, setSaving] = useState(false)
+  /** The bar is faded out while a stroke is drawn. */
+  const [barHidden, setBarHidden] = useState(false)
+  const barTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const screenReaderRef = useScreenReaderRef()
+  const insets = useSafeAreaInsets()
   /** The stroke being drawn, kept current outside renders (endDraftStroke). */
   const draftRef = useRef<readonly MarkupPoint[]>([])
   /** The save in flight, so a flatten answering after it was given up on is
@@ -101,12 +116,15 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     setDraftPoints([])
     setConfirmingDiscard(false)
     setSaving(false)
+    setBarHidden(false)
+    clearBarTimer(barTimerRef)
     draftRef.current = []
     savingRef.current = null
   }, [session?.token])
 
   useEffect(() => () => {
     savingRef.current = null
+    clearBarTimer(barTimerRef)
   }, [])
 
   useEffect(() => {
@@ -134,8 +152,8 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     }
   }, [session?.token, session?.uri])
 
-  const barHeight = space.xl + space.lg + 44 + space.md
-  const box = { width, height: Math.max(0, height - barHeight) }
+  // The photo is fitted to the whole window; the bar floats over it.
+  const box = { width, height }
   const aspectRatio = natural && natural.height > 0 ? natural.width / natural.height : 0
   const drawn = containedSize(box, aspectRatio)
   const penWidth = natural ? markupPenWidth(natural.width, drawn.width) : 0
@@ -148,8 +166,12 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       const point = displayPointToNatural({ x, y }, drawn, natural)
       draftRef.current = replace ? [point] : [...draftRef.current, point]
       setDraftPoints(draftRef.current)
+      if (replace && !screenReaderRef.current) {
+        clearBarTimer(barTimerRef)
+        setBarHidden(true)
+      }
     },
-    [natural, drawn.width, drawn.height]
+    [natural, drawn.width, drawn.height, screenReaderRef]
   )
 
   // Commits from the ref, not from a render's draftPoints: the gesture's
@@ -161,6 +183,11 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     const points = draftRef.current
     draftRef.current = []
     setDraftPoints([])
+    clearBarTimer(barTimerRef)
+    barTimerRef.current = setTimeout(() => {
+      barTimerRef.current = null
+      setBarHidden(false)
+    }, MARKUP_BAR_RETURN_MS)
     if (points.length === 0) {
       return
     }
@@ -211,9 +238,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       return
     }
     if (!hasMarkupStrokes(strokeState) || !natural) {
-      // Nothing drawn (or the photo never loaded): closing is the same as X,
-      // and re-encoding an unmarked photo would only lose quality for nothing.
-      closeImageMarkup()
+      // Done is disabled until something is drawn, as in the Claude app; a
+      // tap that lands anyway does nothing rather than re-encode an unmarked
+      // photo for nothing.
       return
     }
     const svg = svgRef.current
@@ -275,81 +302,39 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       // (Android dropped this window when they did, 2026-10-14); it gives way once this one shows.
       onShow={closeImagePreview}
     >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      {/* The canvas is black in both schemes, so the status bar is light on it. */}
+      <StatusBar barStyle="light-content" />
       {/* Own gesture root: a Modal is a separate native window on Android,
           and gesture-handler only sees touches under a root in the same
           window (same reasoning as ImagePreviewModal). */}
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View
+          style={{ flex: 1, backgroundColor: palette.canvas }}
+          accessibilityLabel="Mark up image"
+          testID="markup-screen"
+        >
+          {/* The photo first and the bar after it: the bar paints over the
+              photo by source order, with no z-index. */}
           <View
             style={{
-              height: barHeight,
-              paddingTop: space.xl + space.lg,
-              paddingHorizontal: space.md,
-              flexDirection: 'row',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: colors.bgPanel,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border
+              justifyContent: 'center'
             }}
           >
-            <View style={{ flexDirection: 'row', gap: space.sm }}>
-              <TopBarButton
-                accessibilityLabel="Close"
-                onPress={handleClose}
-                disabled={saving}
-                background={colors.bgRaised}
-              >
-                <X size={20} color={colors.text} strokeWidth={2.2} />
-              </TopBarButton>
-              <TopBarButton
-                accessibilityLabel="Undo"
-                onPress={() => setStrokeState(undoMarkupStroke)}
-                disabled={saving || !canUndoMarkupStroke(strokeState)}
-                background={colors.bgRaised}
-              >
-                <Undo2
-                  size={20}
-                  color={canUndoMarkupStroke(strokeState) ? colors.text : colors.textMuted}
-                  strokeWidth={2.2}
-                />
-              </TopBarButton>
-              <TopBarButton
-                accessibilityLabel="Redo"
-                onPress={() => setStrokeState(redoMarkupStroke)}
-                disabled={saving || !canRedoMarkupStroke(strokeState)}
-                background={colors.bgRaised}
-              >
-                <Redo2
-                  size={20}
-                  color={canRedoMarkupStroke(strokeState) ? colors.text : colors.textMuted}
-                  strokeWidth={2.2}
-                />
-              </TopBarButton>
-            </View>
-            <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: space.sm }}>
-              <Txt variant="body" weight="semibold" numberOfLines={1}>
-                Mark up image
-              </Txt>
-              {saving ? (
-                <Txt variant="caption" tone="secondary" numberOfLines={1} accessibilityLiveRegion="polite">
-                  Saving…
-                </Txt>
-              ) : null}
-            </View>
-            <TopBarButton accessibilityLabel="Done" onPress={handleDone} disabled={saving} background={colors.accent}>
-              <Check size={20} color={colors.onAccent} strokeWidth={2.6} />
-            </TopBarButton>
-          </View>
-
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             {loadFailed ? (
-              <Txt variant="body" tone="secondary">
-                Couldn't load image
+              <Txt
+                variant="body"
+                style={{ color: palette.canvasText, textAlign: 'center', paddingHorizontal: space.xl }}
+              >
+                Preview unavailable
               </Txt>
             ) : !natural ? (
-              <ActivityIndicator color={colors.text} />
+              <ActivityIndicator color={palette.canvasText} />
             ) : (
               <GestureDetector gesture={pan}>
                 <View style={{ width: drawn.width, height: drawn.height }} testID="markup-canvas">
@@ -398,6 +383,20 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
               </GestureDetector>
             )}
           </View>
+
+          <ImageMarkupBar
+            palette={palette}
+            insetTop={insets.top}
+            hidden={barHidden}
+            saving={saving}
+            canUndo={canUndoMarkupStroke(strokeState)}
+            canRedo={canRedoMarkupStroke(strokeState)}
+            hasStrokes={hasMarkupStrokes(strokeState)}
+            onClose={handleClose}
+            onUndo={() => setStrokeState(undoMarkupStroke)}
+            onRedo={() => setStrokeState(redoMarkupStroke)}
+            onDone={handleDone}
+          />
         </View>
       </GestureHandlerRootView>
       <ConfirmModal
@@ -412,37 +411,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   )
 }
 
-function TopBarButton({
-  accessibilityLabel,
-  onPress,
-  disabled,
-  background,
-  children
-}: {
-  accessibilityLabel: string
-  onPress: () => void
-  disabled?: boolean
-  background: string
-  children: React.ReactNode
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: Boolean(disabled) }}
-      onPress={disabled ? undefined : onPress}
-      hitSlop={8}
-      style={{
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: background,
-        opacity: disabled ? 0.5 : 1
-      }}
-    >
-      {children}
-    </Pressable>
-  )
+function clearBarTimer(timer: { current: ReturnType<typeof setTimeout> | null }): void {
+  if (timer.current !== null) {
+    clearTimeout(timer.current)
+    timer.current = null
+  }
 }

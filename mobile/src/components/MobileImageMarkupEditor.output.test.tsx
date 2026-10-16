@@ -4,14 +4,20 @@ import { Component, createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The markup editor's Done, against the Claude app's (com.anthropic.claude
-// 1.261009.20, decompiled 2026-10-11):
-//   - the title bar reads "Mark up image" (`image_markup_title`);
-//   - while the picture is written it adds "Saving…" (`image_markup_saving`)
-//     and the screen cannot be closed (`gic(!saving, ..)`) nor drawn on;
+// The markup editor against the Claude app's (com.anthropic.claude
+// 1.261009.20 for the output, 1.261013.20 for the screen, decompiled
+// 2026-10-11 and 2026-10-16):
+//   - "Mark up image" (`image_markup_title`) names the screen for a screen
+//     reader only; no title is drawn (xqh.java:85-93);
+//   - while the picture is written, Close and Done give "Saving…"
+//     (`image_markup_saving`) as their reason and the screen cannot be closed
+//     (`goc(!saving, ..)`) nor drawn on;
+//   - Done stays disabled until something is drawn (zqh.java:150);
+//   - the floating bar fades out under a stroke and returns 400 ms after it
+//     (`brh.a`, m7d case 11), unless a screen reader is on;
 //   - an opaque source goes out as JPEG at quality 85, one with alpha as PNG
 //     (`q130.r`, `fl.z`).
-// Code UI keeps its own bar, colours and sizes; only the behaviour is copied.
+// Code UI keeps its own type sizes; the layout, colours and behaviour are the app's.
 
 const pan = vi.hoisted(() => ({
   onStart: null as null | ((event: { x: number; y: number }) => void),
@@ -25,12 +31,14 @@ const svg = vi.hoisted(() => ({
   throws: null as null | Error
 }))
 const manipulator = vi.hoisted(() => ({ compress: [] as number[], formats: [] as string[] }))
+const screenReader = vi.hoisted(() => ({ on: false }))
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   AccessibilityInfo: {
     addEventListener: () => ({ remove: () => {} }),
-    isReduceMotionEnabled: () => Promise.resolve(false)
+    isReduceMotionEnabled: () => Promise.resolve(false),
+    isScreenReaderEnabled: () => Promise.resolve(screenReader.on)
   },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Image: { getSize: vi.fn() },
@@ -166,6 +174,7 @@ beforeEach(() => {
   svg.throws = null
   manipulator.compress = []
   manipulator.formats = []
+  screenReader.on = false
 })
 
 afterEach(() => {
@@ -183,6 +192,18 @@ function texts(): string[] {
   return renderer!.root
     .findAll((node) => (node.type as unknown) === 'Text')
     .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
+}
+
+function saysSaving(): boolean {
+  return ['Close', 'Done'].every((label) => button(label).props.accessibilityValue?.text === 'Saving…')
+}
+
+function bar(): ReactTestInstance {
+  return renderer!.root.find((node) => node.props.testID === 'markup-bar' && typeof node.type === 'string')
+}
+
+function glyph(name: string): ReactTestInstance {
+  return renderer!.root.find((node) => (node.type as unknown) === name)
 }
 
 function button(label: string): ReactTestInstance {
@@ -233,10 +254,12 @@ async function finishFlatten(): Promise<void> {
 }
 
 describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (scheme) => {
-  it('is titled "Mark up image", as the Claude app titles it', async () => {
+  it('names the screen "Mark up image" for a screen reader and draws no title, as the Claude app does', async () => {
     await openOn(OPAQUE_PHOTO, scheme)
-    expect(texts()).toContain('Mark up image')
-    expect(texts()).not.toContain('Saving…')
+    const screen = renderer!.root.find((node) => node.props.testID === 'markup-screen' && typeof node.type === 'string')
+    expect(screen.props.accessibilityLabel).toBe('Mark up image')
+    expect(texts()).not.toContain('Mark up image')
+    expect(saysSaving()).toBe(false)
   })
 
   it('saves a marked-up JPEG photo as a JPEG at quality 85', async () => {
@@ -262,8 +285,7 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     const done = await openOn(OPAQUE_PHOTO, scheme)
     await drawAStroke()
     await pressDone()
-    expect(texts()).toContain('Mark up image')
-    expect(texts()).toContain('Saving…')
+    expect(saysSaving()).toBe(true)
     for (const label of ['Close', 'Undo', 'Redo', 'Done']) {
       expect(button(label).props.accessibilityState, label).toEqual({ disabled: true })
       expect(button(label).props.onPress, label).toBeUndefined()
@@ -312,12 +334,13 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     await drawAStroke()
     vi.useFakeTimers()
     await pressDone()
-    expect(texts()).toContain('Saving…')
+    expect(saysSaving()).toBe(true)
     await act(async () => {
       vi.advanceTimersByTime(30_000)
     })
-    expect(texts()).not.toContain('Saving…')
+    expect(saysSaving()).toBe(false)
     expect(button('Close').props.accessibilityState).toEqual({ disabled: false })
+    expect(button('Done').props.accessibilityState).toEqual({ disabled: false })
     expect(warn.mock.calls.some((call) => String(call[0]).includes('never answered'))).toBe(true)
     vi.useRealTimers()
     await finishFlatten()
@@ -331,7 +354,7 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     await drawAStroke()
     svg.throws = new Error('bitmap allocation failed')
     await pressDone()
-    expect(texts()).not.toContain('Saving…')
+    expect(saysSaving()).toBe(false)
     expect(button('Close').props.accessibilityState).toEqual({ disabled: false })
     expect(warn.mock.calls.some((call) => String(call[0]).includes('bitmap allocation failed'))).toBe(true)
     expect(done).toEqual([])
@@ -345,7 +368,7 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     await drawAStroke()
     await pressDone()
     await finishFlatten()
-    expect(texts()).not.toContain('Saving…')
+    expect(saysSaving()).toBe(false)
     expect(warn.mock.calls.some((call) => String(call[0]).includes('composer gone'))).toBe(true)
   })
 
@@ -370,12 +393,75 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     })
     await pressDone()
     expect(svg.flatten, 'Done flattened a half-drawn stroke').toBeNull()
-    expect(texts()).not.toContain('Saving…')
+    expect(saysSaving()).toBe(false)
     await act(async () => pan.onEnd!())
     expect(paths()).toBe(2)
     await pressDone()
     await finishFlatten()
     expect(done).toHaveLength(1)
+  })
+
+  it('keeps Done disabled until something is drawn, and again once every stroke is undone', async () => {
+    const done = await openOn(OPAQUE_PHOTO, scheme)
+    expect(button('Done').props.accessibilityState).toEqual({ disabled: true })
+    expect(button('Done').props.onPress).toBeUndefined()
+    expect(peekImageMarkup(), 'an empty Done closed the editor').not.toBeNull()
+    await drawAStroke()
+    expect(button('Done').props.accessibilityState).toEqual({ disabled: false })
+    await act(async () => button('Undo').props.onPress())
+    expect(button('Done').props.accessibilityState).toEqual({ disabled: true })
+    expect(button('Redo').props.accessibilityState).toEqual({ disabled: false })
+    expect(done).toEqual([])
+  })
+
+  it('fades the bar out under a stroke and brings it back 400 ms after the stroke ends', async () => {
+    await openOn(OPAQUE_PHOTO, scheme)
+    expect(bar().props.pointerEvents).toBe('box-none')
+    vi.useFakeTimers()
+    await act(async () => pan.onStart!({ x: 10, y: 10 }))
+    expect(bar().props.pointerEvents, 'the bar stayed up under the pen').toBe('none')
+    expect(bar().props.accessibilityElementsHidden).toBe(true)
+    await act(async () => pan.onUpdate!({ x: 40, y: 30 }))
+    await act(async () => pan.onEnd!())
+    await act(async () => {
+      vi.advanceTimersByTime(399)
+    })
+    expect(bar().props.pointerEvents, 'the bar came back before 400 ms').toBe('none')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(bar().props.pointerEvents).toBe('box-none')
+    expect(bar().props.accessibilityElementsHidden).toBe(false)
+  })
+
+  it('keeps the bar up under a stroke while a screen reader is on', async () => {
+    screenReader.on = true
+    await openOn(OPAQUE_PHOTO, scheme)
+    await act(async () => pan.onStart!({ x: 10, y: 10 }))
+    expect(bar().props.pointerEvents).toBe('box-none')
+    await act(async () => pan.onEnd!())
+  })
+
+  it('draws the photo on black, with the bar in the Claude app\'s pill colours', async () => {
+    const expected =
+      scheme === 'light'
+        ? { pill: '#F9F9F7', glyph: '#131313', off: 'rgba(19, 19, 19, 0.38)', done: '#C6613F', divider: 'rgba(30, 30, 29, 0.15)' }
+        : { pill: '#151515', glyph: '#F9F9F7', off: 'rgba(249, 249, 247, 0.38)', done: '#D97757', divider: 'rgba(225, 224, 217, 0.15)' }
+    await openOn(OPAQUE_PHOTO, scheme)
+    const screen = renderer!.root.find((node) => node.props.testID === 'markup-screen' && typeof node.type === 'string')
+    expect(screen.props.style.backgroundColor).toBe('#000000')
+    expect(button('Close').props.style.backgroundColor).toBe(expected.pill)
+    expect(button('Done').props.style.backgroundColor).toBe(expected.pill)
+    const pill = renderer!.root.find((node) => node.props.testID === 'markup-undo-redo-pill' && typeof node.type === 'string')
+    expect(pill.props.style.backgroundColor).toBe(expected.pill)
+    const divider = renderer!.root.find((node) => node.props.testID === 'markup-undo-redo-divider' && typeof node.type === 'string')
+    expect(divider.props.style).toMatchObject({ width: 1, height: 20, backgroundColor: expected.divider })
+    expect(glyph('X').props.color).toBe(expected.glyph)
+    expect(glyph('RotateCcw').props.color, 'undo with nothing to undo').toBe(expected.off)
+    expect(glyph('Check').props.color, 'Done with nothing drawn').toBe(expected.off)
+    await drawAStroke()
+    expect(glyph('RotateCcw').props.color).toBe(expected.glyph)
+    expect(glyph('Check').props.color, 'Done is clay once there is something to save').toBe(expected.done)
   })
 })
 
