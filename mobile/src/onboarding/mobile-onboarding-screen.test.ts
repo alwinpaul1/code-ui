@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   animatedTiming: vi.fn(),
   ensureNotificationPermissions: vi.fn(),
   saveDefaultSessionView: vi.fn(),
-  savePushNotificationsEnabled: vi.fn()
+  savePushNotificationsEnabled: vi.fn(),
+  askBackgroundDeliveryPowerOnOpen: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
@@ -52,6 +53,9 @@ vi.mock('../storage/session-view-preferences', () => ({
 vi.mock('../storage/preferences', () => ({
   savePushNotificationsEnabled: mocks.savePushNotificationsEnabled
 }))
+vi.mock('../background/background-link', () => ({
+  askBackgroundDeliveryPowerOnOpen: mocks.askBackgroundDeliveryPowerOnOpen
+}))
 
 describe('MobileOnboardingScreen', () => {
   let renderer: ReactTestRenderer | null = null
@@ -67,6 +71,7 @@ describe('MobileOnboardingScreen', () => {
     mocks.ensureNotificationPermissions.mockReset().mockResolvedValue(true)
     mocks.saveDefaultSessionView.mockReset().mockResolvedValue(undefined)
     mocks.savePushNotificationsEnabled.mockReset().mockResolvedValue(undefined)
+    mocks.askBackgroundDeliveryPowerOnOpen.mockReset().mockResolvedValue(undefined)
   })
 
   afterEach(() => {
@@ -104,6 +109,27 @@ describe('MobileOnboardingScreen', () => {
     expect(mocks.ensureNotificationPermissions).not.toHaveBeenCalled()
     expect(mocks.savePushNotificationsEnabled).toHaveBeenCalledWith(false)
     expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
+  })
+
+  // 2026-10-16, asked by the user: battery Unrestricted "automatically by default". A fresh install
+  // turns notifications on here, after the launch's own ask found them off; without this the
+  // first ask waited for the next launch while Doze cut the link.
+  it('starts background delivery and asks for the battery exemption once notifications are turned on', async () => {
+    mocks.params = { hostId: 'paired-host', steps: 'notifications' }
+    await renderScreen()
+    await act(async () => pages()[0].props.onNotificationChoice('enable'))
+    expect(mocks.savePushNotificationsEnabled).toHaveBeenCalledWith(true)
+    expect(mocks.askBackgroundDeliveryPowerOnOpen).toHaveBeenCalledTimes(1)
+    expect(mocks.savePushNotificationsEnabled.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.askBackgroundDeliveryPowerOnOpen.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('does not ask for the battery exemption when notifications are skipped', async () => {
+    mocks.params = { hostId: 'paired-host', steps: 'notifications' }
+    await renderScreen()
+    await act(async () => pages()[0].props.onNotificationChoice('skip'))
+    expect(mocks.askBackgroundDeliveryPowerOnOpen).not.toHaveBeenCalled()
   })
 
   it('finishes immediately when the plan contains only one outstanding step', async () => {

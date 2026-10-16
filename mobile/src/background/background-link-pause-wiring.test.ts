@@ -57,10 +57,6 @@ vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: async () => preferences.push,
   clearBackgroundPowerRequested: async () => undefined,
   loadBackgroundPowerRequestedAgo: async () => null,
-  loadBackgroundPowerAskedAgo: async () => null,
-  loadBackgroundPowerLastSeen: async () => null,
-  saveBackgroundPowerAskedNow: async () => undefined,
-  saveBackgroundPowerLastSeen: async () => undefined
 }))
 
 const appended: ConnectionLogEntry[] = []

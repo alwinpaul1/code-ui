@@ -84,8 +84,6 @@ const MIRRORED_WRITERS = [
     unmirrored: [
       'NOTIF_KEY',
       'REMOTE_PUSH_KEY',
-      'POWER_ASKED_AT_KEY',
-      'POWER_LAST_SEEN_KEY',
       'POWER_REQUESTED_AT_KEY',
       'LIVE_TRANSCRIPTION_KEY'
     ]

@@ -12,11 +12,8 @@ import { subscribeToDesktopNotifications } from '../notifications/mobile-notific
 import {
   clearBackgroundPowerRequested,
   loadBackgroundPowerRequestedAgo,
-  loadBackgroundPowerAskedAgo,
-  loadBackgroundPowerLastSeen,
   loadPushNotificationsEnabled,
-  saveBackgroundPowerAskedNow,
-  saveBackgroundPowerLastSeen
+  saveBackgroundPowerRequestedNow
 } from '../storage/preferences'
 import { adviseBackgroundPowerRequestOutcome } from './background-power-request-outcome'
 import { adviseBackgroundDeliveryPower } from './background-delivery-power'
@@ -233,25 +230,6 @@ export async function loadBackgroundDeliveryOn(): Promise<boolean> {
 }
 
 /**
- * Ask for the battery exemption, once, when the app opens with delivery already
- * on and no exemption granted.
- *
- * Without this the exemption was only ever requested as part of switching
- * delivery ON, so anyone who already had notifications on and merely UPDATED the
- * app was never asked — and the settings row is only seen by someone who goes
- * looking. They kept getting notifications late with nothing saying why
- * (2026-09-15). Doze suspends the app's network however long the foreground
- * service runs; only the exemption lifts it.
- *
- * Asked once per app VERSION, and only from the foreground: Android refuses the
- * dialog from the background, and one that reappears every launch is one people
- * learn to dismiss without reading. Per version rather than once ever, because
- * AsyncStorage survives an update — a plain flag would mean someone who declined
- * once went on getting late notifications forever, with only a settings row to
- * explain it. An update is a natural moment to ask again. The row remains either
- * way.
- */
-/**
  * Report whether an exemption request the reader made actually landed.
  *
  * Called on every return to the foreground, because that is when they come back
@@ -280,39 +258,30 @@ export async function reportBackgroundDeliveryPowerOutcome(): Promise<void> {
   if (outcome === 'granted') {
     // Nothing to say. The thing they asked for happened, and the settings row
     // has already stopped showing.
-    await saveBackgroundPowerLastSeen(true)
     return
   }
   openBackgroundPowerPrompt('not-taken')
 }
 
+/**
+ * Open Android's battery-exemption dialog when the app opens with delivery on and no exemption
+ * granted: every launch, until it is granted (background-delivery-power.ts, 2026-10-16).
+ *
+ * Doze suspends the app's network however long the foreground service runs; only the exemption
+ * lifts it, and Android lets no app grant it to itself. Only from the foreground: Android refuses
+ * the dialog from the background. The Notifications screen's row remains either way.
+ */
 export async function askBackgroundDeliveryPowerOnOpen(): Promise<void> {
   if (!isBackgroundDeliveryAvailable()) {
     return
   }
-  const [deliveryOn, askedAgo, wasUnrestricted] = await Promise.all([
-    syncBackgroundLinkFromPreferences(),
-    loadBackgroundPowerAskedAgo(),
-    loadBackgroundPowerLastSeen()
-  ])
+  const deliveryOn = await syncBackgroundLinkFromPreferences()
   const unrestricted = isBackgroundDeliveryUnrestricted()
-  // Recorded every open, so the next one can tell a grant that was taken away
-  // from one that was never given.
-  await saveBackgroundPowerLastSeen(unrestricted)
-  const advice = adviseBackgroundDeliveryPower({
-    deliveryOn,
-    unrestricted,
-    askedAgo,
-    wasUnrestricted
-  })
-  if (!advice.promptOnOpen) {
+  if (!adviseBackgroundDeliveryPower({ deliveryOn, unrestricted }).promptOnOpen) {
     return
   }
-  // Marked asked BEFORE showing it: a dismissal must not bring it back on the
-  // next launch.
-  await saveBackgroundPowerAskedNow()
-  // Explained first, in the app's own sheet. Android's dialog names the cost and
-  // not the benefit, so alone it is dismissed without being read, and the late
-  // notifications that follow are never connected back to it.
-  openBackgroundPowerPrompt()
+  // Straight to Android's dialog, every launch until it is granted (background-delivery-power.ts).
+  // Marked first, so the return from Android's screen can say whether it went through.
+  await saveBackgroundPowerRequestedNow()
+  requestBackgroundDeliveryUnrestricted()
 }

@@ -18,6 +18,7 @@ import {
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { savePushNotificationsEnabled } from '../src/storage/preferences'
+import { askBackgroundDeliveryPowerOnOpen } from '../src/background/background-link'
 
 const SLIDE_DURATION_MS = 280
 
@@ -123,6 +124,11 @@ function MobileOnboardingFlow({
       try {
         const enabled = choice === 'enable' ? await ensureNotificationPermissions() : false
         await savePushNotificationsEnabled(enabled)
+        if (enabled) {
+          // Starts the link and opens Android's battery-exemption dialog now, while the app is in
+          // front: the launch's own ask ran before this, with notifications still off.
+          void askBackgroundDeliveryPowerOnOpen()
+        }
         advanceOrContinue()
       } catch {
         setError('Notification settings could not be updated. Try again.')
