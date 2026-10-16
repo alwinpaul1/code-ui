@@ -96,12 +96,16 @@ describe('a Claude tab’s live state comes from Anthropic’s stream', () => {
     expect(last().live?.working).toBe(false)
   })
 
-  it('a thinking block opening on the ephemeral stream reads as thinking, the text block after it not', async () => {
+  // Re-pinned 2026-10-16 (99ed79f70): the Claude app's footer reads thinking from `thinking_tokens`
+  // alone (`su8.f7`, ccr-live-state.ts); a thinking block on the partial stream never sets it. Reading
+  // it from the stream kept "thinking some more…" up while the app drew its verb (the user's
+  // screenshots of one moment, 2026-10-16).
+  it('a thinking block opening on the ephemeral stream does not read as thinking: the app reads thinking_tokens alone', async () => {
     const history = [prompt('u1', '2026-10-15T12:29:33Z'), toolCall('a1', '2026-10-15T12:29:40Z')]
     const partial = (inner: Record<string, unknown>) => ({ event_type: 'stream_event', payload: { type: 'stream_event', event: inner, parent_tool_use_id: null, uuid: 'p1', session_id: SESSION_A } })
     setCcrLinkDepsLoader(async () => deps(history, [sseFrame('ephemeral_event', partial({ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }))]))
     await mount()
-    expect(last().live?.thinking).toBe(true)
+    expect(last().live?.thinking).toBe(false)
   })
 
   it('session_update disconnected: the session is not working', async () => {
