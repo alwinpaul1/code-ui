@@ -121,7 +121,7 @@ export function MobileNativeChatStatusLine({
   // su8.java:7019-7027: a connection message means no `Working` header, so no tool row.
   const tool = message === null ? toolRow : null
   const palette = claudeStatusFooterPalette(scheme)
-  const text = { fontFamily: fonts.regular, fontSize: type.body.size, lineHeight: type.body.lineHeight }
+  const text = { fontFamily: fonts.medium, fontSize: type.body.size, lineHeight: type.body.lineHeight }
   const count = formatRunningTaskCount(runningCount)
   const countText = <Text style={[text, { color: palette.link }]}>{count}</Text>
   const countButton = (
@@ -224,7 +224,7 @@ export function MobileNativeChatStatusLine({
 function LiveToolRow({ tool, markKind }: { tool: ClaudeLiveToolRowView; markKind: WorkingMarkKind }) {
   const { scheme, fonts, type } = useTheme()
   const palette = claudeStatusFooterPalette(scheme)
-  const text = { fontFamily: fonts.regular, fontSize: type.body.size, lineHeight: type.body.lineHeight }
+  const text = { fontFamily: fonts.medium, fontSize: type.body.size, lineHeight: type.body.lineHeight }
   const spoken = tool.clock === null ? tool.label : `${tool.label}, ${tool.clock}`
   const content = (
     <>

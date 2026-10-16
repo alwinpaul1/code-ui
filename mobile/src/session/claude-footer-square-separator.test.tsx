@@ -114,3 +114,20 @@ describe('the working footer’s separators', () => {
     expect(dots(draw('light', true, 0))).toHaveLength(0)
   })
 })
+
+// 2026-10-16, from the device beside the Claude app: "make the font in the footer bit more bold".
+// The app's "Clauding… · 3 running tasks" reads a step heavier than its line of body text; ours
+// was the regular face. Every word on the line, verb, figures and count, is the medium face.
+describe('the working footer’s words', () => {
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`are a step bolder than body text (${scheme})`, () => {
+      mocks.stats = { stats: '29s · 1,234 tokens', status: 'thought for 1s' }
+      const root = draw(scheme, true, 2)
+      const texts = root.findAll((n) => (n.type as unknown) === 'Text' && typeof n.props.children === 'string')
+      expect(texts.length).toBeGreaterThan(0)
+      for (const node of texts) {
+        expect(flat(node.props.style).fontFamily).toBe('InstrumentSans_500Medium')
+      }
+    })
+  }
+})
