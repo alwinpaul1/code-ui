@@ -213,6 +213,21 @@ Classes `jgh` (screen), `fgh` (layout), `dgh` (canvas and bar), `pgh`
   flexible spacer, **Done** (check icon). Title "Mark up image"
   (`image_markup_title`); while saving, "Saving…" and the screen cannot be
   dismissed.
+- Re-read in 1.261013.20 (2026-10-16; classes `brh` screen, `xqh`/`zqh`
+  layout, `vqh` canvas and undo/redo pill, `hrh` state, all in
+  classes3.dex): the photo fills the whole screen on black (`g79.b`) and the
+  bar floats over it (`j7w.k` padding 16/5/16/5 dp, 8 dp gaps, below the
+  status-bar inset). Close (`x`) and Done (`check`) are 44 dp circles in
+  `ym7.q` (#F9F9F7 light, #151515 dark); Undo (`arrowCounterClockwise`) and
+  Redo (`arrowClockwise`) share one 44 dp pill of that colour with a 1 x 20 dp
+  `ym7.x` line between them; glyphs are `ym7.O` (#131313 / #F9F9F7) and
+  Done's check is clay `ym7.e` (#C6613F / #D97757). "Mark up image" is the
+  screen's accessibility name only, never drawn; "Saving…" is the disabled
+  reason on Close and Done. Done is disabled until there is a stroke. The bar
+  **hides while a stroke is drawn** and returns 400 ms after it ends (`brh.a`,
+  m7d case 11), except under a screen reader. Load states: spinner, "Preview
+  unavailable" in white, and a notice for animated images
+  (`image_markup_animated_unavailable`).
 - **One tool, a pen.** No colour picker, no width choice, no eraser.
   - Colour **#B93535**.
   - Width **8 dp** at the on-screen size, stored as a fraction of the
@@ -832,8 +847,8 @@ usage" (`o610.java:190`).
 ## Not determined
 
 - The fallback use of the `/preview` URL, and how Read-tool images are drawn.
-- Whether the markup bar hides while drawing, and whether marking up a staged
-  attachment replaces it.
+- Whether marking up a staged attachment replaces it. (The markup bar does
+  hide while drawing: 1.261013.20, `brh`/m7d, 2026-10-16.)
 - The attach (+) button composable, and the exact one-row composer trigger.
 - The spinner sprite's frame count and timing.
 - How far up the Background tasks sheet opens.
