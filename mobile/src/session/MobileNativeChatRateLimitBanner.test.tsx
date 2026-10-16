@@ -308,7 +308,7 @@ describe('the connected banner', () => {
   // Anthropic's own `rate_limit_event` on a matched Claude tab is the server's call and decides over
   // the thresholds (ccr-rate-limit-notice.ts), as the Claude app draws it.
   const rateLimitOf = (payload: Record<string, unknown>) =>
-    deriveCcrLiveState([parseCcrEvent(event(payload))!], { liveFrom: 0, streamThinking: null, connectionStatus: 'connected' }).rateLimit
+    deriveCcrLiveState([parseCcrEvent(event(payload))!], { liveFrom: 0, connectionStatus: 'connected' }).rateLimit
   const withAnthropic = (windows: ReturnType<typeof windowsFor>, payload: Record<string, unknown>): MobileSessionController =>
     ({
       nativeChatController: { nativeChatRateLimits: windows, nativeChatAgent: 'claude', nativeChatAnthropicLive: { rateLimit: rateLimitOf(payload) } }

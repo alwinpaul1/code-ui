@@ -18,15 +18,23 @@ import { decodeCcrEvent, isCcrInterruptEvent } from './ccr-transcript-decode'
  *    Anthropic calls `disconnected` is not working (its Claude Code is not attached).
  *  - `turnStartedAt`: the app's `y6y.d` (y6y.java:76-150), the time of the turn's prompt; here the
  *    first top-level user or assistant event of the open turn, its `created_at`.
- *  - `thinking`: the app's `rs8.F6` (oq8.java case 0), a thinking span in progress. INFERRED from
- *    events (its source, `y6y.o`, is set in code jadx could not decompile): an ephemeral
- *    `stream_event` that opened a thinking block (the link's `streamThinking`), else the newest
- *    top-level event of the turn is the prompt, a thinking-only assistant message, or a `system`
- *    `thinking_tokens`. Output, a tool call or a tool result ends it.
+ *  - `thinking`: the app's `su8.f7` (com.anthropic.claude 1.261013.20, read 2026-10-16; zr8 case
+ *    15: `gzy.c() != null`, with no dialog or permission state over it). `gzy.o`, behind `c()`, is
+ *    set only by `ThinkingTokensChanged` with its block open (`olv`, emitted for a `system`
+ *    `thinking_tokens` that moved the count, t5v.java:1058-1061; handled in
+ *    sessions/store/a.d, classes3 dex 0x700-0x7de) and cleared by `ThinkingBlockClosed` (`nlv`, a
+ *    top-level assistant message after such tokens, t5v.java:846-848; a.d 0x7df-0x82e) and by the
+ *    resets at a typed prompt and the result (t5v.L) and an interrupt (t5v.s). So thinking is: a
+ *    `thinking_tokens` moved the count since the last top-level assistant message. Neither the
+ *    prompt, a thinking-only message nor the stream's content blocks set it. Until 2026-10-16 this
+ *    was inferred from those, and a turn waiting on a tool read "thinking some more…" where the
+ *    app drew its verb (the user's screenshots of one moment, 2026-10-16).
  *  - `thinkingTokens`: `system` `thinking_tokens` (`estimated_tokens`, `estimated_tokens_delta`,
- *    omt.java:30-31), summed as the app's `j8y` does (j8y.java): a block's figure is the larger of
- *    its running delta sum and its estimate, and it is committed when a top-level assistant
- *    message lands (qhu.java:810). Null when there were none this turn.
+ *    omt.java:30-31), summed as the app's `j8y`/`v0z` does (v0z.java): a block's figure is the
+ *    larger of its running delta sum and its estimate, and it is committed when a top-level
+ *    assistant message lands (v0z.a). The figure outlives the block (the app's `gzy.m` is cleared
+ *    only by the resets): it starts over at a typed prompt and with the turn. Null when there were
+ *    none since.
  *  - `runningTasks`: the newest top-level `system` `background_tasks_changed`: its `tasks` array,
  *    each entry with a non-blank `task_id` (qhu.java:2296-2335). Null when none is held: unknown,
  *    not zero.
@@ -161,12 +169,11 @@ function turnSignal(event: CcrEvent): TurnSignal {
 /**
  * The live state from a link's events (oldest first). `liveFrom`: the sequence number up to which
  * the events were read from the phone's kept copy rather than from Anthropic (0 when none were);
- * the turn is judged only from what came after it. `streamThinking`: the link's read of the newest
- * ephemeral `stream_event` (true: a thinking block is open; null: none since the last durable event).
+ * the turn is judged only from what came after it.
  */
 export function deriveCcrLiveState(
   events: readonly CcrEvent[],
-  options: { liveFrom: number; streamThinking: boolean | null; connectionStatus: string | null }
+  options: { liveFrom: number; connectionStatus: string | null }
 ): CcrLiveState {
   let runningTasks: number | null = null
   let compacting = false
@@ -174,7 +181,8 @@ export function deriveCcrLiveState(
   // The open turn, judged from events after the kept copy only.
   let open = false
   let turnStartedAt: number | null = null
-  let lastSignal: TurnSignal | 'tokens' | null = null
+  // `gzy.o != null`: a thinking_tokens moved the count since the last top-level assistant message.
+  let thinkingOpen = false
   let committedTokens = 0
   let blockTokens = 0
   let sawTokens = false
@@ -201,10 +209,14 @@ export function deriveCcrLiveState(
           const estimate = Math.max(0, num(payload.estimated_tokens) ?? 0)
           const delta = num(payload.estimated_tokens_delta)
           if (delta !== null && (delta > 0 || blockHasDelta || estimate > 0)) {
+            const before = committedTokens + blockTokens
             blockHasDelta ||= delta > 0
             blockTokens = Math.max(Math.max(0, delta) + blockTokens, estimate)
             sawTokens = true
-            lastSignal = 'tokens'
+            // v0z.c answers true only when the count moved; only then is `olv` sent (t5v.java:1059).
+            if (committedTokens + blockTokens !== before) {
+              thinkingOpen = true
+            }
           }
         }
         break
@@ -220,7 +232,7 @@ export function deriveCcrLiveState(
         if (live) {
           open = false
           turnStartedAt = null
-          lastSignal = null
+          thinkingOpen = false
         }
         break
       case 'user':
@@ -229,28 +241,32 @@ export function deriveCcrLiveState(
           break
         }
         const signal = turnSignal(event)
+        const wasOpen = open
         if (signal === 'end') {
           open = false
           turnStartedAt = null
-          lastSignal = null
+          thinkingOpen = false
           break
         }
         if (!open) {
           open = true
           turnStartedAt = event.createdAt ?? null
+        }
+        if (!wasOpen || signal === 'prompt') {
+          // t5v.L at a typed prompt (and the turn's start): the figure and the block start over.
           committedTokens = 0
           blockTokens = 0
           sawTokens = false
           blockHasDelta = false
+          thinkingOpen = false
         }
         if (payload.type === 'assistant') {
-          // j8y.a: a top-level assistant message commits the block's figure.
+          // v0z.a: a top-level assistant message commits the block's figure and closes the block
+          // (`ThinkingBlockClosed`).
           committedTokens += blockTokens
           blockTokens = 0
           blockHasDelta = false
-        }
-        if (signal !== 'other') {
-          lastSignal = signal
+          thinkingOpen = false
         }
         break
       }
@@ -260,8 +276,7 @@ export function deriveCcrLiveState(
   }
   const disconnected = options.connectionStatus === 'disconnected'
   const working = open && !disconnected
-  const durableThinking = lastSignal === 'prompt' || lastSignal === 'thinking' || lastSignal === 'tokens'
-  const thinking = working && (options.streamThinking ?? durableThinking)
+  const thinking = working && thinkingOpen
   const tokens = committedTokens + blockTokens
   return {
     working,
@@ -272,35 +287,4 @@ export function deriveCcrLiveState(
     compacting: working && compacting,
     rateLimit
   }
-}
-
-/** What an ephemeral `stream_event` says about a thinking block: true when one opens, false when
- *  another kind of block opens or the message stops, null when it says nothing about it. The
- *  payload is the Agent SDK's partial message, `{type: "stream_event", event: {...}}`, carrying the
- *  Messages API's own stream events (`content_block_start`, `message_stop`). */
-export function streamEventThinking(payload: Record<string, unknown>): boolean | null {
-  if (payload.type !== 'stream_event' || !topLevel(payload)) {
-    return null
-  }
-  const event = rec(payload.event)
-  if (!event) {
-    return null
-  }
-  if (event.type === 'content_block_start') {
-    const kind = rec(event.content_block)?.type
-    if (typeof kind !== 'string') {
-      return null
-    }
-    return kind === 'thinking' || kind === 'redacted_thinking'
-  }
-  if (event.type === 'message_stop') {
-    return false
-  }
-  return null
-}
-
-/** The link's held `streamThinking` after one ephemeral payload: the payload's word, or what was
- *  held when it says nothing. */
-export function nextStreamThinking(current: boolean | null, payload: Record<string, unknown>): boolean | null {
-  return streamEventThinking(payload) ?? current
 }

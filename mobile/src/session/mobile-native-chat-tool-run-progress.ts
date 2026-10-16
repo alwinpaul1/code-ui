@@ -5,6 +5,7 @@ import {
   agentRunState,
   isAgentToolName,
   isLaunchText,
+  type AgentRunIcon,
   type NativeChatAgentRunInputs
 } from './mobile-native-chat-agent-run'
 
@@ -29,7 +30,10 @@ import {
 //   stuck", 2026-10-11, mobile-native-chat-agent-run.ts).
 
 export type ToolRunProgress =
-  | { kind: 'agent'; subject: string | null }
+  /** `icon`: the agent icon while the run's agent runs in the background (null while a call
+   *  is still being made); `agents` when the run has more than one task running, any kind, as
+   *  the Claude app counts them (ei4.java:946-976). */
+  | { kind: 'agent'; subject: string | null; icon: AgentRunIcon | null }
   /** `background`: a task the call launched still runs (the Claude app then
    *  draws the task's icon); otherwise the call itself has no answer yet,
    *  which the app draws with no icon. */
@@ -109,13 +113,22 @@ export function toolRunProgress(
   { inNewestReply }: { inNewestReply: boolean }
 ): ToolRunProgress {
   const pairs = pairToolBlocks(blocks)
+  const others = pairs.filter((pair) => pair.call !== undefined && !isAgentToolName(pair.call.name))
+  const live = inputs.liveTaskIds
   if (pairs.some((pair) => pair.call !== undefined && isAgentToolName(pair.call.name))) {
     const agents = agentRunState(blocks, inputs)
     if (agents.running) {
-      return { kind: 'agent', subject: agents.subject }
+      const otherTasks = live
+        ? others.filter((pair) => {
+            const id = launchedTaskId(pair)
+            return id !== null && live.has(id)
+          }).length
+        : 0
+      const icon: AgentRunIcon | null =
+        agents.icon === null ? null : agents.icon === 'agent' && otherTasks === 0 ? 'agent' : 'agents'
+      return { kind: 'agent', subject: agents.subject, icon }
     }
   }
-  const others = pairs.filter((pair) => pair.call !== undefined && !isAgentToolName(pair.call.name))
   if (inputs.agentWorking && inNewestReply) {
     const open = openNonAgentCall(pairs)
     // Stateless calls only: a call the structured lane marks is its `activeCall`'s.
@@ -123,7 +136,6 @@ export function toolRunProgress(
       return { kind: 'call', call: open, background: false }
     }
   }
-  const live = inputs.liveTaskIds
   if (live && live.size > 0) {
     for (const pair of others) {
       const id = launchedTaskId(pair)

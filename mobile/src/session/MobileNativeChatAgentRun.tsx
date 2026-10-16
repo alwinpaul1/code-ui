@@ -10,15 +10,15 @@ import { ShimmerText } from './MobileNativeChatShimmerText'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /**
- * A run of Agent calls, drawn the way the Claude app draws it: "Running agent:
- * Review: story flow ›" (the agent it names) while a call is still being made,
- * "Ran 5 agents ›" once every call has its answer, and a sheet of "Ran agent
- * <description>" rows behind the tap (2026-09-24, Claude Code 2.1.281).
- * Running follows the calls, not the agents: a background launch answers at
- * once, and the row settles then; the agents' own progress is the Background
- * tasks sheet's (why, mobile-native-chat-agent-run.ts). While it runs the
- * diamonds and the chevron stand still and a band sweeps across the label, as
- * in the user's recording of the Claude app (2026-09-26).
+ * A run of Agent calls, drawn the way the Claude app draws it: a bare "Running
+ * agent ›" with no icon while a call is still being made (the user's
+ * screenshot, 2026-10-16), "Running agent: <description> ›" beside the agent
+ * icon while an agent it launched runs in the background, "Ran 5 agents ›"
+ * once nothing runs, and a sheet of "Ran agent <description>" rows behind the
+ * tap (2026-09-24, Claude Code 2.1.281). The decompiled rule is in
+ * mobile-native-chat-agent-run.ts. While it runs the icon and the chevron
+ * stand still and a band sweeps across the label, as in the user's recording
+ * of the Claude app (2026-09-26).
  */
 export function MobileNativeChatAgentRun({
   blocks,
@@ -33,7 +33,7 @@ export function MobileNativeChatAgentRun({
   const { colors } = useTheme()
   const runs = useNativeChatAgentRuns()
   const openRunSheet = useRunSheetOpener(blocks, revertScope)
-  const { running, entries, subject } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
+  const { running, entries, subject, icon } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
   const label = running
     ? runningAgentText(subject)
     : `Ran ${entries.length} agent${entries.length === 1 ? '' : 's'}`
@@ -48,7 +48,7 @@ export function MobileNativeChatAgentRun({
           accessibilityLabel={`${label}. Show the agents`}
           accessibilityLiveRegion="polite"
         >
-          <AgentRunGlyph color={colors.textMuted} />
+          {running && icon ? <AgentRunGlyph icon={icon} color={colors.textMuted} /> : null}
           <ShimmerText
             text={label}
             active={running}

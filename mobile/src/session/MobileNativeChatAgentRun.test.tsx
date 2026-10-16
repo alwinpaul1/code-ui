@@ -199,30 +199,31 @@ describe('the conversation row for five agents launched at once', () => {
     await act(async () => target.props.onPress())
   }
 
-  // 2026-10-09, the Claude app: "Running agent: Review: story flow ›", the
-  // agent it names, not a bare "Running agent".
-  // Since 2026-10-11 the row sweeps while launches are being made, not for as
-  // long as the agents run (MobileNativeChatAgentRun-stuck.test.tsx).
-  it('reads "Running agent: <the agent being launched>" while the launches are being made, not "Ran 5 agents"', async () => {
+  // The Claude app names an agent only from the background task its call
+  // launched, and draws no icon over a call still being made (ei4.java:930-1023,
+  // com.anthropic.claude 1.261013.20): "Running agent ›" (the user's
+  // screenshot, 2026-10-16). Until then this row read "Running agent:
+  // <description>" beside the diamonds from the call's own input (a
+  // 2026-10-09 reading of the app that was a background task's description).
+  it('reads a bare "Running agent" while the launches are being made, not "Ran 5 agents"', async () => {
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, messages: launchesBeingMade() })
-    expect(labelText(tree)).toBe(`Running agent: ${PARALLEL_AGENTS[4].description}`)
+    expect(labelText(tree)).toBe('Running agent')
     expect(texts(tree)).not.toContain('Ran 5 agents')
   })
 
   // 2026-09-26, the user, with a recording of the Claude app: "Running agents
-  // animations must be like this". There the diamonds and the chevron stand
-  // still and a darker band sweeps across the label; nothing fades as a whole.
-  // Until then icon and label breathed together (d96fef9b).
-  it('keeps the diamonds still and sweeps a shimmer across the label while a launch is being made', async () => {
+  // animations must be like this". There the chevron stands still and a
+  // darker band sweeps across the label; nothing fades as a whole. Until then
+  // icon and label breathed together (d96fef9b).
+  it('draws no icon and sweeps a shimmer across the label while a launch is being made', async () => {
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true, messages: launchesBeingMade() })
-    // The Svg alone: no animated wrapper around it.
-    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-glyph')).toHaveLength(1)
+    expect(tree.root.findAll((node) => String(node.props.testID ?? '').startsWith('agent-run-glyph'))).toEqual([])
     const row = tree.root.find(
       (node) => String(node.type) === 'Pressable' && /Show the agents/.test(String(node.props.accessibilityLabel))
     )
     expect(row.findAll((node) => opacityOf(node.props.style) !== undefined)).toEqual([])
     // The label is drawn a glyph at a time, each one coloured by the sweep.
-    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${PARALLEL_AGENTS[4].description}`)
+    expect(glyphsOf(tree).join('')).toBe('Running agent')
   })
 
   it('draws "Ran 5 agents" whole, with nothing left sweeping, once they have all reported', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseCcrEvent, type CcrEvent } from './ccr-session-api'
-import { deriveCcrLiveState, readCcrRateLimit, streamEventThinking } from './ccr-live-state'
+import { deriveCcrLiveState, readCcrRateLimit } from './ccr-live-state'
 import { SESSION_A, event } from './fixtures/ccr-session-api-2026-10-14'
 
 // Event shapes: the envelope is `event()` (the keys observed live 2026-10-14). Payloads:
@@ -57,7 +57,7 @@ const thinkingTokens = (uuid: string, estimated: number, delta: number) =>
   parseCcrEvent(event({ type: 'system', subtype: 'thinking_tokens', uuid, session_id: SESSION_A, estimated_tokens: estimated, estimated_tokens_delta: delta }))!
 const status = (uuid: string, value: string | null) => parseCcrEvent(event({ type: 'system', subtype: 'status', uuid, session_id: SESSION_A, status: value }))!
 
-const LIVE = { liveFrom: 0, streamThinking: null, connectionStatus: 'connected' }
+const LIVE = { liveFrom: 0, connectionStatus: 'connected' }
 const T0 = '2026-10-15T12:29:33Z'
 
 describe('a Claude tab’s live state from Anthropic’s events', () => {
@@ -133,26 +133,31 @@ describe('running tasks', () => {
   })
 })
 
+// The Claude app's thinking is `su8.f7`: a thinking_tokens moved the count since the last top-level
+// assistant message (1.261013.20, ccr-live-state.ts has the lines). Until 2026-10-16 the prompt, a
+// thinking-only message and the stream's thinking block made it think too, which the app's never
+// do (claude-footer-thinking-from-events.test.ts has the user's case).
 describe('thinking', () => {
-  it('right after the prompt, and while a thinking-only message is the newest, it is thinking', () => {
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0)], LIVE).thinking).toBe(true)
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0), toolResult('u2', 'toolu_1', T0), thought('a2', T0)], LIVE).thinking).toBe(true)
+  it('is not the prompt, nor a thinking-only message, with no tokens', () => {
+    expect(deriveCcrLiveState([prompt('u1', 'one', T0)], LIVE).thinking).toBe(false)
+    expect(deriveCcrLiveState([prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0), toolResult('u2', 'toolu_1', T0), thought('a2', T0)], LIVE).thinking).toBe(false)
   })
 
-  it('output, a tool call or a tool result ends it', () => {
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0), reply('a1', 'Looking', T0)], LIVE).thinking).toBe(false)
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0)], LIVE).thinking).toBe(false)
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0), toolResult('u2', 'toolu_1', T0)], LIVE).thinking).toBe(false)
+  it('opens with a thinking_tokens count and closes with the next assistant message, of any kind', () => {
+    const opened = [prompt('u1', 'one', T0), thinkingTokens('k1', 0, 400)]
+    expect(deriveCcrLiveState(opened, LIVE).thinking).toBe(true)
+    expect(deriveCcrLiveState([...opened, thought('a1', T0)], LIVE).thinking).toBe(false)
+    expect(deriveCcrLiveState([...opened, reply('a1', 'Looking', T0)], LIVE).thinking).toBe(false)
+    expect(deriveCcrLiveState([...opened, toolCall('a1', 'toolu_1', T0)], LIVE).thinking).toBe(false)
   })
 
-  it('the stream’s own word on a thinking block wins over the durable events', () => {
-    const events = [prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0)]
-    expect(deriveCcrLiveState(events, { ...LIVE, streamThinking: true }).thinking).toBe(true)
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0)], { ...LIVE, streamThinking: false }).thinking).toBe(false)
+  it('a tool result does not close it: only an assistant message does', () => {
+    const events = [prompt('u1', 'one', T0), toolCall('a1', 'toolu_1', T0), thinkingTokens('k1', 0, 400), toolResult('u2', 'toolu_1', T0)]
+    expect(deriveCcrLiveState(events, LIVE).thinking).toBe(true)
   })
 
-  it('idle is never thinking, whatever the stream said last', () => {
-    expect(deriveCcrLiveState([prompt('u1', 'one', T0), result('r1', T0)], { ...LIVE, streamThinking: true }).thinking).toBe(false)
+  it('idle is never thinking, whatever the tokens said last', () => {
+    expect(deriveCcrLiveState([prompt('u1', 'one', T0), thinkingTokens('k1', 0, 400), result('r1', T0)], LIVE).thinking).toBe(false)
   })
 
   it('thinking tokens add up within a block and across the turn, as the app’s j8y does', () => {
@@ -168,24 +173,6 @@ describe('thinking', () => {
   it('reads compacting from system status', () => {
     expect(deriveCcrLiveState([prompt('u1', 'one', T0), status('s1', 'compacting')], LIVE).compacting).toBe(true)
     expect(deriveCcrLiveState([prompt('u1', 'one', T0), status('s1', 'compacting'), status('s2', null)], LIVE).compacting).toBe(false)
-  })
-})
-
-describe('the stream’s partial output', () => {
-  const partial = (inner: Record<string, unknown>, parent: string | null = null) => ({ type: 'stream_event', event: inner, parent_tool_use_id: parent, uuid: 'p1', session_id: SESSION_A })
-
-  it('a thinking block opening says thinking; a text block or the message stop says not', () => {
-    expect(streamEventThinking(partial({ type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }))).toBe(true)
-    expect(streamEventThinking(partial({ type: 'content_block_start', index: 0, content_block: { type: 'redacted_thinking', data: '' } }))).toBe(true)
-    expect(streamEventThinking(partial({ type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } }))).toBe(false)
-    expect(streamEventThinking(partial({ type: 'message_stop' }))).toBe(false)
-  })
-
-  it('a delta, a subagent’s stream and an unknown shape say nothing', () => {
-    expect(streamEventThinking(partial({ type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'x' } }))).toBeNull()
-    expect(streamEventThinking(partial({ type: 'content_block_start', index: 0, content_block: { type: 'thinking' } }, 'toolu_9'))).toBeNull()
-    expect(streamEventThinking({ type: 'stream_event' })).toBeNull()
-    expect(streamEventThinking({ type: 'control_response' })).toBeNull()
   })
 })
 

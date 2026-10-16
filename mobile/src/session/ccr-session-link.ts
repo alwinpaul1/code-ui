@@ -7,7 +7,7 @@ import { readCcrTranscript } from './ccr-transcript-persist'
 import { ccrEventDrawsRow } from './ccr-transcript-decode'
 import { CcrEventStore, CcrKeptCopyWriter } from './ccr-link-store'
 import { readCcrCatchUp } from './ccr-link-catch-up'
-import { CcrStreamBackoff } from './ccr-stream-backoff'; import { nextStreamThinking } from './ccr-live-state'; import { CcrControlWaiters } from './ccr-context-usage'
+import { CcrStreamBackoff } from './ccr-stream-backoff'; import { CcrControlWaiters } from './ccr-context-usage'
 
 export { CCR_FIRST_PAGE_EVENTS, CCR_OLDER_PAGE_EVENTS, CCR_PERSIST_STREAM_MS, CCR_STREAM_LOST_RETRY_MS, CCR_STREAM_RECONNECT_MS, CCR_STREAM_STABLE_MS, type CcrLinkAuth, type CcrLinkDeps, type CcrLinkPhase, type CcrLinkState } from './ccr-session-link-types'
 
@@ -62,7 +62,7 @@ export class CcrSessionLink {
     this.keptCopy = new CcrKeptCopyWriter(deps.setTimer ?? defaultCcrTimer, () =>
       this.stopped ? null : { accountId, sessionId, events: this.store.drawing(), lastSequenceNum: this.store.lastSequenceNum, olderCursor: this.olderCursor, hasOlder: this.state.hasOlder }
     )
-    this.state = { events: [], phase: 'idle', error: null, hasOlder: true, loadingOlder: false, connectionStatus: null, liveFrom: 0, streamThinking: null, version: 0 }
+    this.state = { events: [], phase: 'idle', error: null, hasOlder: true, loadingOlder: false, connectionStatus: null, liveFrom: 0, version: 0 }
     const kept = readCcrTranscript(accountId, sessionId)
     if (kept) {
       this.store.add(kept.events, false)
@@ -243,7 +243,7 @@ export class CcrSessionLink {
     switch (frame.kind) {
       case 'event':
         if (this.store.add([frame.event])) {
-          this.set(this.state.streamThinking === null ? {} : { streamThinking: null })
+          this.set({})
           this.keptCopy.soon()
         }
         return
@@ -259,11 +259,10 @@ export class CcrSessionLink {
         this.log(`skipped a ${frame.event} frame (${frame.reason}); ${this.skippedFrames} so far`)
         return
       case 'ephemeral':
-      case 'ignored': {
-        // Partial output is not kept: only a `stream_event`'s word on a thinking block is, on a change.
-        const next = frame.kind === 'ephemeral' ? nextStreamThinking(this.state.streamThinking, frame.payload) : this.state.streamThinking
-        return next === this.state.streamThinking ? undefined : this.set({ streamThinking: next })
-      }
+      case 'ignored':
+        // Partial output is not kept. Not even its word on a thinking block: the Claude app's
+        // footer reads thinking from `thinking_tokens` alone (ccr-live-state.ts, 2026-10-16).
+        return
       default: {
         const unhandled: never = frame
         return unhandled
@@ -299,7 +298,7 @@ export class CcrSessionLink {
     if (wait === null) {
       this.log(`stream lost for session …${this.sessionId.slice(-6)} after ${this.backoff.count} reconnects: ${why}`)
     }
-    this.set(wait === null ? { phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' } : { phase: 'reconnecting', streamThinking: null })
+    this.set(wait === null ? { phase: 'lost', error: 'Lost the connection to Anthropic. It reconnects when the phone is back online.' } : { phase: 'reconnecting' })
     if (after !== null) {
       this.cancelTimer = (this.deps.setTimer ?? defaultCcrTimer)(() => void ((this.cancelTimer = null), this.connect()), after)
     }

@@ -28,7 +28,7 @@ type SpanState = {
   last: ClaudeThinkingBounds | null
 }
 
-type ClockState = {
+export type FooterClockState = {
   on: boolean
   thinking: boolean
   turn: number | null
@@ -37,7 +37,8 @@ type ClockState = {
   tween: ClaudeTokenTween
 }
 
-const OFF: ClockState = {
+/** The held state with no turn open. */
+export const FOOTER_CLOCK_OFF: FooterClockState = {
   on: false,
   thinking: false,
   turn: null,
@@ -47,7 +48,7 @@ const OFF: ClockState = {
 }
 
 /** The held state after the footer's input at `now`; the same object when nothing changed. */
-export function stepFooterClock(prev: ClockState, live: ClaudeFooterLiveInput | null, now: number): ClockState {
+export function stepFooterClock(prev: FooterClockState, live: ClaudeFooterLiveInput | null, now: number): FooterClockState {
   const on = live !== null
   const thinking = live?.thinking === true
   const turn = live?.turnStartedAt ?? null
@@ -56,7 +57,7 @@ export function stepFooterClock(prev: ClockState, live: ClaudeFooterLiveInput | 
     return prev
   }
   if (!on) {
-    return OFF
+    return FOOTER_CLOCK_OFF
   }
   let span = prev.span.turn === turn && prev.on ? prev.span : { turn, openedAt: null, last: null }
   if (thinking && span.openedAt === null) {
@@ -68,7 +69,7 @@ export function stepFooterClock(prev: ClockState, live: ClaudeFooterLiveInput | 
 }
 
 export function useClaudeFooterStats(live: ClaudeFooterLiveInput | null): ClaudeFooterStats | null {
-  const [held, setHeld] = useState<ClockState>(OFF)
+  const [held, setHeld] = useState<FooterClockState>(FOOTER_CLOCK_OFF)
   const [now, setNow] = useState(() => Date.now())
   const on = live !== null
   const thinking = live?.thinking === true

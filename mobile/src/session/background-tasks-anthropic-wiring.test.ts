@@ -52,7 +52,7 @@ describe("the header's running count is the sheet's Running list, as in the Clau
   const base = { live: { ...CCR_IDLE_LIVE_STATE, runningTasks: 4 }, connectionStatus: null, relayConnected: true, linkPhase: 'live' as const }
   // The live state folded from the very same events, as the link folds them.
   const agree = (events: CcrEvent[], count: number) => {
-    const folded = deriveCcrLiveState(events, { liveFrom: 0, streamThinking: null, connectionStatus: null })
+    const folded = deriveCcrLiveState(events, { liveFrom: 0, connectionStatus: null })
     const live = claudeChatLive({ ...base, live: folded, stream: { ...STREAM, events } })
     expect(live?.runningCount).toBe(count)
     expect(ccrBackgroundTaskRows(live?.stream?.tasks ?? [], NOW).running).toHaveLength(count)

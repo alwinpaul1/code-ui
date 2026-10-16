@@ -95,10 +95,11 @@ describe('a run reading its own progress', () => {
     expect(toolRunProgress(lone, { ...inputs, liveTaskIds: new Set([RUNNING_ROWS_SHELL_ID]) }, NEWEST)).toBeNull()
   })
 
-  it('names the agent it launched while that agent is live', () => {
+  it('names the agent it launched, with the one-agent icon, while that agent is live', () => {
     expect(toolRunProgress(agentRun(), { ...inputs, agentWorking: false, liveTaskIds: new Set([RUNNING_ROWS_AGENT_ID]) }, NEWEST)).toEqual({
       kind: 'agent',
-      subject: RUNNING_ROWS_AGENT_DESCRIPTION
+      subject: RUNNING_ROWS_AGENT_DESCRIPTION,
+      icon: 'agent'
     })
   })
 

@@ -178,13 +178,44 @@ describe('the row of a background Agent call (session 0954729d, Claude Code 2.1.
     expect(labelText(tree)).toBe('Ran 1 agent')
   })
 
-  it('still sweeps "Running agent: <description>" while the call is being made in a live turn', async () => {
+  // 2026-10-16, the user's screenshots of one moment: the Claude app
+  // (com.anthropic.claude 1.261013.20) drew a bare "Running agent ›", no icon,
+  // over an Agent call still waiting on its answer; Code UI drew the diamonds
+  // and "Running agent: Port Claude app live tool row ›". The app names the
+  // agent and draws its icon only from the BACKGROUND TASK the call launched
+  // (ei4.java:930-1023), and a call still being made has none.
+  it('reads a bare "Running agent" with no icon while the call is still being made, as the Claude app does', async () => {
     const tree = await render({
       messages: backgroundAgentLaunchMessages({ withResult: false }),
       status: rosterRunningTheAgent(),
       agentWorking: true
     })
-    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${BACKGROUND_AGENT.description}`)
+    expect(glyphsOf(tree).join('')).toBe('Running agent')
+    expect(tree.root.findAll((node) => String(node.props.testID ?? '').startsWith('agent-run-glyph'))).toEqual([])
+  })
+
+  // agentSimple (cds_icon_symbols U+E11B, one diamond) for one running agent,
+  // agentsSimple (U+E11C, two) for several (ei4.java:969-994, rt30.java:473).
+  it('draws the one-diamond agent icon beside "Running agent: <description>" while the launched agent runs', async () => {
+    const tree = await render({ messages: backgroundAgentLaunchMessages(), status: rosterRunningTheAgent(), agentWorking: true })
+    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-glyph-agent' && String(node.type) === 'Svg')).toHaveLength(1)
+    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-glyph-agents')).toEqual([])
+  })
+
+  it('draws no icon on "Ran 1 agent"', async () => {
+    const tree = await render({ messages: backgroundAgentLaunchMessages(), status: { ...rosterRunningTheAgent(), subagents: [] }, agentWorking: true })
+    expect(labelText(tree)).toBe('Ran 1 agent')
+    expect(tree.root.findAll((node) => String(node.props.testID ?? '').startsWith('agent-run-glyph'))).toEqual([])
+  })
+
+  it('paints the running agent icon from the theme in light and dark', async () => {
+    const glyphColor = (tree: ReactTestRenderer) =>
+      tree.root.find((node) => node.props.testID === 'agent-run-glyph-agent' && String(node.type) === 'Svg').findByType('Path' as never).props.fill
+    const light = glyphColor(await render({ messages: backgroundAgentLaunchMessages(), status: rosterRunningTheAgent(), agentWorking: true, scheme: 'light' }))
+    act(() => renderer?.unmount())
+    const dark = glyphColor(await render({ messages: backgroundAgentLaunchMessages(), status: rosterRunningTheAgent(), agentWorking: true, scheme: 'dark' }))
+    expect(light).toBe(lightColors.textMuted)
+    expect(dark).toBe(darkColors.textMuted)
   })
 
   it('stands still once the turn has ended with the call never answered', async () => {
