@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { logOpenTiming } from './open-timing-log'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import {
@@ -88,6 +89,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     activeSessionTabIdRef.current = cachedActive?.id ?? null
     activeSessionTabTypeRef.current = cachedActive?.type ?? null
     setActiveSessionTabId(cachedActive?.id ?? null)
+    logOpenTiming('session screen opened', `cached tabs=${cachedTabs.length}`)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
     setFileDocs(new Map())
@@ -121,6 +123,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     }
     // Why: clear the initialized flag so the reconnect scrollback replaces stale content instead of being dropped.
     initializedHandlesRef.current.clear()
+    logOpenTiming('session connected')
     let disposed = false
     const timers: ReturnType<typeof setTimeout>[] = []
     function addTimer(fn: () => void, ms: number) {
@@ -161,10 +164,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       if (disposed) {
         return
       }
+      logOpenTiming('session tabs listed')
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
       }
+      logOpenTiming('session terminals listed')
       addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)
       addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)
       if (client && created === '1' && !isFloatingWorkspaceRoute) {

@@ -65,7 +65,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   // Which panes have their first kept frame; until then a pane is covered.
-  const terminalFirstFrameReveal = useTerminalFirstFrameReveal(activeHandle)
+  const terminalFirstFrameReveal = useTerminalFirstFrameReveal()
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   // Why seeded: with a cached strip but no active tab the screen shows the

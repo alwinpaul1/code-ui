@@ -303,21 +303,95 @@ describe('opening a terminal tab paints one phone-size frame', () => {
     expect(h.shown).toBe(true)
   })
 
-  it('shows the pane of an opened tab whose subscribe never gets past its gates (the WebView never came up)', async () => {
-    // Opus review: a WebView that fails to load draws its error and Reload
-    // under the cover; with no subscribe, nothing armed the timeout.
+  // 2026-10-17, logcat on the S23: every pane since 15:58 read "first frame shown
+  // reason: 'timeout'", the Claude tabs (chat view) and JETCAS/TACO alike. The
+  // hook armed its 2.5 s backstop for the ACTIVE handle on its own, chat or no
+  // chat; under the chat the covered stream never reveals, so the timer lifted
+  // the cover behind the chat, and showing the terminal later drew the blank
+  // WebView and the desk-width frame the cover exists to hide. The backstop for
+  // a shown terminal is the view switch's (use-mobile-session-view-switch.test.tsx).
+  it('keeps the terminal under a chat covered past the timeout, so showing it later still waits for its frame', async () => {
     let reveal!: ReturnType<typeof useTerminalFirstFrameReveal>
+    // The screen state's call as it was, the active handle and no word on the chat.
+    const useReveal = useTerminalFirstFrameReveal as (
+      activeHandle: string | null
+    ) => ReturnType<typeof useTerminalFirstFrameReveal>
     function Screen({ activeHandle }: { activeHandle: string | null }) {
-      reveal = useTerminalFirstFrameReveal(activeHandle)
+      reveal = useReveal(activeHandle)
       return null
     }
     act(() => {
-      create(createElement(Screen, { activeHandle: 'pty-antigravity' }))
+      create(createElement(Screen, { activeHandle: 'pty-claude' }))
     })
-    expect(reveal.revealedTerminalHandles.has('pty-antigravity')).toBe(false)
+    await act(async () => {
+      vi.advanceTimersByTime(TERMINAL_FIRST_FRAME_REVEAL_TIMEOUT_MS * 2)
+    })
+    expect(reveal.revealedTerminalHandles.has('pty-claude')).toBe(false)
+
+    // Shown: the backstop starts now, not from when the tab opened.
+    act(() => {
+      reveal.armTerminalFirstFrameRevealTimeout('pty-claude')
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(TERMINAL_FIRST_FRAME_REVEAL_TIMEOUT_MS - 1)
+    })
+    expect(reveal.revealedTerminalHandles.has('pty-claude')).toBe(false)
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(reveal.revealedTerminalHandles.has('pty-claude')).toBe(true)
+  })
+
+  // Review 2026-10-17: a backstop armed while the terminal was on screen kept running
+  // after the chat covered it, and lifted the cover behind the chat.
+  it('keeps a terminal covered when the chat comes over it before its backstop runs out', async () => {
+    let reveal!: ReturnType<typeof useTerminalFirstFrameReveal>
+    function Screen() {
+      reveal = useTerminalFirstFrameReveal()
+      return null
+    }
+    act(() => {
+      create(createElement(Screen))
+    })
+    act(() => {
+      reveal.armTerminalFirstFrameRevealTimeout('pty-claude')
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(TERMINAL_FIRST_FRAME_REVEAL_TIMEOUT_MS - 1)
+    })
+    act(() => {
+      reveal.cancelTerminalFirstFrameRevealTimeout('pty-claude')
+    })
+    await act(async () => {
+      vi.advanceTimersByTime(TERMINAL_FIRST_FRAME_REVEAL_TIMEOUT_MS * 2)
+    })
+    expect(reveal.revealedTerminalHandles.has('pty-claude')).toBe(false)
+
+    // Shown again: a fresh backstop, the full wait from now.
+    act(() => {
+      reveal.armTerminalFirstFrameRevealTimeout('pty-claude')
+    })
     await act(async () => {
       vi.advanceTimersByTime(TERMINAL_FIRST_FRAME_REVEAL_TIMEOUT_MS)
     })
-    expect(reveal.revealedTerminalHandles.has('pty-antigravity')).toBe(true)
+    expect(reveal.revealedTerminalHandles.has('pty-claude')).toBe(true)
+  })
+
+  it('degenerate: cancelling a pane with no backstop, or one already shown, changes nothing', async () => {
+    let reveal!: ReturnType<typeof useTerminalFirstFrameReveal>
+    function Screen() {
+      reveal = useTerminalFirstFrameReveal()
+      return null
+    }
+    act(() => {
+      create(createElement(Screen))
+    })
+    act(() => {
+      reveal.cancelTerminalFirstFrameRevealTimeout('never-armed')
+      reveal.revealTerminalFirstFrame('pty-shown', 'converged')
+      reveal.cancelTerminalFirstFrameRevealTimeout('pty-shown')
+    })
+    expect(reveal.revealedTerminalHandles.has('never-armed')).toBe(false)
+    expect(reveal.revealedTerminalHandles.has('pty-shown')).toBe(true)
   })
 })

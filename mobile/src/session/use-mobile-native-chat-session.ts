@@ -28,6 +28,7 @@ import {
   planSubscribe,
   type SubscribeRun
 } from './mobile-native-chat-subscribe-identity'
+import { openTimingClock } from './open-timing-log'
 
 export type MobileNativeChatStatus =
   | 'idle'
@@ -266,6 +267,7 @@ export function useMobileNativeChatSession(args: {
       return
     }
     let logged = false
+    const sent = { at: Date.now(), clock: openTimingClock() }
 
     const unsubscribe = client.subscribe(
       'nativeChat.subscribe',
@@ -283,7 +285,7 @@ export function useMobileNativeChatSession(args: {
         }
         frameSeen = true
         const firstSnapshot = !snapshotSeenRef.current
-        if (!logged && logSnapshot(logBase, raw)) {
+        if (!logged && logSnapshot(logBase, raw, sent)) {
           logged = true
         }
         // Also hands on the frame's turn marker, which the kept-session store takes from a Codex rollout (native-chat-kept-session.ts).

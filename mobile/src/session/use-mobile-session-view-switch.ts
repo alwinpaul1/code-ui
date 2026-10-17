@@ -33,7 +33,7 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
   const { activeHandle, sessionTabs, setDisplayMode, nativeChatController } = scope
   const { isTabChatView, toggleTabChatView, showNativeChat, activeChatEligible } = nativeChatController
   const { activeSessionTabId, requestLeaveSession, phoneModeClaimedHandlesRef } = scope
-  const { coverTerminalUntilPhoneFrame, armTerminalFirstFrameRevealTimeout } = scope
+  const { coverTerminalUntilPhoneFrame, armTerminalFirstFrameRevealTimeout, cancelTerminalFirstFrameRevealTimeout } = scope
   const setDisplayModeRef = useRef(setDisplayMode)
   setDisplayModeRef.current = setDisplayMode
 
@@ -122,6 +122,26 @@ export function useMobileSessionViewSwitch(scope: MobileSessionPanelRouteActions
           return true
         }
   )
+
+  // The cover's backstop, for the terminal on screen from the moment it is: a
+  // subscribe turned away by its gates (the WebView never came up, the relay is
+  // down) arms nothing, and the WebView's own error and Reload sit under the
+  // cover. Not under the chat, where the covered stream never reveals and the
+  // timer lifted the cover behind the chat on every open, so the terminal
+  // shown later had none (2026-10-17). Not in the background either, where
+  // nothing may lift it (the resume below arms it on the way back). And a
+  // backstop already running when the chat comes over the terminal (opened
+  // before the view resolved to chat, or chat tapped within the wait) stops.
+  useEffect(() => {
+    if (!activeHandle) {
+      return
+    }
+    if (showNativeChat) {
+      cancelTerminalFirstFrameRevealTimeout(activeHandle)
+    } else if (AppState.currentState === 'active') {
+      armTerminalFirstFrameRevealTimeout(activeHandle)
+    }
+  }, [activeHandle, armTerminalFirstFrameRevealTimeout, cancelTerminalFirstFrameRevealTimeout, showNativeChat])
 
   // Transitions the switch above did not drive (default chat on open, the
   // slash-command terminal peek, the "Back to chat" chip): apply the same

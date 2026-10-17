@@ -58,7 +58,7 @@ export function revealTerminalAfterPaint(
     .then(() => reveal(handle, reason))
 }
 
-export function useTerminalFirstFrameReveal(activeHandle: string | null = null) {
+export function useTerminalFirstFrameReveal() {
   const [revealedTerminalHandles, setRevealedTerminalHandles] = useState<ReadonlySet<string>>(
     () => new Set()
   )
@@ -105,6 +105,17 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
     [revealTerminalFirstFrame]
   )
 
+  /** Stops a pane's backstop without showing it: the chat came over the terminal, where the
+   *  covered stream never reveals, so the timer would lift the cover behind the chat and the
+   *  terminal shown later would have none. Showing the terminal arms a fresh one. */
+  const cancelTerminalFirstFrameRevealTimeout = useCallback((handle: string) => {
+    const timer = timersRef.current.get(handle)
+    if (timer) {
+      clearTimeout(timer)
+      timersRef.current.delete(handle)
+    }
+  }, [])
+
   /**
    * Covers a shown pane again until the host draws it at phone width.
    *
@@ -127,14 +138,10 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
     }
   }, [])
 
-  // Why: a subscribe turned away by its gates (the WebView never came up, the
-  // relay is down) arms nothing, and the WebView's own error and Reload sit
-  // under the cover; the tab on screen is never covered past the timeout.
-  useEffect(() => {
-    if (activeHandle) {
-      armTerminalFirstFrameRevealTimeout(activeHandle)
-    }
-  }, [activeHandle, armTerminalFirstFrameRevealTimeout])
+  // The terminal on screen is armed by the view switch (use-mobile-session-view-switch.ts),
+  // not here from the active handle: under the chat the covered stream never reveals, so
+  // a timer armed for the active handle lifted the cover behind the chat on every open,
+  // and the terminal shown later had none (2026-10-17, every pane read 'timeout').
 
   useEffect(() => {
     const timers = timersRef.current
@@ -150,6 +157,7 @@ export function useTerminalFirstFrameReveal(activeHandle: string | null = null) 
     revealedTerminalHandles,
     revealTerminalFirstFrame,
     armTerminalFirstFrameRevealTimeout,
+    cancelTerminalFirstFrameRevealTimeout,
     coverTerminalUntilPhoneFrame
   }
 }

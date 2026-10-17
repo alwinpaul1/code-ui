@@ -1,3 +1,5 @@
+// First, so the open-timing clock starts with the bundle (open-timing-log.ts).
+import './src/session/open-timing-log'
 // Why a custom entry: the headless task must be registered when the bundle
 // loads, and in a headless start nothing under app/ is ever rendered, so a
 // registration inside a route module would never run.

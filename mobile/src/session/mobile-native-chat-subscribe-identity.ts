@@ -71,15 +71,20 @@ export function pathRelation(path: string | null, sessionId: string | null): str
   return sessionId !== null && name.replace(/\.jsonl$/, '').endsWith(sessionId) ? 'same' : 'other'
 }
 
-/** Logs the first snapshot of a subscribe, row count and `hasMore` only (no message text). Returns whether `raw` was one. */
-export function logSnapshot(logBase: string, raw: unknown): boolean {
+/** When a subscribe went out: the wall clock, and the open-timing clock (open-timing-log.ts) as text. */
+export type SubscribeSent = { at: number; clock: string }
+
+/** Logs the first snapshot of a subscribe, row count and `hasMore` only (no message text), and how
+ *  long after `sent` it came, so a slow open says whether the chat read was the wait. Returns whether `raw` was one. */
+export function logSnapshot(logBase: string, raw: unknown, sent?: SubscribeSent, now = Date.now()): boolean {
   if (raw === null || typeof raw !== 'object' || (raw as { type?: unknown }).type !== 'snapshot') {
     return false
   }
   const snap = raw as { messages?: unknown; hasMore?: unknown; pending?: unknown }
   const rows = Array.isArray(snap.messages) ? snap.messages.length : 0
   const hasMore = typeof snap.hasMore === 'boolean' ? snap.hasMore : 'unset'
-  console.warn(`${logBase} snapshot rows=${rows} hasMore=${hasMore}${snap.pending === true ? ' pending=true' : ''}`)
+  const timing = sent ? ` in ${Math.max(0, now - sent.at)} ms, sent at ${sent.clock}` : ''
+  console.warn(`${logBase} snapshot rows=${rows} hasMore=${hasMore}${snap.pending === true ? ' pending=true' : ''}${timing}`)
   return true
 }
 

@@ -307,7 +307,7 @@ const HEAD_CALLBACK_BODY_SHA256 = 'e9fcbc546c356dabf07d7072c7cc6c03837f2beb76eac
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
 // 2026-10-15: the readers' outside-worktree prefetch effect also hands the worktree's agent
 // sessions to prefetchOutsideWorktreeFileTabs. Only that effect's body moved; still 27.
-const HEAD_EFFECT_SHA256 = '569725fa0d7647f195935333718d75b44f0ed3423d6187244a030b2fe5b002a8'
+const HEAD_EFFECT_SHA256 = '4381856f5f6bc0f07be3b87fedfd64645cbe8ebaecba651c1fb9bb19d741b7ea'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -510,7 +510,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 2026-10-15 (the Anthropic session title): the header's 'Terminal' fallback left for
 // claudeSessionHeaderTitle (ccr-session-facts.ts). 690.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd4eb0144325790aa46a6737034f6ba4698a90248523a841cb32dc84104662c92'
+  '7b8bda715432720dce3d7efcb7d54b9e8a1e55019e28aee2cfddac119d822e8f'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1158,6 +1158,8 @@ describe('mobile session route extraction parity', () => {
     // 26 since 2026-09-24: the keyboard's visibility and height each own their own effect off
     // useSoftKeyboard, where one effect drove both off the raw Keyboard events (Orca #22252).
     // 27 since 2026-10-06: the feedback hook's mountedRef effect (Orca #24759).
+    // Bodies re-pinned 2026-10-17: the terminal cover's backstop moved from the reveal hook's
+    // active-handle effect to the view switch, armed only for a terminal on screen. Count unchanged.
     expect(main.effects).toHaveLength(27)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
@@ -1302,7 +1304,9 @@ describe('mobile session route extraction parity', () => {
     // claudeSessionHeaderTitle (ccr-session-facts.ts), which now chooses the header's title.
     // 689 since 2026-10-16 (loading screens): the session's own loading spinner moved to
     // MobileSessionLoadingState.tsx, outside this family, taking its literal with it.
-    expect(strings).toHaveLength(689)
+    // 695 since 2026-10-17 (slow opens): the startup's four open-timing marks and their
+    // cached-tab detail, and the view switch's 'active' check for the terminal cover's backstop.
+    expect(strings).toHaveLength(695)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

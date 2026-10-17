@@ -311,6 +311,8 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
 
   describe('the log line', () => {
     const lines = () => warn.mock.calls.map((call: unknown[]) => String(call[0])).filter((line: string) => line.startsWith('[native-chat] subscribe'))
+      // The read's timing (open-timing-log.test.ts) varies with the clock; this pins the subscribe itself.
+      .map((line: string) => line.replace(/ in \d+ ms, sent at .*$/, ''))
 
     it('says why each subscribe ran, with the file name only and the first snapshot', async () => {
       await mount({ transcriptPath: null })

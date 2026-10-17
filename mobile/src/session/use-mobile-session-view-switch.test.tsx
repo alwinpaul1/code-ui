@@ -78,9 +78,11 @@ function mountViewSwitch(
   const phoneModeClaimedHandlesRef = { current: new Set<string>() }
   const coverTerminalUntilPhoneFrame = vi.fn()
   const armTerminalFirstFrameRevealTimeout = vi.fn()
+  const cancelTerminalFirstFrameRevealTimeout = vi.fn()
   const scope = {
     coverTerminalUntilPhoneFrame,
     armTerminalFirstFrameRevealTimeout,
+    cancelTerminalFirstFrameRevealTimeout,
     activeHandle,
     sessionTabs: [
       {
@@ -118,6 +120,7 @@ function mountViewSwitch(
     phoneModeClaimedHandlesRef,
     coverTerminalUntilPhoneFrame,
     armTerminalFirstFrameRevealTimeout,
+    cancelTerminalFirstFrameRevealTimeout,
     rerender(next: Record<string, unknown>) {
       Object.assign(scope, next)
       act(() => {
@@ -415,6 +418,8 @@ describe('coming back from the Home screen', () => {
 
   it('starts the cover timeout only on the way back, with the phone-mode retake', () => {
     const probe = mountViewSwitch('term-1')
+    // Armed once on open, for the terminal then on screen ("the terminal cover's backstop").
+    probe.armTerminalFirstFrameRevealTimeout.mockClear()
     act(() => {
       appState.go('background')
     })
@@ -448,5 +453,53 @@ describe('coming back from the Home screen', () => {
     })
 
     expect(probe.coverTerminalUntilPhoneFrame).not.toHaveBeenCalled()
+  })
+})
+
+// 2026-10-17, logcat on the S23: every pane read "first frame shown reason: 'timeout'".
+// The cover's 2.5 s backstop was armed for the active handle whether or not the chat was
+// drawn over it, so under the chat the timer lifted the cover and the terminal shown later
+// had none. It is armed here, for the terminal that is on screen, from the moment it is.
+describe("the terminal cover's backstop", () => {
+  const chat = { isTabChatView: () => true, toggleTabChatView: vi.fn(), showNativeChat: true }
+  const terminal = { isTabChatView: () => false, toggleTabChatView: vi.fn(), showNativeChat: false }
+
+  it('starts for a terminal opened in terminal view, even when its subscribe never goes out', () => {
+    const probe = mountViewSwitch('term-1')
+
+    expect(probe.armTerminalFirstFrameRevealTimeout).toHaveBeenCalledWith('term-1')
+  })
+
+  it('does not start under the chat, and starts when the terminal is shown', () => {
+    const probe = mountViewSwitch('term-1', undefined, { nativeChatController: chat })
+    expect(probe.armTerminalFirstFrameRevealTimeout).not.toHaveBeenCalled()
+
+    probe.rerender({ nativeChatController: terminal })
+
+    expect(probe.armTerminalFirstFrameRevealTimeout).toHaveBeenCalledWith('term-1')
+  })
+
+  // Review 2026-10-17: a timer armed while the terminal was on screen (opened before the view
+  // resolved to chat, or chat tapped within 2.5 s) lifted the cover behind the chat anyway.
+  it('stops a backstop already running when the chat covers the terminal', () => {
+    const probe = mountViewSwitch('term-1')
+    expect(probe.armTerminalFirstFrameRevealTimeout).toHaveBeenCalledWith('term-1')
+
+    probe.rerender({ nativeChatController: chat })
+
+    expect(probe.cancelTerminalFirstFrameRevealTimeout).toHaveBeenCalledWith('term-1')
+  })
+
+  it('does not start while the app is in the background, where nothing may lift the cover', () => {
+    appState.current = 'background'
+    const probe = mountViewSwitch('term-1')
+
+    expect(probe.armTerminalFirstFrameRevealTimeout).not.toHaveBeenCalled()
+  })
+
+  it('degenerate: starts nothing when no terminal is on screen', () => {
+    const probe = mountViewSwitch(null)
+
+    expect(probe.armTerminalFirstFrameRevealTimeout).not.toHaveBeenCalled()
   })
 })
