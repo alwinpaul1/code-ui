@@ -151,9 +151,6 @@ export function MobileNativeChatView({
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
 
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
-  const ChatScrollView = useChatScrollView(pinchGesture)
-
   // Folded transcript plus streaming bubble and accepted echoes.
   const { data } = useMemo(
     () =>
@@ -192,7 +189,7 @@ export function MobileNativeChatView({
     onScrollBeginDrag,
     onScrollEndDrag,
     onMomentumScrollBegin,
-    onMomentumScrollEnd,
+    onMomentumScrollEnd, scrollGestureEnded,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail
@@ -202,6 +199,10 @@ export function MobileNativeChatView({
     loadingEarlier,
     onLoadEarlier
   })
+  // The pinch rides the list's own scroll gesture, whose end — a cancel included — is the end of
+  // a drag the ScrollView never reports.
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture(scrollGestureEnded)
+  const ChatScrollView = useChatScrollView(pinchGesture)
   const { dockHeight, onDockLayout } = useChatDock(pinToTail, keyboardInset > 0)
   // The composer's popover may take only the room between the header and the
   // dock, keyboard included (mobile-native-chat-suggestion-popover.ts).

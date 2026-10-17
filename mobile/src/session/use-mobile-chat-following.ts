@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createChatFollowGate } from './mobile-chat-follow-gate'
 import { isReaderScrollMotion, type ChatScrollGeometry } from './mobile-chat-scroll-motion'
 import { useAppInterruptions, type AppInterruption } from './use-app-interruptions'
+import { logChatScroll } from './chat-scroll-log'
 
 /** A finger held this long is a long-press — Android's text-selection
  *  timeout is 400 ms — and from then on the reader owns the list, as with a
@@ -193,6 +194,12 @@ export function useMobileChatFollowing() {
   // held finger (fourth review). Leaving the foreground ends both.
   const interruptGesture = useCallback(
     (kind: AppInterruption) => {
+      // The four drags of the 2026-10-17 log that never ended were each this: the app left the
+      // foreground about a second after the drag began, and the system's ACTION_CANCEL is a
+      // touch ReactScrollView sends no end for.
+      if (draggingRef.current) {
+        logChatScroll(`drag end missing, ended by ${kind === 'background' ? 'the app leaving the foreground' : 'the window losing focus'}`)
+      }
       draggingRef.current = false
       if (kind === 'background') {
         holdingRef.current = false
@@ -226,6 +233,8 @@ export function useMobileChatFollowing() {
     // selection that took the copied words' place (2026-10-15, 0.9.147).
     holdSelects: textSelectable,
     reportSelection,
+    // A reply holds an open selection: nothing may scroll it away (new-row follow).
+    selectionLive,
     detached,
     setFollowing,
     beginScroll,

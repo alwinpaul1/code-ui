@@ -85,7 +85,7 @@ vi.mock('react-native-gesture-handler', () => {
     onUpdate: () => chain
   }
   return {
-    Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
+    Gesture: { Simultaneous: () => ({}), Native: () => { const native: Record<string, () => unknown> = { shouldCancelWhenOutside: () => native, runOnJS: () => native, onFinalize: () => native }; return native }, Pinch: () => chain },
     GestureDetector: 'GestureDetector',
     GestureHandlerRootView: 'GestureHandlerRootView'
   }

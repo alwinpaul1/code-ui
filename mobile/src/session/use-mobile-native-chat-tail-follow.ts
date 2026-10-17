@@ -4,6 +4,8 @@ import type { FlashListRef } from '@shopify/flash-list'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
 import { logChatScroll, scrollOffsetLabel } from './chat-scroll-log'
+import { useChatMissingDragEnd } from './use-chat-missing-drag-end'
+import { useChatNewRowFollow } from './chat-new-row-follow'
 
 /** Inside this many px of the live edge the list counts as at the tail.
  *
@@ -68,6 +70,11 @@ export type MobileNativeChatTailFollow<TItem> = {
   onScrollEndDrag: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
   onMomentumScrollBegin: () => void
   onMomentumScrollEnd: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
+  /** The list's own scroll gesture (the gesture-handler Native gesture around its ScrollView)
+   *  ended: `cancelled` when it was cancelled or failed rather than lifted. The Claude app's list
+   *  ends a drag on its interaction stopping OR being cancelled; React Native's ScrollView reports
+   *  only the lift, so this is the cancel's half. */
+  scrollGestureEnded: (cancelled: boolean) => void
   /** Passive maintenance: re-pin after the viewport or the dock resizes. */
   pinToTail: () => void
   /** Content-size maintenance, gated so only NEW data may pull the list. */
@@ -109,7 +116,7 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  at the very end, with nothing below to jump to),
  *  and putting the view back where FlashList drew once a pushed route stops
  *  covering the screen (`onScreenFocus` below). */
-export function useMobileNativeChatTailFollow<TItem>(input: {
+export function useMobileNativeChatTailFollow<TItem extends { id: string }>(input: {
   /** The list's rows. Their identity arms the follow gate; their emptiness
    *  guards every pin, as upstream's `hasItems` does. */
   rows: readonly TItem[]
@@ -146,6 +153,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     textSelectable,
     holdSelects,
     reportSelection,
+    selectionLive,
     detached,
     setFollowing,
     beginScroll,
@@ -158,11 +166,15 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // Whether the finger now down started a drag: a touch that ends without one is the line the
   // stuck-scroll report needs (chat-scroll-log.ts).
   const draggedThisTouchRef = useRef(false)
+  // The end of a drag that the scroll view may never send (use-chat-missing-drag-end.ts).
+  const { cancel: cancelMissingEnd, endedBy, noteSample, lastSample, gestureEnded } = useChatMissingDragEnd(draggingRef)
   const touchStart = useCallback(() => {
     draggedThisTouchRef.current = false
+    // A drag never outlives its touch: `followingTouchStart` ends one still open.
+    endedBy('the next touch down')
     logChatScroll(`touch down${followingRef.current ? ', following' : ''}${scrollingRef.current ? ', list moving' : ''}`)
     followingTouchStart()
-  }, [followingRef, followingTouchStart, scrollingRef])
+  }, [endedBy, followingRef, followingTouchStart, scrollingRef])
   const touchEnd = useCallback(() => {
     logChatScroll(draggedThisTouchRef.current ? 'touch up' : 'touch up with no drag')
     followingTouchEnd()
@@ -226,6 +238,33 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     },
     [followGate, followingRef, hasItems, holdingRef, pinToTail]
   )
+
+  // New rows near the newest message take the reader to it, the Claude app's rule
+  // (chat-new-row-follow.ts, `kc0.java:51-66`), unless something holds the list: a finger, a drag
+  // or a fling in flight, or an open selection. In the app a user drag holds the scroll mutex at
+  // UserInput priority and its own scroll, at Default, is refused (`lkm.java:20-21`).
+  const rowsGeometry = useCallback(() => {
+    const list = listRef.current
+    const metrics = lastSample()
+    const index = list?.getFirstVisibleIndex?.()
+    if (!list || metrics === null || index === undefined || index < 0) {
+      return null
+    }
+    // getLayout is relative to the rows, which start after the header (queue, working line, dock spacer).
+    const into = metrics.contentOffset.y - (list.getFirstItemOffset?.() ?? 0) - (list.getLayout?.(index)?.y ?? 0)
+    return { firstVisibleIndex: index, pastHalfIntoFirstRow: into > metrics.layoutMeasurement.height / 2 }
+  }, [lastSample])
+  const followNewRows = useCallback(() => {
+    if (followingRef.current || holdingRef.current || draggingRef.current || scrollingRef.current || selectionLive || !hasItems) {
+      return
+    }
+    logChatScroll('new rows near the newest message: following it')
+    setAtTail(true)
+    setContentBelow(false)
+    setFollowing(true)
+    listRef.current?.scrollToOffset({ offset: 0, animated: false })
+  }, [draggingRef, followingRef, hasItems, holdingRef, scrollingRef, selectionLive, setAtTail, setFollowing])
+  useChatNewRowFollow(rows, rowsGeometry, followNewRows)
 
   const detachFromTail = useCallback(() => {
     setAtTail(false)
@@ -291,10 +330,11 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       // window). A sample that only held the reader's place while the content
       // grew is not movement, and needs the height to tell.
       const metrics = event.nativeEvent
+      noteSample(metrics)
       scrollSample({ offset: metrics.contentOffset.y, height: metrics.contentSize.height })
       applyMetrics(metrics)
     },
-    [applyMetrics, scrollSample]
+    [applyMetrics, noteSample, scrollSample]
   )
 
   // FlashList's own end-of-content signal, which in an inverted list is the
@@ -326,11 +366,12 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // the drag, not after the next scroll sample lands.
   const onScrollBeginDrag = useCallback(() => {
     cancelSettle()
+    cancelMissingEnd()
     jumpingRef.current = false
     draggedThisTouchRef.current = true
     logChatScroll(`drag start${followingRef.current ? ', was following' : ''}`)
     beginScroll()
-  }, [beginScroll, cancelSettle, followingRef])
+  }, [beginScroll, cancelMissingEnd, cancelSettle, followingRef])
 
   const settle = useCallback(
     (metrics: NativeScrollEvent) => {
@@ -347,29 +388,51 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // tail-follow for the length of the fling, and a token arriving in that
   // window yanked the reader down. Wait a frame instead; momentum, when it
   // comes, cancels the wait and where it lands decides.
-  const onScrollEndDrag = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  //
+  // A drag whose end never came ends the same way, from the last sample (`scrollGestureEnded`).
+  const finishDrag = useCallback(
+    (metrics: NativeScrollEvent | null) => {
       cancelSettle()
+      cancelMissingEnd()
       endDrag()
-      const metrics = event.nativeEvent
-      logChatScroll(`drag end ${scrollOffsetLabel(metrics.contentOffset.y)}`)
+      if (metrics === null) {
+        return
+      }
       settleFrameRef.current = requestAnimationFrame(() => {
         settleFrameRef.current = null
         settle(metrics)
       })
     },
-    [cancelSettle, endDrag, settle]
+    [cancelMissingEnd, cancelSettle, endDrag, settle]
+  )
+  const onScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const metrics = event.nativeEvent
+      logChatScroll(`drag end ${scrollOffsetLabel(metrics.contentOffset.y)}`)
+      finishDrag(metrics)
+    },
+    [finishDrag]
+  )
+
+  // A cancelled gesture ends its drag as a lift does (use-chat-missing-drag-end.ts).
+  const scrollGestureEnded = useCallback(
+    (cancelled: boolean) => gestureEnded(cancelled, finishDrag),
+    [finishDrag, gestureEnded]
   )
 
   // A requested jump also emits momentum events. Enabling history anchoring
   // during that animation interrupts it before the end.
   const onMomentumScrollBegin = useCallback(() => {
     cancelSettle()
+    // The scroll view sends this right after its end-drag, so a drag still open here lost it.
+    if (!jumpingRef.current) {
+      endedBy("the fling's start")
+    }
     logChatScroll(jumpingRef.current ? 'jump animation start' : 'fling start')
     if (!jumpingRef.current) {
       beginFling()
     }
-  }, [beginFling, cancelSettle])
+  }, [beginFling, cancelSettle, endedBy])
 
   // Not while a finger drags. An animated scroll runs on a ValueAnimator, and
   // a finger that grabs it is taken by the scroll view, which cancels the
@@ -398,6 +461,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const jumpToTail = useCallback(
     (animated: boolean) => {
       cancelSettle()
+      cancelMissingEnd()
       endDrag()
       jumpingRef.current = true
       setAtTail(true)
@@ -405,7 +469,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
-    [cancelSettle, endDrag, setAtTail, setFollowing]
+    [cancelMissingEnd, cancelSettle, endDrag, setAtTail, setFollowing]
   )
 
   // A pushed route (the Files explorer, a file preview, Settings) took this
@@ -469,6 +533,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     onScrollEndDrag,
     onMomentumScrollBegin,
     onMomentumScrollEnd,
+    scrollGestureEnded,
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,

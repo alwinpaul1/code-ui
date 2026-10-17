@@ -517,6 +517,18 @@ newest message and nothing moves.
   count grew, it was not a history prepend (the newest id unchanged), and the
   first visible index was at most **1** before the change. Scrolls go through
   `gjz.a` → `l030.g`: animate to item 0, then snap.
+  Re-read on 1.261013.20 (2026-10-17): the rule is `kc0.java:51-66` over the
+  `xk2` AutoScrollSnapshot (count, oldest id, newest id, first visible index,
+  "scrolled more than half a viewport into the first row"); the last one, set
+  before the change, also blocks the scroll. No following
+  flag, no drag or scroll-in-progress check: the app's scroll runs at
+  MutatePriority.Default (`m6j.java:165`, `:333`), so a user drag, which holds
+  the mutex at UserInput, refuses it (`lkm.java:20-21`). A cancelled drag ends
+  like a lifted one: `DragInteraction.Cancel` then onDragStopped with zero
+  velocity (`v5d.java:87-108`; the lift is `:203-224`). Text growing inside a
+  row is not a new row and scrolls nothing. Code UI: `chat-new-row-follow.ts`
+  (the new-row rule, guarded by a finger, a drag, a fling or an open
+  selection) and `use-chat-missing-drag-end.ts` (a cancel ends the drag).
 - **Older pages.** Triggered when the last visible index is within **5** items
   of the end (`wt8` case 0), has older history, no error; at most **6**
   automatic loads in a row. One page of **500** by cursor (`ujw.g` → `m4v.g`),

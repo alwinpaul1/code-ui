@@ -61,6 +61,27 @@
     },
     {
       "files": [
+        "src/session/use-mobile-native-chat-tail-follow.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-10-17: 323. The sole scroll owner takes two rules from the Claude app
+            // (1.261013.20): a drag ends on its gesture's cancel as on its lift (the missing
+            // drag end of the stuck scroll; the logic is in use-chat-missing-drag-end.ts and
+            // this file holds its four call sites), and new rows near the newest message take
+            // the reader to it (chat-new-row-follow.ts; here the geometry read and the guarded
+            // pin, which must stay in the one file allowed to move the list).
+            "max": 323,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-session-terminal-subscription.ts"
       ],
       "rules": {

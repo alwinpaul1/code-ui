@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +9,13 @@ import {
   saveChatReadingSettings
 } from '../settings/chat-reading-settings'
 
-const handlers: { start?: () => void; update?: (e: { scale: number }) => void } = {}
+const handlers: {
+  start?: () => void
+  update?: (e: { scale: number }) => void
+  finalize?: (event: unknown, success: boolean) => void
+} = {}
+// The list's own scroll gesture, as the chat builds it.
+const native: { cancelsOutside?: boolean; runOnJS?: boolean } = {}
 
 vi.mock('react-native-gesture-handler', () => {
   const pinch = {
@@ -21,8 +29,22 @@ vi.mock('react-native-gesture-handler', () => {
       return pinch
     }
   }
+  const scroll = {
+    shouldCancelWhenOutside: (value: boolean) => {
+      native.cancelsOutside = value
+      return scroll
+    },
+    runOnJS: (value: boolean) => {
+      native.runOnJS = value
+      return scroll
+    },
+    onFinalize: (cb: (event: unknown, success: boolean) => void) => {
+      handlers.finalize = cb
+      return scroll
+    }
+  }
   return {
-    Gesture: { Simultaneous: (...g: unknown[]) => g, Native: () => ({}), Pinch: () => pinch }
+    Gesture: { Simultaneous: (...g: unknown[]) => g, Native: () => scroll, Pinch: () => pinch }
   }
 })
 
@@ -52,8 +74,10 @@ describe('useMobileNativeChatPinchGesture', () => {
   let renderer: { unmount: () => void } | null = null
   let latest = 1
 
+  const scrollGestureEnded = vi.fn()
+
   function Probe(): null {
-    latest = useMobileNativeChatPinchGesture().fontScale
+    latest = useMobileNativeChatPinchGesture(scrollGestureEnded).fontScale
     return null
   }
 
@@ -67,6 +91,7 @@ describe('useMobileNativeChatPinchGesture', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    scrollGestureEnded.mockReset()
   })
 
   // Why this matters: `renderItem` closes over `fontScale`, so each committed
@@ -81,6 +106,22 @@ describe('useMobileNativeChatPinchGesture', () => {
       act(() => handlers.update?.({ scale }))
     }
     expect(latest).toBe(1)
+  })
+
+  // The stuck scroll (2026-10-17): gesture-handler cancels a Native gesture whose finger leaves
+  // the view (NativeViewGestureHandler's default, GestureHandler.kt:374-376), and the cancel is an
+  // ACTION_CANCEL that ReactScrollView answers with no end-drag (ReactScrollView.java:656). The
+  // root keeps the rest of the touch, so the list froze under a finger that crossed onto the
+  // header or the composer.
+  it('keeps scrolling the list when the dragging finger crosses its edge', () => {
+    expect(native.cancelsOutside).toBe(false)
+  })
+
+  it('tells the list when its scroll gesture ends, and whether it was cancelled', () => {
+    expect(native.runOnJS).toBe(true)
+    act(() => handlers.finalize?.({}, false))
+    act(() => handlers.finalize?.({}, true))
+    expect(scrollGestureEnded.mock.calls).toEqual([[true], [false]])
   })
 
   it('commits a real pinch, on the step grid', () => {
@@ -144,4 +185,14 @@ describe('useMobileNativeChatPinchGesture', () => {
       expect(latest).toBe(1.15)
     })
   })
+})
+
+// Structure, not behaviour: the chat must hand the tail-follow owner's gesture-end handler to the
+// gesture its list scrolls with, or a cancelled drag is never ended. Comments are stripped so the
+// prose above the call cannot satisfy it.
+it('ends a cancelled drag through the gesture the chat list scrolls with', () => {
+  const source = readFileSync(fileURLToPath(new URL('./MobileNativeChatView.tsx', import.meta.url)), 'utf8')
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+  expect(code).toMatch(/scrollGestureEnded,?\s[\s\S]*?=\s*useMobileNativeChatTailFollow/)
+  expect(code).toMatch(/useMobileNativeChatPinchGesture\(scrollGestureEnded\)/)
 })
