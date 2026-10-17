@@ -14,6 +14,7 @@ import {
   CCR_MATCH_PAGES,
   CCR_MAX_CANDIDATES,
   CCR_MAX_EVENT_PAGES,
+  countWords,
   defaultLog,
   maskId,
   reasonOf,
@@ -138,6 +139,9 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   }
   reportFailures(resolved.failures)
   const auths = resolved.auths
+  /** Every signed-in account answered, every list was read to its end and every session to its
+   *  start: only then does "no session holds the tab" say none of them owns it (`unowned`). */
+  let searchedAll = resolved.failures.length === 0
   const accountCount = auths.length + resolved.failures.filter((failure) => failure.accountId !== null).length
 
   const wanted = {
@@ -219,6 +223,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
           continue
         }
         const { rows } = answer.value
+        searchedAll &&= answer.value.complete
         listed += rows.length
         malformed += answer.value.malformed
         for (const row of rows) {
@@ -230,6 +235,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
       }
       // The most likely first (ccr-session-match.ts): the waves below read them in this order.
       const candidates = rankCcrCandidates(listedRows, input.newestMessageAt ?? null).slice(0, CCR_MAX_CANDIDATES)
+      searchedAll &&= listFailures.length === 0 && malformed === 0 && listedRows.length <= CCR_MAX_CANDIDATES
       if (candidates.length === 0) {
         if (listFailures.length > 0) {
           if (!final) {
@@ -240,7 +246,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
           return { kind: 'failed', result: fail('sessions', listFailures[listFailures.length - 1]!) }
         }
         const detail = `no Remote Control session on ${group.length === 1 ? 'this account' : `these ${group.length} accounts`} (${listed} session${listed === 1 ? '' : 's'} listed${malformed ? `, ${malformed} unreadable` : ''}); Claude Code publishes a session only with Remote Control on`
-        return final ? { kind: 'failed', result: fail('sessions', detail, true) } : { kind: 'none' }
+        return final ? { kind: 'failed', result: { ...fail('sessions', detail, true), unowned: searchedAll } } : { kind: 'none' }
       }
       reportFailures(listFailures.map((detail) => ({ stage: 'sessions', detail })))
       report('sessions', true, `${candidates.length} Remote Control session${candidates.length === 1 ? '' : 's'} to compare (${listed} listed)`)
@@ -250,6 +256,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
         return { kind: 'failed', result: fail('match', 'the tab has no transcript messages to compare yet', true) }
       }
       const outcome = await matchCcrSessionInWaves(deps.fetch, candidates, input.messageIds)
+      searchedAll &&= outcome.kind === 'none' && outcome.exhaustive === true
       if (rejudge && outcome.kind !== 'matched') {
         report('match', true, `no account holds a newer message of this tab (${outcome.kind}); keeping the first account's session`)
         return { kind: 'none' }
@@ -284,7 +291,7 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
           report('match', true, `${accountCount > 1 ? `${group[0]!.label}: ` : ''}${detail}; asking the other accounts`)
           return { kind: 'none' }
         }
-        return { kind: 'failed', result: fail('match', detail, true) }
+        return { kind: 'failed', result: { ...fail('match', detail, true), unowned: searchedAll } }
       }
       return { kind: 'matched' }
     }
@@ -360,14 +367,6 @@ async function runOnce(input: CcrPipelineInput, deps: CcrPipelineDeps): Promise<
   report('images', true, detail)
   clearCcrFailure(input.tabId)
   return { stages, sessionId, found, wanted: wantedCount }
-}
-
-function countWords(reasons: string[]): string {
-  const counts = new Map<string, number>()
-  for (const reason of reasons) {
-    counts.set(reason, (counts.get(reason) ?? 0) + 1)
-  }
-  return [...counts].map(([reason, count]) => `${count} ${reason}`).join(', ')
 }
 
 /** Writes each found picture to its cache file and makes it visible. */

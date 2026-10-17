@@ -11,6 +11,7 @@ import {
   type StoredAccount
 } from '../dictation/anthropic-auth-store'
 import { useTheme } from '../theme/theme-context'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 import { Txt } from '../ui/Txt'
 import {
   captureClaudeSession,
@@ -19,7 +20,9 @@ import {
   wireClaudeSessionSignOut,
   type ClaudeSessionAccount
 } from './claude-ai-session'
+import { isReadyMessage, READY_FALLBACK_MS } from './artifact-viewer-ready'
 import { ClaudeCdsGlyph } from './ClaudeCdsGlyph'
+import { ClawdDancing } from './ClawdDancing'
 
 wireClaudeSessionSignOut()
 
@@ -31,8 +34,46 @@ export const ANTHROPIC_SIGN_IN_POLL_MS = 1000
  *  kept without its claude.ai session. */
 export const ANTHROPIC_SIGN_IN_SETTLE_MS = 20_000
 
-export const ANTHROPIC_SIGN_IN_EMAIL_HINT =
-  'Google sign-in may not open inside an app. If it refuses, use Continue with email: claude.ai sends a code.'
+/**
+ * What Google's sign-in pages are sent as when claude.ai moves the whole page there, as Orca's
+ * desktop browser does (Orca 1.4.229, browser-route identity "google-auth": a Firefox user agent
+ * on accounts.google.com and accounts.youtube.com). Google refuses a sign-in it recognises as an
+ * embedded WebView, and a user agent that is not WebView's own carries no Chromium client hints.
+ * A Google popup gets the same identity natively (RNCGoogleSignInPopup in the WebView patch).
+ */
+export const GOOGLE_SIGN_IN_USER_AGENT = 'Mozilla/5.0 (Android 14; Mobile; rv:140.0) Gecko/140.0 Firefox/140.0'
+
+/**
+ * Says `artifactReady` (isReadyMessage) once the page has drawn text for two checks in a row. Unlike
+ * the artifact viewer's READY_SCRIPT it does not wait out spinners: Cloudflare's check page has one
+ * and may need a tap, so it must be shown as soon as it is drawn.
+ */
+export const SIGN_IN_READY_SCRIPT = `(function () {
+  if (window.__codeUiSignInReady) { return; }
+  window.__codeUiSignInReady = true;
+  var calm = 0;
+  function tick() {
+    var text = ((document.body && document.body.innerText) || '').trim();
+    calm = text.length > 0 ? calm + 1 : 0;
+    if (calm >= 2) {
+      if (window.ReactNativeWebView) { window.ReactNativeWebView.postMessage(JSON.stringify({ artifactReady: true })); }
+      return;
+    }
+    setTimeout(tick, 100);
+  }
+  tick();
+})();
+true;`
+
+/** Google's sign-in pages, as Orca lists them. */
+export function isGoogleSignIn(address: string): boolean {
+  try {
+    const host = new URL(address).hostname.toLowerCase()
+    return host === 'accounts.google.com' || host === 'accounts.youtube.com'
+  } catch {
+    return false
+  }
+}
 export const ANTHROPIC_SIGN_IN_PARTIAL =
   "Signed in. claude.ai didn't finish its own sign-in here, so artifacts won't open in the app yet. Sign in to this account again to try once more."
 export const ANTHROPIC_SIGN_IN_UNKNOWN_ORG =
@@ -71,8 +112,11 @@ function toSessionAccount(account: StoredAccount, index: number): ClaudeSessionA
  * The jar's claude.ai cookies are cleared first, so claude.ai asks who is signing in rather than
  * reusing whichever account it was on. A claude.ai session for another organization is refused
  * and cleared, and the user is told whose it was. Google refuses to sign in inside an embedded
- * WebView (its "disallowed_useragent" page); the user agent is not disguised, and the screen says
- * to use claude.ai's email code instead.
+ * WebView (its "disallowed_useragent" page), so Google's pages are sent the way Orca's desktop
+ * browser sends them (GOOGLE_SIGN_IN_USER_AGENT): a page moved to Google is reloaded as Firefox,
+ * and claude.ai's Google popup is kept in the app by the WebView patch (RNCGoogleSignInPopup)
+ * rather than handed to Chrome, where it drew a blank tab cut off from this page (2026-10-17).
+ * The page has no footer of the app's under it (user, 2026-10-17: "remove that text footer").
  */
 export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
   const { colors, space } = useTheme()
@@ -80,6 +124,18 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: 'starting' })
   const [source, setSource] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
+  /** The first page has drawn: Clawd comes off it. Later pages (Google, the email code) load in view. */
+  const [drawn, setDrawn] = useState(false)
+  const [loadedOnce, setLoadedOnce] = useState(false)
+  const reducedMotion = useReducedMotion()
+  /** When this attempt started, for the load timings in the log. */
+  const startedAt = useRef(0)
+  /** Google's sign-in has the page, which is sent as Firefox (GOOGLE_SIGN_IN_USER_AGENT) while it
+   *  does. Leaving Google switches it back for the loads after the one in flight, which is let go
+   *  as it is (Google's answer can be a form POST that a cancelled and reissued load would turn into
+   *  a GET); claude.ai then sees the WebView it is again, as in Orca, where only Google's hosts get
+   *  the Firefox identity (Cloudflare ties its clearance to the user agent). */
+  const [asFirefox, setAsFirefox] = useState(false)
   /** The account the code signed in: the session is captured for it. */
   const target = useRef<string | null>(null)
   const verifier = useRef<string | null>(null)
@@ -97,6 +153,10 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
     let stale = false
     target.current = null
     exchanging.current = false
+    setDrawn(false)
+    setLoadedOnce(false)
+    startedAt.current = Date.now()
+    setAsFirefox(false)
     setPhase({ kind: 'starting' })
     void (async () => {
       await clearClaudeCookies()
@@ -221,6 +281,27 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
     [takeCode]
   )
 
+  // A page that never says it has drawn is shown READY_FALLBACK_MS after it loaded.
+  useEffect(() => {
+    if (drawn || !loadedOnce) {
+      return undefined
+    }
+    const timer = setTimeout(() => setDrawn(true), READY_FALLBACK_MS)
+    return () => clearTimeout(timer)
+  }, [drawn, loadedOnce])
+
+  /** Where a slow sign-in spends its time: one line per page load, from the attempt's start. */
+  const logLoad = useCallback((what: string, address: string | undefined) => {
+    let where = ''
+    try {
+      const parsed = new URL(address ?? '')
+      where = parsed.host + parsed.pathname
+    } catch {
+      where = 'unknown page'
+    }
+    console.info(`[anthropic-sign-in] ${what} ${where} at ${Date.now() - startedAt.current} ms`)
+  }, [])
+
   const showWeb = source !== null && (phase.kind === 'web' || phase.kind === 'finishing')
   const textButton = (props: { testID: string; label: string; onPress: () => void; primary?: boolean }) => (
     <Pressable
@@ -266,6 +347,7 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
             testID="anthropic-sign-in-webview"
             style={{ flex: 1, backgroundColor: colors.bg }}
             source={{ uri: source }}
+            userAgent={asFirefox ? GOOGLE_SIGN_IN_USER_AGENT : undefined}
             javaScriptEnabled
             domStorageEnabled
             sharedCookiesEnabled
@@ -274,16 +356,44 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
               if (takeCode(request.url)) {
                 return false
               }
+              if (request.isTopFrame !== false) {
+                const google = isGoogleSignIn(request.url)
+                if (!asFirefox && google) {
+                  // The same page again, sent as Firefox: the user agent applies from the next load.
+                  setAsFirefox(true)
+                  setSource(request.url)
+                  return false
+                }
+                if (asFirefox && !google) {
+                  setAsFirefox(false)
+                }
+              }
               // Only web pages: an intent: or app link from a provider page has nowhere to go here.
               return /^https?:\/\//i.test(request.url) || request.url === 'about:blank'
             }}
             onNavigationStateChange={onNavigationStateChange}
-            onLoadEnd={() => {
+            injectedJavaScript={SIGN_IN_READY_SCRIPT}
+            onMessage={(event) => {
+              if (!drawn && isReadyMessage(event.nativeEvent.data)) {
+                logLoad('drawn', event.nativeEvent.url)
+                setDrawn(true)
+              }
+            }}
+            onLoadStart={(event) => logLoad('loading', event.nativeEvent.url)}
+            onLoadEnd={(event) => {
+              logLoad('loaded', event.nativeEvent.url)
+              setLoadedOnce(true)
               if (watching) {
                 void tryCapture()
               }
             }}
           />
+          {/* After the page in the tree, so it paints over it with no z-index. */}
+          {!drawn && phase.kind === 'web' ? (
+            <View testID="anthropic-sign-in-loading" pointerEvents="none" style={[styles.cover, { backgroundColor: colors.bg }]}>
+              <ClawdDancing still={reducedMotion !== false} testID="anthropic-sign-in-loading-clawd" />
+            </View>
+          ) : null}
           {phase.kind === 'finishing' ? (
             <View testID="anthropic-sign-in-finishing" style={[styles.cover, { backgroundColor: colors.bg }]}>
               <Txt variant="body" align="center">
@@ -291,11 +401,6 @@ export function AnthropicSignInScreen({ onDone }: { onDone: () => void }) {
               </Txt>
             </View>
           ) : null}
-          <View style={{ padding: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
-            <Txt testID="anthropic-sign-in-hint" variant="caption" tone="secondary">
-              {ANTHROPIC_SIGN_IN_EMAIL_HINT}
-            </Txt>
-          </View>
         </View>
       ) : phase.kind === 'refused' || phase.kind === 'partial' ? (
         <View testID="anthropic-sign-in-message" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: space.md }}>

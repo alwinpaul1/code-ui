@@ -148,7 +148,14 @@ class OrcaClaudeSessionModule : Module() {
   }
 
   private fun allClaudeCookieNames(): Set<String> =
-    HOSTS.flatMap { host -> jarPairs(host).map { it.first } }.toSet() + SESSION_COOKIES
+    HOSTS.flatMap { host -> jarPairs(host).map { it.first } }.filterNot { isCloudflareCookie(it) }.toSet() + SESSION_COOKIES
+
+  /**
+   * Cloudflare's clearance and bot cookies, which say nothing about who is signed in. Expiring them
+   * made claude.ai run its "Performing security verification" check again on every sign-in (user,
+   * 2026-10-17: "appears slowly and takes too long"), so they are kept.
+   */
+  private fun isCloudflareCookie(name: String): Boolean = name.startsWith("cf_") || name.startsWith("__cf") || name == "_cfuvid"
 
   /**
    * Expires the named cookies on both hosts, as the host-only cookie a22.c writes and as the

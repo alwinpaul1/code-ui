@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { darkColors, lightColors } from '../theme/tokens'
@@ -18,6 +20,7 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 0, left: 0, right: 0 }) }))
 vi.mock('react-native-webview', async () => {
   const React = await import('react')
@@ -63,7 +66,8 @@ vi.mock('expo-modules-core', () => ({
 }))
 
 import { ThemeProvider } from '../theme/theme-context'
-import { ANTHROPIC_SIGN_IN_EMAIL_HINT, ANTHROPIC_SIGN_IN_UNKNOWN_ORG, AnthropicSignInScreen, CLAUDE_HOME_URL } from './AnthropicSignInScreen'
+import { READY_FALLBACK_MS } from './artifact-viewer-ready'
+import { GOOGLE_SIGN_IN_USER_AGENT, ANTHROPIC_SIGN_IN_UNKNOWN_ORG, AnthropicSignInScreen, CLAUDE_HOME_URL } from './AnthropicSignInScreen'
 
 const PERSONAL = { id: 'acct-personal', organizationUuid: 'org-personal', organizationName: 'Account 1', credential: { accessToken: 'tok-personal' } }
 const WORK = { id: 'acct-work', organizationUuid: 'org-work', organizationName: 'NexDash', credential: { accessToken: 'tok-work' } }
@@ -177,9 +181,168 @@ describe('a new sign-in', () => {
     expect(host('anthropic-sign-in-retry')).toBeDefined()
   })
 
-  it('says Google may refuse inside an app and points to the email code', async () => {
+  it('draws the sign-in page with no footer text under it', async () => {
+    // The user, 2026-10-17: "remove this text and remove that text footer" (the email-code hint).
     await mount()
-    expect(texts(renderer!.root)).toContain(ANTHROPIC_SIGN_IN_EMAIL_HINT)
+    expect(host('anthropic-sign-in-hint')).toBeUndefined()
+    expect(texts(renderer!.root)).toEqual(['Sign in to Anthropic'])
+  })
+})
+
+/**
+ * The user, 2026-10-17, with a screenshot of a blank Chrome tab on accounts.google.com: "when i do
+ * continue with google with signing in claude its shows this fix this", then "make somehow login
+ * in the codeui app — see how Orca does that". claude.ai's Continue with Google opens Google in a
+ * popup; upstream gave a popup with no onOpenWindow a bare WebView, which passed it to Chrome cut
+ * off from its opener. Orca 1.4.229 sends Google's sign-in pages as Firefox with no client hints.
+ */
+describe('Continue with Google', () => {
+  const GOOGLE = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=x&redirect_uri=https%3A%2F%2Fclaude.ai'
+
+  it('leaves the popup to the native side, which keeps Google in the app instead of a blank Chrome tab', async () => {
+    await mount()
+    // An onOpenWindow handler would take the popup away from RNCGoogleSignInPopup.
+    expect(webview().props.onOpenWindow).toBeUndefined()
+  })
+
+  it('reloads a page that moves to Google as Firefox, the way Orca sends Google its sign-in', async () => {
+    await mount()
+    expect(webview().props.userAgent).toBeUndefined()
+    let allowed: boolean | undefined
+    await act(async () => {
+      allowed = webview().props.onShouldStartLoadWithRequest({ url: GOOGLE, isTopFrame: true })
+    })
+    expect(allowed).toBe(false)
+    expect(webview().props.userAgent).toBe(GOOGLE_SIGN_IN_USER_AGENT)
+    expect(webview().props.source).toEqual({ uri: GOOGLE })
+    // Sent as Firefox now: the reload itself goes through.
+    expect(webview().props.onShouldStartLoadWithRequest({ url: GOOGLE, isTopFrame: true })).toBe(true)
+    expect(webview().props.userAgent).toBe(GOOGLE_SIGN_IN_USER_AGENT)
+  })
+
+  it("lets Google's answer through as it is, then sends claude.ai as the WebView again, as Orca does", async () => {
+    await mount()
+    await act(async () => webview().props.onShouldStartLoadWithRequest({ url: GOOGLE, isTopFrame: true }))
+    let allowed: boolean | undefined
+    await act(async () => {
+      allowed = webview().props.onShouldStartLoadWithRequest({ url: 'https://claude.ai/login/google-callback', isTopFrame: true })
+    })
+    // Not cancelled and reissued: Google's answer can be a form POST.
+    expect(allowed).toBe(true)
+    expect(webview().props.source).toEqual({ uri: GOOGLE })
+    expect(webview().props.userAgent).toBeUndefined()
+  })
+
+  it('leaves Google frames inside a page alone, and claude.ai is sent as the WebView it is', async () => {
+    await mount()
+    expect(webview().props.onShouldStartLoadWithRequest({ url: 'https://accounts.google.com/gsi/iframe/select', isTopFrame: false })).toBe(true)
+    expect(webview().props.onShouldStartLoadWithRequest({ url: 'https://claude.ai/login', isTopFrame: true })).toBe(true)
+    expect(webview().props.userAgent).toBeUndefined()
+  })
+
+  it('a new attempt starts as the WebView again', async () => {
+    await mount()
+    await act(async () => webview().props.onShouldStartLoadWithRequest({ url: GOOGLE, isTopFrame: true }))
+    auth.exchangeCode.mockRejectedValueOnce(new Error('bad code'))
+    await act(async () => webview().props.onShouldStartLoadWithRequest({ url: CALLBACK, isTopFrame: true }))
+    await settle()
+    await act(async () => host('anthropic-sign-in-retry')!.props.onPress())
+    await settle()
+    expect(webview().props.userAgent).toBeUndefined()
+  })
+})
+
+/** The WebView patch, read as code: the popup class is what keeps Google in the app. */
+describe('the WebView patch keeps a Google popup in the app', () => {
+  const patch = readFileSync(resolve(__dirname, '../../patches/react-native-webview@13.16.2.patch'), 'utf8')
+  const added = patch
+    .split('\n')
+    .filter((line) => line.startsWith('+') && !line.startsWith('+++'))
+    .map((line) => line.slice(1))
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n')
+
+  it('sends a popup with no onOpenWindow handler to RNCGoogleSignInPopup, not to a bare WebView', () => {
+    expect(added).toMatch(/if \(!mHasOnOpenWindowEvent\) \{\s*RNCGoogleSignInPopup\.open\(view, resultMsg\);\s*return true;/)
+  })
+
+  it('shows only Google sign-in hosts in the app, as Firefox, without X-Requested-With, and closes with the page', () => {
+    expect(added).toContain('host.equals("accounts.google.com") || host.equals("accounts.youtube.com")')
+    expect(added).toContain('settings.setUserAgentString(firefoxUserAgent());')
+    expect(added).toContain('Gecko/140.0 Firefox/140.0')
+    expect(added).toContain('WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, Collections.<String>emptySet());')
+    expect(added).toContain('public void onCloseWindow(WebView window)')
+    expect(added).toContain('transport.setWebView(popup);')
+  })
+
+  it('still sends any other popup to the browser', () => {
+    expect(added).toMatch(/openInBrowser\(opener, uri\);\s*opener\.post\(state::close\);\s*return true;/)
+  })
+
+  it('sizes the popup itself, since React Native ignores its requestLayout, and follows resizes', () => {
+    expect(added).toMatch(/host\.addView\(popup,[\s\S]*?\);\s*fit\(\);\s*host\.addOnLayoutChangeListener\(this\);/)
+    expect(added).toContain('popup.layout(0, 0, width, height);')
+  })
+
+  it('goes with the screen that opened it, and a dead renderer drops the popup, not the app', () => {
+    expect(added).toMatch(/public void onViewDetachedFromWindow\(View v\) \{\s*close\(\);/)
+    expect(added).toMatch(/onRenderProcessGone[\s\S]*?state\.close\(\);\s*return true;/)
+  })
+
+  it("lets a popup to the opener's own site redirect on to Google before deciding", () => {
+    expect(added).toMatch(/isWeb\(uri\) && sameHost\(uri\.getHost\(\), openerHost\)\) \{\s*return false;/)
+  })
+})
+
+/**
+ * The user, 2026-10-17, with a screenshot of the sign-in as an empty dark page: "the page appears
+ * slowly and takes too long". The page loads behind Clawd, as an artifact does, until claude.ai has
+ * drawn something; a page that never says so is shown READY_FALLBACK_MS after it loaded.
+ */
+describe('while the sign-in page loads', () => {
+  const ready = JSON.stringify({ artifactReady: true })
+
+  it('shows Clawd over the page, which loads underneath, until the page has drawn', async () => {
+    await mount()
+    expect(webview()).toBeDefined()
+    expect(host('anthropic-sign-in-loading')).toBeDefined()
+    expect(renderer!.root.findAll((node) => node.props.testID === 'anthropic-sign-in-loading-clawd').length).toBeGreaterThan(0)
+    expect(String(webview().props.injectedJavaScript)).toContain('artifactReady')
+    await act(async () => webview().props.onMessage({ nativeEvent: { data: ready } }))
+    expect(host('anthropic-sign-in-loading')).toBeUndefined()
+  })
+
+  it('a message that is not the ready one leaves Clawd up', async () => {
+    await mount()
+    await act(async () => webview().props.onMessage({ nativeEvent: { data: '{"other":1}' } }))
+    expect(host('anthropic-sign-in-loading')).toBeDefined()
+  })
+
+  it('lifts anyway a while after the page loaded, so a page that never says is still shown', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount()
+      await act(async () => webview().props.onLoadEnd({ nativeEvent: {} }))
+      await act(async () => {
+        vi.advanceTimersByTime(READY_FALLBACK_MS - 1)
+      })
+      expect(host('anthropic-sign-in-loading')).toBeDefined()
+      await act(async () => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(host('anthropic-sign-in-loading')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('draws the cover in the theme, light and dark', async () => {
+    for (const [scheme, colors] of [['light', lightColors], ['dark', darkColors]] as const) {
+      await mount(vi.fn(), scheme)
+      expect(flat(host('anthropic-sign-in-loading')!.props.style).backgroundColor).toBe(colors.bg)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
   })
 })
 

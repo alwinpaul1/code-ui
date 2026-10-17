@@ -19,15 +19,6 @@ import { voiceSettingsStyles } from './voice-settings-styles'
 // Signing out of an account forgets its claude.ai session too (claude-ai-session.ts).
 wireClaudeSessionSignOut()
 
-/** What the row under "Add another account" says. The sign-in runs in the app
- *  (AnthropicSignInScreen), starting at claude.ai's login with no account picked, and one sign-in
- *  also opens the account's artifacts. */
-export const ADD_ACCOUNT_HINT = 'Sign in with the other account. Artifacts open with it too.'
-/** The first sign-in's row. */
-export const FIRST_SIGN_IN_HINT = 'Used for sessions, usage, dictation and artifacts.'
-/** The first usable account's row when several are listed: a chat dictates with its own account,
- *  and this one answers outside a chat or for a chat whose account is not known. */
-export const DICTATION_FALLBACK_ROW = "Signed in. Dictation uses the chat's own account, else this one."
 /** An account signed in before the in-app sign-in existed has no claude.ai session, and nothing
  *  else gives it one: the row says so, and the way through is the
  *  ordinary sign-in again (Add another account), which updates the account in place. */
@@ -111,13 +102,10 @@ export function AnthropicAccountsSection(): React.JSX.Element {
   }, [reload])
 
   const signedIn = accounts !== null && accounts.length > 0
-  // Dictation in a chat uses that chat's own account; outside a chat, or in one whose account is not
-  // known, the first account still signed in (readPrimaryAccount), and that row says so. With
-  // several accounts listed it says the chat's account comes first (review of 2026-10-17). One whose
-  // sign-in died says so instead of "Signed in", as the single-account screen did (isLoggedIn)
-  // before 2026-10-14.
+  // A working account is its name and its Sign out button (user, 2026-10-17: "remove the subtext in
+  // small"). The small line is kept only for one that needs something done: a sign-in that died
+  // (isLoggedIn's wording before 2026-10-14) or one with no claude.ai session for its artifacts.
   const now = readAt
-  const voiceAccountId = accounts?.find((account) => isAccountUsable(account, now))?.id ?? null
 
   return (
     <>
@@ -132,15 +120,9 @@ export function AnthropicAccountsSection(): React.JSX.Element {
             <View key={account.id} style={styles.row}>
               <View style={styles.rowContent}>
                 <Text style={styles.rowLabel}>{accountLabel(account, index)}</Text>
-                <Text style={styles.rowSublabel}>
-                  {!isAccountUsable(account, now)
-                    ? 'Signed out. Sign in to this account again.'
-                    : account.id === voiceAccountId
-                      ? accounts.length > 1
-                        ? DICTATION_FALLBACK_ROW
-                        : 'Signed in. Dictation uses this account.'
-                      : 'Signed in.'}
-                </Text>
+                {!isAccountUsable(account, now) ? (
+                  <Text style={styles.rowSublabel}>Signed out. Sign in to this account again.</Text>
+                ) : null}
                 {isAccountUsable(account, now) && unconnected.has(account.id) ? (
                   <Text style={styles.rowSublabel}>{SIGN_IN_AGAIN_FOR_ARTIFACTS}</Text>
                 ) : null}
@@ -165,7 +147,6 @@ export function AnthropicAccountsSection(): React.JSX.Element {
           >
             <View style={styles.rowContent}>
               <Text style={styles.rowLabel}>{signedIn ? 'Add another account' : 'Sign in to Anthropic'}</Text>
-              <Text style={styles.rowSublabel}>{signedIn ? ADD_ACCOUNT_HINT : FIRST_SIGN_IN_HINT}</Text>
             </View>
           </Pressable>
         ) : null}

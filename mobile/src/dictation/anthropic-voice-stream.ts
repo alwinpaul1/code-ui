@@ -19,67 +19,16 @@
 
 import type { VoiceSocket } from './voice-socket'
 import { openVoiceSocket } from './voice-socket-opener'
+import { createPcmBacklog, PCM_BYTES_PER_SECOND, type PcmBacklog } from './pcm-backlog'
+import { apiErrorMessage, voiceStreamQuery, type VoiceStreamOptions } from './voice-stream-query'
+
+export { voiceStreamQuery, type VoiceStreamOptions, type VoiceStreamProtocol } from './voice-stream-query'
 
 export type VoiceStreamCallbacks = {
   readonly onTranscript?: (text: string, isFinal: boolean) => void
   readonly onError?: (error: Error) => void
   readonly onClose?: () => void
   readonly onReady?: () => void
-}
-
-/**
- * Which client's voice_stream contract the stream speaks.
- *
- * - `claude-code`: Claude Code CLI 2.1.296's parameters (`use_conversation_engine=true`, endpointing
- *   and utterance-end timings). Every TranscriptInterim and TranscriptText carries the whole
- *   transcript so far, and TranscriptEndpoint ends the take.
- * - `claude-app`: the Claude Android app 1.261013.20's (r4u.java:1018-1020): `encoding,
- *   sample_rate, channels, language, forward_interims=typed, organization_uuid`. TranscriptText is
- *   a committed segment, appended; TranscriptInterim replaces the live tail; what is shown is the
- *   two joined (j3i.java:846-851, a3x.q). The committed text is the server's corrected version of
- *   the words the interim showed, so it takes their place. TranscriptEndpoint is not one of the
- *   app's messages (nkt.java) and does not end a take the mic still holds.
- */
-export type VoiceStreamProtocol = 'claude-code' | 'claude-app'
-
-export type VoiceStreamOptions = {
-  readonly accessToken: string
-  readonly language?: string
-  readonly sampleRate?: number
-  /** Defaults to `claude-code`. */
-  readonly protocol?: VoiceStreamProtocol
-  /** The signed-in account's organization, sent as `organization_uuid` under `claude-app`. */
-  readonly organizationUuid?: string | null
-}
-
-/** The query voice_stream is opened with. The Claude app encodes Opus in process; the phone
- *  streams the 16 kHz PCM it captures, so `encoding=linear16` under either protocol. */
-export function voiceStreamQuery(options: VoiceStreamOptions): string {
-  const { language = 'en', sampleRate = 16000, protocol = 'claude-code', organizationUuid } = options
-  const audio = [`encoding=linear16`, `sample_rate=${sampleRate}`, `channels=1`]
-  const lang = `language=${encodeURIComponent(language)}`
-  switch (protocol) {
-    case 'claude-code':
-      return [
-        ...audio,
-        `endpointing_ms=300`,
-        `utterance_end_ms=1000`,
-        lang,
-        `use_conversation_engine=true`,
-        `forward_interims=typed`
-      ].join('&')
-    case 'claude-app':
-      return [
-        ...audio,
-        lang,
-        `forward_interims=typed`,
-        ...(organizationUuid ? [`organization_uuid=${encodeURIComponent(organizationUuid)}`] : [])
-      ].join('&')
-    default: {
-      const unhandled: never = protocol
-      throw new Error(`Unknown voice_stream protocol: ${String(unhandled)}`)
-    }
-  }
 }
 
 const BASE_URL = 'wss://api.anthropic.com'
@@ -98,24 +47,13 @@ const SAFETY_TIMEOUT_MS = 5000
 /** Give up if no message arrives this long after CloseStream. Reset on
  *  every message that does arrive. */
 const NO_DATA_TIMEOUT_MS = 1500
-
-/** The Anthropic API's error shape, `{ type: 'error', error: { type, message }, request_id }`, as
- *  one line naming the reason and the request id to look up; null for any other shape. */
-function apiErrorMessage(msg: Record<string, unknown>): string | null {
-  const error = msg.error
-  if (typeof error !== 'object' || error === null) {
-    return null
-  }
-  const { type, message } = error as { type?: unknown; message?: unknown }
-  const reason = typeof message === 'string' && message ? message : null
-  const detail = [typeof type === 'string' ? type : null, typeof msg.request_id === 'string' ? msg.request_id : null]
-    .filter((part): part is string => part !== null)
-    .join(', ')
-  if (!reason && !detail) {
-    return null
-  }
-  return `Voice server: ${reason ?? 'error'}${detail ? ` (${detail})` : ''}`
-}
+/** Audio held while the socket opens: 15 s of the 16 kHz PCM the phone streams. A socket that has
+ *  not opened by then has failed or soon will; what is spoken past it is dropped, and said once. */
+export const MAX_AUDIO_BEFORE_OPEN_BYTES = 15 * PCM_BYTES_PER_SECOND
+/** How long a take finalized before its socket opened waits for it to open: past this the take
+ *  ends with an error rather than sit on "Transcribing…" with a socket that never answers. */
+export const FINALIZE_CONNECT_TIMEOUT_MS = 10000
+const AUDIO_BEFORE_OPEN_OVERFLOW = `[dictation] more than ${MAX_AUDIO_BEFORE_OPEN_BYTES / PCM_BYTES_PER_SECOND} s of audio before voice_stream opened; the rest of it is dropped`
 
 export class AnthropicVoiceStream {
   private ws: VoiceSocket | null = null
@@ -134,6 +72,13 @@ export class AnthropicVoiceStream {
   private finalizeResolve: ((reason: string) => void) | null = null
   private safetyTimer: ReturnType<typeof setTimeout> | null = null
   private noDataTimer: ReturnType<typeof setTimeout> | null = null
+  /** A take finalized before the socket opened waits this long for it (FINALIZE_CONNECT_TIMEOUT_MS). */
+  private connectTimer: ReturnType<typeof setTimeout> | null = null
+  /** Audio sent before the socket opened, and whether it has. Before 2026-10-17 such audio went to
+   *  sendBinary, which drops anything sent on a socket not open yet: the first half second or more
+   *  of every take ("what's happening now" read "now"). */
+  private opened = false
+  private beforeOpen: PcmBacklog = createPcmBacklog(MAX_AUDIO_BEFORE_OPEN_BYTES, AUDIO_BEFORE_OPEN_OVERFLOW)
 
   constructor(
     private readonly options: VoiceStreamOptions,
@@ -151,6 +96,8 @@ export class AnthropicVoiceStream {
     this.done = false
     this.latestText = ''
     this.committedText = ''
+    this.opened = false
+    this.beforeOpen.clear()
 
     const { accessToken } = this.options
     const url = `${BASE_URL}${PATH}?${voiceStreamQuery(this.options)}`
@@ -158,7 +105,18 @@ export class AnthropicVoiceStream {
     const headers = { Authorization: `Bearer ${accessToken}`, ...CLIENT_HEADERS }
     this.ws = openVoiceSocket(url, headers, {
       onOpen: () => {
+        if (this.done || !this.ws) {
+          return
+        }
+        this.opened = true
         this.ws?.sendText(KEEPALIVE_JSON)
+        // What was spoken while the socket opened, then a CloseStream asked for meanwhile.
+        this.beforeOpen.drain((pcm) => this.ws?.sendBinary(pcm))
+        if (this.closeStreamSent) {
+          this.clearFinalizeTimers()
+          this.startFinalizeTimers()
+          this.ws?.sendText(CLOSESTREAM_JSON)
+        }
         this.keepAliveTimer = setInterval(() => {
           this.ws?.sendText(KEEPALIVE_JSON)
         }, KEEPALIVE_INTERVAL_MS)
@@ -166,6 +124,7 @@ export class AnthropicVoiceStream {
       },
       onMessage: (text) => this.handleMessage(text),
       onError: (message) => {
+        this.beforeOpen.clear()
         this.promoteInterim('ws error')
         if (!this.done) {
           // The socket's own reason when it gave one (OkHttp's, or the HTTP status of a refused upgrade).
@@ -175,6 +134,9 @@ export class AnthropicVoiceStream {
         }
       },
       onClose: (code, reason) => {
+        // Gone: nothing more is held or sent for it.
+        this.ws = null
+        this.beforeOpen.clear()
         this.clearKeepAlive()
         this.promoteInterim('ws close')
         this.resolveFinalize('ws_close')
@@ -190,10 +152,14 @@ export class AnthropicVoiceStream {
 
   /** Send a chunk of raw PCM audio to the server. */
   sendAudio(pcm: Uint8Array): void {
-    if (this.closeStreamSent) {
+    if (this.closeStreamSent || this.done || !this.ws) {
       return
     }
-    this.ws?.sendBinary(pcm)
+    if (!this.opened) {
+      this.beforeOpen.push(pcm)
+      return
+    }
+    this.ws.sendBinary(pcm)
   }
 
   /**
@@ -210,24 +176,39 @@ export class AnthropicVoiceStream {
     }
     this.closeStreamSent = true
     return new Promise<string>((resolve) => {
-      this.safetyTimer = setTimeout(
-        () => this.resolveFinalize('safety_timeout'),
-        SAFETY_TIMEOUT_MS
-      )
-      this.noDataTimer = setTimeout(
-        () => this.resolveFinalize('no_data_timeout'),
-        NO_DATA_TIMEOUT_MS
-      )
       this.finalizeResolve = (reason: string) => {
         this.clearFinalizeTimers()
         resolve(reason)
       }
+      if (!this.opened) {
+        // onOpen sends CloseStream after the audio held for it, and the two timers start then: a
+        // slow connect spent the 1.5 s one before CloseStream could go out (review 2026-10-17). A
+        // socket that never opens and never closes ends the take here, and says so.
+        this.connectTimer = setTimeout(() => this.connectTimedOut(), FINALIZE_CONNECT_TIMEOUT_MS)
+        return
+      }
+      this.startFinalizeTimers()
       // Send CloseStream on next tick (matches CLI).
       setTimeout(() => {
         this.ws?.sendText(CLOSESTREAM_JSON)
       }, 0)
     })
   }
+
+  private startFinalizeTimers(): void {
+    this.safetyTimer = setTimeout(() => this.resolveFinalize('safety_timeout'), SAFETY_TIMEOUT_MS)
+    this.noDataTimer = setTimeout(() => this.resolveFinalize('no_data_timeout'), NO_DATA_TIMEOUT_MS)
+  }
+
+  private connectTimedOut(): void {
+    this.connectTimer = null
+    this.resolveFinalize('connect_timeout')
+    const callbacks = this.callbacks
+    this.done = true
+    this.teardownSocket()
+    callbacks?.onError?.(new Error(`Voice stream did not connect within ${FINALIZE_CONNECT_TIMEOUT_MS / 1000} s`))
+  }
+
 
   /** Hard teardown — no callbacks fire after this. */
   destroy(): void {
@@ -380,6 +361,10 @@ export class AnthropicVoiceStream {
   }
 
   private clearFinalizeTimers(): void {
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer)
+      this.connectTimer = null
+    }
     if (this.safetyTimer) {
       clearTimeout(this.safetyTimer)
       this.safetyTimer = null
@@ -398,6 +383,7 @@ export class AnthropicVoiceStream {
   }
 
   private teardownSocket(): void {
+    this.beforeOpen.clear()
     this.clearKeepAlive()
     this.clearFinalizeTimers()
     const socket = this.ws

@@ -10,7 +10,8 @@ import { CCR_LIST_PAGE_SIZE, CCR_LIST_SHARE_MS, CCR_MAX_LIST_PAGES } from './ccr
  * a new connection starts from a fresh list.
  */
 
-export type CcrAccountList = { rows: CcrSessionRow[]; malformed: number }
+/** `complete`: the last page was read (no cursor left), so no row was left past CCR_MAX_LIST_PAGES. */
+export type CcrAccountList = { rows: CcrSessionRow[]; malformed: number; complete: boolean }
 
 type Held = { at: number; fetch: CcrFetch; list: Promise<CcrAccountList>; settled: boolean }
 
@@ -55,11 +56,11 @@ async function readAll(fetchImpl: CcrFetch, auth: { token: string; organizationU
     rows.push(...result.sessions)
     malformed += result.malformedRows
     if (!result.nextCursor || result.nextCursor === cursor) {
-      break
+      return { rows, malformed, complete: true }
     }
     cursor = result.nextCursor
   }
-  return { rows, malformed }
+  return { rows, malformed, complete: false }
 }
 
 /**

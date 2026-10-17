@@ -94,6 +94,10 @@ export type CcrPipelineResult = {
   sessionId: string | null
   found: number
   wanted: number
+  /** Anthropic's answer, from every signed-in account, is that none of them holds the tab's session:
+   *  no Remote Control session at all, or none sharing its messages. Absent when the run matched or
+   *  could not ask every account. Read by dictation (dictation-session-account.ts). */
+  unowned?: boolean
 }
 
 /** An id as log lines and the check show it: first and last three characters, and the length. */
@@ -128,6 +132,15 @@ export function reasonOf(error: unknown): string {
     }
   }
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Reasons with how often each came up: "2 too large, 1 not an image". */
+export function countWords(reasons: readonly string[]): string {
+  const counts = new Map<string, number>()
+  for (const reason of reasons) {
+    counts.set(reason, (counts.get(reason) ?? 0) + 1)
+  }
+  return [...counts].map(([reason, count]) => `${count} ${reason}`).join(', ')
 }
 
 /** One line per stage: what it found, or why it failed, and the tab, masked. */

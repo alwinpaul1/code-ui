@@ -9,7 +9,8 @@ export type CcrCandidatePages = { events: CcrEvent[]; uuids: Set<string>; cursor
 
 export type CcrWavesOutcome =
   | { kind: 'matched'; candidate: CcrCandidate; pages: CcrCandidatePages; overlap: number }
-  | { kind: 'none' }
+  /** `exhaustive`: every candidate was read back to its first event, so none of them holds the tab. */
+  | { kind: 'none'; exhaustive?: boolean }
   | { kind: 'ambiguous'; sessionIds: string[] }
   /** Some candidates' events could not be read: `reasons` are each one's error, of `compared`. */
   | { kind: 'unreadable'; reasons: unknown[]; candidates: CcrCandidate[]; compared: number }
@@ -96,7 +97,9 @@ export async function matchCcrSessionInWaves(fetchImpl: CcrFetch, candidates: re
       return settled
     }
   }
-  return judge(candidates.slice(0, introduced))
+  const last = judge(candidates.slice(0, introduced))
+  // Within CCR_MATCH_PAGES of its newest event a long session may hold the tab further back.
+  return last.kind === 'none' ? { kind: 'none', exhaustive: candidates.every((one) => pages.get(pageKey(one))?.cursor === null) } : last
 
   function judge(compared: readonly CcrCandidate[]): Exclude<CcrWavesOutcome, { kind: 'unreadable' }> {
     const match = matchCcrSession(tabMessageIds, compared.map((candidate) => ({ sessionId: candidate.row.id, uuids: pages.get(pageKey(candidate))?.uuids ?? new Set() })))

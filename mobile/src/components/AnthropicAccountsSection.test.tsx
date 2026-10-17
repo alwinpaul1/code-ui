@@ -78,8 +78,6 @@ vi.mock('../session/open-anthropic-sign-in', () => ({
 
 import {
   AnthropicAccountsSection,
-  ADD_ACCOUNT_HINT,
-  DICTATION_FALLBACK_ROW,
   SIGN_IN_AGAIN_FOR_ARTIFACTS
 } from './AnthropicAccountsSection'
 import { ThemeProvider } from '../theme/theme-context'
@@ -170,7 +168,6 @@ describe('the accounts list', () => {
     for (const text of ['Personal', 'NexDash', 'Add another account']) {
       expect(stylesOf(textNode(root, text)!.props.style).map((s) => s.color)).toContain(palette.text)
     }
-    expect(stylesOf(textNode(root, ADD_ACCOUNT_HINT)!.props.style).map((s) => s.color)).toContain(palette.textSecondary)
     expect(stylesOf(textNode(root, 'ANTHROPIC ACCOUNTS')!.props.style).map((s) => s.color)).toContain(palette.textMuted)
   })
 
@@ -179,15 +176,14 @@ describe('the accounts list', () => {
     expect(lightColors.textSecondary).not.toBe(darkColors.textSecondary)
   })
 
-  // Review of 2026-10-17: a chat dictates with its own account, so with two signed in the first
-  // one no longer says it is the account dictation uses, only the one it falls back to.
-  it("lists each account once, and says dictation takes the chat's own account before the first one", async () => {
+  // The user, 2026-10-17: "remove the subtext in small". A working account is its name and its Sign
+  // out button; the small grey line is kept only for one that needs something done.
+  it('lists each account once by name, with no small line under a working one or under Add another account', async () => {
     store.accounts = [PERSONAL, WORK]
     const root = await draw()
     expect(texts(root).filter((text) => text === 'Personal' || text === 'NexDash')).toEqual(['Personal', 'NexDash'])
-    expect(texts(root).filter((text) => text.startsWith('Signed in'))).toEqual([DICTATION_FALLBACK_ROW, 'Signed in.'])
-    expect(DICTATION_FALLBACK_ROW).toBe("Signed in. Dictation uses the chat's own account, else this one.")
-    expect(texts(root)).not.toContain('Signed in. Dictation uses this account.')
+    expect(texts(root).filter((text) => text.startsWith('Signed in'))).toEqual([])
+    expect(texts(root).filter((text) => /Dictation|Artifacts open with it/.test(text))).toEqual([])
     expect(root.findAll((node) => String(node.type) === 'Button' && node.props.label === 'Sign out')).toHaveLength(2)
   })
 
@@ -196,7 +192,7 @@ describe('the accounts list', () => {
     const root = await draw()
     expect(texts(root)).toContain('ANTHROPIC ACCOUNT')
     expect(texts(root)).toContain('Add another account')
-    expect(texts(root)).toContain(ADD_ACCOUNT_HINT)
+    expect(texts(root)).not.toContain('Sign in with the other account. Artifacts open with it too.')
   })
 
   it('with none, offers the first sign-in and nothing to sign out of', async () => {
@@ -222,8 +218,8 @@ describe('an account whose sign-in died (review of 2026-10-14)', () => {
 
     const all = texts(root)
     expect(all).toContain('Signed out. Sign in to this account again.')
-    // Voice uses the account that still works, and only that one says so.
-    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual([DICTATION_FALLBACK_ROW])
+    // The working account carries no line; only the dead one says what to do.
+    expect(all.filter((text) => text.startsWith('Signed in'))).toEqual([])
     expect(stylesOf(textNode(root, 'Signed out. Sign in to this account again.')!.props.style).map((s) => s.color)).toContain(palette.textSecondary)
   })
 

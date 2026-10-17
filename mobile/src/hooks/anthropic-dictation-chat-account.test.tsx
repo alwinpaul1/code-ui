@@ -18,7 +18,8 @@ const seen = vi.hoisted(() => ({
   asked: [] as (string | undefined)[],
   primaryReads: 0,
   options: [] as Record<string, unknown>[],
-  micOpens: 0
+  micOpens: 0,
+  micReleases: 0
 }))
 vi.mock('../platform/dictation-capture', () => {
   const instance = {
@@ -28,7 +29,9 @@ vi.mock('../platform/dictation-capture', () => {
     },
     begin: () => true,
     end: async () => {},
-    release: () => {},
+    release: () => {
+      seen.micReleases += 1
+    },
     onChunk: () => ({ remove: () => {} })
   }
   return { useDictationCapture: () => instance }
@@ -60,7 +63,7 @@ vi.mock('../dictation/anthropic-voice-stream', () => ({
   }
 }))
 
-import { useAnthropicDictation, type DictationChatAccount, type UseAnthropicDictationResult } from './use-anthropic-dictation'
+import { UNKNOWN_SESSION_ACCOUNT, useAnthropicDictation, type DictationChatAccount, type UseAnthropicDictationResult } from './use-anthropic-dictation'
 
 const ACCOUNT_1: AccountCredential = { id: 'acct-1', label: 'Account 1', accessToken: 'tok-1', organizationUuid: 'org-1' }
 const NEXDASH: AccountCredential = { id: 'acct-nexdash', label: 'NexDash', accessToken: 'tok-nexdash', organizationUuid: 'org-nexdash' }
@@ -90,6 +93,7 @@ beforeEach(() => {
   seen.primaryReads = 0
   seen.options = []
   seen.micOpens = 0
+  seen.micReleases = 0
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => {
@@ -105,12 +109,78 @@ describe("dictation in a chat uses the chat's own Anthropic account", () => {
     expect(warn).not.toHaveBeenCalled()
   })
 
-  it("falls back to the first account signed in when the chat's account is not known, and warns once that it did", async () => {
-    const { hook } = await startTake({ accountId: null })
-    expect(hook.isRecording).toBe(true)
-    expect(seen.options).toEqual([expect.objectContaining({ accessToken: 'tok-1', organizationUuid: 'org-1' })])
+  // The user, 2026-10-17: "for dictation use the account or profile that sessions exactly belongs
+  // to". A session whose account is not known is never dictated with another one.
+  it("refuses, rather than dictating with the first account, when the chat's account is not known", async () => {
+    const { hook, errors } = await startTake({ accountId: null })
+    expect(hook.status).toBe('error')
+    expect(hook.error).toBe(UNKNOWN_SESSION_ACCOUNT)
+    expect(errors.map((err) => err.message)).toEqual([UNKNOWN_SESSION_ACCOUNT])
+    expect(seen.options).toEqual([])
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(String(warn.mock.calls[0]![0])).toMatch(/chat's Anthropic account is not known.*first account signed in/)
+    expect(String(warn.mock.calls[0]![0])).toMatch(/not known.*nobody else's account/)
+  })
+
+  // "it must exactly tell" (the user, 2026-10-17): a chat whose account is not matched yet is
+  // matched on demand (session/dictation-session-account.ts) before the microphone opens.
+  it("matches the chat's account on demand and dictates with it when it was not known at the tap", async () => {
+    const resolve = vi.fn(async () => ({ ok: true as const, accountId: NEXDASH.id }))
+    const { hook } = await startTake({ accountId: null, resolve })
+    expect(resolve).toHaveBeenCalledTimes(1)
+    expect(hook.isRecording).toBe(true)
+    expect(seen.asked).toEqual([NEXDASH.id])
+    expect(seen.options).toEqual([expect.objectContaining({ accessToken: 'tok-nexdash', organizationUuid: 'org-nexdash' })])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it("refuses with the lookup's own reason, and one log line naming it, when the account cannot be found", async () => {
+    const reason = "This session belongs to an Anthropic account that isn't signed in on the phone: none of the 2 signed in holds it (…). Sign in to that account in Settings, Anthropic accounts, to dictate here."
+    const { hook, errors } = await startTake({ accountId: null, resolve: async () => ({ ok: false, reason }) })
+    expect(hook.status).toBe('error')
+    expect(hook.error).toBe(reason)
+    expect(errors.map((err) => err.message)).toEqual([reason])
+    expect(seen.options).toEqual([])
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
+    expect(seen.asked).toEqual([])
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(String(warn.mock.calls[0]![0])).toBe(`[dictation] refused: this session's Anthropic account could not be found exactly: ${reason}`)
+  })
+
+  it('refuses with the reason when the lookup itself throws, never with another account', async () => {
+    const { hook } = await startTake({ accountId: null, resolve: () => Promise.reject(new Error('chunk failed to load')) })
+    expect(hook.status).toBe('error')
+    expect(hook.error).toBe("Can't tell which Anthropic account this session belongs to: chunk failed to load")
+    expect(seen.options).toEqual([])
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('makes no stream and lets the microphone go when the take is cancelled while its account is being looked up', async () => {
+    let answer: (value: { ok: true; accountId: string }) => void = () => {}
+    const resolve = () => new Promise<{ ok: true; accountId: string }>((done) => { answer = done })
+    const held: { result: UseAnthropicDictationResult | null } = { result: null }
+    function Probe(): null {
+      held.result = useAnthropicDictation({ enabled: true, onTranscript: () => {}, chatAccount: { accountId: null, resolve } })
+      return null
+    }
+    await act(async () => {
+      create(createElement(Probe))
+    })
+    let started: Promise<void> = Promise.resolve()
+    await act(async () => {
+      started = held.result!.start()
+    })
+    await act(async () => {
+      await held.result!.cancel()
+    })
+    await act(async () => {
+      answer({ ok: true, accountId: NEXDASH.id })
+      await started
+    })
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
+    expect(seen.options).toEqual([])
+    expect(held.result!.status).toBe('idle')
   })
 
   it('outside a chat, dictates with the first account signed in and warns about nothing', async () => {
@@ -128,7 +198,7 @@ describe("dictation in a chat uses the chat's own Anthropic account", () => {
     expect(hook.error).toBe("Can't dictate with NexDash, this chat's account: the sign-in expired and could not be refreshed; sign in to this account again in Settings, Anthropic accounts")
     expect(errors.map((err) => err.message)).toEqual([hook.error])
     expect(seen.options).toEqual([])
-    expect(seen.micOpens).toBe(0)
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
     expect(seen.primaryReads).toBe(1) // the mount's availability read only, never the take
   })
 
@@ -138,7 +208,7 @@ describe("dictation in a chat uses the chat's own Anthropic account", () => {
     expect(hook.status).toBe('error')
     expect(hook.error).toBe("This chat's Anthropic account is no longer signed in on the phone. Sign in to it again in Settings, Anthropic accounts, to dictate here")
     expect(seen.options).toEqual([])
-    expect(seen.micOpens).toBe(0)
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
   })
 
   it("refuses with the reason when the chat's account cannot be read at all", async () => {
@@ -147,6 +217,6 @@ describe("dictation in a chat uses the chat's own Anthropic account", () => {
     expect(hook.status).toBe('error')
     expect(hook.error).toBe("Can't read this chat's Anthropic account to dictate: SecureStore unavailable")
     expect(seen.options).toEqual([])
-    expect(seen.micOpens).toBe(0)
+    expect(seen.micReleases).toBe(1) // opened at the tap (first-words fix), let go on the refusal
   })
 })

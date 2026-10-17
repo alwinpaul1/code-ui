@@ -249,3 +249,32 @@ describe('never hands the claude.ai session to JavaScript', () => {
     expect(kotlin).toMatch(/val value = Base64\.encodeToString\(cipher\.iv[^\n]*Base64\.encodeToString\(sealed/)
   })
 })
+
+/**
+ * A new sign-in cleared every claude.ai cookie, Cloudflare's too, so claude.ai ran its "Performing
+ * security verification" check again on every sign-in (user, 2026-10-17: "appears slowly and takes
+ * too long"). Cloudflare's cookies say nothing about who is signed in; they are kept.
+ */
+describe("clearing claude.ai's sign-in keeps Cloudflare's clearance", () => {
+  const kotlin = readFileSync(
+    fileURLToPath(
+      new URL('../../modules/orca-claude-session/android/src/main/java/expo/modules/orcaclaudesession/OrcaClaudeSessionModule.kt', import.meta.url)
+    ),
+    'utf8'
+  )
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '')
+
+  it('leaves cf_clearance, __cf_bm and _cfuvid out of the cookies a sign-in expires', () => {
+    const names = kotlin.match(/private fun allClaudeCookieNames\(\)[^=]*=([\s\S]*?)\n\s*\n/)?.[1] ?? ''
+    expect(names).toContain('.filterNot { isCloudflareCookie(it) }')
+    const rule = kotlin.match(/private fun isCloudflareCookie\(name: String\)[^=]*=([^\n]*)/)?.[1] ?? ''
+    expect(rule).toContain('name.startsWith("cf_")')
+    expect(rule).toContain('name.startsWith("__cf")')
+    expect(rule).toContain('name == "_cfuvid"')
+  })
+
+  it('still expires the session cookies themselves', () => {
+    expect(kotlin).toMatch(/\+ SESSION_COOKIES/)
+  })
+})

@@ -128,7 +128,7 @@ describe('what it costs', () => {
     expect(matchedId(await matchCcrSessionInWaves(one.fetch, [candidate(TRUE)], tab(1)))).toBe(TRUE)
     expect(one.sent).toHaveLength(1)
     const none = harness({})
-    expect(await matchCcrSessionInWaves(none.fetch, [], tab(1))).toEqual({ kind: 'none' })
+    expect(await matchCcrSessionInWaves(none.fetch, [], tab(1))).toEqual({ kind: 'none', exhaustive: true })
     expect(none.sent).toHaveLength(0)
   })
 })

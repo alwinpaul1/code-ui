@@ -140,18 +140,19 @@ describe('voice dictation on Android', () => {
     stream.connect()
     const id = native.connects[0]!.id
 
-    // Audio before the socket opens is not sent.
+    // Audio before the socket opens is held, and sent once it opens (voice-stream-first-words.test.ts).
     stream.sendAudio(new Uint8Array([9, 9]))
     expect(native.binaries).toEqual([])
 
     emit('onOpen', { id })
     expect(ready).toBe(1)
     expect(native.texts).toEqual([{ id, text: '{"type":"KeepAlive"}' }])
+    expect(native.binaries).toEqual([{ id, base64: 'CQk=' }])
     vi.advanceTimersByTime(8000)
     expect(native.texts.map((sent) => sent.text)).toEqual(['{"type":"KeepAlive"}', '{"type":"KeepAlive"}'])
 
     stream.sendAudio(new Uint8Array([0, 1, 2, 250, 255]))
-    expect(native.binaries).toEqual([{ id, base64: 'AAEC+v8=' }])
+    expect(native.binaries).toEqual([{ id, base64: 'CQk=' }, { id, base64: 'AAEC+v8=' }])
 
     // Another socket's events are not this stream's.
     emit('onMessage', { id: 'voice-other', text: JSON.stringify({ type: 'TranscriptText', data: 'nope' }) })
@@ -162,7 +163,7 @@ describe('voice dictation on Android', () => {
     expect(native.texts.at(-1)).toEqual({ id, text: '{"type":"CloseStream"}' })
     // Audio after CloseStream is not sent.
     stream.sendAudio(new Uint8Array([1]))
-    expect(native.binaries).toHaveLength(1)
+    expect(native.binaries).toHaveLength(2)
 
     emit('onMessage', { id, text: JSON.stringify({ type: 'TranscriptText', data: 'hello world' }) })
     emit('onMessage', { id, text: JSON.stringify({ type: 'TranscriptEndpoint' }) })

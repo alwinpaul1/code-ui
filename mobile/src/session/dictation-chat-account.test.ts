@@ -6,20 +6,40 @@
  */
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { dictationChatAccount } from './dictation-chat-account'
+import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
 const account = { tabId: 'tab-1', epoch: 1, agentSessionId: 'sess-1', configDir: '/Users/a/.claude-work' }
 
 describe("the session screen names the chat's account to dictation", () => {
-  it("names the Claude chat's own account", () => {
-    expect(dictationChatAccount({ nativeChatClaudeArtifacts: { artifacts: [], account }, nativeChatArtifactAccountId: 'acct-nexdash' })).toEqual({ accountId: 'acct-nexdash' })
+  // The artifacts' account falls back to the only account signed in, which is not proof the session
+  // is its own ("it must exactly tell", 2026-10-17): dictation always asks the lookup, which takes a
+  // kept match or config-dir binding first and otherwise asks Anthropic.
+  it("asks the lookup even when the chat's artifacts name the only account signed in", async () => {
+    const lookUp = vi.fn(async () => ({ ok: true as const, accountId: 'acct-only' }))
+    const chat = dictationChatAccount({ nativeChatClaudeArtifacts: { artifacts: [], account }, nativeChatArtifactAccountId: 'acct-only' }, lookUp)
+    expect(chat?.accountId).toBeNull()
+    await chat?.resolve?.()
+    expect(lookUp).toHaveBeenCalledTimes(1)
   })
 
-  it('says a Claude chat has no known account when several are signed in and none is matched', () => {
-    expect(dictationChatAccount({ nativeChatClaudeArtifacts: { artifacts: [], account }, nativeChatArtifactAccountId: null })).toEqual({ accountId: null })
-    expect(dictationChatAccount({ nativeChatClaudeArtifacts: { artifacts: [], account } })).toEqual({ accountId: null })
+  it("hands a Claude chat with no matched account a lookup of the tab's own session, with its transcript messages", async () => {
+    const messages = [
+      { id: 'm-1', source: 'transcript', timestamp: 1000 },
+      { id: 'local-1', source: 'local', timestamp: 3000 },
+      { id: 'm-2', source: 'transcript', timestamp: 2000 }
+    ] as unknown as MobileNativeChatController['nativeChatSession']['messages']
+    const lookUp = vi.fn(async () => ({ ok: true as const, accountId: 'acct-nexdash' }))
+    const chat = dictationChatAccount(
+      { nativeChatClaudeArtifacts: { artifacts: [], account }, nativeChatArtifactAccountId: null, nativeChatSession: { messages } as MobileNativeChatController['nativeChatSession'] },
+      lookUp
+    )
+    expect(chat?.accountId).toBeNull()
+    await expect(chat?.resolve?.()).resolves.toEqual({ ok: true, accountId: 'acct-nexdash' })
+    expect(lookUp).toHaveBeenCalledWith(account, { messageIds: ['m-1', 'm-2'], newestMessageAt: 2000 })
   })
+
 
   it('names no chat outside a Claude chat (a terminal, a Codex chat)', () => {
     expect(dictationChatAccount({ nativeChatArtifactAccountId: null })).toBeUndefined()
