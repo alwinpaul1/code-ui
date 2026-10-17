@@ -163,7 +163,7 @@ export function ClaudeArtifactGallery({ onBack }: { onBack: () => void }) {
         ListHeaderComponent={list.error !== null && !list.loading ? <StaleListLine message={list.error} onRetry={refresh} /> : null}
         ListEmptyComponent={<GalleryEmpty text={artifactGalleryEmptyText(filters)} glyph={isDefaultArtifactGalleryFilters(filters)} />}
         renderItem={({ item }: ListRenderItemInfo<ClaudeArtifactListItem>) => (
-          <ArtifactGalleryRow item={item} now={now} onPress={() => openClaudeArtifact({ url: item.url, title: item.title })} />
+          <ArtifactGalleryRow item={item} now={now} onPress={() => openClaudeArtifact({ url: item.url, title: item.title, accountId })} />
         )}
       />
     )

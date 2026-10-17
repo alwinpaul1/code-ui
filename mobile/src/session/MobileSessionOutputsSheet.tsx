@@ -86,7 +86,7 @@ export function MobileSessionOutputsSheet({
                 key={row.uuid}
                 testID={`outputs-artifact-row-${row.uuid}`}
                 row={row}
-                onPress={then(() => openClaudeArtifact({ url: row.url, title: row.title }))}
+                onPress={then(() => openClaudeArtifact(accountId ? { url: row.url, title: row.title, accountId } : { url: row.url, title: row.title }))}
               />
             ))}
           </View>

@@ -26,6 +26,7 @@ import { nativeChatComposerLockReason } from './use-mobile-native-chat-input-loc
 import { useMobileNativeChatSendError, mobileNativeChatSendErrorMessage } from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
+import { dictationChatAccount } from './dictation-chat-account'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(
@@ -142,8 +143,10 @@ export function useMobileSessionNativeChatDictation(
     }),
     onError: (err) => { dictationRouteContextRef.current = null; reportDictationFailure(err) }
   })
+  // A take in a Claude chat dictates with that chat's own account (review of 2026-10-17).
   const anthropicDictation = useAnthropicDictation({
-    enabled: canSend, onTranscript: onSpoken, onError: onSpokenError, lang: 'en'
+    enabled: canSend, onTranscript: onSpoken, onError: onSpokenError, lang: 'en',
+    chatAccount: dictationChatAccount(nativeChatController)
   })
   // Signing in on the phone is mandatory (the user, 2026-10-14). A mic tap while signed out reads
   // the store once more (a sign-in may have just happened) and, if still nobody is signed in,

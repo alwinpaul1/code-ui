@@ -1,0 +1,19 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcaclaudesession'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcaclaudesession'
+}
+
+// No dependencies block: CookieManager is android.webkit, and the store is the platform's own
+// AndroidKeyStore + javax.crypto (AES/GCM). androidx.security:security-crypto is not on the app's
+// classpath (expo-secure-store does its own Keystore encryption too), so none is added for this.

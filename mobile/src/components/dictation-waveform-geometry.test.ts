@@ -4,6 +4,7 @@ import {
   levelSampleDue,
   waveformBar,
   waveformBarCount,
+  waveformBarParts,
   waveformBars,
   waveformLevelAt,
   WAVEFORM_BAR_GAP,
@@ -181,5 +182,27 @@ describe('the level history', () => {
     for (let i = 1; i < taken.length; i++) {
       expect(taken[i]! - taken[i - 1]!).toBe(WAVEFORM_SAMPLE_MS)
     }
+  })
+})
+
+describe('a bar built from caps and a strip that only transforms move', () => {
+  /** The painted extent about the row's centre: the strip, and two 3 dp caps squashed by capScaleY. */
+  function extent(h: number): number {
+    const parts = waveformBarParts(h, H)
+    const strip = parts.bodyScaleY * H
+    const cap = WAVEFORM_BAR_WIDTH * parts.capScaleY
+    return Math.max(strip, 2 * parts.capOffset + cap)
+  }
+
+  it('paints exactly the bar’s height for a dot, a voiced bar, a full bar and an edge sliver', () => {
+    for (const h of [3, 3.5, 11, H, 2, 0.4]) {
+      expect(extent(h), `height ${h}`).toBeCloseTo(h, 9)
+    }
+  })
+
+  it('paints nothing for no height, and never more than the row', () => {
+    expect(waveformBarParts(0, H)).toEqual({ capOffset: 0, capScaleY: 0, bodyScaleY: 0 })
+    expect(waveformBarParts(Number.NaN, H)).toEqual({ capOffset: 0, capScaleY: 0, bodyScaleY: 0 })
+    expect(extent(H + 10)).toBeCloseTo(H, 9)
   })
 })

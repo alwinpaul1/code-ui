@@ -15,10 +15,17 @@ import { readClaudeArtifactAccounts, useClaudeArtifactList } from './claude-arti
  *
  * Until the list has answered, false: the bar starts on Open in browser and turns to Share when the
  * row arrives.
+ *
+ * `known` is the account the viewer opened the artifact as (use-artifact-viewer-session.ts); when
+ * given, its list is read instead of guessing from the count.
  */
-export function useArtifactViewerOwnsArtifact(uuid: string): boolean {
-  const [accountId, setAccountId] = useState<string | null>(null)
+export function useArtifactViewerOwnsArtifact(uuid: string, known: string | null = null): boolean {
+  const [onlyAccount, setAccountId] = useState<string | null>(null)
+  const accountId = known ?? onlyAccount
   useEffect(() => {
+    if (known !== null) {
+      return
+    }
     let stale = false
     void readClaudeArtifactAccounts().then(
       (entries) => {
@@ -33,7 +40,7 @@ export function useArtifactViewerOwnsArtifact(uuid: string): boolean {
     return () => {
       stale = true
     }
-  }, [])
+  }, [known])
   const list = useClaudeArtifactList(accountId)
   const wanted = uuid.toLowerCase()
   return list.items.some((item) => item.uuid.toLowerCase() === wanted && item.rel === 'mine')

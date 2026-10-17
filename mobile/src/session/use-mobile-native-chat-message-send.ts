@@ -139,7 +139,7 @@ export function useMobileNativeChatMessageSend(args: {
       // rejected send has to put back exactly that (#14819).
       const text = draftText.trimEnd()
       const handle = handleRef.current
-      const origin = captureSendOrigin(text)
+      const origin = follow?.origin ?? captureSendOrigin(text) // one origin per press (mobile-native-chat-text-send-start.ts)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       if (!handle || !origin) {
@@ -170,7 +170,7 @@ export function useMobileNativeChatMessageSend(args: {
       const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
       const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
       // Written down before the gate, so a gate that wanted the desktop hands it to the outbox (S4).
-      const gate = openSendGateOutbox({ origin, draftText, chat: classification === 'chat', syncComposer, ...(images ? { images } : {}), report, clearDraftForSend, ...(showSendingEcho ? { showSendingEcho } : {}) })
+      const gate = openSendGateOutbox({ origin, draftText, chat: classification === 'chat', syncComposer, ...(images ? { images } : {}), report, clearDraftForSend, restoreRejectedDraft, ...(showSendingEcho ? { showSendingEcho } : {}) })
       gate.enter()
       // Nothing has been written yet, so a composer send tapped while the relay
       // re-dials waits for it and then goes (mobile-native-chat-send-readiness.ts).
@@ -237,6 +237,7 @@ export function useMobileNativeChatMessageSend(args: {
       // Clear, body, and for Claude a check that it took the words. The limit
       // behind it is per stdin READ and writes coalesce, so the host's ack is not
       // proof (mobile-native-chat-send-write.ts).
+      origin.bodyWriteStarted = true
       const written = await timeSendWrites(syncComposer, () => writeChatSend({
         agent, client, terminal: handle,
         text,

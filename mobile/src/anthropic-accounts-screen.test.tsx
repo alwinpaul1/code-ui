@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 /**
  * Anthropic sign-in lives on its own Settings screen, not under Voice (the user, 2026-10-15):
  * sign-in now matters for session matching, the model pill, usage and sending, not only dictation.
- * Pins the screen in both themes, the row that opens it, the keyboard rule for its code field, and
+ * Pins the screen in both themes, the row that opens it, its keyboard rule, and
  * that Voice no longer draws the accounts section.
  */
 
@@ -40,6 +40,9 @@ vi.mock('lucide-react-native', () => ({
   KeyRound: 'KeyRound',
   UserRound: 'UserRound'
 }))
+// The accounts section reads each account's claude.ai session through modules/orca-claude-session
+// (claude-ai-session.ts). Absent here, as on a phone without it: the real wrapper answers "none".
+vi.mock('expo-modules-core', () => ({ requireOptionalNativeModule: () => null }))
 vi.mock('expo-router', () => ({
   useRouter: () => ({ back: vi.fn(), push: (href: string) => nav.pushed.push(href) }),
   useFocusEffect: () => {}
@@ -116,7 +119,7 @@ describe('the Anthropic accounts screen', () => {
     expect(stylesOf(signIn!.props.style).map((s) => s.color)).toContain(palette.text)
   })
 
-  it('keeps taps with the keyboard up, for the paste-the-code field', async () => {
+  it('keeps taps with the keyboard up', async () => {
     const root = await draw('light', AnthropicAccountsScreen)
     const scroller = root.findAll((node) => String(node.type) === 'ScrollView')[0]
     expect(scroller?.props.keyboardShouldPersistTaps).toBe('handled')

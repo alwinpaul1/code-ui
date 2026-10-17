@@ -163,3 +163,32 @@ export function waveformBars(
   }
   return bars
 }
+
+/**
+ * A bar drawn from three views whose layout never changes: a 3 dp round cap at the top, one at the
+ * bottom, and a 3 dp wide strip the full row tall between them, all centred on the row. Only
+ * transforms move them, so a bar's height and its position reach the screen in the same frame.
+ * (Animating `height` sent it through a layout commit while the transform went straight to the
+ * view, and the two landed frames apart: the waveform shivered, device 0.9.157, 2026-10-17.)
+ *
+ * - `capOffset`: how far each cap's centre sits from the row's centre (up for the top cap).
+ * - `capScaleY`: a bar shorter than the 3 dp cap squashes both caps into one, as the Claude app's
+ *   `drawRoundRect` clamps its corner radius to half the height.
+ * - `bodyScaleY`: the strip's scale against its full-row height, filling between the caps.
+ */
+export type WaveformBarParts = {
+  readonly capOffset: number
+  readonly capScaleY: number
+  readonly bodyScaleY: number
+}
+
+export function waveformBarParts(barHeight: number, rowHeight: number): WaveformBarParts {
+  'worklet'
+  const h = barHeight > 0 ? Math.min(barHeight, rowHeight) : 0
+  const cap = WAVEFORM_BAR_WIDTH
+  return {
+    capOffset: Math.max(0, (h - cap) / 2),
+    capScaleY: Math.min(1, h / cap),
+    bodyScaleY: rowHeight > 0 ? Math.max(0, h - cap) / rowHeight : 0
+  }
+}

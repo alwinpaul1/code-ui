@@ -15,7 +15,9 @@ import { openClaudeArtifact } from './open-claude-artifact'
  */
 export function claudeArtifactMarkdownLinks(
   items: readonly ClaudeArtifactListItem[],
-  open: (link: { url: string; title?: string | null }) => void = openClaudeArtifact
+  open: (link: { url: string; title?: string | null; accountId?: string | null }) => void = openClaudeArtifact,
+  /** The chat's account: the viewer opens the link signed in as it. */
+  accountId: string | null = null
 ): MarkdownArtifactLinks {
   return {
     resolve: (href) => {
@@ -29,7 +31,7 @@ export function claudeArtifactMarkdownLinks(
       return {
         label,
         describe: (words) => `Artifact, ${words}`,
-        open: () => open({ url: link.url, title })
+        open: () => open(accountId ? { url: link.url, title, accountId } : { url: link.url, title })
       }
     }
   }
@@ -41,6 +43,6 @@ export function ClaudeArtifactLinks({ text, children }: { text: string; children
   const holdsLinks = useMemo(() => findClaudeArtifactLinks(text).length > 0, [text])
   const account = useClaudeArtifactAccount()
   const { items } = useClaudeArtifactList(holdsLinks ? account : null)
-  const links = useMemo(() => claudeArtifactMarkdownLinks(items), [items])
+  const links = useMemo(() => claudeArtifactMarkdownLinks(items, openClaudeArtifact, account), [items, account])
   return <MarkdownArtifactLinksContext.Provider value={links}>{children}</MarkdownArtifactLinksContext.Provider>
 }

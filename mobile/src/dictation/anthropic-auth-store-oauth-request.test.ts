@@ -40,10 +40,9 @@ vi.mock('expo-linking', () => ({
 
 import {
   exchangeCode,
-  getSavedVerifier,
   readCredential,
   refreshAccessToken,
-  startLogin
+  prepareLogin
 } from './anthropic-auth-store'
 
 type Posted = { url: string; headers: Record<string, string>; body: string }
@@ -62,9 +61,13 @@ function stubTokenEndpoint(status = 200): Posted[] {
   return posted
 }
 
+/** The authorize page the sign-in loads (in the app's WebView since 2026-10-17), and the verifier
+ *  that sign-in saved for its exchange. */
+let lastVerifier = ''
 async function openedLogin(): Promise<URL> {
-  await startLogin()
-  return new URL(fake.opened.at(-1)!)
+  const login = await prepareLogin()
+  lastVerifier = login.codeVerifier
+  return new URL(login.url)
 }
 
 beforeEach(() => {
@@ -109,7 +112,7 @@ describe('pasting the code the callback page shows', () => {
   it('exchanges the code part and sends the state back, as JSON', async () => {
     const state = (await openedLogin()).searchParams.get('state')!
     const posted = stubTokenEndpoint()
-    await exchangeCode(`the-code#${state}`, (await getSavedVerifier())!)
+    await exchangeCode(`the-code#${state}`, lastVerifier)
 
     // The profile is asked for after the exchange, to know which account this is.
     expect(posted.map((request) => request.url)).toEqual(['https://platform.claude.com/v1/oauth/token', 'https://api.anthropic.com/api/oauth/profile'])
@@ -126,7 +129,7 @@ describe('pasting the code the callback page shows', () => {
   it('refuses a code copied without its #state, before calling the server', async () => {
     await openedLogin()
     const posted = stubTokenEndpoint()
-    await expect(exchangeCode('the-code', (await getSavedVerifier())!)).rejects.toThrow(
+    await expect(exchangeCode('the-code', lastVerifier)).rejects.toThrow(
       'Invalid code. Make sure the full code was copied'
     )
     expect(posted).toEqual([])
@@ -135,7 +138,7 @@ describe('pasting the code the callback page shows', () => {
   it('refuses a code from a different sign-in, before calling the server', async () => {
     await openedLogin()
     const posted = stubTokenEndpoint()
-    await expect(exchangeCode('the-code#someone-elses-state', (await getSavedVerifier())!)).rejects.toThrow(
+    await expect(exchangeCode('the-code#someone-elses-state', lastVerifier)).rejects.toThrow(
       'This code is from a different sign-in. Tap Sign in again.'
     )
     expect(posted).toEqual([])
@@ -145,7 +148,7 @@ describe('pasting the code the callback page shows', () => {
   it('says what the server answered when the exchange fails', async () => {
     const state = (await openedLogin()).searchParams.get('state')!
     stubTokenEndpoint(400)
-    await expect(exchangeCode(`the-code#${state}`, (await getSavedVerifier())!)).rejects.toThrow(
+    await expect(exchangeCode(`the-code#${state}`, lastVerifier)).rejects.toThrow(
       'Token exchange failed (400): refused'
     )
     expect(await readCredential()).toBeNull()

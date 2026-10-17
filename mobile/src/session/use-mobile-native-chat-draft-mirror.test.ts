@@ -113,6 +113,28 @@ describe('useMobileNativeChatDraftMirror', () => {
     expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U + 'a'])
   })
 
+  // 2026-10-17: a text send empties the composer at the tap, before its look at the desktop screen
+  // (mobile-native-chat-text-send-start.ts). Echoed, that clear typed a Ctrl+U into the desktop
+  // before the look, which is there because a dialog on screen takes typed keys as answers.
+  it('does not echo the box emptying at the tap of a send onto the desktop line', async () => {
+    const { client, sendRequest } = makeClient()
+    const { type, update, api } = mount(client, { enabled: true, text: '' })
+    type({ enabled: true, text: 'go' })
+    await flush()
+    sendRequest.mockClear()
+    act(() => api().standAsideForSend())
+    update({ enabled: true, text: '' })
+    await flush()
+    expect(sendRequest).not.toHaveBeenCalled()
+    // The send's own settle still runs, and the next edit starts a fresh line.
+    await act(async () => {
+      await api().settleBeforeSend()
+    })
+    type({ enabled: true, text: 'a' })
+    await flush()
+    expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U + 'a'])
+  })
+
   it('sends nothing while disabled', async () => {
     const { client, sendRequest } = makeClient()
     const { type } = mount(client, { enabled: false, text: '' })

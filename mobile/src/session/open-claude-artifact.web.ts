@@ -6,6 +6,6 @@ import { openExternalLink } from '../platform/external-link'
  * browser counterpart. claude.ai also refuses to be framed, so the page hands the link to the app's
  * external opener instead.
  */
-export function openClaudeArtifact(link: { url: string; title?: string | null }): void {
+export function openClaudeArtifact(link: { url: string; title?: string | null; accountId?: string | null }): void {
   openExternalLink(link.url)
 }

@@ -5,6 +5,7 @@ import { anthropicSignedInCount, anthropicSignInPresenceVersion, subscribeAnthro
 import { ClaudeArtifactsGlyph } from '../session/ClaudeArtifactsGlyph'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
+import { SectionLabel } from '../ui/SectionLabel'
 import { Txt } from '../ui/Txt'
 
 export const HOME_ARTIFACTS_CAPTION = 'Yours and shared with you'
@@ -13,7 +14,8 @@ export const HOME_ARTIFACTS_CAPTION = 'Yours and shared with you'
  * Home's way into the account's Artifacts gallery (app/artifacts.tsx). The Claude Android app
  * 1.261013.20 has a top-level Artifacts tab (vew.java:16) and an Artifacts folder in its Code
  * overview (cs30.java:600); Code UI has no tab bar, so the gallery is a card here, drawn like the
- * Tasks card. Only while an Anthropic account is signed in (anthropic-sign-in-presence.ts): the list
+ * Tasks card under its own heading (it sat inside the Tasks section until 2026-10-17, which read as
+ * a kind of task). The heading goes with the card, so a signed-out home has no empty section. Only while an Anthropic account is signed in (anthropic-sign-in-presence.ts): the list
  * is read with that sign-in, and with none there is nothing to show.
  */
 export function MobileHomeArtifactsCard(props: { onOpen: () => void }) {
@@ -23,6 +25,8 @@ export function MobileHomeArtifactsCard(props: { onOpen: () => void }) {
     return null
   }
   return (
+    <>
+    <SectionLabel>Artifacts</SectionLabel>
     <PressScale
       testID="home-artifacts-card"
       accessibilityRole="button"
@@ -36,7 +40,6 @@ export function MobileHomeArtifactsCard(props: { onOpen: () => void }) {
         borderColor: colors.border,
         borderRadius: radius.lg,
         minHeight: 72,
-        marginTop: space.sm,
         paddingHorizontal: space.md,
         paddingVertical: space.md
       }}
@@ -65,5 +68,6 @@ export function MobileHomeArtifactsCard(props: { onOpen: () => void }) {
       </View>
       <ChevronRight size={16} color={colors.textMuted} />
     </PressScale>
+    </>
   )
 }

@@ -33,8 +33,9 @@ import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
+import type { NativeChatTextSendStart } from './mobile-native-chat-text-send-start'; import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
-import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { INPUT_BOX_REFUSALS, SEND_WAITS_FOR_DESKTOP } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
+import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { releaseOutboxSend } from './native-chat-outbox-sends'; import { INPUT_BOX_REFUSALS, SEND_WAITS_FOR_DESKTOP } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -67,7 +68,9 @@ type Args = {
   /** Empties the composer as the send starts (the chips go with it) and returns
    *  the undo. `images` also adds the optimistic bubble in this same call.
    *  `imagePaths` are the desktop paths pasted, one per preview in `images`. */
-  readonly beginImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
+  /** `beginTextSend`: a text send that can go now empties the box and draws its bubble at the tap,
+   *  before the look at the desktop screen (mobile-native-chat-text-send-start.ts). */
+  readonly beginImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null; readonly beginTextSend?: (text: string) => NativeChatTextSendStart | null
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -140,7 +143,7 @@ export function useMobileNativeChatImageAttachments({
   onSendError,
   baseSend,
   beforeImagePaste,
-  beginImageSend, parkRefusedSend,
+  beginImageSend, parkRefusedSend, beginTextSend,
   structuredNativeChat,
   refuseUnderDialog,
   hostTerminalOfTab,
@@ -247,9 +250,13 @@ export function useMobileNativeChatImageAttachments({
         // desktop, waits in the outbox, which types it once the box is back; any other keeps its
         // words in the composer with a Retry.
         const textOnly = pendingAll.length === 0 && composerText.trim() !== ''
+        // With the link up at the tap, the box empties and the bubble is drawn now, as the Claude app
+        // draws its pending row; the look below still comes before anything is typed, and a refusal
+        // puts the words back (mobile-native-chat-text-send-start.ts, 2026-10-17).
+        const early = textOnly && !structuredNativeChat && sendGate.isReady() && classifyMobileNativeChatSend(agent ?? null, composerText.trimEnd()) === 'chat' ? (beginTextSend?.(composerText) ?? null) : null
         const refuse = (message: string, waits = INPUT_BOX_REFUSALS.get(message)): boolean => {
-          if (textOnly && waits && parkRefusedSend?.(composerText)) { onSendError(waits); return true }
-          onError?.(); if (textOnly && !/session changed|pairing invalid/.test(message)) { onSendError(message, { retry: true }) } else { onSendError(message) }; return false
+          if (textOnly && waits && (early ? early.handOver() : parkRefusedSend?.(composerText))) { onSendError(waits); return true }
+          early?.giveBack(); onError?.(); if (textOnly && !/session changed|pairing invalid/.test(message)) { onSendError(message, { retry: true }) } else { onSendError(message) }; return false
         }
         // Says why when the budget ran out (the app was away, or the desktop slow).
         const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
@@ -319,9 +326,8 @@ export function useMobileNativeChatImageAttachments({
                 // later send with a bare "Message not sent" (#10681). Gate it like the
                 // image path: it waits for the lease, or leaves the marker for later.
                 const healClient = await sendGate.wait(deadline, () => scopeKeyRef.current !== scope)
-                if (!healClient) {
-                  return false
-                }
+                // A send whose box emptied at the tap gets its words back (second review, 2026-10-17).
+                if (!healClient) { early?.giveBack(); return false }
                 const healed = await healMobileNativeChatStaleInput({
                   client: healClient,
                   terminal: staleTerminal,
@@ -344,8 +350,10 @@ export function useMobileNativeChatImageAttachments({
               }
               // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
               // A throw puts the file chips back too, and still rejects as it always did.
-              const sent = await baseSend(text, undefined, deadline, undefined, follow ?? undefined).catch((error: unknown) => ({ error }))
-              const accepted = typeof sent === 'string' && sent !== 'rejected' && !follow?.reminted
+              if (follow && early) { follow.origin = early.origin } const sent = await baseSend(text, undefined, deadline, undefined, follow ?? undefined).catch((error: unknown) => ({ error }))
+              // A refusal before any write, or a throw: its words back, its bubble down (once; the send's own give-back counts).
+              const accepted = typeof sent === 'string' && sent !== 'rejected' && !follow?.reminted; // A throw after the body may have been typed goes to the drainer, never back to the box: Send again would post it twice (second review, 2026-10-17).
+              if (early && !follow?.reminted && !accepted) { if (typeof sent !== 'string' && early.origin.bodyWriteStarted) { releaseOutboxSend(early.origin.outboxId) } else { early.giveBack() } }
               if (!accepted && pendingFiles.length > 0 && scope) { restoreSentAttachments(scope, pendingAll) }
               if (typeof sent !== 'string') { throw sent.error }
               return follow?.reminted ? SEND_REMINTED : accepted

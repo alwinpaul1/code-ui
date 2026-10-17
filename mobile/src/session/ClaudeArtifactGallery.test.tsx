@@ -209,7 +209,26 @@ describe('the Artifacts gallery', () => {
     setClaudeArtifactListDepsForTests({ load: async () => pipeline(answers(LIST)) })
     await mount()
     host(`artifact-gallery-row-${SHARED}`)!.props.onPress()
-    expect(opened).toHaveBeenCalledWith({ url: claudeArtifactUrl(SHARED), title: 'Team roadmap' })
+    expect(opened).toHaveBeenCalledWith({ url: claudeArtifactUrl(SHARED), title: 'Team roadmap', accountId: 'acct' })
+  })
+
+  it('opens an artifact signed in as the account that owns it: the one chosen in the picker', async () => {
+    // Reported 2026-10-17: two accounts signed in, and the viewer showed claude.ai's "Sign in to
+    // view this page". The viewer opens as the account it is handed; the gallery hands its choice.
+    const lists: Record<string, unknown> = { personal: LIST, work: { frames: [{ slug: SHARED, title: 'Work board', rel: 'mine', audience: 'owner' }] } }
+    const fetchImpl = vi.fn<CcrFetch>(async (_url, init) => ({ ok: true, status: 200, json: async () => lists[init.headers.Authorization!.replace('Bearer tok-', '')] }))
+    setClaudeArtifactListDepsForTests({
+      load: async () =>
+        pipeline(fetchImpl, [
+          { id: 'personal', label: 'Personal' },
+          { id: 'work', label: 'Acme' }
+        ])
+    })
+    await mount()
+    await pick('artifact-gallery-account', 'Acme')
+    await settle()
+    host(`artifact-gallery-row-${SHARED}`)!.props.onPress()
+    expect(opened).toHaveBeenCalledWith({ url: claudeArtifactUrl(SHARED), title: 'Work board', accountId: 'work' })
   })
 
   it('lists by the list dropdown, in the app’s order, and says No artifacts match under an empty Pinned', async () => {
@@ -384,6 +403,55 @@ describe('the Artifacts gallery', () => {
     act(() => renderer?.unmount())
     await mount()
     expect(host('artifact-gallery-account')).toBeUndefined()
+  })
+
+  it('never lists the second account’s artifacts while the first is chosen, whichever read answers first', async () => {
+    // Reported 2026-10-17 on 0.9.157 with two accounts signed in: account 1 chosen, account 2's
+    // artifacts in the list. Each read is answered by the account its bearer names, and held until
+    // the test lets it go, so the other account's answer can land first, mid-switch, or late.
+    const FIRST = 'b0000000-0000-4000-8000-000000000001'
+    const SECOND = 'b0000000-0000-4000-8000-000000000002'
+    const bodies: Record<string, unknown> = {
+      one: { frames: [{ slug: FIRST, title: 'First account page', rel: 'mine', audience: 'owner' }] },
+      two: { frames: [{ slug: SECOND, title: 'Second account page', rel: 'mine', audience: 'owner' }] }
+    }
+    const held: { account: string; release: () => void }[] = []
+    const fetchImpl = vi.fn<CcrFetch>(
+      (_url, init) =>
+        new Promise((resolve) => {
+          const account = init.headers.Authorization!.replace('Bearer tok-', '')
+          held.push({ account, release: () => resolve({ ok: true, status: 200, json: async () => bodies[account] }) })
+        })
+    )
+    setClaudeArtifactListDepsForTests({
+      load: async () =>
+        pipeline(fetchImpl, [
+          { id: 'one', label: 'Account 1' },
+          { id: 'two', label: 'Account 2' }
+        ])
+    })
+    const release = async (account: string) => {
+      const at = held.findIndex((entry) => entry.account === account)
+      held.splice(at, 1)[0]!.release()
+      await settle()
+    }
+    await mount()
+    // Account 1 is chosen and its read is held; account 2 is picked, then account 1 again, and
+    // account 2's answer lands while account 1 is chosen.
+    await pick('artifact-gallery-account', 'Account 2')
+    await settle()
+    await pick('artifact-gallery-account', 'Account 1')
+    await settle()
+    await release('two')
+    expect(host('artifact-gallery-account')!.props.accessibilityValue).toEqual({ text: 'Account 1' })
+    expect(rowTitles()).not.toContain('Second account page')
+    await release('one')
+    expect(rowTitles()).toEqual(['First account page'])
+    // Each account's list was read with that account's own bearer, never the other's.
+    expect(fetchImpl.mock.calls.map(([, init]) => init.headers.Authorization).sort()).toEqual(['Bearer tok-one', 'Bearer tok-two'])
+    await pick('artifact-gallery-account', 'Account 2')
+    await settle()
+    expect(rowTitles()).toEqual(['Second account page'])
   })
 
   it('says to sign in when no account is signed in, and reads no list', async () => {

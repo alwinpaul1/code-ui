@@ -152,6 +152,25 @@ export function releaseOutboxSendFromGate(id: string | undefined): boolean {
   return releaseOutboxSend(id)
 }
 
+/**
+ * A send whose box emptied at the tap (mobile-native-chat-text-send-start.ts), refused before
+ * anything was typed for want of the desktop or of its input box: handed to the outbox as a gate
+ * refusal is, marked `unwritten`. Returns false when nothing could see it through; the entry is
+ * then held LIVE again, so neither the drainer nor a recovery sends it while its words go back to
+ * the composer, and the give-back retires it once they have landed.
+ */
+export function releaseOutboxSendBeforeWrite(id: string | undefined): boolean {
+  if (!findOutboxEntry(id)) {
+    return false
+  }
+  void patchOutboxEntry(id!, { unwritten: true })
+  if (releaseOutboxSend(id)) {
+    return true
+  }
+  live.add(id!)
+  return false
+}
+
 /** The structured operation id every attempt of this origin's entry sends, if it has one. */
 export function outboxOperationId(origin: MobileNativeChatSendOrigin): string | undefined {
   return findOutboxEntry(origin.outboxId)?.operationId

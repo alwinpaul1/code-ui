@@ -45,6 +45,20 @@ vi.mock('./use-artifact-viewer-ownership', () => ({
   }
 }))
 
+const viewerSession = vi.hoisted(() => ({
+  requested: [] as (string | null)[],
+  session: { kind: 'ready', accountId: null } as Record<string, unknown>,
+  choose: vi.fn()
+}))
+vi.mock('./use-artifact-viewer-session', () => ({
+  useArtifactViewerSession: (requested: string | null) => {
+    viewerSession.requested.push(requested)
+    return { session: viewerSession.session, choose: viewerSession.choose }
+  }
+}))
+const accountsScreen = vi.hoisted(() => vi.fn())
+vi.mock('./open-anthropic-accounts', () => ({ openAnthropicAccounts: accountsScreen }))
+
 const shortcutKey = vi.hoisted(() => ({ good: 'key-1', checked: [] as (string | undefined)[], fail: false }))
 vi.mock('./claude-artifact-shortcut-key', () => ({
   isArtifactShortcutKey: async (k: string | undefined) => {
@@ -76,6 +90,8 @@ afterEach(() => {
   ownership.asked.length = 0
   shortcutKey.checked.length = 0
   shortcutKey.fail = false
+  viewerSession.requested.length = 0
+  viewerSession.session = { kind: 'ready', accountId: null }
 })
 
 function mountRoute(scheme: 'light' | 'dark' = 'light') {
@@ -106,6 +122,12 @@ describe('opening an artifact', () => {
     openClaudeArtifact({ url: PUBLISHED_LINK, title: '  Code UI Artifact Check ' })
     await vi.waitFor(() => expect(nav.push).toHaveBeenCalled())
     expect(nav.push).toHaveBeenCalledWith({ pathname: '/artifact', params: { url: PUBLISHED_LINK, title: 'Code UI Artifact Check' } })
+  })
+
+  it('opens an artifact signed in as the account that owns it: the opener names the account to the route', async () => {
+    openClaudeArtifact({ url: PUBLISHED_LINK, title: 'Board', accountId: 'acct-work' })
+    await vi.waitFor(() => expect(nav.push).toHaveBeenCalled())
+    expect(nav.push).toHaveBeenCalledWith({ pathname: '/artifact', params: { url: PUBLISHED_LINK, title: 'Board', account: 'acct-work' } })
   })
 
   it('pushes no title when none is known', async () => {
@@ -162,6 +184,34 @@ describe('the viewer route', () => {
     mountRoute()
     expect(viewers()[0]!.props).toMatchObject({ url: PUBLISHED_LINK, uuid: PUBLISHED_UUID, own: true, title: null })
     expect(ownership.asked).toContain(PUBLISHED_UUID)
+  })
+
+  it('opens an artifact signed in as the account that owns it: the route asks for that account’s session, and none for a deep link', () => {
+    nav.params = { url: PUBLISHED_LINK, account: 'acct-work' }
+    mountRoute()
+    expect(viewerSession.requested.at(-1)).toBe('acct-work')
+    act(() => renderer?.unmount())
+    nav.params = { url: PUBLISHED_LINK, external: '1' }
+    mountRoute()
+    expect(viewerSession.requested.at(-1)).toBeNull()
+  })
+
+  it('holds the page while the session is written, and turns a missing one into the viewer’s own sign-in state', () => {
+    viewerSession.session = { kind: 'checking' }
+    nav.params = { url: PUBLISHED_LINK, account: 'acct-work' }
+    mountRoute()
+    expect(viewers()[0]!.props.signIn).toEqual({ kind: 'checking' })
+    act(() => renderer?.unmount())
+    viewerSession.session = { kind: 'needed', accountId: 'acct-work', label: 'NexDash', choices: [] }
+    mountRoute()
+    const signIn = viewers()[0]!.props.signIn
+    expect(signIn).toMatchObject({ kind: 'needed', accountId: 'acct-work', label: 'NexDash' })
+    signIn.onOpenAccounts()
+    expect(accountsScreen).toHaveBeenCalledTimes(1)
+    act(() => renderer?.unmount())
+    viewerSession.session = { kind: 'ready', accountId: 'acct-work' }
+    mountRoute()
+    expect(viewers()[0]!.props.signIn).toBeNull()
   })
 
   it('opens a link from inside the app at once, with no question', () => {

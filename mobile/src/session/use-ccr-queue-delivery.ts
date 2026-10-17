@@ -4,7 +4,7 @@ import { ccrQueueAtTurnEnd, type CcrQueueTurnEnd } from './ccr-local-queue'
 import { CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen } from './ccr-send'
 import type { CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
-import type { CcrSendFlight } from './ccr-send-order'
+import type { CcrSendFlight, CcrTapReads } from './ccr-send-order'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
@@ -80,7 +80,7 @@ type Latest = {
 }
 type SendNow = (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid?: string, files?: undefined, restore?: (origin: MobileNativeChatSendOrigin, text: string) => void, report?: (why: string) => void) => Promise<MobileNativeChatSendOutcome>
 
-export function useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flight, offline, takeFromQueue, requeueFront, giveBack, sendNow, sendOlderFirst, delivering, paused, alive, storeDraft }: {
+export function useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flight, offline, takeFromQueue, requeueFront, giveBack, sendNow, sendOlderFirst, delivering, paused, alive, storeDraft, tapReads }: {
   /** This render's view of the tab on screen. */
   args: { active: boolean; working: boolean; events: readonly CcrEvent[]; tabId: string | null }
   latest: Latest
@@ -103,6 +103,8 @@ export function useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flig
   alive: MutableRefObject<boolean>
   /** Words into a tab's stored draft, for after the chat is gone. */
   storeDraft: (draftKey: string | null, text: string) => void
+  /** Per tab, the queued taps whose status read is out: their words are queued already. */
+  tapReads: MutableRefObject<Map<string, CcrTapReads>>
 }): void {
   const [deliveryEnded, setDeliveryEnded] = useState(0)
   /** Per tab, the turn its last queued entry started, not yet seen to end: the next entry waits. */
@@ -171,12 +173,14 @@ export function useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flig
       case 'none':
         return false
       case 'to-composer': {
-        // Words typed while it read the status were accepted to wait behind it: offline, they
-        // get the notice they would have had.
-        const grew = current.entries.length > held.entries.length
+        // Words typed while it read the status were accepted to wait behind it, as were taps whose
+        // own read is still out: offline, they get the notice they would have had, once.
+        const reads = tapReads.current.get(tab)
+        const grew = current.entries.length > held.entries.length || (reads !== undefined && reads.pending > 0)
         deps.log(`[ccr-send] queued message moved back to the composer: ${verdict.because}`)
         giveBack(tab, '')
-        if (isOffline && grew) { now.onSendError(CCR_REMOTE_CONTROL_OFFLINE) }
+        if (isOffline && grew && !reads?.noticed) { now.onSendError(CCR_REMOTE_CONTROL_OFFLINE) }
+        if (isOffline && reads) { reads.noticed = true }
         return true
       }
       case 'send': {
@@ -218,7 +222,7 @@ export function useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flig
         return unhandled
       }
     }
-  }, [deps, giveBack, keepQueued, offline, reportKeptQueued, sendNow, sendOlderFirst, takeFromQueue])
+  }, [deps, giveBack, keepQueued, offline, reportKeptQueued, sendNow, sendOlderFirst, takeFromQueue, tapReads])
   // The flight is claimed BEFORE the status read (unless a send already holds it, which sends the
   // queue back to the composer), so nothing tapped meanwhile posts ahead of the queue, and the
   // outbox's resend waits for it.

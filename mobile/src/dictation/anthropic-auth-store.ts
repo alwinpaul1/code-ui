@@ -1,6 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
 import * as Crypto from 'expo-crypto'
-import * as Linking from 'expo-linking'
 import { fetchCcrProfile, type CcrProfile } from '../session/ccr-session-api'
 import { clearAccounts, markRefreshRefused, readCredential, replaceCredentialOf, upsertAccount, type StoredCredential } from './anthropic-accounts-store'
 
@@ -17,6 +16,8 @@ export {
   type StoredCredential
 } from './anthropic-accounts-store'
 
+/** Only deleted now: the browser sign-in saved its verifier here for the pasted code, and the
+ *  in-app sign-in holds its own (prepareLogin returns it). */
 const VERIFIER_KEY = 'anthropic-dictation-pkce-verifier'
 const STATE_KEY = 'anthropic-dictation-oauth-state'
 // Production OAuth endpoints (from Claude Code 2.1.296).
@@ -126,11 +127,12 @@ function parseTokenResponse(data: unknown): StoredCredential {
 // ---------------------------------------------------------------------------
 
 /**
- * Open the Anthropic OAuth page in the phone's browser. The user signs in,
- * authorises Code UI, and sees a code on screen. They copy that code and
- * paste it back into the app.
+ * Prepares a sign-in: a fresh PKCE verifier and state (both saved, so exchangeCode can check the
+ * code it is given belongs to this sign-in) and the authorize URL. The sign-in loads it in the
+ * app's WebView (AnthropicSignInScreen.tsx), not the phone's browser (until 2026-10-17), so the
+ * same login also leaves that account's claude.ai session in the WebView's cookie jar.
  */
-export async function startLogin(): Promise<string> {
+export async function prepareLogin(): Promise<{ url: string; codeVerifier: string }> {
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = await generateCodeChallenge(codeVerifier)
   const state = generateState()
@@ -147,21 +149,35 @@ export async function startLogin(): Promise<string> {
     code_challenge_method: 'S256',
     state
   })
-  const url = `${AUTHORIZE_URL}?${params}`
-  await SecureStore.setItemAsync(VERIFIER_KEY, codeVerifier)
   await SecureStore.setItemAsync(STATE_KEY, state)
-  await Linking.openURL(url)
-  return codeVerifier
-}
-
-/** Read back the verifier saved by `startLogin`. */
-export async function getSavedVerifier(): Promise<string | null> {
-  return SecureStore.getItemAsync(VERIFIER_KEY)
+  return { url: `${AUTHORIZE_URL}?${params}`, codeVerifier }
 }
 
 /**
- * Exchange the authorisation code the user pasted for an access + refresh
- * token pair. Validates the response shape before storing.
+ * The pasted-code form (`<code>#<state>`, what the callback page shows) of an address the
+ * authorize page redirects to, or null when the address is not the callback or carries no code.
+ * The redirect is an ordinary https page (REDIRECT_URI) that draws the code for the user to copy,
+ * with the code and state in its query; the in-app sign-in stops the WebView there and hands this
+ * to exchangeCode, so nothing is copied by hand.
+ */
+export function codeFromCallbackUrl(address: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(address)
+  } catch {
+    return null
+  }
+  if (`${parsed.origin}${parsed.pathname}` !== REDIRECT_URI) {
+    return null
+  }
+  const code = parsed.searchParams.get('code')
+  const state = parsed.searchParams.get('state')
+  return code && state ? `${code}#${state}` : null
+}
+
+/**
+ * Exchange the authorisation code (`<code>#<state>`, as the callback page shows it and
+ * codeFromCallbackUrl reads it) for an access + refresh token pair. Validates the response shape before storing.
  */
 export async function exchangeCode(
   pasted: string,

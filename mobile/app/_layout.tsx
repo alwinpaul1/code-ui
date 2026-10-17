@@ -358,6 +358,8 @@ function ThemedRoot() {
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
           <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="anthropic-accounts" options={{ headerShown: false }} />
+          {/* The accounts sign-in, in the app: OAuth and the claude.ai session in one (AnthropicSignInScreen.tsx). */}
+          <Stack.Screen name="anthropic-sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
           <Stack.Screen name="connection-log" options={{ headerShown: false }} />

@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
 import { ActivityIndicator, View, type StyleProp, type ViewStyle } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
 import type { AgentType } from '../../../src/shared/agent-status-types'
-import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { ViewportCentred } from './viewport-centre'
-import { CLAUDE_TRANSCRIPT_LOADING, clawdLayerColor, clawdLayers, nextClawdFrame } from './claude-transcript-loading-spec'
+import { CLAUDE_TRANSCRIPT_LOADING } from './claude-transcript-loading-spec'
+import { ClawdDancing } from './ClawdDancing'
 import { useLoadingConnectionTroubleContext } from './loading-connection-trouble'
 import { LoadingConnectionTroubleBody, LoadingConnectionTroubleView } from './LoadingConnectionTroubleView'
 
@@ -28,37 +26,14 @@ import { LoadingConnectionTroubleBody, LoadingConnectionTroubleView } from './Lo
  * not answer. The trouble clears by itself when the host connects.
  */
 export function ClaudeTranscriptLoading() {
-  const { colors } = useTheme()
   const reducedMotion = useReducedMotion()
   const troubleState = useLoadingConnectionTroubleContext()
   const still = reducedMotion !== false || troubleState !== null
   const spec = CLAUDE_TRANSCRIPT_LOADING
-  const [frame, setFrame] = useState<number>(spec.stillFrame)
-  useEffect(() => {
-    if (still) {
-      setFrame(spec.stillFrame)
-      return undefined
-    }
-    setFrame(spec.loopFrom)
-    const timer = setInterval(() => setFrame(nextClawdFrame), spec.frameMs)
-    return () => clearInterval(timer)
-  }, [still, spec])
-  const height = (spec.width * spec.rows) / spec.columns
   return (
     <ViewportCentred testID="claude-transcript-loading">
       <View style={{ alignItems: 'center', gap: spec.gap }}>
-      <View
-        style={{ width: spec.width, height }}
-        testID="claude-transcript-loading-clawd"
-        importantForAccessibility="no-hide-descendants"
-        accessibilityElementsHidden
-      >
-        <Svg width={spec.width} height={height} viewBox={`0 0 ${spec.columns} ${spec.rows}`}>
-          {clawdLayers(frame).map((layer) => (
-            <Path key={layer.token} d={layer.d} fill={clawdLayerColor(colors, layer)} />
-          ))}
-        </Svg>
-      </View>
+      <ClawdDancing still={still} testID="claude-transcript-loading-clawd" />
       {troubleState ? (
         <LoadingConnectionTroubleBody state={troubleState} />
       ) : (

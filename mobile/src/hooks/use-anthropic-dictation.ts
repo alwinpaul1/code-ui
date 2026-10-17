@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDictationCapture } from '../platform/dictation-capture'
-import { fetchAnthropicCredential } from '../dictation/anthropic-credential-reader'
+import { fetchAccountCredentials, fetchAnthropicCredential } from '../dictation/anthropic-credential-reader'
 import { AnthropicVoiceStream, type VoiceStreamProtocol } from '../dictation/anthropic-voice-stream'
 import type {
   DictationStatus,
@@ -19,6 +19,60 @@ import { createLevelSource, pcm16Level, type LevelSource } from '../dictation/pc
  */
 export const DICTATION_VOICE_PROTOCOL: VoiceStreamProtocol = 'claude-app'
 
+/**
+ * The chat a take dictates into: its Anthropic account's id, or null when several accounts are
+ * signed in and none is matched to it (useClaudeTabAccount). Left out outside a Claude chat.
+ */
+export type DictationChatAccount = { readonly accountId: string | null }
+
+/** What a take dictates with: a token and its account's organization, or why there is none. */
+type DictationCredential =
+  | { readonly ok: true; readonly accessToken: string; readonly organizationUuid: string | null }
+  | { readonly ok: false; readonly reason: string }
+
+const SIGN_IN_TO_DICTATE = 'Sign in to Anthropic in Settings, Anthropic accounts, to dictate'
+
+/**
+ * The credential for one take. In a chat with a known account, that account's token and
+ * organization and nothing else: if it cannot give a token the take is refused with the reason,
+ * because dictating with another account would send voice_stream the wrong organization (review of
+ * 2026-10-17: every take used the first account signed in, whatever chat it went into). A chat
+ * whose account is not known uses the first account signed in and says so in one log line; outside
+ * a chat that account is used quietly.
+ */
+async function readDictationCredential(chat: DictationChatAccount | undefined): Promise<DictationCredential> {
+  const accountId = chat?.accountId ?? null
+  if (accountId === null) {
+    const primary = await fetchAnthropicCredential().catch(() => null)
+    if (!primary) {
+      return { ok: false, reason: SIGN_IN_TO_DICTATE }
+    }
+    if (chat) {
+      console.warn(
+        "[dictation] this chat's Anthropic account is not known (several are signed in and none is matched to its session); dictating with the first account signed in"
+      )
+    }
+    return { ok: true, accessToken: primary.accessToken, organizationUuid: primary.organizationUuid ?? null }
+  }
+  let listed
+  try {
+    listed = await fetchAccountCredentials(accountId)
+  } catch (err) {
+    return { ok: false, reason: `Can't read this chat's Anthropic account to dictate: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  const account = listed[0]
+  if (!account) {
+    return {
+      ok: false,
+      reason: "This chat's Anthropic account is no longer signed in on the phone. Sign in to it again in Settings, Anthropic accounts, to dictate here"
+    }
+  }
+  if (!account.accessToken) {
+    return { ok: false, reason: `Can't dictate with ${account.label}, this chat's account: ${account.error ?? 'it has no sign-in token'}` }
+  }
+  return { ok: true, accessToken: account.accessToken, organizationUuid: account.organizationUuid }
+}
+
 export type UseAnthropicDictationOptions = {
   enabled: boolean
   /** Called on every partial and on the final result.
@@ -27,6 +81,8 @@ export type UseAnthropicDictationOptions = {
   onTranscript: (text: string, final: boolean, interim?: string) => void
   onError?: (error: Error) => void
   lang?: string
+  /** The chat the take dictates into; read at each start. Left out, the first account signed in. */
+  chatAccount?: DictationChatAccount
 }
 
 export type UseAnthropicDictationResult = UseMobileDictationResult & {
@@ -53,7 +109,7 @@ export type UseAnthropicDictationResult = UseMobileDictationResult & {
 export function useAnthropicDictation(
   options: UseAnthropicDictationOptions
 ): UseAnthropicDictationResult {
-  const { enabled, onTranscript, onError, lang = 'en' } = options
+  const { enabled, onTranscript, onError, lang = 'en', chatAccount } = options
   const capture = useDictationCapture()
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +123,8 @@ export function useAnthropicDictation(
   const onErrorRef = useRef(onError)
   onTranscriptRef.current = onTranscript
   onErrorRef.current = onError
+  const chatAccountRef = useRef(chatAccount)
+  chatAccountRef.current = chatAccount
 
   const mountedRef = useRef(true)
   const refreshAvailable = useCallback(async (): Promise<boolean> => {
@@ -106,16 +164,18 @@ export function useAnthropicDictation(
 
     // Read fresh on every start, never a token held from an earlier read: a sign-in (or sign-out)
     // on the Anthropic accounts screen takes effect on the next tap (2026-10-14).
-    const cred = await fetchAnthropicCredential().catch(() => null)
-    setAvailable(cred !== null)
-    if (!cred) {
+    const cred = await readDictationCredential(chatAccountRef.current)
+    if (!cred.ok) {
+      if (cred.reason === SIGN_IN_TO_DICTATE) {
+        setAvailable(false)
+      }
       activeRef.current = false
       setStatus('error')
-      const msg = 'Sign in to Anthropic in Settings, Anthropic accounts, to dictate'
-      setError(msg)
-      onErrorRef.current?.(new Error(msg))
+      setError(cred.reason)
+      onErrorRef.current?.(new Error(cred.reason))
       return
     }
+    setAvailable(true)
 
     // Open the microphone.
     const opened = await capture.open({
@@ -146,7 +206,7 @@ export function useAnthropicDictation(
         accessToken: cred.accessToken,
         language: lang,
         protocol: DICTATION_VOICE_PROTOCOL,
-        organizationUuid: cred.organizationUuid ?? null
+        organizationUuid: cred.organizationUuid
       },
       {
         onTranscript: (text, isFinal) => {

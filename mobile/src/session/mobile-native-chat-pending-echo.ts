@@ -151,6 +151,14 @@ export type MobileNativeChatSendOrigin = {
   /** Its bubble was drawn when the box emptied (showSendingEchoWith), under the
    *  entry's own id: acceptance keeps that one, a refusal takes it down. */
   echoDrawn?: boolean
+  /** The composer emptied and the bubble was drawn at the tap, before the send looked at the
+   *  desktop screen (mobile-native-chat-text-send-start.ts): a refusal before any write puts the
+   *  words back rather than leaving them where they never were. */
+  boxEmptiedAtTap?: boolean
+  /** Such a send's words went back to the composer, or to the outbox: never a second time. */
+  wordsPlaced?: boolean
+  /** The send began typing its body: from here a throw may follow words the desktop already took. */
+  bodyWriteStarted?: boolean
 }
 
 /** Where and when a send leaves the phone: how often its text already shows,

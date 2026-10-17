@@ -101,7 +101,7 @@ function ArtifactCard({ view }: { view: Exclude<CardView, { kind: 'failed' }> })
       <Pressable
         testID="artifact-card"
         style={({ pressed }) => [cardStyle, pressed ? cardStyles.pressed : null]}
-        onPress={() => openClaudeArtifact({ url: link.url, title: content.title })}
+        onPress={() => openClaudeArtifact(account ? { url: link.url, title: content.title, accountId: account } : { url: link.url, title: content.title })}
         accessibilityRole="button"
         accessibilityLabel={content.accessibilityLabel}
       >

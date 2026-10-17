@@ -119,6 +119,25 @@ pairing keeps the words in the composer (Retry for the dialog). A parked entry i
 settled transcript (offline from launch) is still sent. The words go to the outbox OR stay in
 the composer, never both: both would let a Send in the composer and the drainer each deliver it.
 
+### The bubble at the tap (2026-10-17)
+
+With the link up at the tap, a composer text send on a terminal tab empties the box and draws
+its bubble in the frame of the tap, before the look at the desktop screen
+(`mobile-native-chat-text-send-start.ts`), as the Claude app draws its pending row. Until then the
+words sat in the box with no bubble for the whole look: one `terminal.read` over the relay at the
+least, up to three reads 400 ms apart while Claude repaints its box (mostly while it works), then
+the draft mirror's flush ("when a message is sent from the composer it takes time to appear").
+The look still runs before anything is typed. Its entry is written as a send's own, not `atGate`,
+since the words have left the composer: a process killed during the look leaves them in the
+outbox. A refusal from the look follows the rules above, from the other side: no input box or no
+desktop hands the entry to the outbox (`releaseOutboxSendBeforeWrite`, marked `unwritten`) with the
+bubble kept; a dialog, a changed session or a refused write puts the words back (once per press,
+`wordsPlaced`) and takes the bubble down, with a Retry. The whole press is one origin, handed to
+the message send on its follow, so a tab given a new terminal during the look keeps one bubble and
+one entry. A send tapped while the link is down still waits at the gate with its words in the
+composer, as above. The emptied box is not echoed onto the desktop's input line
+(`standAsideForSend` in the draft mirror). Pinned by `send-bubble-at-tap-terminal.test.ts`.
+
 ### One id per send (S1, 2026-10-11)
 
 Every part of one press carries the outbox entry's id (`send-<ms>-<12 hex>`): the entry, the

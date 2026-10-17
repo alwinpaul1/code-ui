@@ -13,6 +13,7 @@ import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-a
 import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import { methodNotFound, ok } from './use-mobile-native-chat-image-attachments.test-support'
 import { useMobileNativeChatImageMarkup } from './use-mobile-native-chat-image-markup'
+import { resetVideoChipPostersForTests } from './mobile-video-chip-poster'
 import { useNativeChatAttachmentScopeWriters } from './use-native-chat-attachment-scope-writers'
 
 vi.mock('react-native', async () => {
@@ -694,6 +695,103 @@ describe('a document chip, as the Claude app draws it', () => {
     expect(ring).toBeDefined()
     expect(ring!.props.style).not.toMatchObject({ position: 'absolute' })
     expect(ring!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]?.props.color).toBe(PALETTE[scheme].composerSend)
+  })
+
+  // 2026-10-17, the user: "when an attachment is uploaded it loads in the corner of attachment,
+  // see how Claude does that". The Claude app (1.261009.20 g330.c / f0f.d; 1.261013.20 l7f.d) draws
+  // any image/* attachment (`w330.k` sets dk4.d from the MIME type) as the 96 dp picture with the
+  // 32 dp ring over its centre (Alignment.Center, no scrim), whatever it was picked through; only a
+  // non-picture gets the card with the ring beside its name. Code UI drew a pasted screenshot
+  // ('Pasted image', a data:image URI) and a PNG from Files as a document card, ring in the corner.
+  const PASTED: PendingNativeChatImage = { id: 'paste-1', path: '', previewUri: 'data:image/png;base64,AAAA', kind: 'file', name: 'Pasted image', uploading: true }
+  const FROM_FILES: PendingNativeChatImage = { id: 'png-1', path: '', previewUri: 'file:///cache/shot.PNG', kind: 'file', name: 'shot.PNG', uploading: true }
+
+  it.each(SCHEMES)('loads a pasted screenshot or a picture from Files over its centre, as a photo, not in a card corner (%s)', (scheme) => {
+    for (const picture of [PASTED, FROM_FILES]) {
+      const screenNow = draw(scheme, { attachments: [picture], onRemoveAttachment: vi.fn() })
+      expect(screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.style?.borderWidth === 1)).toHaveLength(0)
+      expect(chipPictures(screenNow)).toEqual([picture.previewUri])
+      const [ring] = screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.testID === 'attachment-uploading')
+      expect(ring!.props.style).toMatchObject({ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' })
+      const indicator = ring!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]
+      expect(indicator?.props).toMatchObject({ size: 32, color: PALETTE[scheme].composerSend })
+      const tile = screenNow.root.find((node) => String(node.type) === 'View' && node.props.style?.width === 96 && node.props.style?.height === 96)
+      expect(tile.props.style).toMatchObject({ borderRadius: 16, overflow: 'hidden', backgroundColor: PALETTE[scheme].attachmentCardFill })
+      expect(tile.findAll((node) => node === ring)).toHaveLength(1)
+      expect(pressables(screenNow, 'Preview image, uploading')).toHaveLength(1)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  it('keeps a picture attached as a file free of the markup pencil once it has uploaded', () => {
+    const onEditAttachment = vi.fn()
+    const screenNow = draw('light', { attachments: [{ ...FROM_FILES, path: '/tmp/shot.png', uploading: false }], onEditAttachment })
+    tap(thumbnails(screenNow)[0])
+    expect(pictureInViewer(screenNow)).toBe(FROM_FILES.previewUri)
+    expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
+    act(() => resetImagePreviewForTests())
+  })
+
+  // 2026-10-17, the user, for a screen recording: it "loads in the corner of attachment". The Claude
+  // app draws a `video/*` attachment as its frame filling the tile, the 32 dp ring over the centre
+  // (`xw` sets dk4.f, and g330.c sends a video with a URI down f0f.d's picture branch).
+  const VIDEO: PendingNativeChatImage = { id: 'vid-1', path: '', previewUri: 'file:///cache/Screen_Recording_20261017.mp4', kind: 'file', name: 'Screen_Recording_20261017.mp4', uploading: true }
+  const POSTER = 'data:image/jpeg;base64,POSTER'
+
+  async function drawSettled(scheme: Scheme, props: ChipProps): Promise<ReactTestRenderer> {
+    await act(async () => {
+      renderer = create(screen(scheme, props))
+    })
+    await act(async () => {})
+    return renderer!
+  }
+
+  it.each(SCHEMES)('loads an uploading video over its own frame, the ring centred, not in a card corner (%s)', async (scheme) => {
+    const maker = vi.fn(async () => POSTER)
+    resetVideoChipPostersForTests(maker)
+    const screenNow = await drawSettled(scheme, { attachments: [VIDEO], onRemoveAttachment: vi.fn() })
+    expect(maker).toHaveBeenCalledExactlyOnceWith(VIDEO.previewUri)
+    expect(screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.style?.borderWidth === 1)).toHaveLength(0)
+    expect(chipPictures(screenNow)).toEqual([POSTER])
+    const [ring] = screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.testID === 'attachment-uploading')
+    expect(ring!.props.style).toMatchObject({ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' })
+    expect(ring!.findAll((node) => String(node.type) === 'ActivityIndicator')[0]?.props).toMatchObject({ size: 32, color: PALETTE[scheme].composerSend })
+    const tile = screenNow.root.find((node) => String(node.type) === 'View' && node.props.style?.width === 96 && node.props.style?.height === 96)
+    expect(tile.props.style).toMatchObject({ borderRadius: 16, overflow: 'hidden', backgroundColor: PALETTE[scheme].attachmentCardFill })
+    expect(tile.findAll((node) => node === ring)).toHaveLength(1)
+    // A video frame is not a photo: nothing opens the image viewer on it, and no pencil.
+    expect(thumbnails(screenNow)).toHaveLength(0)
+    expect(screenNow.root.findAll((node) => node.props.accessibilityLabel === 'Screen_Recording_20261017.mp4, uploading')).not.toHaveLength(0)
+    resetVideoChipPostersForTests()
+  })
+
+  it.each(SCHEMES)('keeps the card with its ring beside the name when no frame can be made, and says why once (%s)', async (scheme) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resetVideoChipPostersForTests(() => {
+      throw new Error('generateThumbnailsAsync failed: unsupported codec')
+    })
+    const screenNow = await drawSettled(scheme, { attachments: [VIDEO], onRemoveAttachment: vi.fn() })
+    const card = screenNow.root.find((node) => String(node.type) === 'View' && node.props.style?.height === 96 && node.props.style?.borderWidth === 1)
+    expect(card.props.style).toMatchObject({ borderColor: PALETTE[scheme].attachmentCardBorder, backgroundColor: PALETTE[scheme].attachmentCardFill })
+    const [ring] = screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.testID === 'attachment-uploading')
+    expect(ring!.props.style).not.toMatchObject({ position: 'absolute' })
+    expect(chipPictures(screenNow)).toEqual([])
+    await act(async () => {
+      renderer!.update(screen(scheme, { attachments: [{ ...VIDEO, uploading: false, path: '/tmp/rec.mp4' }], onRemoveAttachment: vi.fn() }))
+    })
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0]?.[0])).toContain('unsupported codec')
+    warn.mockRestore()
+    resetVideoChipPostersForTests()
+  })
+
+  it('asks for no frame for a document that is not a video', async () => {
+    const maker = vi.fn(async () => POSTER)
+    resetVideoChipPostersForTests(maker)
+    await drawSettled('light', { attachments: [DOC] })
+    expect(maker).not.toHaveBeenCalled()
+    resetVideoChipPostersForTests()
   })
 
   it('lays the strip out 12 apart', () => {

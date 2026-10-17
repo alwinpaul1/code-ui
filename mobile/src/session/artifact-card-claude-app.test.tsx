@@ -152,7 +152,8 @@ describe('the Artifact card, as the Claude app draws it', () => {
     expect(shown.box!.props.accessibilityLabel).toBe(`Open ${PUBLISHED_TITLE}`)
     expect(list.askedFor).toContain('acct-1')
     act(() => shown.box!.props.onPress())
-    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE }])
+    // As the chat's account, so the viewer opens it signed in as the account that owns it.
+    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE, accountId: 'acct-1' }])
   })
 
   it('falls back to the file name when the list does not name the page, or no account is known', () => {

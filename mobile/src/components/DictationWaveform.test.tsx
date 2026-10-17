@@ -34,9 +34,13 @@ async function mount(scheme: 'light' | 'dark', width: number): Promise<ReactTest
   return box
 }
 
-/** The bar views: absolutely placed children of the waveform's box. */
+/** The bar views: the host views placed directly in the waveform's box (each holds its parts). */
 function bars(box: ReactTestInstance): ReactTestInstance[] {
-  return box.findAll((node) => typeof node.type === 'string' && node !== box)
+  const hosts = (node: ReactTestInstance): ReactTestInstance[] =>
+    (node.children as (ReactTestInstance | string)[]).flatMap((child) =>
+      typeof child === 'string' ? [] : typeof child.type === 'string' ? [child] : hosts(child)
+    )
+  return hosts(box)
 }
 
 describe('the dictation waveform view', () => {

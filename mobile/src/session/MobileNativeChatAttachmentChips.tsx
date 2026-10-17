@@ -9,6 +9,8 @@ import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
 import { moveNativeChatAttachment } from './mobile-native-chat-attachment-order'
 import { useFileCardStyles } from './mobile-native-chat-file-card-styles'
 import { splitAttachmentName } from './mobile-native-chat-file-mentions'
+import { useVideoChipPosters } from './mobile-video-chip-poster'
+import { isVideoAsset } from './mobile-video-frame-picker'
 
 /**
  * A chip as the Claude app draws one in the Code composer (com.anthropic.claude 1.261009.20,
@@ -16,7 +18,8 @@ import { splitAttachmentName } from './mobile-native-chat-file-mentions'
  * 96 dp high (`cxe.c`, cxe.java:340/497), the same body as the card above a sent prompt
  * (mobile-native-chat-file-card-styles.ts): a photo fills a 96 dp square clipped to 16 dp, cropped;
  * a document is the bordered card, 116 dp wide here (that file says why), with its extension
- * badge at the top and its name at the bottom.
+ * badge at the top and its name at the bottom. A picture attached as a file (a pasted screenshot, a
+ * PNG from Files) is the photo square, as the app draws any image/* attachment (`drawsAsPhoto`).
  * While it uploads, an indeterminate ring (`yfi.f`, 32 dp, `pl7.e`) sits over the photo's centre, or
  * at the card's bottom end beside the name, with no scrim. A failed upload is a red disc there
  * instead (`l7f.a`: `pl7.A` at 0.8 alpha, 6 dp padding). Remove is an 18 dp disc in `pl7.O` at the
@@ -36,6 +39,30 @@ const REMOVE_TOUCH = 48
 const REMOVE_REACH = REMOVE_TOUCH / 2 - (4 + 9)
 const REMOVE_HOLDER = { paddingTop: REMOVE_REACH, paddingRight: REMOVE_REACH, marginTop: -REMOVE_REACH, marginRight: -REMOVE_REACH }
 const REMOVE_TARGET = { position: 'absolute', top: 0, right: 0, width: REMOVE_TOUCH, height: REMOVE_TOUCH, alignItems: 'center', justifyContent: 'center' } as const
+
+/** Picture types React Native's Image decodes on every Android this app runs on. */
+const PICTURE_NAME = /\.(png|jpe?g|gif|webp|bmp)$/i
+
+/**
+ * Whether the chip is drawn as a photo. The Claude app decides by the bytes, not the picker: an
+ * `image/*` attachment (`w330.k` sets `dk4.d` from the MIME type) is the picture with the ring over
+ * its centre (g330.c → f0f.d, 1.261009.20; l7f.d, 1.261013.20), and only a non-picture is the card.
+ * A file chip whose bytes are a picture is drawn the same way here: a pasted screenshot ('Pasted
+ * image', a data:image URI) or a PNG from Files. Its `kind` stays 'file', so the send is unchanged.
+ * A video is drawn the same way over its first frame once the phone has made one
+ * (mobile-video-chip-poster.ts), and stays the card if it cannot (2026-10-17).
+ */
+function drawsAsPhoto(attachment: PendingNativeChatImage, videoPoster: string | undefined): boolean {
+  if (attachment.kind !== 'file') {
+    return true
+  }
+  return videoPoster !== undefined || attachment.previewUri.startsWith('data:image/') || PICTURE_NAME.test(attachment.name ?? '')
+}
+
+/** A document chip whose file is a video, by its name (the picker's MIME type is not kept). */
+function isVideoChip(attachment: PendingNativeChatImage): boolean {
+  return attachment.kind === 'file' && !!attachment.previewUri && isVideoAsset({ name: attachment.name, uri: attachment.previewUri })
+}
 
 /** "Move earlier" / "Move later" where the chip can go, the Claude app's
  *  screen-reader reorder (ccr_reorder_move_earlier_a11y / _later_a11y). */
@@ -82,6 +109,7 @@ export function MobileNativeChatAttachmentChips({
 }) {
   const { colors, space } = useTheme()
   const cardStyles = useFileCardStyles()
+  const posters = useVideoChipPosters(attachments.filter(isVideoChip).map((attachment) => attachment.previewUri))
   if (attachments.length === 0 && !videoFrameExtraction) {
     return null
   }
@@ -145,7 +173,9 @@ export function MobileNativeChatAttachmentChips({
         </View>
       ) : null}
       {attachments.map((attachment, index) => {
-        const isFile = attachment.kind === 'file'
+        // A card for a non-picture only; a picture attached as a file is the photo square.
+        const videoPoster = isVideoChip(attachment) ? posters[attachment.previewUri] : undefined
+        const isFile = !drawsAsPhoto(attachment, videoPoster)
         const reorderable = reorderActions(index, attachments.length)
         const fileName = attachment.name ?? 'File'
         // The app's own split (p530): base name over the extension badge; a dotfile keeps its name.
@@ -205,6 +235,18 @@ export function MobileNativeChatAttachmentChips({
                     {state}
                   </View>
                 </View>
+              ) : videoPoster !== undefined ? (
+                // A video over its first frame. The frame is not the video, so nothing opens on a tap
+                // (the card it replaces had nothing to open either) and there is no pencil.
+                <View
+                  accessible
+                  accessibilityLabel={`${fileName}${stateWord}`}
+                  accessibilityActions={reorderable}
+                  onAccessibilityAction={onReorderAction(attachment.id)}
+                  style={{ flex: 1 }}
+                >
+                  <Image source={{ uri: videoPoster }} style={cardStyles.thumbImage} resizeMode="cover" />
+                </View>
               ) : (
                 // A tap opens the photo full-screen, the way the Claude app does,
                 // and markup is the pencil there (2026-09-26; from 360ef269 a tap
@@ -225,7 +267,9 @@ export function MobileNativeChatAttachmentChips({
                       attachment.previewUri,
                       attachment.name ?? 'Image',
                       0,
-                      onEditAttachment && !attachment.uploading && !attachment.failed && !attachment.videoFrame
+                      // Nor on a picture attached as a file: markup re-uploads it as a photo chip's
+                      // bytes, and a file chip's path rides in the words instead.
+                      onEditAttachment && attachment.kind !== 'file' && !attachment.uploading && !attachment.failed && !attachment.videoFrame
                         ? () => onEditAttachment(attachment.id, attachment.previewUri)
                         : undefined
                     )

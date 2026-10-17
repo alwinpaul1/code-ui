@@ -281,7 +281,8 @@ describe('the Outputs sheet', () => {
     await mount(controller({ artifacts: [PAGE] }))
     await act(async () => host('outputs-pill')!.props.onPress())
     await act(async () => host(`outputs-artifact-row-${PAGE.uuid}`)!.props.onPress())
-    expect(state.opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE }])
+    // As the tab's account, so the viewer opens it signed in as the account that owns it.
+    expect(state.opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE, accountId: 'acct' }])
     expect(host('session-outputs-sheet')).toBeUndefined()
   })
 

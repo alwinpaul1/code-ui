@@ -33,6 +33,7 @@ vi.mock('react-native-reanimated', () => {
   return {
     default: { View: host('View') },
     useSharedValue: <T,>(initial: T) => useRef({ value: initial }).current,
+    useDerivedValue: <T,>(factory: () => T) => ({ value: factory() }),
     useAnimatedStyle: <T,>(factory: () => T) => factory(),
     useFrameCallback: (callback: (info: FrameInfo) => void) => {
       useEffect(() => {

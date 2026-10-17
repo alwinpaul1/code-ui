@@ -8,6 +8,7 @@ import {
   SEND_WITHOUT_CODEX_COMPOSER_REFUSAL,
   SEND_WITHOUT_COMPOSER_REFUSAL
 } from './mobile-native-chat-dialog-guard'
+import { handOverTextSendStartedAtTap } from './mobile-native-chat-text-send-start'
 
 /** What a send the gate refused for want of the desktop says when the outbox keeps it. */
 export const SEND_WAITS_FOR_DESKTOP = 'Message waits for your desktop: it is sent when the connection is back'
@@ -90,12 +91,20 @@ export function openSendGateOutbox(args: {
   report: (message: string, details?: MobileNativeChatSendErrorDetails) => void
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
+  /** Puts back the words of a send whose box emptied at the tap (`boxEmptiedAtTap`). */
+  restoreRejectedDraft?: (origin: MobileNativeChatSendOrigin, text: string) => void
 }): SendGateOutbox {
   const { origin, draftText, report } = args
   // Only a text send typed in the composer, on its first try, takes the new path.
   const gated = args.syncComposer && args.chat && !args.images?.length && !origin.outboxRecovery
+  // Its box emptied and its bubble was drawn at the tap (mobile-native-chat-text-send-start.ts):
+  // its entry is a send's own, not a gate entry, and a refusal puts its words back.
+  const tapped = gated && origin.boxEmptiedAtTap === true && args.restoreRejectedDraft !== undefined
   // Handed to the outbox: the box empties and the bubble is drawn, as for a send on its way.
   const hold = (): boolean => {
+    if (tapped) {
+      return handOverTextSendStartedAtTap(origin)
+    }
     if (!gated || !releaseOutboxSendFromGate(origin.outboxId)) {
       return false
     }
@@ -108,13 +117,14 @@ export function openSendGateOutbox(args: {
       report(message)
       return 'rejected'
     }
-    void retireOutboxSend(origin.outboxId)
+    // The entry leaves once the words are back in the composer (restoreRejectedDraft retires it).
+    if (tapped) { args.restoreRejectedDraft!(origin, draftText) } else { void retireOutboxSend(origin.outboxId) }
     if (retry) { report(message, { retry: true }) } else { report(message) }
     return 'rejected'
   }
   return {
     enter: () => {
-      if (gated) {
+      if (gated && !tapped) {
         recordOutboxSend(origin, draftText, { atGate: true })
       }
     },
@@ -146,7 +156,8 @@ export function openSendGateOutbox(args: {
       return giveBack(message)
     },
     drop: () => {
-      if (gated) {
+      // A tapped send goes on, the same origin, on the tab's new terminal (MobileNativeChatSendFollow).
+      if (gated && !tapped) {
         void retireOutboxSend(origin.outboxId)
       }
     }

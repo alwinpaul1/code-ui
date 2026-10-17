@@ -29,7 +29,8 @@ export default function AnthropicAccountsScreen(): React.JSX.Element {
         <Text style={styles.heading}>Anthropic accounts</Text>
       </View>
 
-      {/* keyboardShouldPersistTaps: the paste-the-code field is a TextInput in this scroller. */}
+      {/* keyboardShouldPersistTaps: a tap is never eaten while a keyboard is up. (The paste-the-code
+          field it was for went with the browser sign-in, 2026-10-17.) */}
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}

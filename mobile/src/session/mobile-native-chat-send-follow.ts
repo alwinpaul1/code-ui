@@ -1,6 +1,7 @@
 import { claudeRowsUnderBox } from './claude-composer-screen'
 import { codexComposerLive } from './codex-composer-screen'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
@@ -16,6 +17,9 @@ export type MobileNativeChatSendFollow = {
   readonly terminal: string
   readonly tabChanged: () => boolean
   reminted: boolean
+  /** The press's origin when its box emptied at the tap (mobile-native-chat-text-send-start.ts):
+   *  the message send carries it instead of capturing another. */
+  origin?: MobileNativeChatSendOrigin
 }
 
 /**

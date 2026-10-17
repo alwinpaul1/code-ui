@@ -10,8 +10,11 @@ import {
 } from '../src/session/artifact-viewer-policy'
 import { parseClaudeArtifactLink, type ClaudeArtifactLink } from '../src/session/claude-artifacts'
 import { isArtifactShortcutKey } from '../src/session/claude-artifact-shortcut-key'
+import type { ArtifactViewerSignIn } from '../src/session/ArtifactViewerSignInState'
 import { MobileArtifactViewer } from '../src/session/MobileArtifactViewer'
+import { openAnthropicAccounts } from '../src/session/open-anthropic-accounts'
 import { useArtifactViewerOwnsArtifact } from '../src/session/use-artifact-viewer-ownership'
+import { useArtifactViewerSession } from '../src/session/use-artifact-viewer-session'
 import { useTheme } from '../src/theme/theme-context'
 
 /**
@@ -20,7 +23,9 @@ import { useTheme } from '../src/theme/theme-context'
  * says the link came from outside the app (every system link is marked so,
  * claude-artifact-native-intent.ts). `k` is the key Code UI's own home-screen shortcut carries
  * (claude-artifact-shortcut-key.ts): when it checks out, the link opens at once, as the Claude
- * app's shortcut does; anything else asks first.
+ * app's shortcut does; anything else asks first. `account` names the Code UI account the opener
+ * knew the artifact by (openClaudeArtifact): the viewer opens it signed in to claude.ai as that
+ * account (use-artifact-viewer-session.ts); with none, the only account, else the last one used.
  *
  * Only a claude.ai artifact link is loaded here (parseClaudeArtifactLink): a deep link naming any
  * other address is handed to the browser and the screen closes, so this route cannot be used to
@@ -28,7 +33,7 @@ import { useTheme } from '../src/theme/theme-context'
  */
 export default function ArtifactViewerRoute() {
   const router = useRouter()
-  const { url, title, external, k } = useLocalSearchParams<{ url?: string; title?: string; external?: string; k?: string }>()
+  const { url, title, external, k, account } = useLocalSearchParams<{ url?: string; title?: string; external?: string; k?: string; account?: string }>()
   const fromOutside = external === '1'
   // null while the shortcut key is checked: neither the page nor the question shows until then.
   const [shortcut, setShortcut] = useState<boolean | null>(fromOutside && k ? null : false)
@@ -72,7 +77,17 @@ export default function ArtifactViewerRoute() {
   if (shortcut === null) {
     return null
   }
-  return <ArtifactViewerScreen link={link} title={title ?? null} external={fromOutside && !shortcut} onClose={close} />
+  return (
+    <ArtifactViewerScreen
+      link={link}
+      title={title ?? null}
+      // A link from outside the app names no account it could be trusted to (a shortcut's
+      // `account` is ours, but the viewer resolves the same fallback for it anyway).
+      accountId={typeof account === 'string' && account ? account : null}
+      external={fromOutside && !shortcut}
+      onClose={close}
+    />
+  )
 }
 
 /**
@@ -90,17 +105,26 @@ export default function ArtifactViewerRoute() {
 function ArtifactViewerScreen({
   link,
   title,
+  accountId,
   external,
   onClose
 }: {
   link: ClaudeArtifactLink
   title: string | null
+  accountId: string | null
   external: boolean
   onClose: () => void
 }) {
   const { colors } = useTheme()
   const { width, height } = useWindowDimensions()
-  const own = useArtifactViewerOwnsArtifact(link.uuid)
+  const { session, choose } = useArtifactViewerSession(accountId)
+  const own = useArtifactViewerOwnsArtifact(link.uuid, session.kind === 'ready' ? session.accountId : null)
+  const signIn: ArtifactViewerSignIn | null =
+    session.kind === 'checking'
+      ? { kind: 'checking' }
+      : session.kind === 'needed'
+        ? { kind: 'needed', accountId: session.accountId, label: session.label, choices: session.choices, onOpenAccounts: openAnthropicAccounts, onPick: choose }
+        : null
   const [confirmed, setConfirmed] = useState(!external)
   // ConfirmModal calls onCancel after onConfirm too (it closes itself that way), so Cancel must
   // know an Open came first, before the state that says so has rendered.
@@ -108,7 +132,7 @@ function ArtifactViewerScreen({
   const side = artifactViewerAsSidePanel(width, height)
 
   const body = confirmed ? (
-    <MobileArtifactViewer url={link.url} uuid={link.uuid} title={title} own={own} onClose={onClose} />
+    <MobileArtifactViewer url={link.url} uuid={link.uuid} title={title} own={own} signIn={signIn} onClose={onClose} />
   ) : (
     <View style={{ flex: 1, backgroundColor: colors.bg }} />
   )

@@ -3,7 +3,7 @@ import { CCR_ATTACHMENT_OTHER_ACCOUNT } from './ccr-attachment-send'
 import type { Dispatch, SetStateAction } from 'react'
 import type { CcrComposerSendDeps } from './ccr-composer-send-deps'
 import { joinCcrQueue, returnCcrQueueToComposer, type CcrQueue } from './ccr-local-queue'
-import { ccrEchoSeen, ccrSessionOffline } from './ccr-send'
+import { CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline } from './ccr-send'
 import { reasonOf } from './ccr-session-shared'
 import type { CcrEvent } from './ccr-session-api'
 import type { NativeChatOutboxCcr } from '../storage/native-chat-outbox'
@@ -184,6 +184,55 @@ export function ccrSendTargetRefusal(to: CcrTo, pinned: NativeChatOutboxCcr | un
   return null
 }
 
+/** A tab's queued taps whose own status read is still out (use-ccr-composer-send.ts), and whether
+ *  the offline notice was given in the spell they share: given once, by whichever read says it
+ *  (the turn end's read too, use-ccr-queue-delivery.ts). */
+export type CcrTapReads = { pending: number; noticed: boolean }
+
+/**
+ * A queued tap's status read, after its card was drawn: 'accepted' online; offline, its entry and
+ * any queued after it while the read ran go back (`giveBack`, told whether the spell was already
+ * said) and it is 'rejected'. An entry gone already was given back offline by an overlapping read
+ * ('rejected', nothing more), or else posted at the turn's end or taken to edit while the read ran
+ * ('accepted': this read did not refuse it).
+ */
+export async function ccrQueuedTapRead(args: {
+  reads: Map<string, CcrTapReads>
+  tab: string
+  isOffline: () => Promise<boolean>
+  withdraw: () => CcrQueue | null
+  giveBack: (taken: CcrQueue, noticed: boolean) => void
+}): Promise<MobileNativeChatSendOutcome> {
+  const { reads: all, tab } = args
+  const reads = all.get(tab) ?? { pending: 0, noticed: false }
+  all.set(tab, reads)
+  reads.pending += 1
+  try {
+    let offline = false
+    try {
+      offline = await args.isOffline()
+    } finally {
+      reads.pending -= 1
+    }
+    if (!offline) {
+      return 'accepted'
+    }
+    const taken = args.withdraw()
+    if (!taken) {
+      return reads.noticed ? 'rejected' : 'accepted'
+    }
+    args.giveBack(taken, reads.noticed)
+    reads.noticed = true
+    return 'rejected'
+  } finally {
+    if (reads.pending === 0 && all.get(tab) === reads) { all.delete(tab) }
+  }
+}
+
+/** An offline refusal, as [log line, user notice] (the app's own words). */
+export const ccrOfflineRefusal = (to: CcrTo): readonly [string, string] =>
+  [`[ccr-send] refused: session ${ccrSessionTail(to.sessionId)} is offline (connection_status disconnected)`, CCR_REMOTE_CONTROL_OFFLINE] as const
+
 /** Whether the Remote Control computer is offline: the stream's word, else the row read now. Not
  *  refused on an unread status, as the app does not refuse UNKNOWN: the POST says. */
 export async function ccrTargetOffline(streamed: string | null, to: CcrTo, deps: Pick<CcrComposerSendDeps, 'readStatus' | 'log'>): Promise<boolean> {
@@ -251,7 +300,21 @@ export function ccrQueueGiveBack(
    *  screen's draft setters keep nothing after it unmounted (second review, 2026-10-16: a queued
    *  POST that failed after the chat closed lost its words). */
   leaving?: { gone: () => boolean; store: (draftKey: string | null, text: string) => void }
-): { giveBack: (tab: string, text: string, draftKey?: string) => void; restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void } {
+): {
+  giveBack: (tab: string, text: string, draftKey?: string) => void
+  restoreQueued: (tab: string) => (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Words already out of the queue back to `tab`'s composer, ahead of what it holds, wherever it is now. */
+  place: (tab: string, words: string, draftKey: string | null) => void
+} {
+  const place = (tab: string, all: string, key: string | null): void => {
+    if (leaving?.gone()) {
+      leaving.store(key, all)
+    } else if ((latest.current.tabId ?? '') !== tab && key !== null) {
+      latest.current.returnQueueToDraft(key, all)
+    } else {
+      latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))
+    }
+  }
   const giveBack = (tab: string, text: string, draftKey?: string): void => {
     const held = queued(tab)
     // Every entry still queued comes back with it, in order: the composer is one text.
@@ -267,16 +330,11 @@ export function ccrQueueGiveBack(
     if (!all) {
       return
     }
-    if (leaving?.gone()) {
-      leaving.store(key, all)
-    } else if ((latest.current.tabId ?? '') !== tab && key !== null) {
-      latest.current.returnQueueToDraft(key, all)
-    } else {
-      latest.current.setComposerText((draft) => returnCcrQueueToComposer(all, draft))
-    }
+    place(tab, all, key)
   }
   return {
     giveBack,
+    place,
     restoreQueued: (tab) => (origin, text) => {
       latest.current.restoreRejectedDraft(origin, '')
       giveBack(tab, text, origin.draftKey)

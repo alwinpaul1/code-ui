@@ -133,7 +133,7 @@ export function useMobileNativeChatController(
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft, returnQueueToDraft,
-    clearDraftAtSendStart,
+    clearDraftAtSendStart, beginTextSendAtTap,
     acceptSend,
     holdUnconfirmedSend, removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   } = useMobileNativeChatDrafts({
@@ -268,7 +268,7 @@ export function useMobileNativeChatController(
   // answers, and mirrored prose could pick one. A dialog no card shows reads
   // keys the same way, so one on screen closes the mirror too, by the same
   // test the sends use (mobile-native-chat-dialog-guard.ts).
-  const { settleBeforeSend: settleDraftMirrorBeforeSend, adoptRecalledInput } = useMobileNativeChatDraftMirror({
+  const { settleBeforeSend: settleDraftMirrorBeforeSend, standAsideForSend: draftMirrorStandAside, adoptRecalledInput } = useMobileNativeChatDraftMirror({
     client, getComposerEditGeneration: getChatComposerEditGeneration,
     // Why not `inputSendable`: the lease is about who owns the input floor and
     // collapses a render late; a mirror write without it is simply refused by
@@ -504,7 +504,7 @@ export function useMobileNativeChatController(
     answers: { ask: handleNativeChatAnswerAsk, cancelAsk: handleNativeChatCancelAsk, question: legacyHandleNativeChatQuestionAnswer, permission: activeChatStructured ? structuredNativeChat.respondPermission : (text: string) => ccrControl.respondPermission(text) ?? legacyHandleNativeChatRespondPermission(text) }
   })
   // The composer's attachments live in the image hook, made after this one: the overlay reports their count (the queue's turn-end blocker).
-  const ccrComposerAttachments = useRef(0), setCcrComposerAttachments = useRef((count: number) => { ccrComposerAttachments.current = count }).current; const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: () => ccrComposerAttachments.current, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft, returnQueueToDraft, removePending, onSendError }); const ccrAttachments = useCcrAttachmentLane({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), send: ccrSend.sendWithOutcome }) /* attachments too, behind the switch in ccr-file-upload.ts */; if (ccrLane) { shareSendRef.current.send = (text) => (claudeComposerSendGoes(text) === 'anthropic' ? ccrSend.sendWithOutcome(text) : handleNativeChatSendWithOutcome(text)) } // a slash command types, as before the lane (claude-composer-send-route.ts)
+  const ccrComposerAttachments = useRef(0), setCcrComposerAttachments = useRef((count: number) => { ccrComposerAttachments.current = count }).current; const ccrSend = useCcrComposerSend({ active: ccrLane, tabId: activeSessionTabId ?? null, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), events: claudeApi.events, connectionStatus: claudeApi.connectionStatus, working: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, attachments: () => ccrComposerAttachments.current, composerText: chatComposerText, setComposerText: setChatComposerText, captureSendOrigin, clearDraftForSend, acceptSend, restoreRejectedDraft: askAwareRestore, returnQueueToDraft, removePending, onSendError }); const ccrAttachments = useCcrAttachmentLane({ active: ccrLane, resolveTarget: () => ccrSendTargetForTab(activeSessionTabId ?? '', lastConnectedAt, activeChatSessionId, ccrConfigDir), send: ccrSend.sendWithOutcome }) /* attachments too, behind the switch in ccr-file-upload.ts */; if (ccrLane) { shareSendRef.current.send = (text) => (claudeComposerSendGoes(text) === 'anthropic' ? ccrSend.sendWithOutcome(text) : handleNativeChatSendWithOutcome(text)) } // a slash command types, as before the lane (claude-composer-send-route.ts)
   // A refusal card's Edit and retry, behind CCR_CONTROL_LANE (ccr-refusal-retry.ts).
   useCcrRefusalRetryHost({ rewindTo: ccrControl.rewindTo, setComposerText: setChatComposerText, onSendError })
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
@@ -602,7 +602,7 @@ export function useMobileNativeChatController(
     openNativeChatQueueEditor: queueEditor.recallToComposer, sendNativeChatQueueNow: queueEditor.sendNow,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
-    beginNativeChatImageSend: clearDraftAtSendStart, parkRefusedNativeChatSend: (text: string) => parkRefusedComposerSend({ text, captureSendOrigin, clearDraftForSend, showSendingEcho }),
+    beginNativeChatImageSend: clearDraftAtSendStart, parkRefusedNativeChatSend: (text: string) => parkRefusedComposerSend({ text, captureSendOrigin, clearDraftForSend, showSendingEcho }), beginNativeChatTextSend: (text: string) => { const start = beginTextSendAtTap(text); if (start) { draftMirrorStandAside() } return start }, // the emptied box is not echoed to the desktop
     handleNativeChatStop: stopButton.onStop, nativeChatStopping: stopButton.stopping,
     nativeChatFilePaths,
     loadNativeChatFiles,

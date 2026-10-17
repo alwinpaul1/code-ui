@@ -161,7 +161,8 @@ describe("the session's Artifacts sheet", () => {
     await mount({ onClose })
     act(() => host(`artifact-row-${PUBLISHED_UUID}`)!.props.onPress())
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(opened).toHaveBeenCalledWith({ url: PUBLISHED_LINK, title: PUBLISHED_TITLE })
+    // Under the tab's account, so the viewer opens it signed in as the account that owns it.
+    expect(opened).toHaveBeenCalledWith({ url: PUBLISHED_LINK, title: PUBLISHED_TITLE, accountId: 'acct' })
   })
 })
 

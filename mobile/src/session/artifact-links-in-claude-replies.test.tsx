@@ -114,7 +114,8 @@ describe("an artifact link in Claude's reply", () => {
     const root = render(`Published it: ${PUBLISHED_LINK}.`, { account: 'acct-1' })
     expect(textOf(root)).toBe(`Published it: ${PUBLISHED_TITLE}.`)
     act(() => link(root, PUBLISHED_TITLE).props.onPress())
-    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE }])
+    // As the chat's account, so the viewer opens it signed in as the account that owns it.
+    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE, accountId: 'acct-1' }])
     expect(link(root, PUBLISHED_TITLE).props.accessibilityLabel).toBe(`Artifact, ${PUBLISHED_TITLE}`)
   })
 
@@ -125,7 +126,8 @@ describe("an artifact link in Claude's reply", () => {
     const chip = link(root, 'the check page')
     expect(chip.props.accessibilityLabel).toBe('Artifact, the check page')
     act(() => chip.props.onPress())
-    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE }])
+    // As the chat's account, so the viewer opens it signed in as the account that owns it.
+    expect(opened).toEqual([{ url: PUBLISHED_LINK, title: PUBLISHED_TITLE, accountId: 'acct-1' }])
   })
 
   it('draws the label for a Markdown link whose words are only its address', () => {

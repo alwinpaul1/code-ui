@@ -210,6 +210,12 @@ export const SHARE_ASK_BUSY = 'Another input is still being sent. Try again.'
  *  as the user's own typed words, which it is not. */
 const asksInFlight = new Set<string>()
 
+/** Whether `text` is an ask on its way rather than the user's typed words: the Anthropic lane
+ *  draws its bubble at the tap only for words that were in the box (use-ccr-composer-send.ts). */
+export function isShareAskInFlight(text: string): boolean {
+  return asksInFlight.has(text.trimEnd())
+}
+
 /** The composer send's draft restore, minus an ask's words: they were never
  *  in the box, and appended to the user's draft they would ride its next send.
  *  The ask's button comes back instead. */

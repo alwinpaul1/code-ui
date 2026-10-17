@@ -41,6 +41,10 @@ export function useCcrTabQueues(latest: Latest, deps: CcrComposerSendDeps): {
   /** Entry `index` of the tab on screen back into the composer, ahead of its draft (a tap on that
    *  entry's card); the other entries stay queued, in order. */
   editQueue: (index: number) => void
+  /** A send queued at its tap and refused after (use-ccr-composer-send.ts): the last entry of
+   *  `tab`'s queue that reads `text`, and every entry queued after it, out of the queue, in order;
+   *  null when it is no longer there (sent at a turn's end, edited, or given back already). */
+  withdrawQueued: (tab: string, text: string) => CcrQueue | null
 } {
   const queuesRef = useRef<HeldQueues>({})
   const [queues, setQueues] = useState<HeldQueues>(queuesRef.current)
@@ -114,6 +118,24 @@ export function useCcrTabQueues(latest: Latest, deps: CcrComposerSendDeps): {
     now.setComposerText((draft) => returnCcrQueueToComposer(taken.text, draft))
   }, [latest, updateQueues])
 
+  const withdrawQueued = useCallback((tab: string, text: string): CcrQueue | null => {
+    const held = queuesRef.current[tab]
+    const at = held ? held.entries.lastIndexOf(text.trim()) : -1
+    if (!held || at === -1) {
+      return null
+    }
+    const taken = held.entries.slice(at)
+    const rest = held.entries.slice(0, at)
+    updateQueues((previous) => {
+      if (rest.length === 0) {
+        const { [tab]: _gone, ...others } = previous
+        return others
+      }
+      return { ...previous, [tab]: { ...held, entries: rest } }
+    })
+    return taken
+  }, [updateQueues])
+
   // Leaving the chat (the controller unmounts) with queues held: each is posted into the target
   // it was queued for as `priority: "later"` with a fresh uuid, as the app does when its session
   // screen closes (the server holds it until that turn ends), if its tab still resolves to that
@@ -152,5 +174,5 @@ export function useCcrTabQueues(latest: Latest, deps: CcrComposerSendDeps): {
     [deps]
   )
 
-  return { queues, queuesRef, queueOnTab, takeFromQueue, requeueFront, editQueue }
+  return { queues, queuesRef, queueOnTab, takeFromQueue, requeueFront, editQueue, withdrawQueued }
 }

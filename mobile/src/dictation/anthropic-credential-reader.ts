@@ -20,8 +20,9 @@ export type AnthropicCredential = {
 const TOKEN_MARGIN_MS = 60_000
 
 /**
- * The phone's own Anthropic sign-in, refreshed when it is near expiry; null when nobody is signed
- * in on the phone. Signing in on the phone is mandatory (the user, 2026-10-14): there is no
+ * The phone's first Anthropic sign-in still usable (readPrimaryAccount), refreshed when it is near
+ * expiry; null when nobody is signed in on the phone. Dictation uses it outside a chat and in a chat
+ * whose account is not known. Signing in on the phone is mandatory (the user, 2026-10-14): there is no
  * desktop fallback. A reader that opened a hidden terminal on the desktop to take Claude Code's
  * token out of its Keychain lived here until then, which CLAUDE.md forbids (nothing may open a
  * terminal on the user's machine to read files), and the voice server rejected that token anyway.
@@ -72,7 +73,8 @@ export type AccountCredential = {
 /**
  * Every signed-in account with its token refreshed when near expiry, each on its own: one
  * account's refresh failing leaves it without a token and the others untouched. The sessions path
- * (session/ccr-session-default-deps.ts) reads this; dictation reads only the first account, through
+ * (session/ccr-session-default-deps.ts) reads this, and so does dictation in a chat whose account is
+ * known (hooks/use-anthropic-dictation.ts); anywhere else dictation reads the first account, through
  * fetchAnthropicCredential. An empty list means nobody is signed in. With `only`, just that
  * account is read and refreshed (the model pill re-reads one matched account, not every one).
  * With `refresh`, each token is refreshed whatever life it has left: a server refused it (401).

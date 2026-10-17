@@ -19,6 +19,9 @@ export type MobileNativeChatDraftMirror = {
   /** Drain in-flight echoes and forget the mirrored line. Called by the send
    *  path before its own clear + body, which replaces the line wholesale. */
   settleBeforeSend: () => Promise<void>
+  /** A send emptied the composer at its tap, before settleBeforeSend runs: that clear is not
+   *  echoed. What is still on its way to the desktop is left for settleBeforeSend to wait for. */
+  standAsideForSend: () => void
   /** The agent's own recall key just put `text` in its input (a tapped queued
    *  message), and the composer is about to take the same words. Call it before
    *  setting the composer. One line becomes the mirrored line, edited in place
@@ -65,6 +68,8 @@ export function useMobileNativeChatDraftMirror(args: {
    *  Not cleared when the composer empties: the mirror's Ctrl+U clears one line of
    *  the several, and the send's own clear is the one sized for them. */
   const heldRef = useRef<string | null>(null)
+  /** The composer emptied at a send's tap, before its settle (standAsideForSend). */
+  const emptiedAtTapRef = useRef(false)
 
   const forget = useCallback(() => {
     cancelTerminalLivePendingFlush(flushStateRef.current)
@@ -149,11 +154,20 @@ export function useMobileNativeChatDraftMirror(args: {
     await waitForTerminalLivePendingFlush(flushStateRef.current)
     forget()
     // The send empties the composer; that clear is an edit, and re-baselining on
-    // the count here keeps it from being echoed as one.
-    baselineEditsRef.current = null
+    // the count here keeps it from being echoed as one. A box that emptied at the
+    // tap (standAsideForSend) has had its render: the count is the baseline now,
+    // so the next keystroke is echoed, from a fresh line.
+    baselineEditsRef.current = emptiedAtTapRef.current ? getComposerEditGeneration() : null
+    emptiedAtTapRef.current = false
     armedRef.current = false
     heldRef.current = null
-  }, [forget])
+  }, [forget, getComposerEditGeneration])
+
+  const standAsideForSend = useCallback(() => {
+    emptiedAtTapRef.current = true
+    baselineEditsRef.current = null
+    armedRef.current = false
+  }, [])
 
   const adoptRecalledInput = useCallback(
     (handle: string, recalled: string) => {
@@ -173,5 +187,5 @@ export function useMobileNativeChatDraftMirror(args: {
     [getComposerEditGeneration]
   )
 
-  return { settleBeforeSend, adoptRecalledInput }
+  return { settleBeforeSend, standAsideForSend, adoptRecalledInput }
 }

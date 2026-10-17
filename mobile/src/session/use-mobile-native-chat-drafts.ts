@@ -1,5 +1,5 @@
 import { stripMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
-import { clearDraftAtSendStartWith, type UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
+import { clearDraftAtSendStartWith, type UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'; import { beginTextSendAtTapWith, type NativeChatTextSendStart } from './mobile-native-chat-text-send-start'
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
@@ -99,6 +99,8 @@ export function useMobileNativeChatDrafts(args: {
   returnQueueToDraft: (draftKey: string, text: string) => void
   /** Clear the composer at send start; `images` also echoes at once — see clearDraftAtSendStartWith. */
   clearDraftAtSendStart: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
+  /** A text send that can go now: the box empties and the bubble is drawn at the tap (beginTextSendAtTapWith). */
+  beginTextSendAtTap: (text: string) => NativeChatTextSendStart | null
   /** Returns the new pending echo's id (for a later removePending), or null if none was added. */
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]) => string | null
   holdUnconfirmedSend: (
@@ -222,6 +224,7 @@ export function useMobileNativeChatDrafts(args: {
 
   const returnQueueToDraft = useCallback((key: string, text: string) => { draftEditGenerationsRef.current.advance(key); liveNativeChatDrafts(key, own).setDrafts((previous) => ({ ...previous, [key]: returnCcrQueueToComposer(text, previous[key] ?? '') })) }, [own])
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    if (origin.boxEmptiedAtTap) { if (origin.wordsPlaced) { return } origin.wordsPlaced = true } // once per press (mobile-native-chat-text-send-start.ts)
     if (origin.outboxRecovery && origin.outboxId) { keepRefusedSendInOutbox(origin); return } else if (origin.echoDrawn && origin.outboxId) { dropNativeChatPendingEverywhere(own, outboxEchoId(origin.outboxId)) } // a recovery resend's bubble says "Not sent" instead
     // Appended, so typing done while the send was in flight stays; on screen at once and into the
     // stored draft at once, open chat or closed, and the outbox entry goes only after that lands.
@@ -379,6 +382,7 @@ export function useMobileNativeChatDrafts(args: {
   const removePending = useCallback((id: string) => dropNativeChatPendingEverywhere(own, id), [own])
   const showOutboxEcho = useCallback((entry: NativeChatOutboxEntry) => { const live = liveNativeChatDrafts(entry.draftKey, own); showOutboxEchoIn(entry, live.setPendingBySession, live.setPendingWaitingForSession) }, [own]); const showSendingEcho = useCallback((origin: MobileNativeChatSendOrigin) => showSendingEchoWith(origin, showOutboxEcho), [showOutboxEcho])
 
+  const beginTextSendAtTap = useCallback((text: string) => beginTextSendAtTapWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, showSendingEcho }, text), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, showSendingEcho])
   const clearDraftAtSendStart = useCallback((text: string, images?: string[], imagePaths?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images, imagePaths), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 
   return {
@@ -393,7 +397,7 @@ export function useMobileNativeChatDrafts(args: {
     readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho, takeSends,
     clearDraftForSend, restoreRejectedDraft, returnQueueToDraft,
     acceptSend,
-    clearDraftAtSendStart,
+    clearDraftAtSendStart, beginTextSendAtTap,
     holdUnconfirmedSend,
     removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   }

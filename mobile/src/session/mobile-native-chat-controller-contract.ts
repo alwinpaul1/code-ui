@@ -3,6 +3,7 @@ import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { ClaudeChatLive } from './claude-chat-live'
 import type { CcrSessionHeader } from './use-ccr-session-header'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
+import type { NativeChatTextSendStart } from './mobile-native-chat-text-send-start'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -290,6 +291,8 @@ export type MobileNativeChatController = {
   beginNativeChatImageSend: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   /** Hands a composer text send refused before any write to the outbox (S4); false when it cannot. */
   parkRefusedNativeChatSend: (text: string) => boolean
+  /** A text send that can go now: the box empties and its bubble is drawn at the tap (mobile-native-chat-text-send-start.ts). */
+  beginNativeChatTextSend?: (text: string) => NativeChatTextSendStart | null
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],

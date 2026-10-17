@@ -342,7 +342,12 @@ account's sign-in (`ccrSendTargetForTab`, `use-ccr-composer-send.ts`).
   target for the tab's profile (unknown profile, unmatched, another account's
   copy, an unconfirmed match), the session's `connection_status` is
   `disconnected` (the app's `ccr_remote_control_offline_error`), or a send is
-  in flight.
+  in flight. The bubble (or the queued card) is drawn at the tap, as the app
+  draws its `pending_message`: when the stream has not yet said the session's
+  status, the row is read after the bubble and before the POST, and an offline
+  answer takes the bubble or card down and gives the words back, once
+  (2026-10-17, `ccr-send-bubble-at-tap.test.tsx`). A send with files and the
+  outbox's resend still read the status first.
 - The bubble dims until the 2xx and goes when the stream echoes its uuid. A
   failed POST puts the words back with Retry and a `[ccr-send]` log line.
 - While Claude works the words wait in the phone's queue, one entry per send,

@@ -65,6 +65,20 @@ describe("Home's Artifacts card", () => {
     expect(card(await render(0))).toBeUndefined()
   })
 
+  it('draws no heading of its own with nobody signed in, so home shows no empty Artifacts section', async () => {
+    const root = await render(0)
+    expect(texts(root)).toEqual([])
+  })
+
+  it('sits under its own Artifacts heading on home, not inside the Tasks section', async () => {
+    const root = await render(1)
+    const all = texts(root)
+    const inCard = texts(card(root)!)
+    // The heading comes first and is outside the card; the card follows it.
+    expect(all).toEqual(['Artifacts', ...inCard])
+    expect(flat(card(root)!.props.style).marginTop).toBeUndefined()
+  })
+
   it('is not drawn when the sign-ins cannot be read', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     expect(card(await render(new Error('locked')))).toBeUndefined()

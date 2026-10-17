@@ -98,6 +98,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
       beforeNativeChatImagePaste: nativeChatController.prepareNativeChatImageSend,
       beginNativeChatImageSend: nativeChatController.beginNativeChatImageSend, parkRefusedNativeChatSend: nativeChatController.parkRefusedNativeChatSend,
+      ...(nativeChatController.beginNativeChatTextSend ? { beginNativeChatTextSend: nativeChatController.beginNativeChatTextSend } : {}),
       nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
       structuredNativeChat: activeSessionTab?.type === 'agent-session',
       readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,

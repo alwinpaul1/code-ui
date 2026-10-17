@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -7,6 +7,7 @@ import { openExternalLink } from '../platform/external-link'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useTheme } from '../theme/theme-context'
 import { FloatingToast } from '../ui/FloatingToast'
+import { useReducedMotion } from '../ui/use-reduced-motion'
 import { Txt } from '../ui/Txt'
 import {
   artifactViewerBridgeScript,
@@ -20,6 +21,9 @@ import {
   type ArtifactViewerCommand
 } from './artifact-viewer-policy'
 import { ClaudeCdsGlyph, type ClaudeCdsGlyphName } from './ClaudeCdsGlyph'
+import { ArtifactViewerSignInState, type ArtifactViewerSignIn } from './ArtifactViewerSignInState'
+import { ClawdDancing } from './ClawdDancing'
+import { FRAMES_SCRIPT, isReadyMessage, READY_FALLBACK_MS, READY_SCRIPT } from './artifact-viewer-ready'
 import { pinClaudeArtifactShortcut } from './claude-artifact-shortcut'
 import { parseClaudeArtifactLink } from './claude-artifacts'
 import { openUrlOutsideApp } from './open-outside-app'
@@ -54,6 +58,7 @@ true;`
 
 const GLYPH = 24
 
+
 /**
  * Hands an address to the browser. A claude.ai artifact link goes through openUrlOutsideApp: Code
  * UI registers for those links itself, so with "Open supported links" on, a plain open would come
@@ -81,9 +86,13 @@ const NO_COMMENTS: CommentMode = { on: false, available: false }
  * The page is claude.ai's artifact shell, told before its scripts run (a document-start script on
  * Android where the WebView supports one) that it is embedded in a native pane
  * (artifactViewerBridgeScript). It reports its title, its undo/redo actions and its
- * comment mode back as echoes, and the bar drives it by posting commands into it. Signed out it
- * offers "Sign in"; that flow and its providers stay in this WebView, and the cookie it leaves is
- * shared with every later artifact. Any other top-level navigation is a link out of the page, and
+ * comment mode back as echoes, and the bar drives it by posting commands into it. The page loads
+ * only once the route has written the owning account's claude.ai session into the jar
+ * (`signIn`, use-artifact-viewer-session.ts); with none stored the viewer draws its own sign-in
+ * state, which says to sign in to that account again and opens Anthropic accounts (where the one
+ * sign-in now also keeps the claude.ai session, AnthropicSignInScreen.tsx), instead of claude.ai's
+ * dead "Sign in to view this page". Should the shell still ask (a session claude.ai has since ended),
+ * its own "Sign in" flow and providers stay in this WebView. Any other top-level navigation is a link out of the page, and
  * the viewer asks before handing it to the browser (sq30.java:718-735). The page's content runs in
  * its own frame on another host, so frames are left alone.
  *
@@ -94,6 +103,7 @@ export function MobileArtifactViewer({
   uuid,
   title,
   own = false,
+  signIn = null,
   onClose
 }: {
   url: string
@@ -102,6 +112,8 @@ export function MobileArtifactViewer({
   title?: string | null
   /** The user's own artifact (use-artifact-viewer-ownership.ts): Share and Add to home screen. */
   own?: boolean
+  /** Set: the page does not load yet, and this is drawn instead (ArtifactViewerSignIn). */
+  signIn?: ArtifactViewerSignIn | null
   onClose: () => void
 }) {
   const { colors, space, isDark } = useTheme()
@@ -112,6 +124,10 @@ export function MobileArtifactViewer({
   const [actions, setActions] = useState<readonly ArtifactViewerChromeAction[]>([])
   const [comments, setComments] = useState<CommentMode>(NO_COMMENTS)
   const [loading, setLoading] = useState(true)
+  /** The page has said it has nothing loading (READY_SCRIPT), or is a sign-in page with no artifact. */
+  const [ready, setReady] = useState(false)
+  const signInPage = useRef(false)
+  const reducedMotion = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [canGoBack, setCanGoBack] = useState(false)
@@ -156,6 +172,7 @@ export function MobileArtifactViewer({
   const retry = useCallback(() => {
     setFailed(false)
     setLoading(true)
+    setReady(false)
     setLoaded(false)
     forgetPage()
     // The error column took the WebView's place, so this mounts a new one on the artifact's own
@@ -169,6 +186,10 @@ export function MobileArtifactViewer({
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
+      if (isReadyMessage(event.nativeEvent.data)) {
+        setReady(true)
+        return
+      }
       const echo = artifactViewerEcho(event.nativeEvent.data, event.nativeEvent.url, url, uuid)
       if (echo === undefined) {
         return
@@ -224,6 +245,14 @@ export function MobileArtifactViewer({
         }
       })
   }, [adding, url, shown])
+
+  useEffect(() => {
+    if (loading || ready) {
+      return undefined
+    }
+    const timer = setTimeout(() => setReady(true), READY_FALLBACK_MS)
+    return () => clearTimeout(timer)
+  }, [loading, ready])
 
   const undo = actions.find((action) => action.id === 'undo')
   const redo = actions.find((action) => action.id === 'redo')
@@ -306,12 +335,16 @@ export function MobileArtifactViewer({
                 onPress: addToHome
               })
             : null}
-          {own && !failed
+          {/* A browser sign-in cannot reach this WebView (2026-10-17: the user signed in there and
+              the viewer stayed signed out), so while it asks for a sign-in the bar offers no browser. */}
+          {signIn?.kind === 'needed' ? null : own && !failed
             ? button({ testID: 'artifact-viewer-share', glyph: 'share', label: 'Share', onPress: () => send({ cmd: 'share' }) })
             : button({ testID: 'artifact-viewer-open-browser', glyph: 'arrowOutSquare', label: 'Open in browser', onPress: () => openOutside(url) })}
         </View>
       </View>
-      {failed ? (
+      {signIn ? (
+        <ArtifactViewerSignInState signIn={signIn} still={reducedMotion !== false} onOpenBrowser={() => openOutside(url)} />
+      ) : failed ? (
         <View testID="artifact-viewer-error" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: space.md }}>
           <Txt variant="body" align="center">
             {ARTIFACT_VIEWER_ERROR}
@@ -353,12 +386,12 @@ export function MobileArtifactViewer({
             // A `target="_blank"` link or a sign-in popup comes to onOpenWindow instead of opening
             // a window this screen has nowhere to put.
             setSupportMultipleWindows
-            injectedJavaScriptBeforeContentLoaded={bridge}
+            injectedJavaScriptBeforeContentLoaded={bridge + FRAMES_SCRIPT}
             injectedJavaScriptBeforeContentLoadedForMainFrameOnly
             // Android: registered as a true document-start script under these origins where the
             // WebView supports it (the patched react-native-webview; artifactViewerBridgeScript).
             injectedJavaScriptBeforeContentLoadedOrigins={bridgeOrigins}
-            injectedJavaScript={TITLE_SCRIPT}
+            injectedJavaScript={TITLE_SCRIPT + READY_SCRIPT}
             onMessage={onMessage}
             onNavigationStateChange={onNavigationStateChange}
             onShouldStartLoadWithRequest={(request) => {
@@ -382,10 +415,15 @@ export function MobileArtifactViewer({
             }}
             onLoadStart={() => {
               setLoading(true)
+              setReady(false)
+              signInPage.current = false
               forgetPage()
             }}
             onLoadEnd={() => {
               setLoading(false)
+              if (signInPage.current) {
+                setReady(true)
+              }
               setLoaded(true)
             }}
             onError={(event) => {
@@ -398,6 +436,7 @@ export function MobileArtifactViewer({
               // says so; the error column would hide its Sign in button.
               const status = event.nativeEvent.statusCode
               if (status === 401 || status === 403) {
+                signInPage.current = true
                 return
               }
               console.warn('[artifacts] the artifact page answered with an error', { url, status })
@@ -406,9 +445,9 @@ export function MobileArtifactViewer({
             }}
           />
           {/* After the page in the tree, so it paints over it with no z-index. */}
-          {loading ? (
-            <View testID="artifact-viewer-loading" pointerEvents="none" style={styles.loading}>
-              <ActivityIndicator color={colors.textSecondary} />
+          {loading || !ready ? (
+            <View testID="artifact-viewer-loading" pointerEvents="none" style={[styles.loading, { backgroundColor: colors.bg }]}>
+              <ClawdDancing still={reducedMotion !== false} testID="artifact-viewer-loading-clawd" />
             </View>
           ) : null}
         </View>
@@ -435,5 +474,6 @@ const styles = StyleSheet.create({
   // The app's icon buttons are 48 dp tap targets (MIN_TAP_TARGET, tap-target-audit.test.ts).
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   textButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999 },
-  loading: { position: 'absolute', top: 24, left: 0, right: 0, alignItems: 'center' }
+  loading: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }
 })
+

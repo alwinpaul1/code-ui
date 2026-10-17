@@ -5,6 +5,7 @@ import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
+import type { NativeChatTextSendStart } from './mobile-native-chat-text-send-start'
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   useMobileNativeChatImageAttachments,
@@ -36,6 +37,7 @@ type Args = {
   readonly beforeNativeChatImagePaste?: () => Promise<void>
   readonly beginNativeChatImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   readonly parkRefusedNativeChatSend?: (text: string) => boolean
+  readonly beginNativeChatTextSend?: (text: string) => NativeChatTextSendStart | null
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
@@ -80,7 +82,7 @@ export function useMobileSessionImageAttachments({
   beforeTerminalSend,
   nativeChatBaseSend,
   beforeNativeChatImagePaste,
-  beginNativeChatImageSend, parkRefusedNativeChatSend,
+  beginNativeChatImageSend, parkRefusedNativeChatSend, beginNativeChatTextSend,
   structuredNativeChat,
   readSeededLaunchDraft,
   showToast,
@@ -124,6 +126,7 @@ export function useMobileSessionImageAttachments({
     baseSend: nativeChatBaseSend,
     beforeImagePaste: beforeNativeChatImagePaste,
     beginImageSend: beginNativeChatImageSend, parkRefusedSend: parkRefusedNativeChatSend,
+    ...(beginNativeChatTextSend ? { beginTextSend: beginNativeChatTextSend } : {}),
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError,

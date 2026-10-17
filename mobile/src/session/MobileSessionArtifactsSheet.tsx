@@ -54,7 +54,7 @@ export function MobileSessionArtifactsSheet({
   const rows = sessionArtifactRows(artifacts, accountId ? list.items : [])
   const open = (row: ArtifactSheetRow) => {
     onClose()
-    openClaudeArtifact({ url: row.url, title: row.title })
+    openClaudeArtifact(accountId ? { url: row.url, title: row.title, accountId } : { url: row.url, title: row.title })
   }
   const accountLine = accountId === null ? SESSION_ARTIFACTS_ACCOUNT_UNKNOWN : accountLabel === null ? null : `Account: ${accountLabel}`
   return (

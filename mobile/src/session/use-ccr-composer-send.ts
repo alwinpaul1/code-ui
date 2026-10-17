@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { defaultCcrComposerSendDeps, restoreCcrQueueToStoredDraft, type CcrComposerSendDeps } from './ccr-composer-send-deps'
-import type { CcrQueue } from './ccr-local-queue'
-import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
+import { joinCcrQueue, type CcrQueue } from './ccr-local-queue'
+import { buildCcrUserEventBody, CCR_REMOTE_CONTROL_OFFLINE, ccrEchoSeen, ccrSessionOffline, type CcrFileAttachment, type CcrSendPriority } from './ccr-send'
 import { CcrApiError, type CcrEvent } from './ccr-session-api'
 import type { CcrSendTarget } from './ccr-session-cache'
 import { reasonOf } from './ccr-session-shared'
@@ -10,11 +10,12 @@ import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-ec
 import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
 import type { NativeChatOutboxCcr, NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import { recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
-import { ccrQueueGiveBack, ccrResendLanded, CcrSendFlight, ccrSendTargetRefusal, ccrTargetOffline, sendCcrQueueAhead, sendOlderCcrEntriesFirst } from './ccr-send-order'
+import { ccrOfflineRefusal, ccrQueuedTapRead, ccrQueueGiveBack, type CcrTapReads, ccrResendLanded, CcrSendFlight, ccrSendTargetRefusal, ccrTargetOffline, sendCcrQueueAhead, sendOlderCcrEntriesFirst } from './ccr-send-order'
 import type { ClaudeChatGate } from './use-claude-anthropic-transcript'
 import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 import { ccrSessionTail, useCcrTabQueues, type CcrTo } from './use-ccr-tab-queues'
 import { useCcrQueueDelivery } from './use-ccr-queue-delivery'
+import { isShareAskInFlight } from './agent-image-share-ask'
 
 /**
  * The composer of a Claude tab that sends through Anthropic (ccr-send.ts) instead of typing into
@@ -101,6 +102,8 @@ export const CCR_SEND_REFUSALS: Record<Extract<CcrSendTarget, { kind: 'refused' 
 export const CCR_SEND_IN_FLIGHT = 'Another input is still being sent. Try again.'
 
 type Sent = { uuid: string; rowId: string | null }
+/** A send whose bubble is drawn and whose POST has not gone yet (`show` in the hook). */
+type Shown = { text: string; origin: MobileNativeChatSendOrigin; to: CcrTo; uuid: string; files: CcrSendFiles | undefined; withFiles: boolean; rowId: string | null }
 
 /** A send's attachments, already at Anthropic (ccr-attachment-send.ts chose them): referenced in the
  *  same event as the words, uploaded under `accountId`, which must be the target's own. */
@@ -149,7 +152,7 @@ export function useCcrComposerSend(args: {
   const deps = args.deps ?? defaultCcrComposerSendDeps
   const latest = useRef(args)
   latest.current = args
-  const { queues, queuesRef, queueOnTab: queueOnTabNow, takeFromQueue, requeueFront, editQueue } = useCcrTabQueues(latest, deps)
+  const { queues, queuesRef, queueOnTab: queueOnTabNow, takeFromQueue, requeueFront, editQueue, withdrawQueued } = useCcrTabQueues(latest, deps)
   /** Tabs whose queued send failed: their queue waits for the user's next send or turn end. */
   const paused = useRef(new Set<string>())
   const queueOnTab = useCallback((tab: string, text: string, to: CcrTo, draftKey: string) => {
@@ -161,6 +164,8 @@ export function useCcrComposerSend(args: {
   /** Tabs whose queue is being seen out at its turn's end. */
   const delivering = useRef(new Set<string>())
   const sent = useRef<Sent[]>([])
+  /** Per tab, the queued taps whose status read is out, and whether this offline spell was said. */
+  const tapReads = useRef(new Map<string, CcrTapReads>())
 
   const setDelivery = useCallback((rowId: string | null, delivery: OutboxDelivery | null) => {
     if (!rowId) {
@@ -226,10 +231,9 @@ export function useCcrComposerSend(args: {
    *  with its session and uuid before the box empties, and kept there until the POST is answered,
    *  so an app killed meanwhile resends it from there (under the same uuid) on the next launch.
    *  A send with attachments is not written there: the outbox keeps words only, and a resend
-   *  without its files would drop them without a word. */
-  /** `report`, when given, says the failure instead of the default banner with Retry (a queued
-   *  entry kept queued has no words in the composer for Retry to send). */
-  const sendNow = useCallback(async (text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid = deps.newUuid(), files?: CcrSendFiles, restore?: (origin: MobileNativeChatSendOrigin, text: string) => void, report?: (why: string) => void): Promise<MobileNativeChatSendOutcome> => {
+   *  without its files would drop them without a word. Two halves, so a composer send can draw its
+   *  bubble at the tap and check the computer is online before its POST (`show`, then `deliver`). */
+  const show = useCallback((text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid: string = deps.newUuid(), files?: CcrSendFiles): Shown => {
     const now = latest.current
     const withFiles = files !== undefined && files.attachments.length > 0
     if (!withFiles) { recordOutboxSend(origin, text, { ccr: { sessionId: to.sessionId, accountId: to.accountId, uuid } }) }
@@ -237,29 +241,32 @@ export function useCcrComposerSend(args: {
     const rowId = files && files.previewUris.length > 0 ? now.acceptSend(origin, text, [...files.previewUris]) : now.acceptSend(origin, text)
     setDelivery(rowId, 'sending')
     sent.current.push({ uuid, rowId })
-    const result = await flight.posting(() => post(to, text, uuid, undefined, files?.attachments))
+    return { text, origin, to, uuid, files, withFiles, rowId }
+  }, [deps, setDelivery])
+  /** A shown send that will not be posted: its bubble down and its words back (the outbox entry
+   *  leaves once they have landed, restoreRejectedDraft). */
+  const takeDown = useCallback((shown: Shown, restore?: (origin: MobileNativeChatSendOrigin, text: string) => void) => {
+    sent.current = sent.current.filter((item) => item.uuid !== shown.uuid)
+    setDelivery(shown.rowId, null)
+    if (shown.rowId) { latest.current.removePending(shown.rowId) }
+    void (restore ?? latest.current.restoreRejectedDraft)(shown.origin, shown.text)
+  }, [setDelivery])
+  /** `report`, when given, says the failure instead of the default banner with Retry (a queued
+   *  entry kept queued has no words in the composer for Retry to send). */
+  const deliver = useCallback(async (shown: Shown, restore?: (origin: MobileNativeChatSendOrigin, text: string) => void, report?: (why: string) => void): Promise<MobileNativeChatSendOutcome> => {
+    const { origin, to, text, uuid, rowId } = shown
+    const result = await flight.posting(() => post(to, text, uuid, undefined, shown.files?.attachments))
     if (result === true) {
-      if (!withFiles) { void retireOutboxSend(origin.outboxId) }
-      if (ccrEchoSeen(latest.current.events, uuid)) {
-        settle(uuid)
-      } else {
-        setDelivery(rowId, 'taken')
-      }
+      if (!shown.withFiles) { void retireOutboxSend(origin.outboxId) }
+      if (ccrEchoSeen(latest.current.events, uuid)) { settle(uuid) } else { setDelivery(rowId, 'taken') }
       return 'accepted'
     }
-    sent.current = sent.current.filter((item) => item.uuid !== uuid)
-    setDelivery(rowId, null)
-    if (rowId) {
-      latest.current.removePending(rowId)
-    }
-    void (restore ?? latest.current.restoreRejectedDraft)(origin, text)
-    if (report) {
-      report(result)
-    } else {
-      latest.current.onSendError(result, { retry: true })
-    }
+    takeDown(shown, restore)
+    if (report) { report(result) } else { latest.current.onSendError(result, { retry: true }) }
     return 'rejected'
-  }, [deps, flight, post, setDelivery, settle])
+  }, [flight, post, setDelivery, settle, takeDown])
+  const sendNow = useCallback((text: string, origin: MobileNativeChatSendOrigin, to: CcrTo, uuid?: string, files?: CcrSendFiles, restore?: (origin: MobileNativeChatSendOrigin, text: string) => void, report?: (why: string) => void): Promise<MobileNativeChatSendOutcome> =>
+    deliver(show(text, origin, to, uuid, files), restore, report), [deliver, show])
   /** False once the chat controller unmounted: what fails after that goes to stored drafts. */
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
@@ -270,7 +277,7 @@ export function useCcrComposerSend(args: {
     deps.log('[ccr-send] queued message moved to its tab\'s stored draft: its send failed after the chat closed')
     void (deps.restoreDraft ?? restoreCcrQueueToStoredDraft)(draftKey, text).catch((error: unknown) => deps.log(`[ccr-send] queued message could not be written back to its composer draft: ${reasonOf(error)}`))
   }, [deps])
-  const { giveBack, restoreQueued } = useMemo(() => ccrQueueGiveBack(latest, (tab) => queuesRef.current[tab], takeFromQueue, { gone: () => !alive.current, store: storeDraft }), [queuesRef, storeDraft, takeFromQueue])
+  const { giveBack, restoreQueued, place } = useMemo(() => ccrQueueGiveBack(latest, (tab) => queuesRef.current[tab], takeFromQueue, { gone: () => !alive.current, store: storeDraft }), [queuesRef, storeDraft, takeFromQueue])
   const sendOlderFirst = useCallback((origin: MobileNativeChatSendOrigin, to: CcrTo) =>
     sendOlderCcrEntriesFirst({ origin, to, events: () => latest.current.events, captureSendOrigin: (text) => latest.current.captureSendOrigin(text), sendNow, log: deps.log }), [deps, sendNow])
 
@@ -282,6 +289,63 @@ export function useCcrComposerSend(args: {
       }
     }
   }, [args.events, settle])
+
+  /**
+   * A composer send of words only: the box empties and its bubble (or, while Claude works, its
+   * queued card) is drawn at the tap, as the Claude app draws its `pending_message` row in the
+   * frame of the tap (docs/claude-app-parity-gaps.md §1.1). The computer's being offline is judged
+   * from the stream when it has said (the app's own state, read without a request), and refused
+   * then before anything is drawn. When the stream has not said yet, the row is read before the
+   * POST, as before, but no longer before the bubble: that read is a GET to Anthropic, and the
+   * words sat in the box with nothing drawn for all of it ("a message sent from the composer takes
+   * time to appear", 2026-10-17). An offline answer then takes the bubble or the card down and
+   * puts the words back, once. A send with files and the outbox's resend keep the read first.
+   */
+  const sendAtTap = useCallback(async (text: string, tab: string, to: CcrTo): Promise<MobileNativeChatSendOutcome> => {
+    const now = latest.current
+    const streamed = now.connectionStatus
+    if (streamed !== null && ccrSessionOffline(streamed)) {
+      const [line, notice] = ccrOfflineRefusal(to)
+      deps.log(line); now.onSendError(notice); return 'rejected'
+    }
+    const origin = now.captureSendOrigin(text)
+    if (!origin) { now.onSendError('Message not sent (no chat on this tab)'); return 'rejected' }
+    // Steering and post-later are off (ccr-local-queue.ts): the words wait on the phone, behind
+    // anything this tab already has waiting. Not under the flight's claim: a queued card posts
+    // nothing, and a claim held over the read would send the whole queue back to the composer
+    // ("a send is in flight") if the turn ended while it ran.
+    if (now.working || queuesRef.current[tab] || delivering.current.has(tab)) {
+      now.clearDraftForSend(origin, text)
+      queueOnTab(tab, text, to, origin.draftKey)
+      if (streamed !== null) { return 'accepted' }
+      return await ccrQueuedTapRead({
+        reads: tapReads.current, tab, isOffline: () => offline(to), withdraw: () => withdrawQueued(tab, text),
+        giveBack: (taken, noticed) => {
+          const [line, notice] = ccrOfflineRefusal(to)
+          deps.log(`${line}; its queued message went back to the composer`)
+          place(tab, joinCcrQueue(taken), origin.draftKey)
+          if (!noticed && alive.current) { latest.current.onSendError(notice) }
+        }
+      })
+    }
+    // Claimed before the bubble, and held over the read: two sends tapped together must not both
+    // pass, and nothing else posts between this send's read and its POST.
+    flight.claimed = true
+    try {
+      const shown = show(text, origin, to)
+      if (streamed === null && (await offline(to))) {
+        const [line, notice] = ccrOfflineRefusal(to)
+        deps.log(line); takeDown(shown); latest.current.onSendError(notice); return 'rejected'
+      }
+      // Behind the messages a killed app left for this tab (posted first, oldest first).
+      if (!(await sendOlderFirst(origin, to))) {
+        takeDown(shown); latest.current.onSendError(CCR_SEND_IN_FLIGHT); return 'rejected'
+      }
+      return await deliver(shown)
+    } finally {
+      flight.release()
+    }
+  }, [deliver, deps, flight, offline, place, queueOnTab, queuesRef, sendOlderFirst, show, takeDown, tapReads, withdrawQueued])
 
   /** A composer send, or (`pinned`) an outbox resend into the session and under the uuid its
    *  first attempt had, which is never queued and never goes to another session. */
@@ -316,33 +380,32 @@ export function useCcrComposerSend(args: {
       latest.current.onSendError(CCR_SEND_IN_FLIGHT)
       return 'rejected'
     }
+    // An image share ask (agent-image-share-ask.ts) was never in the box: it keeps the read first,
+    // so an offline refusal never puts its words into the user's own draft.
+    if (!pinned && !withFiles && !isShareAskInFlight(text)) {
+      return await sendAtTap(text, tab, to)
+    }
     // Claimed BEFORE the status read: two sends tapped together must not both pass while it runs.
     flight.claimed = true
     try {
       const late = (await offline(to))
-        ? ([`[ccr-send] refused: session ${ccrSessionTail(to.sessionId)} is offline (connection_status disconnected)`, CCR_REMOTE_CONTROL_OFFLINE] as const)
+        ? ccrOfflineRefusal(to)
         : (latest.current.tabId ?? '') !== tab
           ? ([`[ccr-send] refused: the tab changed while the send to session ${ccrSessionTail(to.sessionId)} was being checked`, 'Message not sent: the tab changed while it was being sent.'] as const)
           : null
-      if (late) {
-        deps.log(late[0]); latest.current.onSendError(late[1]); return 'rejected'
-      }
+      if (late) { deps.log(late[0]); latest.current.onSendError(late[1]); return 'rejected' }
       const now = latest.current
       const origin = now.captureSendOrigin(text)
       if (!origin) {
         now.onSendError('Message not sent (no chat on this tab)')
         return 'rejected'
       }
-      // Steering and post-later are off (ccr-local-queue.ts): the words wait on the phone, behind
-      // anything this tab already has waiting.
+      if (!pinned && !withFiles && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
+        now.clearDraftForSend(origin, text); queueOnTab(tab, text, to, origin.draftKey); return 'accepted'
+      }
       // A send with files goes now, unprioritised, as the phone's queue holds words only (the app's
       // local queue is blocked by attachments); the server holds it until Claude takes input. The
       // words already queued on this tab go just ahead of it (sendCcrQueueAhead), in the order typed.
-      if (!pinned && !withFiles && (now.working || queuesRef.current[tab] || delivering.current.has(tab))) {
-        now.clearDraftForSend(origin, text)
-        queueOnTab(tab, text, to, origin.draftKey)
-        return 'accepted'
-      }
       if (!pinned && !(await sendOlderFirst(origin, to))) {
         latest.current.onSendError(CCR_SEND_IN_FLIGHT)
         return 'rejected'
@@ -354,14 +417,14 @@ export function useCcrComposerSend(args: {
     } finally {
       flight.release()
     }
-  }, [deps, flight, offline, queueOnTab, restoreQueued, sendNow, sendOlderFirst, takeFromQueue, target])
+  }, [deps, flight, offline, queueOnTab, queuesRef, restoreQueued, sendAtTap, sendNow, sendOlderFirst, takeFromQueue, target])
   const sendWithOutcome = useCallback((text: string, files?: CcrSendFiles) => sendOrResend(text, undefined, files), [sendOrResend])
   // An entry from before this lane has no uuid: it goes as a new post, through Anthropic still.
   const resendFromOutbox = useCallback((text: string, entry: NativeChatOutboxEntry) => sendOrResend(text, entry.ccr), [sendOrResend])
 
   const tab = args.tabId ?? ''
   const shown = queues[tab]
-  useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flight, offline, takeFromQueue, requeueFront, giveBack, sendNow, sendOlderFirst, delivering, paused, alive, storeDraft })
+  useCcrQueueDelivery({ args, latest, deps, shown, queuesRef, flight, offline, takeFromQueue, requeueFront, giveBack, sendNow, sendOlderFirst, delivering, paused, alive, storeDraft, tapReads })
 
   const send = useCallback(async (text: string) => (await sendWithOutcome(text)) !== 'rejected', [sendWithOutcome])
   return { sendWithOutcome, resendFromOutbox, send, queue: shown?.entries ?? NO_ENTRIES, editQueue, deliveries }

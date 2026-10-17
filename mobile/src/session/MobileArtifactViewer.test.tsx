@@ -23,6 +23,8 @@ vi.mock('react-native', () => ({
   View: 'View',
   useColorScheme: () => 'light'
 }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => false }))
 vi.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 24, bottom: 0, left: 0, right: 0 }) }))
 const web = vi.hoisted(() => ({ goBack: vi.fn(), injectJavaScript: vi.fn() }))
 vi.mock('react-native-webview', async () => {
@@ -375,11 +377,60 @@ describe('the artifact viewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('shows a spinner until the page has loaded', () => {
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('loads with one loader, Clawd dancing over the whole page in the %s theme, and no spinner', (scheme, colors) => {
+    mount({ scheme })
+    const cover = host('artifact-viewer-loading')!
+    expect(cover).toBeDefined()
+    expect(renderer!.root.findAll((node) => (node.type as unknown) === 'ActivityIndicator')).toHaveLength(0)
+    expect(cover.findAll((node) => node.props.testID === 'artifact-viewer-loading-clawd' && typeof node.type === 'string')).toHaveLength(1)
+    // Opaque and over all of the page, so the shell's own spinner underneath is never seen.
+    expect(flat(cover.props.style)).toMatchObject({ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: colors.bg })
+  })
+
+  it("keeps Clawd over the page's own loader until the page says the artifact is drawn", () => {
     mount()
+    loaded()
     expect(host('artifact-viewer-loading')).toBeDefined()
+    post({ artifactReady: true })
+    expect(host('artifact-viewer-loading')).toBeUndefined()
+  })
+
+  it('asks the page, from the scripts it injects, to say when nothing on it is loading any more', () => {
+    mount()
+    expect(String(webview().props.injectedJavaScript)).toContain('artifactReady')
+    expect(String(webview().props.injectedJavaScriptBeforeContentLoaded)).toContain('__codeUiFrames')
+  })
+
+  it('takes Clawd away 8 s after the page loaded when the page never says it is drawn', () => {
+    vi.useFakeTimers()
+    mount()
+    loaded()
+    act(() => {
+      vi.advanceTimersByTime(7900)
+    })
+    expect(host('artifact-viewer-loading')).toBeDefined()
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(host('artifact-viewer-loading')).toBeUndefined()
+  })
+
+  it('takes Clawd away as soon as a sign-in page has loaded, which has no artifact to wait for', () => {
+    mount()
+    act(() => webview().props.onHttpError({ nativeEvent: { statusCode: 401 } }))
     loaded()
     expect(host('artifact-viewer-loading')).toBeUndefined()
+  })
+
+  it('puts Clawd back over the next page the viewer loads', () => {
+    mount()
+    loaded()
+    post({ artifactReady: true })
+    act(() => webview().props.onLoadStart({ nativeEvent: {} }))
+    expect(host('artifact-viewer-loading')).toBeDefined()
   })
 
   it('keeps claude.ai, its sign-in and the sign-in providers inside, and asks before sending any other page out', () => {
